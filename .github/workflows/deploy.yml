@@ -1,0 +1,46 @@
+# main에 올라올 때마다 게임을 다시 만들어 GitHub Pages에 배포해요 (Actions 탭의 "Run workflow"로 손으로도 돼요).
+# node build.js 가 deploy/ (배포 페이지 + 앱 설치 파일 + 오프라인 sw.js)를 만들고, 그 폴더가 그대로 올라가요.
+# firebase.config.json 이 저장소에 있으면 구글 로그인 저장이 켜진 페이지가 만들어져요 (FIREBASE-SETUP.md).
+name: 배포 (GitHub Pages)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 연달아 올리면 마지막 것만 배포해요
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: 게임 만들기 (node build.js)
+        run: node build.js
+        env:
+          PG_BUILD_TEMP: ${{ runner.temp }}/bogeul
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: deploy
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
