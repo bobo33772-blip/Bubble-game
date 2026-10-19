@@ -92,4 +92,5 @@ jobs:
           expires: 7d
       - name: 미리보기 주소
         if: env.HAS_FB == 'true'
-        run: echo "미리보기: ${{ steps.fb.outputs.details_url }}" >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          echo "미리보기: ${{ steps.fb.outputs.details_url }}" >> "$GITHUB_STEP_SUMMARY"
