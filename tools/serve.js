@@ -17,7 +17,7 @@ const TYPES = {
   '.webmanifest': 'application/manifest+json; charset=utf-8', '.zip': 'application/zip',
 };
 
-function start(port = 8765, root = 'C:/Temp/bogeul', opts = {}) {
+function start(port = 8765, root = require('./env').T, opts = {}) {
   const base = path.resolve(root);
   const log = opts.quiet ? () => {} : (m) => console.log(m);
   const handler = (req, res) => {
@@ -54,7 +54,7 @@ function start(port = 8765, root = 'C:/Temp/bogeul', opts = {}) {
 }
 
 if (require.main === module) {
-  const [port = '8765', root = 'C:/Temp/bogeul'] = process.argv.slice(2);
+  const [port = '8765', root = require('./env').T] = process.argv.slice(2);
   const srv = start(parseInt(port, 10) || 8765, root);
   console.log(`serving ${srv.root} at ${srv.url} (Ctrl+C to stop)`);
 }

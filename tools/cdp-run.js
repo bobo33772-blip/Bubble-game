@@ -5,8 +5,7 @@
 const { spawn } = require('child_process');
 const fs = require('fs');
 const [file = 'preview.html', out = '-', w = '900', h = '760', maxMs = '20000', doneRe = 'DONE', mobile = '0'] = process.argv.slice(2);
-const CH = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const T = 'C:/Temp/bogeul';
+const { CH, T } = require('./env');
 const prof = `${T}/cdp-profile-${process.pid}`;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -44,14 +43,14 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await send('Emulation.setDeviceMetricsOverride', { width: +w, height: +h, deviceScaleFactor: 1, mobile: mobile === '1' });
   if (mobile === '1') await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
   // (a full http(s) URL too: the multi-iframe pages served by tools/serve.js, on a phone viewport)
-  await send('Page.navigate', { url: /^https?:\/\//i.test(file) ? file : `file:///${T}/${file}` });
+  await send('Page.navigate', { url: /^https?:\/\//i.test(file) ? file : require('./env').fileUrl(file) });
   const t0 = Date.now();
   while (!done && Date.now() - t0 < +maxMs) await sleep(100);
   if (!done) console.log(`cdp: timeout after ${maxMs} ms`);
   await sleep(150);
   if (out !== '-') {
     const r = await send('Page.captureScreenshot', { format: 'png' });
-    const p = out.includes(':') ? out : `${T}/${out}`;
+    const p = require('./env').inT(out);
     fs.writeFileSync(p, Buffer.from(r.result.data, 'base64'));
     console.log(`screenshot: ${p}`);
   }

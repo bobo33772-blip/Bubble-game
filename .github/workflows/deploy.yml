@@ -1,7 +1,9 @@
 # main에 올라올 때마다 게임을 다시 만들어 GitHub Pages에 배포해요 (Actions 탭의 "Run workflow"로 손으로도 돼요).
 # node build.js 가 deploy/ (배포 페이지 + 앱 설치 파일 + 오프라인 sw.js)를 만들고, 그 폴더가 그대로 올라가요.
 # firebase.config.json 이 저장소에 있으면 구글 로그인 저장이 켜진 페이지가 만들어져요 (FIREBASE-SETUP.md).
-name: 배포 (GitHub Pages)
+# Firebase 비밀값 FIREBASE_SERVICE_ACCOUNT 와 변수 FIREBASE_PROJECT_ID 가 있으면 Firebase Hosting(live)에도 같이 올려요.
+# 없으면 그 일만 실패 없이 건너뛰어요. (Firestore 규칙은 여기서 올리지 않아요: FIREBASE-SETUP.md 대로 손으로 한 번)
+name: 배포 (GitHub Pages + Firebase)
 
 on:
   push:
@@ -44,3 +46,32 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+
+  firebase:
+    name: Firebase 배포 (live)
+    runs-on: ubuntu-latest
+    env:
+      HAS_FB: ${{ secrets.FIREBASE_SERVICE_ACCOUNT != '' && vars.FIREBASE_PROJECT_ID != '' }}
+    steps:
+      - name: Firebase 연결 전이라 건너뛰어요
+        if: env.HAS_FB != 'true'
+        run: echo "::notice::Firebase 배포는 비밀값 FIREBASE_SERVICE_ACCOUNT 와 변수 FIREBASE_PROJECT_ID 가 생기면 시작돼요. 지금은 건너뛰어요."
+      - uses: actions/checkout@v4
+        if: env.HAS_FB == 'true'
+      - uses: actions/setup-node@v4
+        if: env.HAS_FB == 'true'
+        with:
+          node-version: 22
+      - name: 게임 만들기 (node build.js)
+        if: env.HAS_FB == 'true'
+        run: node build.js
+        env:
+          PG_BUILD_TEMP: ${{ runner.temp }}/bogeul
+      - name: Firebase Hosting (live)에 올리기
+        if: env.HAS_FB == 'true'
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: ${{ vars.FIREBASE_PROJECT_ID }}
+          entryPoint: firebase
+          channelId: live

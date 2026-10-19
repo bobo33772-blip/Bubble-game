@@ -1,0 +1,95 @@
+# PR이 열리거나 새 커밋이 올라올 때마다 돌아요 (Actions 탭의 "Run workflow"로 손으로도 돼요).
+#   테스트    게임을 만들고(node build.js) 빠르고 안정적인 테스트 묶음을 돌려요. main에 합치려면 이게 통과해야 해요.
+#   미리보기  PR 번호로 미리보기 판(PG_PREVIEW: 배지, 따로 쓰는 저장 칸, 설치/오프라인 없음)을 만들어 Firebase Hosting
+#             미리보기 채널(7일 뒤 사라짐)에 올리고, 주소를 PR 댓글로 달아요. Firebase 비밀값 FIREBASE_SERVICE_ACCOUNT 와
+#             변수 FIREBASE_PROJECT_ID 가 생기기 전에는 실패하지 않고 건너뛰어요.
+name: PR 확인
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# 같은 PR에 새 커밋이 오면 이전 실행은 멈춰요
+concurrency:
+  group: pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: 테스트
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: 준비 (크롬 위치, 임시 폴더)
+        run: |
+          echo "PG_BUILD_TEMP=$RUNNER_TEMP/bogeul" >> "$GITHUB_ENV"
+          echo "PG_CHROME=$(command -v google-chrome)" >> "$GITHUB_ENV"
+          google-chrome --version
+      - name: 게임 만들기 (node build.js)
+        run: node build.js
+      - name: 빠른 테스트 묶음 (tools/run-all.js)
+        # node 검사 전부 + 핵심을 덮는 가상 시간 헤드리스 테스트들. 실시간 여러 창 온라인 테스트는 공용 러너에서
+        # 흔들려서 빼요 (그건 PC에서 node tools/run-all.js 전체로 돌려요)
+        env:
+          JOBS: >-
+            check-sprites check-integration check-shop check-pages check-cloud net-node audio-node validate-levels
+            smoke campaign final-e2e fixes integration v2-core mp-local v3-levels shop gacha
+        run: node tools/run-all.js --no-build --exact $JOBS
+      - name: 실패 기록 올리기
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-all-logs
+          path: ${{ runner.temp }}/bogeul/runall/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  preview:
+    name: 미리보기
+    # (같은 저장소의 브랜치만: 포크에서 온 PR에는 비밀값이 없어요)
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+      checks: write
+    env:
+      HAS_FB: ${{ secrets.FIREBASE_SERVICE_ACCOUNT != '' && vars.FIREBASE_PROJECT_ID != '' }}
+    steps:
+      - name: Firebase 연결 전이라 건너뛰어요
+        if: env.HAS_FB != 'true'
+        run: echo "::notice::미리보기는 Firebase 연결 뒤에 만들어져요 (비밀값 FIREBASE_SERVICE_ACCOUNT, 변수 FIREBASE_PROJECT_ID). 지금은 건너뛰어요."
+      - uses: actions/checkout@v4
+        if: env.HAS_FB == 'true'
+      - uses: actions/setup-node@v4
+        if: env.HAS_FB == 'true'
+        with:
+          node-version: 22
+      - name: 미리보기 판 만들기 (PG_PREVIEW)
+        if: env.HAS_FB == 'true'
+        run: node build.js
+        env:
+          PG_BUILD_TEMP: ${{ runner.temp }}/bogeul
+          PG_PREVIEW: ${{ github.event.pull_request.number }}
+      - name: Firebase 미리보기 채널에 올리기
+        id: fb
+        if: env.HAS_FB == 'true'
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: ${{ vars.FIREBASE_PROJECT_ID }}
+          entryPoint: firebase
+          expires: 7d
+      - name: 미리보기 주소
+        if: env.HAS_FB == 'true'
+        run: echo "미리보기: ${{ steps.fb.outputs.details_url }}" >> "$GITHUB_STEP_SUMMARY"

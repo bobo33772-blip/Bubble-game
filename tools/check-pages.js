@@ -14,8 +14,7 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 
 const ROOT = path.join(__dirname, '..');
-const T = 'C:/Temp/bogeul';
-const CH = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
+const { T, CH } = require('./env');
 let fails = 0, passes = 0;
 const ok = (name, cond, info) => { if (cond) passes++; else fails++; console.log(`${cond ? 'PASS' : 'FAIL'} ${name}${!cond && info ? ' :: ' + info : ''}`); return !!cond; };
 
@@ -84,7 +83,7 @@ const PEER_RE = /^https:\/\/(?:cdnjs\.cloudflare\.com\/ajax\/libs\/peerjs\/\d+\.
 function chrome(file, flags, budget) {
   const prof = `${T}/chrome-profile-pages-${process.pid}`;
   const r = spawnSync(CH, ['--headless=new', '--disable-gpu', '--no-first-run', '--no-sandbox', '--hide-scrollbars', '--mute-audio', `--user-data-dir=${prof}`,
-    '--window-size=900,760', `--virtual-time-budget=${budget}`, '--enable-logging=stderr', '--v=0', ...flags, '--dump-dom', `file:///${T}/${file}`],
+    '--window-size=900,760', `--virtual-time-budget=${budget}`, '--enable-logging=stderr', '--v=0', ...flags, '--dump-dom', require('./env').fileUrl(file)],
   { encoding: 'utf8', timeout: 120000, maxBuffer: 64 * 1024 * 1024 });
   try { fs.rmSync(prof, { recursive: true, force: true }); } catch (e) { /* ignore */ }
   return (r.stderr || '').split(/\r?\n/).filter((l) => l.includes(':CONSOLE')).map((l) => { const m = l.match(/CONSOLE[^\]]*\]\s*"(.*)", source:/); return m ? m[1] : l; });

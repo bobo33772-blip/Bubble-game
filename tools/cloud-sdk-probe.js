@@ -8,7 +8,7 @@
 const { spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
-const T = 'C:/Temp/bogeul';
+const { T } = require('./env');
 const src = fs.readFileSync(path.join(T, 'deploy-cloud', 'index.html'), 'utf8');
 const PROBE = `<script>
 (async function () {

@@ -39,12 +39,12 @@ const path = require('path');
 const http = require('http');
 
 const ROOT = path.join(__dirname, '..');
-const T = 'C:/Temp/bogeul';
+const { T } = require('./env');
 const TD = `${T}/deploy`;
 const PORT = 8766;
 const ORIGIN = `http://127.0.0.1:${PORT}`;
 const APP = `${ORIGIN}/deploy/`;
-const CH = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
+const { CH } = require('./env');
 const KEEP = process.argv.includes('--keep');
 const prof = `${T}/pwa-profile-${process.pid}`;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

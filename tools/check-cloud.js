@@ -21,7 +21,7 @@ const crypto = require('crypto');
 const { spawnSync } = require('child_process');
 
 const ROOT = path.join(__dirname, '..');
-const T = 'C:/Temp/bogeul';
+const { T } = require('./env');
 let passes = 0, fails = 0;
 const ok = (name, cond, info) => { if (cond) passes++; else fails++; console.log(`CHECK-CLOUD ${cond ? 'PASS' : 'FAIL'} ${name}${!cond && info !== undefined ? ' :: ' + (typeof info === 'string' ? info : JSON.stringify(info)).slice(0, 400) : ''}`); return !!cond; };
 const read = (f) => fs.readFileSync(f, 'utf8');
@@ -152,7 +152,7 @@ const hasCfg = fs.existsSync(path.join(ROOT, 'firebase.config.json'));
   fs.writeFileSync(path.join(SRC, 'firebase', '.firebaserc'), '{\n  "projects": {\n    "default": "YOUR-PROJECT-ID"\n  }\n}\n');
   const cfg = `const firebaseConfig = {\n  apiKey: "AIza${'Copy1'.repeat(7)}",\n  authDomain: "pg-copy-test.firebaseapp.com",\n  projectId: "pg-copy-test",\n  storageBucket: "pg-copy-test.firebasestorage.app",\n  messagingSenderId: "987654321",\n  appId: "1:987654321:web:abcdef0123456789"\n};\n`;
   fs.writeFileSync(path.join(SRC, 'firebase.config.json'), cfg);
-  const env = Object.assign({}, process.env, { PG_BUILD_TEMP: TMP }); delete env.PG_FIREBASE_CONFIG;
+  const env = Object.assign({}, process.env, { PG_BUILD_TEMP: TMP }); delete env.PG_FIREBASE_CONFIG; delete env.PG_PREVIEW;
   const run = spawnSync(process.execPath, [path.join(SRC, 'build.js')], { encoding: 'utf8', env, cwd: SRC });
   const out = (run.stdout || '') + (run.stderr || '');
   if (ok('build copy: build.js runs with the console snippet as firebase.config.json', run.status === 0, out.slice(-600))) {
