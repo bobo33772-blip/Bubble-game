@@ -1,0 +1,13 @@
+# build outputs (node build.js makes them; CI builds its own)
+dist/
+deploy/
+release/
+# old copies from before v4 (git history keeps everything now)
+src-v3-backup/
+tools-v3-backup/
+# local tools / caches
+node_modules/
+firebase/.firebase/
+*.log
+.DS_Store
+Thumbs.db

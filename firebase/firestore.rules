@@ -1,0 +1,347 @@
+rules_version = '2';
+
+// 뽀득뽀득 목욕탕 - cloud trophies (design/cloud-trophies.md 7) and, from document v 2, 비누 코인 and the items bought with
+// them (design/shop.md 8). Paste into Firebase console > Firestore Database > 규칙 (Rules) > 게시, or deploy with the
+// firebase CLI from bogeul/firebase (firebase.json points here). Publish these rules BEFORE deploying a page with the
+// shop: they still accept every v 1 page, while a v 2 page is refused by the old rules. The same for document v 3 (a worn
+// set per animal, design/looks-per-animal.md 6): publish these rules before the page; they still accept v 1 / v 2 pages.
+// And for document v 4 (the 뽑기, design/gacha.md 7): publish these rules first; they still accept v 1 - v 3 pages.
+//
+// One document per Google account: players/{uid}, readable and writable by that account only. Nothing else in the
+// database is readable or writable (no leaderboard, so nothing is public).
+//
+//   players/{uid} = {
+//     v: 4,                         schema version (1: trophies only; a page with the shop makes it 2 at its first slot
+//                                   write, a page with per-animal sets makes it 3 at its first slot or worn-set write, a
+//                                   page with the 뽑기 makes it 4 at its first slot or worn-set write - older pages then
+//                                   see a newer schema and never write it)
+//     dev: 'abcd1234',              the account's device id (the game hashes it per room; same account = same device)
+//     nick: '뽀숑',                 optional, the in-game nickname (never the Google name / mail / photo)
+//     eq: '<30 characters>',        optional; v >= 3: the account's worn sets, 30 characters - 5 per animal (머리 얼굴 목 등
+//                                   효과) in the game's order 오리 카피바라 해달 펭귄 고양이 개구리; v 2: one set of 5 for
+//                                   every animal
+//     s: { <slot>: {...}, ... },    one slot per browser that has signed in (<= 16, plus the archive '_')
+//     last: '<slot>',               the slot this write changed
+//     updatedAt: <server time>      when the document was last written
+//   }
+//   slot = { t, w, g, ko,           what that browser ADDED to the account (t may be negative: trophies lost there)
+//            best, bl, seen, hi,    the best that browser has seen (best count, best league, 내 기록 opened, best score)
+//            day, de,               목욕 보너스 given there on that local day (YYYYMMDD, 0..20)
+//            ce, sp, o,             (v 2) 비누 코인 that browser earned / spent, and the items it bought (purchase order)
+//            bd, bs,                (v 2) the last day it paid the day's first-game bonus, and the streak day then
+//            dn, gd,                (v 4) the draws that browser made and the items it got by drawing (o: only the
+//                                   items it BOUGHT; a draw-only item is never in o)
+//            n, at }                that browser's write counter, and the server time of its last write
+//   The account's count is the sum of the slots' t (shown as 0..99999); its coins are sum ce - sum sp (a draw's 200 coins
+//   are in sp, a duplicate's coins back in ce); its items the union of the o's and gd's; its draws the sum of dn. Every write replaces ONE slot with absolute values, so a write that is repeated, late or sent by
+//   two tabs at once can never count twice.
+//
+// Honest limits: the game runs in the player's browser, so these rules cannot prove a count was earned. They keep the
+// data well-formed, keep every player's document to that player, and bound each write: at most +250 trophies per write
+// (the biggest real result is +220, a 4-player win at stake 50 counted from before the hold) and at most 20 + 2 per
+// second since that slot's last write; at most 20 games / 400 KOs per write; one write per 2 s per document. 비누 코인
+// earned rise by at most 150 a write and 30 + 1 per 2 s since that slot's last write (≈ 30 a minute: about three times
+// what play pays); spent coins never drop; items only grow, at most ONE new item a write and only together with exactly
+// its catalog price added to the spent coins; a league item only with that league reached. What that still lets a
+// modified page do to its OWN account (nobody else's): the first upload of an account carries the browser's store as
+// it is (any count up to 99999, any coins and items - an edited localStorage included); a new browser slot may start
+// at +250 trophies and 150 coins; writing every 2 s raises a slot by about 12 trophies a second; and since the rules
+// cannot add up the account's balance (no loops over the slots), coins can be spent that were only inflated within
+// that rate. Nothing reads these numbers but their owner (no leaderboard), and items are cosmetics, so this is the same
+// freedom an edited localStorage already gives. The 뽑기 (v 4): a draw spends exactly 200 coins (sp), at most 10 draws a
+// write, at most as many new drawn items as draws, pool items only (never a league item or the starter); the rules cannot
+// check the random draw itself, so a modified page can take ANY pool item for 200 coins by writing it into its slot's
+// gd with one draw (e6, b7 and every draw-only 전설 included), and start a new browser slot with 10 drawn items (2,000
+// coins, in debt) - its own account only, cosmetics only. A document is never deleted by a player (the owner can, in the
+// console): an account cannot start over at a new count. The free Spark quotas are per project: they stop a flood.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /players/{uid} {
+      allow get: if signedIn(uid);
+      allow list: if false;
+      allow create: if signedIn(uid) && createOk();
+      allow update: if signedIn(uid) && metaOk() && (slotOk() || foldOk() || nickOk() || eqOk());
+      allow delete: if false;
+    }
+
+    // (everything else stays closed - the default, spelled out)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function signedIn(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+    function isInt(v, lo, hi) {
+      return v is int && v >= lo && v <= hi;
+    }
+    // a browser slot's key (the archive is '_')
+    function isKey(k) {
+      return k is string && k.matches('^[a-z][0-9a-z]{7}$');
+    }
+    // the game sends at most 12 characters; 24 leaves room for a size() that counts UTF-16 units (emoji)
+    function nickValue(n) {
+      return n is string && n.size() >= 1 && n.size() <= 24;
+    }
+    // the 12 v1 fields' values (a slot as it is written now: this write's server time)
+    function slotCore(x) {
+      return isInt(x.t, -999999, 999999)
+        && isInt(x.g, 0, 10000000) && isInt(x.w, 0, x.g) && isInt(x.ko, 0, 10000000)
+        && isInt(x.best, 0, 99999) && isInt(x.bl, 0, 6) && isInt(x.seen, 0, 1) && isInt(x.hi, 0, 999999999)
+        && isInt(x.day, 0, 99991231) && isInt(x.de, 0, 20)
+        && isInt(x.n, 1, 1000000000)
+        && x.at == request.time;
+    }
+    function v1Keys() {
+      return ['t', 'w', 'g', 'ko', 'best', 'bl', 'seen', 'hi', 'day', 'de', 'n', 'at'];
+    }
+    // a v1 slot: every field, nothing else
+    function slotShape(x) {
+      return x is map && x.keys().hasAll(v1Keys()) && x.keys().hasOnly(v1Keys()) && slotCore(x);
+    }
+
+    // ---- v 2 (design/shop.md 8): 비누 코인 and items. A v 1 document becomes v 2 at its first slot write by a page with
+    // the shop; v1-shaped slots in a v 2 document stay as they are until their browser writes again (read as no coins)
+    function v2Keys() {
+      return ['t', 'w', 'g', 'ko', 'best', 'bl', 'seen', 'hi', 'day', 'de', 'n', 'at', 'ce', 'sp', 'o', 'bd', 'bs'];
+    }
+    function slotShape2(x) {
+      return x is map && x.keys().hasAll(v2Keys()) && x.keys().hasOnly(v2Keys())
+        && slotCore(x)
+        && isInt(x.ce, 0, 1000000000) && isInt(x.sp, 0, 1000000000)
+        && x.o is list && x.o.size() <= 64 && x.o.toSet().size() == x.o.size() && x.o.hasOnly(itemIds())
+        && isInt(x.bd, 0, 99991231) && isInt(x.bs, 0, 5);
+    }
+    // GENERATED by tools/check-shop.js from ITEMS and DRAW (game.js); never edit by hand. A price never changes (a new
+    // price = a new id; a new draw price = a new counter); an id never leaves these lists (a slot holding it could never
+    // be written again)
+    function itemIds() { return ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7', 'h8', 'h9', 'ha', 'hb', 'hc', 'f1', 'f3', 'f2', 'f4', 'f5', 'f6',
+      'f7', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7', 'n8', 'b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7', 'e2', 'e1',
+      'e3', 'e4', 'e5', 'e6']; }
+    function priceOf(id) { return {'h1': 60, 'h2': 70, 'h3': 80, 'h4': 90, 'h5': 160, 'h6': 180, 'h7': 200, 'h8': 220, 'h9': 380, 'ha': 420,
+      'hb': 450, 'hc': 1200, 'f1': 60, 'f3': 70, 'f2': 80, 'f4': 160, 'f5': 180, 'f6': 200, 'f7': 400,
+      'n2': 70, 'n3': 80, 'n4': 90, 'n5': 150, 'n6': 200, 'n7': 220, 'n8': 380, 'b1': 90, 'b2': 160,
+      'b3': 180, 'b4': 200, 'b5': 400, 'b6': 480, 'b7': 950, 'e2': 80, 'e1': 90, 'e3': 200, 'e4': 220,
+      'e5': 450, 'e6': 1100}[id]; }
+    function leagueNeed(id) { return {'h8': 3, 'hb': 5, 'hc': 6, 'f3': 1, 'n5': 2, 'n7': 4}.get(id, 0); }
+    function poolIds() { return ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7', 'h9', 'ha', 'hd', 'he', 'f1', 'f2', 'f4', 'f5', 'f6', 'f7', 'f8',
+      'f9', 'n2', 'n3', 'n4', 'n6', 'n8', 'n9', 'na', 'b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7', 'b8', 'b9',
+      'e2', 'e1', 'e3', 'e4', 'e5', 'e6', 'e7', 'e8']; }
+    function drawPrice() { return 200; }
+    function drawMax() { return 10; }
+    // END GENERATED
+    // the account's worn set: 5 characters
+    function eqValue(e) {
+      return e is string && e.matches('^[0-9a-z]{5}$');
+    }
+    // ---- v 3 (design/looks-per-animal.md): a worn set per animal - eq is 30 characters, 5 per animal in the game's
+    // order (오리 카피바라 해달 펭귄 고양이 개구리). Slots are as in v 2
+    function eqsValue(e) {
+      return e is string && e.matches('^[0-9a-z]{30}$');
+    }
+    // the worn set as the document's version wants it: v >= 3 - six sets (30), v 1 / v 2 - one set (5)
+    function eqFor(e, v) {
+      return v >= 3 ? eqsValue(e) : eqValue(e);
+    }
+    // a slot's coin field / items, a v1-shaped slot reading none
+    function cv(a, f) {
+      return (f in a) ? a[f] : 0;
+    }
+    function ov(a) {
+      return ('o' in a) ? a.o : [];
+    }
+    // the coin part of a later write of the same slot (dt in ms since that slot's last write): coins earned rise by at
+    // most 150 and 30 + 1 per 2 s; the bonus day never goes back; the items stay as they were with the spent coins, or
+    // gain ONE item at the end with exactly its price spent (and its league reached)
+    function coinStepOk(a, b, dt) {
+      let ao = ov(a);
+      let n = ao.size();
+      let rise = b.ce - cv(a, 'ce');
+      return rise >= 0 && rise <= 150 && rise * 2000 <= 60000 + dt
+        && b.bd >= cv(a, 'bd')
+        && (b.o.size() == n
+              ? (b.o == ao && b.sp == cv(a, 'sp'))
+              : (b.o.size() == n + 1 && b.o[0:n] == ao && !(b.o[n] in ao)
+                 && b.sp == cv(a, 'sp') + priceOf(b.o[n]) && b.bl >= leagueNeed(b.o[n])));
+    }
+    // a browser's first write in a v 2 document: up to 150 coins, at most one item with exactly its price spent
+    function coinNewOk(b) {
+      return b.ce <= 150 && b.o.size() <= 1
+        && b.sp == (b.o.size() == 1 ? priceOf(b.o[0]) : 0)
+        && (b.o.size() == 0 || b.bl >= leagueNeed(b.o[0]));
+    }
+
+    // ---- v 4 (design/gacha.md 7): each slot also counts its draws (dn) and lists the items it got by drawing (gd, pool
+    // ids only). A draw costs drawPrice() coins: sp rises by exactly that per draw counted (+ one bought item's price, as
+    // in v 2); a write counts at most drawMax() draws and appends at most that many drawn items
+    function v4Keys() {
+      return ['t', 'w', 'g', 'ko', 'best', 'bl', 'seen', 'hi', 'day', 'de', 'n', 'at', 'ce', 'sp', 'o', 'bd', 'bs', 'dn', 'gd'];
+    }
+    function slotShape3(x) {
+      return x is map && x.keys().hasAll(v4Keys()) && x.keys().hasOnly(v4Keys())
+        && slotCore(x)
+        && isInt(x.ce, 0, 1000000000) && isInt(x.sp, 0, 1000000000)
+        && x.o is list && x.o.size() <= 64 && x.o.toSet().size() == x.o.size() && x.o.hasOnly(itemIds())
+        && isInt(x.bd, 0, 99991231) && isInt(x.bs, 0, 5)
+        && isInt(x.dn, 0, 1000000000)
+        && x.gd is list && x.gd.size() <= 64 && x.gd.toSet().size() == x.gd.size() && x.gd.hasOnly(poolIds())
+        && x.gd.size() <= x.dn;
+    }
+    // a slot's draws / drawn items, an older slot reading none
+    function dv(a) {
+      return ('dn' in a) ? a.dn : 0;
+    }
+    function gv(a) {
+      return ('gd' in a) ? a.gd : [];
+    }
+    // the coin part of a later write of the same slot in a v 4 document: v 2's rules with the draws' coins in sp, plus the
+    // draws: dn rises by 0..drawMax(), gd keeps its start and gains at most that many items
+    function coinStepOk3(a, b, dt) {
+      let ao = ov(a);
+      let n = ao.size();
+      let ag = gv(a);
+      let g = ag.size();
+      let rise = b.ce - cv(a, 'ce');
+      let d = b.dn - dv(a);
+      return rise >= 0 && rise <= 150 && rise * 2000 <= 60000 + dt
+        && b.bd >= cv(a, 'bd')
+        && d >= 0 && d <= drawMax()
+        && b.gd.size() >= g && b.gd.size() <= g + d && b.gd[0:g] == ag
+        && (b.o.size() == n
+              ? (b.o == ao && b.sp == cv(a, 'sp') + drawPrice() * d)
+              : (b.o.size() == n + 1 && b.o[0:n] == ao && !(b.o[n] in ao)
+                 && b.sp == cv(a, 'sp') + drawPrice() * d + priceOf(b.o[n]) && b.bl >= leagueNeed(b.o[n])));
+    }
+    // a browser's first write in a v 4 document: up to 150 coins, at most one bought item and drawMax() draws, sp exact
+    function coinNewOk3(b) {
+      return b.ce <= 150 && b.o.size() <= 1 && b.dn <= drawMax()
+        && b.sp == drawPrice() * b.dn + (b.o.size() == 1 ? priceOf(b.o[0]) : 0)
+        && (b.o.size() == 0 || b.bl >= leagueNeed(b.o[0]));
+    }
+    function slotOk3(o, b, k) {
+      return slotShape3(b)
+        && ((k in o.s)
+              ? (stepOk(o.s[k], b) && coinStepOk3(o.s[k], b, request.time.toMillis() - o.s[k].at.toMillis()))
+              : (newOk(b) && coinNewOk3(b)));
+    }
+    // (v 4) the archive's draws are the sum, its drawn items the union
+    function drawSumOk(a, b, z) {
+      return z.dn == dv(a) + dv(b)
+        && z.gd.hasAll(gv(a)) && z.gd.hasAll(gv(b)) && z.gd.hasOnly(gv(a).concat(gv(b)));
+    }
+
+    // first sign-in with no cloud data yet: this browser's trophies (and, v 2, coins and items) become the account's
+    // (one slot, n 1). An older page creates a v 1 document, the shop's page a v 2 one with its worn set, a page with
+    // per-animal sets a v 3 one (its six worn sets), a page with the 뽑기 a v 4 one (the store as it is: any dn, any pool
+    // ids in gd up to dn - the honest limit of t)
+    function createOk() {
+      let d = request.resource.data;
+      return d.keys().hasAll(['v', 'dev', 's', 'last', 'updatedAt'])
+        && d.keys().hasOnly(['v', 'dev', 'nick', 'eq', 's', 'last', 'updatedAt'])
+        && d.dev is string && d.dev.matches('^[0-9a-z]{8}$')
+        && (!('nick' in d) || nickValue(d.nick))
+        && d.updatedAt == request.time
+        && d.s is map && d.s.size() == 1
+        && isKey(d.last) && (d.last in d.s)
+        && ((d.v == 1 && slotShape(d.s[d.last]) && !('eq' in d))
+            || (d.v == 2 && slotShape2(d.s[d.last]) && (!('eq' in d) || eqValue(d.eq)))
+            || (d.v == 3 && slotShape2(d.s[d.last]) && (!('eq' in d) || eqsValue(d.eq)))
+            || (d.v == 4 && slotShape3(d.s[d.last]) && (!('eq' in d) || eqsValue(d.eq))))
+        && d.s[d.last].n == 1
+        && d.s[d.last].t >= 0 && d.s[d.last].t <= 99999;
+    }
+
+    // every update: only s / last / nick / eq / v / updatedAt change (v only upwards, to 2, 3 or 4), at most one write per
+    // 2 s, at most 16 browser slots; eq as the document's version after the write wants it
+    function metaOk() {
+      let d = request.resource.data;
+      let o = resource.data;
+      return d.diff(o).affectedKeys().hasOnly(['s', 'last', 'nick', 'eq', 'v', 'updatedAt'])
+        && (d.v == o.v || ((d.v == 2 || d.v == 3 || d.v == 4) && d.v > o.v))
+        && d.updatedAt == request.time
+        && request.time > o.updatedAt + duration.value(2, 's')
+        && d.s is map && d.s.size() <= (('_' in d.s) ? 17 : 16)
+        && (!('nick' in d) || nickValue(d.nick))
+        && (!('eq' in d) || eqFor(d.eq, d.v));
+    }
+
+    // one browser writes its own slot (absolute values): in a v 4 document in the v 4 shape, its coins, items and draws
+    // stepping as coinStepOk3 / coinNewOk3 say; in a v 2 / v 3 document in the v 2 shape, its coins and items stepping
+    // as coinStepOk / coinNewOk say; in a v 1 document as before
+    function slotOk() {
+      let d = request.resource.data;
+      let o = resource.data;
+      let k = d.last;
+      return isKey(k)
+        && d.s.diff(o.s).affectedKeys().hasOnly([k])
+        && (k in d.s)
+        && (d.v == 4 ? slotOk3(o, d.s[k], k) : d.v >= 2 ? slotOk2(o, d.s[k], k) : (slotShape(d.s[k]) && ((k in o.s) ? stepOk(o.s[k], d.s[k]) : newOk(d.s[k]))));
+    }
+    function slotOk2(o, b, k) {
+      return slotShape2(b)
+        && ((k in o.s)
+              ? (stepOk(o.s[k], b) && coinStepOk(o.s[k], b, request.time.toMillis() - o.s[k].at.toMillis()))
+              : (newOk(b) && coinNewOk(b)));
+    }
+    // a browser's first write: it starts from nothing (the account's count is in the other slots)
+    function newOk(b) {
+      return b.n == 1 && b.t <= 250 && b.g <= 20 && b.ko <= 400;
+    }
+    // a later write of the same slot: newer, >= 2 s after its last one, rises bounded by time, counters only go up
+    function stepOk(a, b) {
+      let dt = request.time.toMillis() - a.at.toMillis();
+      let rise = b.t - a.t;
+      return b.n > a.n && dt >= 2000
+        && (rise <= 0 || (rise <= 250 && rise * 500 <= 10000 + dt))
+        && b.g >= a.g && b.g - a.g <= 20
+        && b.w >= a.w && b.w - a.w <= b.g - a.g
+        && b.ko >= a.ko && b.ko - a.ko <= 400
+        && b.best >= a.best && b.bl >= a.bl && b.seen >= a.seen && b.hi >= a.hi;
+    }
+
+    // a browser that has not written for 7 days is folded into the archive slot '_' (frees a slot; the count is kept:
+    // the archive gains exactly what the folded slot held - in a v 2 document its coins and items too, in a v 4 one its
+    // draws and drawn items). last = the
+    // folded slot
+    function foldOk() {
+      let d = request.resource.data;
+      let o = resource.data;
+      let k = d.last;
+      let z0 = ('_' in o.s) ? o.s['_'] : {'t': 0, 'w': 0, 'g': 0, 'ko': 0, 'best': 0, 'bl': 0, 'seen': 0, 'hi': 0, 'n': 0};
+      return isKey(k) && (k in o.s) && !(k in d.s) && ('_' in d.s)
+        && d.s.diff(o.s).affectedKeys().hasOnly([k, '_'])
+        && o.s[k].at < request.time - duration.value(7, 'd')
+        && sumOk(z0, o.s[k], d.s['_'], d.v);
+    }
+    function sumOk(a, b, z, v) {
+      return (v == 4 ? (slotShape3(z) && coinSumOk(a, b, z) && drawSumOk(a, b, z)) : v >= 2 ? (slotShape2(z) && coinSumOk(a, b, z)) : slotShape(z))
+        && z.n == a.n + 1 && z.day == 0 && z.de == 0
+        && z.t == a.t + b.t && z.w == a.w + b.w && z.g == a.g + b.g && z.ko == a.ko + b.ko
+        && z.best == (a.best > b.best ? a.best : b.best)
+        && z.bl == (a.bl > b.bl ? a.bl : b.bl)
+        && z.seen == (a.seen > b.seen ? a.seen : b.seen)
+        && z.hi == (a.hi > b.hi ? a.hi : b.hi);
+    }
+    // (v 2) the archive's coins are the sums, its items the union, its bonus day none (a week quiet: history)
+    function coinSumOk(a, b, z) {
+      return z.ce == cv(a, 'ce') + cv(b, 'ce') && z.sp == cv(a, 'sp') + cv(b, 'sp')
+        && z.o.hasAll(ov(a)) && z.o.hasAll(ov(b)) && z.o.hasOnly(ov(a).concat(ov(b)))
+        && z.bd == 0 && z.bs == 0;
+    }
+
+    // only the nickname changes (metaOk checked its value)
+    function nickOk() {
+      let d = request.resource.data;
+      let o = resource.data;
+      return d.diff(o).affectedKeys().hasOnly(['nick', 'updatedAt']) && ('nick' in d);
+    }
+    // only the worn set changes - and the version with it when this write makes the document v 3 or v 4 (a page with
+    // per-animal sets upgrades with its first worn set of 30 characters; metaOk checked both values)
+    function eqOk() {
+      let d = request.resource.data;
+      let o = resource.data;
+      return d.diff(o).affectedKeys().hasOnly(['eq', 'v', 'updatedAt']) && ('eq' in d);
+    }
+  }
+}

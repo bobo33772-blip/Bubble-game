@@ -1,0 +1,1417 @@
+<title>뽀득뽀득 목욕탕</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link id="pg-fontcss" rel="stylesheet" media="print" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Gowun+Dodum&display=swap">
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #0a2327;
+  --bg-deep: #061518;
+  --grout: rgba(127, 220, 200, 0.06);
+  --mint: #7fdcc8;
+  --mint-2: #4cb8a5;
+  --mint-deep: #1d5953;
+  --pink: #f6a6bd;
+  --pink-2: #d97893;
+  --cream: #fbf0d9;
+  --cream-dim: #c4b99f;
+  --duck: #ffd447;
+  --duck-2: #e89a17;
+  --ink: #071619;
+  --panel: rgba(6, 22, 25, 0.88);
+  --panel-line: rgba(127, 220, 200, 0.32);
+  --focus: #ffe27a;
+  --font-sign: "Black Han Sans", "Do Hyeon", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-body: "Gowun Dodum", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+}
+html { height: 100%; box-sizing: border-box; overflow: hidden; background: var(--bg); }
+*, *::before, *::after { box-sizing: inherit; }
+body {
+  height: 100%; margin: 0; overflow: hidden;
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(110% 70% at 50% -10%, rgba(127, 220, 200, 0.13), transparent 62%),
+    linear-gradient(var(--grout) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grout) 1px, transparent 1px);
+  background-size: 100% 100%, 26px 26px, 26px 26px;
+  color: var(--cream);
+  font-family: var(--font-body);
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+}
+#pg-app {
+  height: 100%; width: 100%;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 0 16px; gap: 6px;
+  user-select: none; -webkit-user-select: none;
+}
+#pg-head {
+  flex: none; width: 100%; max-width: 980px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding-top: 10px;
+}
+.pg-brand {
+  margin: 0; font-family: var(--font-sign); font-weight: 400; font-size: 21px; line-height: 1;
+  color: var(--cream); white-space: nowrap; display: flex; align-items: center; gap: 8px; letter-spacing: 0.01em;
+  flex: 0 1 auto; min-width: 0; overflow: hidden;
+}
+.pg-brand-t { overflow: hidden; text-overflow: ellipsis; }
+.pg-brand .pg-onsen { color: var(--pink); font-family: var(--font-body); font-size: 22px; }
+.pg-brand em { font-style: normal; color: var(--mint); }
+.pg-tools { flex: none; display: flex; gap: 8px; }
+.pg-icon {
+  width: 38px; height: 38px; padding: 0; border-radius: 12px; cursor: pointer;
+  display: grid; place-items: center; color: var(--cream);
+  background: rgba(127, 220, 200, 0.08); border: 1.5px solid var(--panel-line);
+  transition: background-color 0.15s;
+}
+.pg-icon:hover { background: rgba(127, 220, 200, 0.18); }
+.pg-icon:disabled { opacity: 0.4; cursor: default; }
+.pg-icon svg { width: 20px; height: 20px; display: block; }
+.pg-icon .pg-off { display: none; }
+.pg-icon.is-muted .pg-on { display: none; }
+.pg-icon.is-muted .pg-off { display: block; }
+#pg-stage {
+  flex: 1 1 0; min-height: 0; width: 100%; position: relative;
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+/* v3 online: connection chip in the header ("연결 중…", "연결이 불안정해요") */
+.pg-chip {
+  flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; display: inline-flex; align-items: center; gap: 0.4em; padding: 0.3em 0.75em; border-radius: 999px;
+  font-size: 13px; line-height: 1.2; white-space: nowrap; color: var(--ink); background: var(--duck);
+  box-shadow: 0 0 0 1.5px var(--ink);
+}
+.pg-chip::before { content: ""; width: 0.55em; height: 0.55em; border-radius: 50%; background: currentColor; opacity: 0.75; }
+.pg-chip.is-bad { background: #ff9a8a; }
+.pg-chip.is-wait::before { animation: pg-blink 0.9s ease-in-out infinite; }
+@keyframes pg-blink { 50% { opacity: 0.15; } }
+#pg-frame {
+  flex: none; position: relative; padding: 10px; border-radius: 18px;
+  background-color: #3fae9c;
+  background-image:
+    linear-gradient(rgba(10, 45, 42, 0.55) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(10, 45, 42, 0.55) 1px, transparent 1px),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 45%, rgba(0, 0, 0, 0.12));
+  background-size: 10px 10px, 10px 10px, 100% 100%;
+  box-shadow:
+    0 0 0 2px var(--ink),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.25),
+    0 18px 50px rgba(0, 0, 0, 0.55),
+    0 0 80px rgba(127, 220, 200, 0.12);
+}
+#pg-frame::before, #pg-frame::after {
+  content: ""; position: absolute; top: 3px; width: 4px; height: 4px; border-radius: 50%;
+  background: var(--pink); box-shadow: 0 0 0 1px var(--ink);
+}
+#pg-frame::before { left: 3px; }
+#pg-frame::after { right: 3px; }
+#pg-screen {
+  position: relative; overflow: hidden; border-radius: 5px; background: #071417;
+  box-shadow: 0 0 0 2px var(--ink), 0 0 0 3px rgba(255, 255, 255, 0.18);
+  font-size: var(--fs, 12px); width: 512px; height: 448px;
+}
+#pg-canvas {
+  display: block; width: 100%; height: 100%;
+  image-rendering: pixelated; image-rendering: crisp-edges; image-rendering: pixelated;
+}
+.pg-ov {
+  position: absolute; inset: 0; z-index: 3;
+  display: flex; align-items: center; justify-content: center; padding: 0.8em;
+  text-align: center;
+  background: radial-gradient(90% 90% at 50% 50%, rgba(6, 22, 25, 0.5), rgba(6, 22, 25, 0.78));
+}
+#pg-title.pg-ov { background: linear-gradient(180deg, rgba(6, 22, 25, 0.25), rgba(6, 22, 25, 0.62) 55%, rgba(6, 22, 25, 0.8)); }
+.pg-card {
+  max-width: 94%; max-height: 100%; overflow: hidden;
+  /* Korean: wrap between words, never inside one (no lone syllable such as a stray "르" on its own line) */
+  word-break: keep-all; overflow-wrap: break-word;
+  background: var(--panel); border: 2px solid var(--panel-line); border-radius: 1.2em;
+  padding: 1em 1.5em 1.15em;
+  box-shadow: 0 0.6em 2em rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.pg-logo {
+  margin: 0; font-family: var(--font-sign); font-weight: 400; line-height: 1.02; font-size: 2.7em;
+  color: var(--duck);
+  text-shadow: 0 0.05em 0 var(--duck-2), 0 0.1em 0 var(--ink), 0 0 0.6em rgba(255, 212, 71, 0.25);
+}
+.pg-logo span { display: block; font-size: 0.5em; color: var(--mint); text-shadow: 0 0.08em 0 var(--ink); letter-spacing: 0.08em; margin-bottom: 0.15em; }
+.pg-howto { list-style: none; margin: 0.75em 0 0; padding: 0; font-size: 1em; line-height: 1.55; color: var(--cream); }
+.pg-howto li { text-wrap: balance; }
+.pg-howto li::before { content: "● "; color: var(--pink); font-size: 0.7em; vertical-align: 0.15em; }
+.pg-keys { margin: 0.55em 0 0; font-size: 0.86em; color: var(--cream-dim); }
+.pg-best { margin: 0.6em 0 0.75em; font-size: 0.95em; color: var(--mint); }
+.pg-best b { font-family: var(--font-sign); font-weight: 400; color: var(--duck); font-size: 1.15em; margin-left: 0.25em; }
+.pg-h2 { margin: 0 0 0.35em; font-family: var(--font-sign); font-weight: 400; font-size: 2.1em; line-height: 1.1; color: var(--cream); text-shadow: 0 0.08em 0 var(--ink); }
+.pg-h2.pg-pink { color: var(--pink); }
+.pg-h2.pg-duck { color: var(--duck); }
+.pg-sub { margin: 0 0 0.8em; color: var(--cream-dim); font-size: 0.95em; }
+.pg-stats { margin: 0.2em auto 0.9em; display: grid; grid-template-columns: auto auto; gap: 0.25em 1.1em; text-align: left; font-size: 1em; width: max-content; max-width: 100%; }
+.pg-stats dt { color: var(--mint); }
+.pg-stats dd { margin: 0; color: var(--cream); font-family: var(--font-sign); font-weight: 400; text-align: right; }
+.pg-new { display: inline-block; margin: 0 0 0.6em; padding: 0.15em 0.7em; border-radius: 999px; background: var(--pink); color: var(--ink); font-family: var(--font-sign); font-size: 0.9em; }
+.pg-row { display: flex; gap: 0.6em; justify-content: center; flex-wrap: wrap; }
+.pg-btn {
+  font: inherit; font-family: var(--font-sign); font-size: 1.3em; line-height: 1;
+  padding: 0.55em 1.5em 0.5em; border-radius: 999px; border: 0; cursor: pointer;
+  background: var(--duck); color: var(--ink);
+  box-shadow: 0 0.16em 0 var(--duck-2), 0 0.3em 0.8em rgba(0, 0, 0, 0.35);
+  transition: transform 0.08s, filter 0.15s;
+}
+.pg-btn:hover { filter: brightness(1.06); }
+.pg-btn:active { transform: translateY(0.1em); box-shadow: 0 0.06em 0 var(--duck-2); }
+.pg-btn.pg-ghost {
+  background: transparent; color: var(--cream); font-size: 1em; padding: 0.6em 1.1em 0.55em;
+  box-shadow: inset 0 0 0 1.5px var(--panel-line);
+}
+.pg-btn:focus-visible, .pg-icon:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+.pg-banner {
+  position: absolute; left: 0; right: 0; top: 36%; z-index: 2;
+  text-align: center; pointer-events: none; transform: translateY(-50%);
+}
+/* boss banners move down when the boss (or its giant bubble) is up where a banner normally sits */
+.pg-banner.low { top: 70%; }
+.pg-banner-in { display: inline-block; max-width: 94%; padding: 0.25em 1.1em 0.35em; border-radius: 0.8em; background: rgba(6, 22, 25, 0.8); word-break: keep-all; overflow-wrap: break-word; }
+.pg-banner.show .pg-banner-in { animation: pg-pop 0.32s cubic-bezier(0.2, 1.5, 0.45, 1); }
+#pg-banner-sub {
+  display: block; font-size: 0.95em; color: var(--mint); margin-bottom: 0.1em; letter-spacing: 0.04em;
+  text-shadow: 0 0.08em 0 var(--ink), 0 0 0.35em rgba(6, 22, 25, 0.9);
+}
+#pg-banner-main {
+  display: block; font-family: var(--font-sign); font-size: 2.3em; line-height: 1.1; color: var(--cream);
+  text-shadow: 0 0.07em 0 var(--ink), 0 0 0.5em rgba(127, 220, 200, 0.35);
+}
+.pg-banner.ready #pg-banner-main { color: var(--duck); font-size: 2.8em; }
+.pg-banner.hurry #pg-banner-main { color: #ff8070; }
+.pg-banner.hurry #pg-banner-sub { color: var(--pink); }
+.pg-banner.ticket #pg-banner-main { color: var(--duck); font-size: 2.8em; }
+.pg-banner.ticket #pg-banner-sub { color: var(--pink); }
+.pg-banner.clear #pg-banner-main { color: var(--mint); }
+.pg-banner.clear #pg-banner-sub { color: var(--duck); font-size: 1.05em; }
+.pg-banner.power #pg-banner-main { color: var(--pink); }
+.pg-banner.boss #pg-banner-main { color: #ff8070; font-size: 2.5em; }
+.pg-banner.boss #pg-banner-sub { color: var(--cream); }
+.pg-banner.bomb #pg-banner-main { color: #9fe6ff; }
+.pg-banner.bomb #pg-banner-sub { color: var(--pink); }
+.pg-banner.victory #pg-banner-main { color: var(--duck); font-size: 3.1em; }
+.pg-banner.victory #pg-banner-sub { color: var(--mint); font-size: 1.05em; }
+/* v4 first-time hints ("특기: 둥실 활공" over how it works) and the countdown's "내 특기" line under the 3 */
+.pg-banner.hint #pg-banner-main { color: var(--duck); font-size: 1.7em; }
+.pg-banner.hint #pg-banner-sub, .pg-banner.count #pg-banner-sub { color: var(--cream); font-size: 0.9em; letter-spacing: 0; }
+/* 목욕 도장 카드 (pause + game over): a paper stamp card with 10 slots */
+.pg-stampcard {
+  margin: 0.1em auto 0.85em; padding: 0.4em 0.75em 0.45em; width: max-content; max-width: 100%;
+  background: linear-gradient(180deg, #fff7e6, #f6e6c6); color: var(--ink);
+  border: 2px dashed #c9404a; border-radius: 0.55em;
+  box-shadow: 0 0.15em 0 rgba(0, 0, 0, 0.25), inset 0 0 0 2px rgba(255, 255, 255, 0.55);
+  transform: rotate(-1.2deg);
+}
+.pg-stampcard-head {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 1.2em; margin-bottom: 0.3em;
+  font-family: var(--font-sign); font-size: 0.92em; color: #b8323c; letter-spacing: 0.02em;
+}
+.pg-stampcard-head b { font-weight: 400; color: var(--ink); }
+.pg-slots { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(10, 1.45em); gap: 0.26em; }
+.pg-slots li {
+  width: 1.45em; height: 1.45em; border-radius: 50%; position: relative;
+  border: 1.5px dotted rgba(184, 50, 60, 0.5); background: rgba(184, 50, 60, 0.05);
+}
+.pg-slots li.on {
+  border: 0; transform: rotate(-14deg);
+  background: radial-gradient(circle at 38% 32%, #f2626b, #c3242f 72%);
+  box-shadow: 0 0 0 1.5px #a81d28, inset 0 0 0 2px rgba(255, 235, 230, 0.4);
+}
+.pg-slots li.on::after {
+  content: "♨"; position: absolute; inset: 0; display: grid; place-items: center;
+  color: #fff3ef; font-size: 0.9em; line-height: 1;
+}
+.pg-stampcard-foot { margin: 0.3em 0 0; font-size: 0.78em; color: #8a5a3c; text-align: center; }
+/* phones: text has a minimum size, so keep the result cards compact enough to fit the playfield */
+.pg-touch-on .pg-stampcard-foot { display: none; }
+.pg-touch-on .pg-stampcard { margin-bottom: 0.6em; padding-bottom: 0.4em; }
+.pg-touch-on #pg-over .pg-stats { margin-bottom: 0.55em; }
+.pg-touch-on #pg-over .pg-h2, .pg-touch-on #pg-pause .pg-h2 { margin-bottom: 0.2em; }
+.pg-touch-on #pg-pause .pg-sub { margin-bottom: 0.55em; }
+/* v3: animal picker on the title card */
+.pg-tagline { margin: 0.45em 0 0; font-size: 0.95em; color: var(--cream); }
+.pg-pick { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0.35em; margin: 0.65em auto 0.25em; max-width: 25em; }
+.pg-pick-btn {
+  font: inherit; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 0.12em;
+  padding: 0.3em 0.1em 0.25em; border-radius: 0.8em; cursor: pointer; color: var(--cream);
+  background: rgba(127, 220, 200, 0.06); border: 1.5px solid var(--panel-line);
+  transition: transform 0.08s, background-color 0.15s;
+}
+.pg-pick-btn:hover { background: rgba(127, 220, 200, 0.14); }
+.pg-pick-btn.on { border-color: var(--duck); background: rgba(255, 212, 71, 0.16); box-shadow: 0 0 0 2px rgba(255, 212, 71, 0.3); }
+.pg-pick-btn:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.pg-pick-art { width: 2.7em; height: 2.7em; image-rendering: pixelated; image-rendering: crisp-edges; image-rendering: pixelated; }
+.pg-pick-btn.on .pg-pick-art { animation: pg-hop 0.9s ease-in-out infinite; }
+.pg-pick-name { font-size: 0.78em; line-height: 1.1; white-space: nowrap; }
+/* v4 character kits: the picked animal's card under the portraits (#pg-kit) and its compact twin in the room
+   (#pg-room-kit). game.js fills the texts and the 4 stat rows, sets --hue (the animal's colour) and toggles .off
+   (능력 끄기: greyed, every bar 3/3/3/3). Every line keeps one height whatever the animal, so nothing below the card
+   jumps while players flick through the six */
+.pg-kit {
+  --kc: var(--hue, var(--duck));
+  position: relative; isolation: isolate; width: 25em; max-width: 100%; margin: 0.45em auto 0; padding: 0.4em 0.75em 0.45em;
+  border-radius: 0.8em; border: 1.5px solid rgba(127, 220, 200, 0.2); text-align: left; line-height: 1.3;
+}
+/* a faint wash of the animal's colour */
+.pg-kit::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: var(--kc); opacity: 0.07; pointer-events: none; }
+.pg-kit-head { margin: 0; display: flex; align-items: center; gap: 0.1em 0.45em; min-width: 0; white-space: nowrap; }
+.pg-kit-head b { font-family: var(--font-sign); font-weight: 400; font-size: 1.2em; line-height: 1.1; color: var(--kc); text-shadow: 0 0.07em 0 var(--ink); }
+.pg-kit-animal { font-size: 0.82em; color: var(--cream-dim); }
+.pg-kit-role, .pg-kit-badge { font-style: normal; line-height: 1; border-radius: 999px; }
+/* (the body face: Black Han Sans turns to blots at chip size) */
+.pg-kit-role { font-weight: 700; font-size: 0.78em; padding: 0.2em 0.6em 0.18em; background: var(--kc); color: var(--ink); }
+.pg-kit-badge { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 0.74em; padding: 0.2em 0.6em 0.16em; color: var(--pink); box-shadow: inset 0 0 0 1px rgba(246, 166, 189, 0.6); }
+.pg-kit-badge:empty { display: none; }
+.pg-kit-tag { margin: 0.15em 0 0; font-size: 0.86em; color: var(--cream); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 속도 / 점프 / 사거리 / 연사: 5 pips each (filled in the hue, empty ones a dim outline), two rows side by side */
+.pg-kit-stats { display: grid; grid-template-columns: repeat(2, max-content); gap: 0.3em 1.5em; margin: 0.4em 0 0.15em; }
+.pg-kit-stats:empty { display: none; }
+.pg-stat { display: flex; align-items: center; gap: 0.2em; font-size: 0.82em; line-height: 1; }
+.pg-stat b, .pg-kit-line b { flex: none; width: 3.2em; font-weight: 700; color: var(--mint); text-align: left; }
+.pg-stat i { flex: none; width: 0.82em; height: 0.82em; border-radius: 0.24em; box-shadow: inset 0 0 0 1.5px rgba(127, 220, 200, 0.3); }
+.pg-stat i.on { background: var(--kc); box-shadow: inset 0 -0.16em 0 rgba(7, 22, 25, 0.28); }
+/* 특기 / 거품: label, name, then how it works (one line; a how too long for a narrow card ends in "…") */
+.pg-kit-line { display: flex; align-items: baseline; gap: 0.45em; margin: 0.2em 0 0; font-size: 0.82em; white-space: nowrap; }
+.pg-kit-line b { margin-right: -0.25em; }
+.pg-kit-line b + span { flex: none; font-weight: 700; color: var(--cream); }
+.pg-kit-how { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 0.94em; color: var(--cream-dim); }
+/* the room's kit card when my animal is a twin (distinction 2.10): "같은 동물이 있어서 분홍색으로 나와요" with a dot of
+   that colour (--twin = my seat colour) */
+.pg-kit-twin { margin: 0.2em 0 0; font-size: 0.82em; color: var(--cream); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pg-kit-twin::before { content: ""; display: inline-block; width: 0.7em; height: 0.7em; margin-right: 0.35em; border-radius: 50%;
+  vertical-align: -0.05em; background: var(--twin, var(--mint)); box-shadow: 0 0 0 1px var(--ink); }
+.pg-kit.off { --kc: #8a9b98; border-style: dashed; }
+.pg-kit.off .pg-kit-head b, .pg-kit.off .pg-kit-line b + span { color: var(--cream-dim); }
+.pg-kit.off .pg-kit-badge { display: none; }
+.pg-title-card .pg-best { margin: 0.45em 0 0.65em; }
+/* the title card: both start buttons stay on one row (친구와 하기 is the only way into online play), and the card
+   scrolls rather than clipping on very short screens */
+.pg-title-card { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+.pg-title-card::-webkit-scrollbar { display: none; }
+.pg-title-card .pg-row { flex-wrap: nowrap; }
+.pg-touch-on .pg-title-card .pg-btn { font-size: 1.15em; padding-left: 0.9em; padding-right: 0.9em; }
+.pg-touch-on .pg-title-card .pg-best { margin: 0.3em 0 0.5em; }
+.pg-btn.pg-alt { background: var(--pink); box-shadow: 0 0.16em 0 var(--pink-2), 0 0.3em 0.8em rgba(0, 0, 0, 0.35); }
+.pg-btn.pg-alt:active { box-shadow: 0 0.06em 0 var(--pink-2); }
+@keyframes pg-hop { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-0.15em); } }
+.pg-touch-on .pg-tagline { display: none; }
+.pg-touch-on .pg-pick { margin-top: 0.5em; }
+.pg-touch-on .pg-pick-btn { min-height: 44px; min-width: 44px; }
+/* phones: the kit shows its head, the pips and the 특기 name (game.js keeps the rest in #pg-kit's aria-label) */
+@media (max-width: 600px), (max-height: 560px) {
+  .pg-touch-on .pg-kit-tag, .pg-touch-on .pg-kit-how, .pg-touch-on .pg-kit-bubline { display: none; }
+}
+/* the title card fits the game screen at every scale: the screen is a size container whose em is --fs, and the
+   shorter it is in em (phones, small windows: --fs stops shrinking at 11-12.5px), the more extras step aside.
+   Browsers without container queries keep the card's own scrolling */
+#pg-screen { container-type: size; }
+@container (max-height: 31em) {
+  .pg-kit-tag, .pg-kit-how, .pg-kit-bubline { display: none; }
+}
+@container (max-height: 28.5em) {
+  .pg-tagline, .pg-keys { display: none; }
+}
+/* phones: the 특기 moves up beside the name (the animal word and the badge step aside), the pips fill the 2nd row */
+@container (max-height: 25.5em) {
+  .pg-kit { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "head perk" "stats stats"; align-items: center; column-gap: 0.6em; margin-top: 0.35em; padding: 0.3em 0.7em 0.35em; }
+  .pg-kit-head { grid-area: head; min-width: max-content; }
+  .pg-kit-animal, .pg-kit-badge { display: none; }
+  .pg-kit-stats { grid-area: stats; margin: 0.3em 0 0.05em; }
+  .pg-kit-line { grid-area: perk; justify-content: flex-end; justify-content: safe flex-end; margin: 0; min-width: 0; overflow: hidden; }
+  .pg-kit-line b { width: auto; margin-right: 0; }
+  .pg-kit-line b + span { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .pg-title-card .pg-best, .pg-touch-on .pg-title-card .pg-best { margin: 0.25em 0 0.4em; }
+  .pg-touch-on .pg-card.pg-title-card { padding-top: 0.7em; padding-bottom: 0.8em; }
+  .pg-touch-on .pg-title-card .pg-pick { margin-top: 0.4em; }
+}
+/* small phones: the logo drops its "꽥꽥이와 친구들의" line (the header names the game) and the portraits their
+   captions (the kit names the pick; each button keeps its aria-label) */
+@container (max-height: 23.3em) {
+  .pg-logo span, .pg-pick .pg-pick-name { display: none; }
+}
+/* the smallest (a 320px phone, a window under 1x): slimmer margins, as the max-width 340px rules below do */
+@container (max-height: 19.5em) {
+  #pg-title.pg-ov { padding: 0.35em; }
+  .pg-card.pg-title-card, .pg-touch-on .pg-card.pg-title-card { padding: 0.55em 0.8em 0.7em; }
+}
+/* narrow screens: the two start buttons as slim as on phones, so their labels never break onto two lines */
+@container (max-width: 30em) {
+  .pg-title-card .pg-btn { font-size: 1.15em; padding-left: 0.9em; padding-right: 0.9em; }
+}
+/* tiny windows (the screen under 1x): a one-line logo and narrower pip rows */
+@container (max-width: 23em) {
+  .pg-logo { font-size: 2.2em; }
+  .pg-kit-stats { column-gap: 0.7em; }
+  .pg-stat b { width: 2.9em; }
+  .pg-stat i { width: 0.72em; height: 0.72em; }
+}
+@container (max-width: 19em) {
+  .pg-kit-stats { column-gap: 0.5em; }
+  .pg-stat { gap: 0.12em; }
+  .pg-stat b { width: 2.7em; }
+  .pg-stat i { width: 0.6em; height: 0.6em; }
+}
+@container (max-width: 15.5em) {
+  .pg-kit-stats { grid-template-columns: max-content; }
+}
+/* the tiniest (a window a couple of hundred px tall): the logo goes too (the header names the game); below that the
+   card scrolls */
+@container (max-height: 16.5em) {
+  .pg-logo { display: none; }
+  .pg-pick { margin-top: 0; }
+  .pg-title-card .pg-best, .pg-touch-on .pg-title-card .pg-best { margin: 0.15em 0 0.3em; }
+}
+@media (max-width: 420px) {
+  .pg-touch-on .pg-pick-sm { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .pg-touch-on .pg-pick-sm .pg-pick-btn { flex-direction: row; justify-content: center; gap: 0.35em; }
+}
+/* name tags over every animal, Korean word pops ("냥!", "뽀득 KO!") */
+#pg-tags, #pg-words { position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
+/* name tags v2 (design/distinction.md 2.6): a solid slot pill with the seat number chip (.pg-tag-n) and the nick
+   (.pg-tag-t, ellipsized inside the flex pill); .is-cmp = the number chip only (tags that would overlap); mine (online)
+   holds a white "나" chip and a white ring - white means "me" only */
+.pg-tag {
+  position: absolute; transform: translate(-50%, -100%); display: inline-flex; align-items: center; gap: 0.25em;
+  max-width: 7em; white-space: nowrap; font-family: var(--font-body); font-weight: 700; font-size: 0.7em; line-height: 1.05;
+  padding: 0.1em 0.42em 0.14em 0.14em; border-radius: 0.6em; background: var(--slot, #ffffff); color: var(--ink);
+  box-shadow: 0 0 0 1px rgba(7, 22, 25, 0.9);
+}
+.pg-tag-n { flex: none; min-width: 1.15em; height: 1.15em; border-radius: 0.45em; display: grid; place-items: center; padding: 0 0.15em;
+  box-sizing: border-box; font-style: normal; font-family: var(--font-sign); background: var(--ink); color: var(--slot, #ffffff); }
+.pg-tag-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.pg-touch-on .pg-tag { font-size: max(0.7em, 11px); }
+.pg-tag.is-cmp { padding-right: 0.14em; }
+.pg-tag.is-cmp .pg-tag-t { display: none; }
+/* trapped: a ring in the TRAPPER's colour (syncTags sets --ring; ink when the trapper is gone) */
+.pg-tag.is-trap { box-shadow: 0 0 0 1px rgba(7, 22, 25, 0.9), 0 0 0 2.5px var(--ring, rgba(7, 22, 25, 0.9)); }
+/* me: a 1 px ink line, then 2 px of white (after is-trap, so my own trapped tag stays white); painted over every other
+   tag (a chip the HUD clamp could not move must never hide my 나 chip), and a hint chip over that */
+.pg-tag.is-me { z-index: 2; box-shadow: 0 0 0 1px rgba(7, 22, 25, 0.9), 0 0 0 3px #ffffff; }
+.pg-tag.is-me .pg-tag-n { background: #ffffff; color: var(--ink); }
+.pg-tag.is-hi { font-size: 0.91em; }
+.pg-touch-on .pg-tag.is-hi { font-size: max(0.91em, 14px); }
+.pg-tag.is-ghost { opacity: 0.85; }
+@media (prefers-reduced-motion: no-preference) { .pg-tag.is-hi { animation: pg-tag-bob 0.5s ease-in-out infinite alternate; } }
+@keyframes pg-tag-bob { to { transform: translate(-50%, -100%) translateY(-2px); } }
+.pg-tip {
+  position: absolute; z-index: 3; transform: translate(-50%, -100%); white-space: nowrap; pointer-events: none;
+  font-family: var(--font-sign); font-size: 0.8em; line-height: 1; padding: 0.18em 0.5em 0.14em; border-radius: 0.6em;
+  background: var(--ink); color: var(--slot, #ffffff); box-shadow: 0 0 0 1.5px var(--slot, #ffffff);
+}
+.pg-touch-on .pg-tip { font-size: max(0.8em, 12px); }
+.pg-tip.is-mash { animation: pg-mash 0.4s ease-in-out infinite; }
+@keyframes pg-mash { 50% { transform: translate(-50%, -100%) scale(1.15); } }
+.pg-word {
+  position: absolute; transform: translate(-50%, -50%); white-space: nowrap;
+  font-family: var(--font-sign); font-size: 1.2em; line-height: 1; color: var(--slot, #ffffff);
+  text-shadow: 0 0.08em 0 var(--ink), 1px 0 0 var(--ink), -1px 0 0 var(--ink), 0 -1px 0 var(--ink), 0 0 0.35em rgba(7, 22, 25, 0.9);
+}
+.pg-banner.count #pg-banner-main { color: var(--duck); font-size: 4.2em; }
+/* co-op results: one row per player, MVP crown */
+.pg-team { display: grid; grid-template-columns: auto auto auto auto auto; align-items: center; gap: 0.2em 0.55em; margin: -0.2em auto 0.8em; width: max-content; max-width: 100%; text-align: left; font-size: 0.92em; }
+.pg-team-row { display: contents; }
+.pg-team-ic { width: 1.5em; height: 1.5em; image-rendering: pixelated; }
+.pg-team-nick { color: var(--slot, var(--cream)); font-weight: 700; max-width: 6.5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pg-team-nick .pg-tag-n { display: inline-grid; margin-right: 0.3em; vertical-align: 0.08em; font-size: 0.85em; }
+.pg-team-row b { font-family: var(--font-sign); font-weight: 400; text-align: right; }
+.pg-team-st { color: var(--cream-dim); font-size: 0.86em; white-space: nowrap; }
+.pg-mvp { font-style: normal; font-family: var(--font-sign); color: var(--duck); display: inline-flex; align-items: center; gap: 0.2em; font-size: 0.85em; }
+.pg-mvp canvas { width: 1.15em; height: 1.15em; image-rendering: pixelated; }
+#pg-over.pg-coop .pg-stampcard { display: none; }
+#pg-pause.pg-battle .pg-stampcard { display: none; }
+#pg-over.pg-coop .pg-h2 { margin-bottom: 0.25em; }
+/* battle results: the canvas draws the podium; this layer only adds the heading and the buttons */
+.pg-ov.pg-podium { background: none; flex-direction: column; justify-content: space-between; padding: calc(7.2% + 0.35em) 0.8em 0.6em; pointer-events: none; }
+.pg-podium > * { pointer-events: auto; }
+.pg-podium-title { margin: 0; font-family: var(--font-sign); font-weight: 400; font-size: 2.1em; line-height: 1.1; color: var(--duck); text-shadow: 0 0.08em 0 var(--ink), 0 0 0.5em rgba(255, 212, 71, 0.35); }
+.pg-podium-btns .pg-btn { font-size: 1.1em; }
+.pg-sr { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* online results / menu: what a guest sees instead of the host's buttons */
+.pg-wait { margin: 0 0 0.7em; color: var(--mint); font-size: 0.95em; }
+.pg-podium .pg-wait { margin: 0.3em auto 0; padding: 0.25em 0.9em; border-radius: 999px; background: rgba(6, 22, 25, 0.8); width: max-content; max-width: 100%; }
+.pg-podium-btns .pg-btn.pg-ghost { background: rgba(6, 22, 25, 0.7); }
+/* phones: a compact heading + wait note, clear of the winner's name tag */
+.pg-touch-on .pg-ov.pg-podium { padding-top: calc(7.2% + 0.1em); }
+.pg-touch-on .pg-podium-title { font-size: 1.65em; }
+.pg-touch-on .pg-podium .pg-wait { margin-top: 0.1em; padding: 0.12em 0.8em; font-size: 0.85em; }
+/* ---- v3 online panels (친구와 하기, the room): they cover the whole stage, so phones get the full height */
+.pg-panel {
+  position: absolute; inset: 0; z-index: 6; overflow-y: auto; overscroll-behavior: contain;
+  display: flex; justify-content: center; align-items: flex-start; padding: 8px 0 14px;
+  background: radial-gradient(120% 90% at 50% 0%, rgba(10, 35, 39, 0.9), rgba(6, 21, 24, 0.96));
+  font-size: 15px; text-align: left;
+}
+.pg-panel .pg-pcard { width: 100%; max-width: 600px; max-height: none; margin: auto 0; padding: 0.85em 1em 0.95em; }
+.pg-panel .pg-h2 { font-size: 1.75em; text-align: center; margin-bottom: 0.3em; }
+.pg-panel .pg-btn { font-size: 1.12em; min-height: 40px; }
+.pg-touch-on .pg-panel .pg-btn { min-height: 44px; }
+.pg-panel .pg-btn.pg-ghost { font-size: 0.98em; }
+.pg-panel .pg-btn:disabled { filter: grayscale(0.7) brightness(0.75); cursor: default; transform: none; }
+.pg-box { margin: 0.6em 0 0; padding: 0.55em 0.75em 0.65em; border-radius: 0.9em; background: rgba(127, 220, 200, 0.06); border: 1.5px solid rgba(127, 220, 200, 0.18); }
+.pg-box h3 { margin: 0 0 0.4em; font-family: var(--font-sign); font-weight: 400; font-size: 1.08em; color: var(--mint); letter-spacing: 0.02em; }
+.pg-room-sum { margin: 0; color: var(--cream); font-weight: 700; }
+.pg-room-sum span { color: var(--cream-dim); font-weight: 400; }
+.pg-room-sum i { font-style: normal; white-space: nowrap; }
+.pg-pc-tag canvas { width: 1.05em; height: 1.05em; vertical-align: -0.15em; margin-right: 0.2em; image-rendering: pixelated; }
+.pg-note { margin: 0 0 0.3em; padding: 0.5em 0.75em; border-radius: 0.7em; background: rgba(255, 212, 71, 0.12); color: var(--cream); font-size: 0.92em; line-height: 1.45; text-align: center; }
+.pg-note b { color: var(--duck); font-weight: 700; }
+/* a page whose online only reaches this browser's tabs (design/distinction.md 4.2): the block card - heading, why, what to
+   do (ask for a Claude email invite / 새로고침), solo still there; it pulses twice when 참여 / 방 만들기 is answered */
+.pg-note.is-block { text-align: left; padding: 0.7em 0.9em; border-radius: 0.9em; background: rgba(255, 138, 122, 0.12); border: 2px solid #ff9a8a; color: var(--cream); }
+.pg-note.is-block .pg-note-h { display: block; margin-bottom: 0.3em; font-family: var(--font-sign); font-weight: 400; font-size: 1.1em; color: #ffb3a6; }
+.pg-note.is-block span { display: block; }
+.pg-note.is-block .pg-note-foot { margin-top: 0.35em; color: var(--cream-dim); font-size: 0.9em; }
+.pg-note.is-block .pg-note-btn { margin-top: 0.5em; font-size: 0.95em; }
+@media (prefers-reduced-motion: no-preference) { .pg-note.is-flash { animation: pg-note-flash 0.35s ease-in-out 2; } }
+@keyframes pg-note-flash { 50% { box-shadow: 0 0 0 4px rgba(255, 154, 138, 0.55); } }
+.pg-err { min-height: 1.4em; margin: 0.6em 0 0.2em; color: #ff9a8a; font-weight: 700; text-align: center; }
+.pg-err:empty { display: none; }
+.pg-field { display: flex; align-items: center; flex-wrap: wrap; gap: 0.45em 0.6em; }
+.pg-field label { color: var(--mint); font-weight: 700; }
+.pg-input {
+  font: inherit; font-size: 16px; color: var(--cream); background: rgba(6, 22, 25, 0.9);
+  border: 1.5px solid var(--panel-line); border-radius: 0.6em; padding: 0.45em 0.7em; min-height: 44px; min-width: 0;
+}
+.pg-input:focus-visible, .pg-panel select:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; }
+#pg-nick { flex: 1 1 9em; max-width: 14em; }
+.pg-mychar { display: inline-flex; align-items: center; gap: 0.35em; color: var(--cream-dim); font-size: 0.92em; }
+.pg-mychar canvas { width: 24px; height: 24px; image-rendering: pixelated; }
+.pg-seg { display: flex; gap: 0.4em; flex-wrap: wrap; }
+.pg-seg button {
+  font: inherit; flex: 1 1 0; min-width: 4.5em; min-height: 38px; padding: 0.3em 0.6em; border-radius: 0.7em; cursor: pointer;
+  color: var(--cream); background: rgba(6, 22, 25, 0.6); border: 1.5px solid var(--panel-line); font-weight: 700;
+}
+.pg-seg button[aria-checked="true"], .pg-seg button[aria-pressed="true"] { background: rgba(255, 212, 71, 0.18); border-color: var(--duck); color: var(--duck); }
+.pg-seg button:disabled { cursor: default; opacity: 0.85; }
+.pg-seg button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.pg-desc { margin: 0.45em 0 0.55em; color: var(--cream-dim); font-size: 0.92em; }
+.pg-touch-on .pg-seg button { min-height: 44px; }
+.pg-opts { display: grid; grid-template-columns: auto 1fr; gap: 0.35em 0.7em; align-items: center; margin: 0 0 0.6em; }
+.pg-opts[hidden] { display: none; }
+.pg-opts > span { color: var(--mint); font-weight: 700; white-space: nowrap; }
+.pg-opts select { font: inherit; font-size: 16px; min-height: 36px; color: var(--cream); background: rgba(6, 22, 25, 0.9); border: 1.5px solid var(--panel-line); border-radius: 0.6em; padding: 0.15em 0.5em; }
+.pg-opts .pg-seg button { min-height: 36px; }
+.pg-touch-on .pg-opts .pg-seg button, .pg-touch-on .pg-opts select { min-height: 44px; }
+.pg-check { display: inline-flex; align-items: center; gap: 0.5em; cursor: pointer; min-height: 34px; }
+.pg-touch-on .pg-check { min-height: 44px; }
+.pg-check input { width: 1.3em; height: 1.3em; accent-color: var(--duck); margin: 0; }
+.pg-joinrow { display: flex; gap: 0.5em; }
+#pg-code { flex: 1 1 auto; width: 6em; text-transform: uppercase; letter-spacing: 0.3em; font-family: "Arial Black", "Segoe UI Black", system-ui, sans-serif; font-weight: 900; font-variant-numeric: lining-nums tabular-nums; font-size: 20px; text-align: center; }
+.pg-games { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.4em; }
+.pg-game {
+  font: inherit; width: 100%; min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 0.6em; cursor: pointer;
+  padding: 0.45em 0.75em; border-radius: 0.7em; color: var(--cream); background: rgba(6, 22, 25, 0.6); border: 1.5px solid var(--panel-line); text-align: left;
+}
+.pg-game:hover { background: rgba(127, 220, 200, 0.14); }
+.pg-game:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.pg-game b { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pg-game span { color: var(--mint); white-space: nowrap; font-size: 0.92em; }
+.pg-panel .pg-sub { text-align: center; margin: 0.5em 0 0.2em; }
+.pg-panel .pg-row { margin-top: 0.8em; }
+/* the room */
+.pg-room-top { display: flex; align-items: center; justify-content: space-between; gap: 0.6em; flex-wrap: wrap; }
+.pg-room-code { display: flex; flex-direction: column; line-height: 1.05; }
+.pg-room-code span { color: var(--mint); font-size: 0.9em; font-weight: 700; }
+/* the code is read aloud / retyped: a face whose digits stand as tall as its capitals */
+.pg-room-code b { font-family: "Arial Black", "Segoe UI Black", "Helvetica Neue", system-ui, sans-serif; font-weight: 900; font-variant-numeric: lining-nums tabular-nums; font-size: 2.4em; color: var(--duck); letter-spacing: 0.12em; text-shadow: 0 0.06em 0 var(--ink); user-select: text; -webkit-user-select: text; }
+.pg-room-side { display: flex; align-items: center; gap: 0.5em; flex-wrap: wrap; justify-content: flex-end; }
+.pg-badge { display: inline-block; padding: 0.3em 0.8em; border-radius: 999px; background: var(--pink); color: var(--ink); font-family: var(--font-sign); font-size: 1em; }
+.pg-badge.is-battle { background: #ff9a8a; }
+.pg-btn.pg-small { font-size: 0.92em; padding: 0.5em 0.9em; min-height: 40px; }
+.pg-cards4 { list-style: none; margin: 0.6em 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.45em; }
+.pg-pc {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 0.1em; min-width: 0;
+  padding: 0.45em 0.3em 0.45em; border-radius: 0.9em; text-align: center;
+  background: rgba(6, 22, 25, 0.7); border: 2px solid var(--slot, var(--panel-line));
+}
+.pg-pc.is-empty { border-style: dashed; border-color: rgba(127, 220, 200, 0.25); color: var(--cream-dim); justify-content: center; min-height: 6.6em; }
+.pg-pc > canvas { width: 44px; height: 44px; image-rendering: pixelated; image-rendering: crisp-edges; image-rendering: pixelated; }
+.pg-pc-nick { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; color: var(--slot, var(--cream)); }
+.pg-pc-char { font-size: 0.82em; color: var(--cream-dim); }
+.pg-pc-tag { font-size: 0.8em; padding: 0.1em 0.6em; border-radius: 999px; background: rgba(127, 220, 200, 0.14); color: var(--cream-dim); }
+.pg-pc-tag.is-host { background: var(--duck); color: var(--ink); font-weight: 700; }
+.pg-pc-tag.is-ready { background: #7fe08f; color: #0f2a14; font-weight: 700; }
+/* my seat: "나" in a white chip like the in-game 나 chip, and a white ring round the card (white = me, room to podium) */
+.pg-pc-me { position: absolute; top: 0.3em; left: 0.35em; font-size: 0.72em; line-height: 1; padding: 0.15em 0.35em 0.12em; border-radius: 0.45em;
+  font-weight: 700; background: #ffffff; color: var(--ink); }
+.pg-pc.is-me { box-shadow: 0 0 0 1px rgba(7, 22, 25, 0.9), 0 0 0 3px #ffffff; }
+/* the seat number (1P-4P, distinction 2.10): the same number as the name tag and the HUD panel */
+.pg-pc-n { position: absolute; top: 0.3em; right: 0.35em; font-size: 0.72em; line-height: 1; padding: 0.15em 0.35em 0.12em; border-radius: 0.45em;
+  font-style: normal; font-family: var(--font-sign); background: var(--slot, var(--mint)); color: var(--ink); }
+.pg-pick-sm { margin: 0; max-width: none; }
+.pg-pick-sm .pg-pick-art { width: 2.1em; height: 2.1em; }
+/* the room's kit card: name + role and the 특기 on the left, the 2x2 stats on the right (stacked on narrow phones) */
+.pg-kit.pg-kit-sm {
+  width: auto; margin: 0.5em 0 0; padding: 0.4em 0.75em 0.45em;
+  display: grid; grid-template-columns: minmax(0, 1fr) max-content; grid-template-areas: "head stats" "perk stats"; align-items: center; gap: 0.15em 1em;
+}
+.pg-kit-sm .pg-kit-head { grid-area: head; }
+.pg-kit-sm .pg-kit-stats { grid-area: stats; margin: 0; }
+.pg-kit-sm .pg-kit-line { grid-area: perk; margin: 0; white-space: normal; }
+.pg-kit-sm .pg-kit-line b + span { flex: 0 1 auto; min-width: 0; }
+/* 능력 끄기: the line reads "능력 꺼짐 · 모두 같은 기본 능력이에요" on its own */
+.pg-kit-sm.off .pg-kit-line b { display: none; }
+@media (max-width: 520px) {
+  .pg-kit.pg-kit-sm { grid-template-columns: minmax(0, 1fr); grid-template-areas: "head" "stats" "perk"; gap: 0.35em; }
+}
+/* the room's ready / start / leave row stays in view while the host scrolls the settings (short windows, phones) */
+.pg-panel .pg-pcard { overflow: visible; }
+.pg-room-actions {
+  /* bottom: minus the panel's 14px bottom padding (Chrome keeps sticky boxes inside the scroller's padding) */
+  position: sticky; bottom: -14px; z-index: 2; margin: 0.2em -1em -0.95em; padding: 0.15em 1em 0.95em; border-radius: 0 0 1.1em 1.1em;
+  /* opaque from its top edge: nothing scrolled under the status line shows through (the soft edge is above it) */
+  background: rgb(6, 22, 25); box-shadow: 0 -0.7em 0.7em -0.3em rgb(6, 22, 25);
+}
+@media (max-height: 500px) {
+  .pg-room-actions { display: flex; align-items: center; gap: 0.6em; flex-wrap: wrap; justify-content: center; padding-top: 0.4em; }
+  .pg-room-actions .pg-sub { margin: 0; flex: 1 1 10em; text-align: left; }
+  .pg-room-actions .pg-row { margin-top: 0; flex: 0 1 auto; }
+}
+.pg-room-hint { margin: 0.45em 0 0; font-size: 0.9em; color: var(--cream-dim); line-height: 1.4; }
+.pg-room-hint b { color: var(--mint); font-weight: 700; }
+.pg-rules { margin: 0.5em 0 0; padding: 0; list-style: none; font-size: 0.9em; line-height: 1.45; color: var(--cream); }
+.pg-rules li::before { content: "● "; color: var(--pink); font-size: 0.7em; vertical-align: 0.15em; }
+.pg-room-actions .pg-row { margin-top: 0.5em; }
+.pg-btn.is-on { background: #7fe08f; box-shadow: 0 0.16em 0 #3f9a4f, 0 0.3em 0.8em rgba(0, 0, 0, 0.35); }
+.pg-panel-open #pg-touch { display: none !important; }
+.pg-panel-open.pg-touch-on#pg-app { padding-bottom: 0; }
+@media (max-width: 480px) {
+  .pg-panel { font-size: 14.5px; padding-top: 4px; }
+  .pg-panel .pg-pcard { padding: 0.8em 0.75em 0.9em; border-radius: 1em; }
+  .pg-cards4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pg-pc.is-empty { min-height: 4.2em; }
+  .pg-room-code b { font-size: 2.2em; }
+  .pg-room-actions { margin: 0.2em -0.75em -0.9em; padding: 0.15em 0.75em 0.9em; }
+  .pg-opts { grid-template-columns: 1fr; gap: 0.3em; }
+}
+@media (orientation: landscape) and (max-height: 560px) {
+  .pg-panel-open.pg-touch-on#pg-app { padding: 0 16px 0; }
+  .pg-panel .pg-pcard { max-width: 760px; }
+}
+@media (prefers-reduced-motion: reduce) { .pg-chip.is-wait::before { animation: none; } }
+@keyframes pg-pop { from { transform: scale(0.55); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+#pg-hints {
+  flex: none; display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 16px;
+  padding: 2px 0 12px; font-size: 13px; color: var(--cream-dim); max-width: 100%;
+}
+#pg-hints span { white-space: nowrap; }
+kbd {
+  font-family: inherit; font-size: 12px; line-height: 1; display: inline-block; min-width: 1.6em; text-align: center;
+  padding: 3px 5px 2px; margin-right: 2px; border-radius: 5px; color: var(--cream);
+  background: rgba(127, 220, 200, 0.1); border: 1px solid var(--panel-line); border-bottom-width: 2px;
+}
+#pg-touch { display: none; }
+.pg-touch-on #pg-hints { display: none; }
+.pg-keys-touch { display: none; margin: 0.55em 0 0; font-size: 0.86em; color: var(--cream-dim); }
+.pg-touch-on .pg-keys { display: none; }
+.pg-touch-on .pg-keys-touch { display: block; font-size: 0.95em; }
+/* touch: overlay buttons are real 44px tap targets */
+.pg-touch-on .pg-btn { min-height: 44px; padding-top: 0.45em; padding-bottom: 0.4em; }
+.pg-touch-on .pg-btn.pg-ghost { min-width: 5.5em; }
+.pg-touch-on .pg-card { padding: 0.85em 1.2em 1em; }
+.pg-touch-on .pg-howto { line-height: 1.45; margin-top: 0.6em; }
+.pg-touch-on #pg-touch {
+  display: flex; position: fixed; z-index: 10; left: 16px; right: 16px;
+  bottom: max(14px, env(safe-area-inset-bottom, 0px));
+  justify-content: space-between; align-items: flex-end; pointer-events: none;
+}
+.pg-touch-on#pg-app { padding-bottom: calc(132px + env(safe-area-inset-bottom, 0px)); }
+.pg-pad { display: flex; gap: 10px; pointer-events: auto; touch-action: none; }
+.pg-tb {
+  width: 66px; height: 66px; border-radius: 50%;
+  display: grid; place-items: center; text-align: center;
+  font-family: var(--font-sign); font-size: 17px; line-height: 1; color: var(--ink);
+  touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.35), inset 0 2px 0 rgba(255, 255, 255, 0.35);
+  transition: transform 0.06s, filter 0.1s;
+}
+.pg-tb.on { transform: translateY(3px) scale(0.95); filter: brightness(1.15); box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35), inset 0 2px 0 rgba(255, 255, 255, 0.35); }
+#pg-dpad .pg-tb { background: var(--mint); font-size: 22px; }
+#pg-t-jump { background: var(--pink); align-content: center; }
+/* the animal's JUMP move under the label ("꾹: 활공", "두 번: 쿵"): a small second line inside the same 66px circle */
+.pg-tb-sub { display: block; margin-top: 3px; pointer-events: none; font-family: var(--font-body); font-weight: 700; font-size: 10px; line-height: 1; letter-spacing: -0.02em; white-space: nowrap; opacity: 0.85; }
+#pg-t-shoot { background: var(--duck); width: 74px; height: 74px; font-size: 19px; }
+@media (orientation: landscape) and (max-height: 560px) {
+  .pg-touch-on#pg-app { padding: 0 max(170px, calc(env(safe-area-inset-right, 0px) + 170px)) 6px max(170px, calc(env(safe-area-inset-left, 0px) + 170px)); }
+  .pg-touch-on #pg-touch { left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); }
+  #pg-head { padding-top: 6px; }
+}
+@media (max-width: 420px) {
+  .pg-brand { font-size: 18px; }
+  .pg-icon { width: 36px; height: 36px; }
+  .pg-touch-on .pg-icon { width: 44px; height: 44px; }
+  #pg-head { gap: 8px; }
+  /* the connection chip takes the brand text's place (the ♨ stays): the menu button never leaves the screen */
+  #pg-head.pg-has-chip .pg-brand-t { display: none; }
+}
+/* very small phones (e.g. 320 px wide): slimmer mirror frame, smaller pads with a gap between them; the deploy's header
+   gaps shrink (its fullscreen button makes three 44px buttons there: the name keeps its room, the buttons their size) */
+@media (max-width: 340px) {
+  .pg-sa #pg-head { gap: 6px; }
+  .pg-sa .pg-tools { gap: 5px; }
+  .pg-sa .pg-brand { gap: 5px; }
+  #pg-frame { padding: 4px; border-radius: 12px; }
+  #pg-frame::before, #pg-frame::after { display: none; }
+  .pg-pad { gap: 8px; }
+  .pg-tb { width: 58px; height: 58px; font-size: 15px; }
+  #pg-dpad .pg-tb { font-size: 19px; }
+  #pg-t-shoot { width: 64px; height: 64px; font-size: 17px; }
+  .pg-touch-on#pg-app { padding-bottom: calc(118px + env(safe-area-inset-bottom, 0px)); }
+  .pg-ov { padding: 0.35em; }
+  .pg-card, .pg-touch-on .pg-card { padding: 0.55em 0.8em 0.7em; max-width: 98%; }
+  .pg-logo { font-size: 2.2em; }
+  .pg-howto, .pg-touch-on .pg-howto { margin-top: 0.4em; line-height: 1.3; }
+  .pg-keys, .pg-keys-touch { margin-top: 0.35em; }
+  .pg-best { margin: 0.35em 0 0.5em; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pg-banner.show .pg-banner-in, .pg-pick-btn.on .pg-pick-art { animation: none; }
+  .pg-btn, .pg-tb, .pg-icon { transition: none; }
+}
+/* ---- v4 trophies (트로피, design/trophies.md §8): 8x8 pixel icons (game.js paints .pg-cup / .pg-lg canvases), the
+   title's trophy badge on the 최고 점수 line, 내 기록, the chips in the friends panel and the room, the stake row, the
+   countdown's trophy line, the podium tag / note and the result cards' 트로피 row */
+.pg-ic { width: 1.1em; height: 1.1em; image-rendering: pixelated; image-rendering: crisp-edges; image-rendering: pixelated; vertical-align: -0.18em; }
+.pg-best { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0.2em 0.6em; }
+.pg-best-hi { white-space: nowrap; }
+.pg-tro {
+  position: relative; font: inherit; display: inline-flex; align-items: center; gap: 0.25em; padding: 0.1em 0.6em 0.08em 0.45em;
+  border: 0; border-radius: 999px; cursor: pointer; color: var(--duck); background: rgba(255, 212, 71, 0.12);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 212, 71, 0.55); line-height: 1.2; white-space: nowrap;
+}
+.pg-tro:hover { background: rgba(255, 212, 71, 0.2); }
+/* a ~24px tap target without layout height; it stays inside .pg-best's margins (>= 0.3em), so it never takes taps from
+   the start buttons */
+.pg-tro::after { content: ""; position: absolute; inset: -0.3em -0.35em; }
+.pg-tro b { font-family: var(--font-sign); font-weight: 400; font-size: 1.1em; margin: 0; color: var(--duck); }
+.pg-tro-name { font-size: 0.8em; color: var(--lgc, var(--cream-dim)); }
+.pg-tro-new { position: absolute; top: -0.25em; right: -0.2em; width: 0.5em; height: 0.5em; border-radius: 50%; background: var(--pink); box-shadow: 0 0 0 1.5px var(--ink); }
+.pg-tro:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+@container (max-width: 30em) { .pg-tro-name { display: none; } }
+/* (the badge wraps under the score there: the card scrolls anyway) */
+@container (max-width: 15.5em) { .pg-best { row-gap: 0.1em; } }
+/* 내 기록: league row (icon, name, "다음 리그까지", the bar, the count), 2 rows of stats, the 7-league ladder, a note */
+.pg-rec-card { width: 25em; max-width: 100%; text-align: left; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; padding: 0.8em 1.1em 0.9em; }
+.pg-rec-card::-webkit-scrollbar { display: none; }
+.pg-rec-card .pg-h2 { text-align: center; font-size: 1.75em; margin-bottom: 0.3em; }
+.pg-rec-lg { --lgc: var(--duck); display: flex; align-items: center; gap: 0.6em; padding: 0.4em 0.65em; border-radius: 0.8em; background: rgba(255, 212, 71, 0.07); box-shadow: inset 0 0 0 1.5px rgba(255, 212, 71, 0.28); }
+#pg-rec-lgart { flex: none; width: 2.6em; height: 2.6em; image-rendering: pixelated; image-rendering: crisp-edges; image-rendering: pixelated; }
+.pg-rec-lgtx { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 0.18em; }
+.pg-rec-lgtx b { font-family: var(--font-sign); font-weight: 400; font-size: 1.2em; line-height: 1.1; color: var(--lgc); text-shadow: 0 0.07em 0 var(--ink); white-space: nowrap; }
+#pg-rec-next { font-size: 0.82em; color: var(--cream-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pg-rec-bar { display: block; height: 0.45em; border-radius: 999px; background: rgba(127, 220, 200, 0.15); overflow: hidden; }
+.pg-rec-bar > i { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--lgc); }
+.pg-rec-n { flex: none; display: inline-flex; align-items: center; gap: 0.15em; font-family: var(--font-sign); font-weight: 400; font-size: 1.6em; line-height: 1; color: var(--duck); text-shadow: 0 0.07em 0 var(--ink); }
+.pg-rec-n .pg-ic { width: 0.8em; height: 0.8em; vertical-align: 0; }
+.pg-rec-stats { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 0.25em 0.6em; margin: 0.55em 0 0; font-size: 0.88em; }
+.pg-rec-stats dt { color: var(--mint); white-space: nowrap; }
+.pg-rec-stats dd { margin: 0; font-family: var(--font-sign); font-weight: 400; text-align: right; white-space: nowrap; color: var(--cream); }
+/* (the left pair's value ends at a thin rule: "312" no longer reads as the label of the "배틀" beside it) */
+.pg-rec-stats dd:nth-of-type(odd) { padding-right: 0.65em; border-right: 1px solid rgba(127, 220, 200, 0.22); }
+.pg-rec-ladder { list-style: none; display: flex; justify-content: space-between; gap: 0.2em; margin: 0.6em 0 0; padding: 0.3em 0.4em; border-radius: 0.7em; background: rgba(6, 22, 25, 0.55); }
+.pg-rec-ladder li { opacity: 0.35; }
+.pg-rec-ladder li.got { opacity: 1; }
+.pg-rec-ladder canvas { display: block; width: 1.5em; height: 1.5em; image-rendering: pixelated; image-rendering: crisp-edges; image-rendering: pixelated; border-radius: 0.25em; }
+.pg-rec-ladder li.on canvas { box-shadow: 0 0 0 0.15em var(--ink), 0 0 0 0.3em var(--duck); }
+.pg-rec-note { margin: 0.55em 0 0; font-size: 0.85em; line-height: 1.35; color: var(--cream); text-align: center; text-wrap: balance; }
+.pg-rec-note:empty { display: none; }
+.pg-rec-card .pg-row { margin-top: 0.65em; }
+/* short screens (1x, phones): a smaller heading and no note first; the ladder goes last */
+@container (max-height: 23em) {
+  .pg-rec-card { padding: 0.6em 0.9em 0.7em; }
+  .pg-rec-card .pg-h2 { font-size: 1.45em; margin-bottom: 0.2em; }
+  .pg-rec-note { display: none; }
+  .pg-rec-stats { margin-top: 0.45em; gap: 0.15em 0.6em; }
+  .pg-rec-ladder { margin-top: 0.45em; padding: 0.2em 0.35em; }
+  .pg-rec-card .pg-row { margin-top: 0.5em; }
+}
+@container (max-height: 19.5em) { .pg-rec-ladder, .pg-rec-note { display: none; } }
+@container (max-width: 21em) { .pg-rec-stats { grid-template-columns: auto 1fr; } .pg-rec-stats dd:nth-of-type(odd) { padding-right: 0; border-right: 0; } .pg-rec-ladder { display: none; } }
+/* chips: league icon + cup + count (friends panel, room seats); an unknown count is a grey cup and "?" */
+.pg-tchip { display: inline-flex; align-items: center; gap: 0.12em; white-space: nowrap; }
+.pg-tchip b { font-family: var(--font-sign); font-weight: 400; color: var(--duck); margin-left: 0.12em; }
+.pg-tchip.is-unknown b { color: var(--cream-dim); }
+.pg-tchip .pg-ic { vertical-align: 0; }
+.pg-mytro { display: inline-flex; align-items: center; padding: 0.15em 0.65em; border-radius: 999px; background: rgba(255, 212, 71, 0.12); box-shadow: inset 0 0 0 1.5px rgba(255, 212, 71, 0.45); }
+.pg-pc-tro { font-size: 0.85em; line-height: 1.2; }
+.pg-pc-tag.is-short { background: #ff9a8a; color: var(--ink); font-weight: 700; }
+.pg-badge .pg-ic { margin-right: 0.2em; vertical-align: -0.12em; }
+/* (the stake badge is duck on ink, so its gold cup stays visible - on a duck fill only the cup's outline showed) */
+.pg-badge.pg-bet { background: var(--ink); color: var(--duck); box-shadow: inset 0 0 0 1.5px var(--duck); }
+.pg-badge.pg-prac { background: #8a9b98; color: var(--ink); }
+/* 트로피 걸기: 5 slim buttons on one row even in a 320px panel (the default min-width 4.5em would wrap them) */
+.pg-seg.pg-bets button { flex: 1 1 auto; min-width: 0; padding: 0.3em 0.45em; white-space: nowrap; }
+/* (a stake above the host's own count: clearly off, not just the 0.85 of a read-only option) */
+.pg-seg.pg-bets button.is-short { opacity: 0.38; }
+.pg-bets .pg-ic { margin-right: 0.15em; }
+/* the countdown: "트로피 10개씩 걸어요!" in pink, "연습 경기 · 트로피 없음" dim */
+.pg-banner.count.bet #pg-banner-sub { color: var(--pink); font-size: 1.1em; }
+.pg-banner.count.prac #pg-banner-sub { color: var(--cream-dim); }
+/* the podium title's tag (무승부 / 기권승 / 연습 / 승급! …): inline, so it adds no height */
+/* (the body face, bold: at ~1em the heavy sign face of the title blurred into a blob at 1x and on phones) */
+.pg-podium-tag { display: inline-block; font-family: var(--font-body); font-weight: 700; font-size: 0.5em; line-height: 1.2; vertical-align: 0.3em; margin-left: 0.35em; padding: 0.12em 0.6em 0.14em; border-radius: 999px; background: var(--duck); color: var(--ink); text-shadow: none; }
+.pg-podium-tag.pg-promo { background: var(--pink); }
+.pg-podium-tag.is-prac { background: #8a9b98; }
+/* the 목욕 끝 / ending cards: a 트로피 row (+N, the count or "오늘 보너스 끝") and the 승급 chip beside 최고 기록 */
+.pg-tro-row { display: contents; }
+.pg-stats dd .pg-ic { width: 0.95em; height: 0.95em; margin-right: 0.15em; vertical-align: -0.08em; }
+.pg-stats dd small { font-family: var(--font-body); font-weight: 700; font-size: 0.7em; color: var(--cream-dim); }
+.pg-new.pg-promo { background: var(--duck); }
+.pg-new + .pg-new { margin-left: 0.35em; }
+.pg-tro-pop { display: inline-block; animation: pg-pop 0.32s cubic-bezier(0.2, 1.5, 0.45, 1); }
+/* short screens (1x, phones): the 목욕 끝 / ending cards make room for the 트로피 row with tighter margins and no stamp
+   card footer, so they keep fitting (the card clips rather than scrolls) */
+@container (max-height: 22em) {
+  #pg-over .pg-stampcard-foot { display: none; }
+  #pg-over .pg-card, #pg-ending .pg-card, .pg-touch-on #pg-over .pg-card, .pg-touch-on #pg-ending .pg-card { padding-top: 0.6em; padding-bottom: 0.7em; }
+  #pg-over .pg-h2, #pg-ending .pg-h2, .pg-touch-on #pg-over .pg-h2 { margin-bottom: 0.1em; font-size: 1.85em; }
+  #pg-over .pg-stats, #pg-ending .pg-stats, .pg-touch-on #pg-over .pg-stats { gap: 0.1em 1.1em; margin-bottom: 0.45em; font-size: 0.94em; line-height: 1.15; }
+  #pg-over .pg-stampcard, .pg-touch-on #pg-over .pg-stampcard { margin-bottom: 0.5em; padding-top: 0.3em; padding-bottom: 0.3em; }
+  #pg-over .pg-slots { grid-template-columns: repeat(10, 1.3em); }
+  #pg-over .pg-slots li { width: 1.3em; height: 1.3em; }
+  #pg-over .pg-stampcard-head { margin-bottom: 0.2em; }
+  #pg-over .pg-new, #pg-ending .pg-new { margin-bottom: 0.3em; }
+  /* (v4 shop 9.7) the 비누 코인 row with the 트로피 row: 최고 점수 steps aside (the HUD's HI shows it, a new best keeps its
+     chip) and the ending's sub line too */
+  #pg-over.has-2rows .pg-hi-row, #pg-ending.has-2rows #pg-end-sub { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .pg-tro-pop { animation: none; } }
+/* ---- v4 app install (the STANDALONE deploy only: game.js creates #pg-install / #pg-ioshint there, the artifact never
+   has them): a pill after the trophy badge on the 최고 점수 line - "앱으로 설치" (Android / desktop Chrome: the browser's
+   install dialog) or the iOS hint "공유 → 홈 화면에 추가" (the share-sheet icon in front) */
+.pg-inst {
+  position: relative; font: inherit; display: inline-flex; align-items: center; gap: 0.3em; padding: 0.14em 0.7em 0.12em 0.5em;
+  border: 0; border-radius: 999px; font-size: 0.86em; line-height: 1.2; white-space: nowrap; color: var(--mint);
+  background: rgba(127, 220, 200, 0.1); box-shadow: inset 0 0 0 1.5px rgba(127, 220, 200, 0.5);
+}
+.pg-inst svg { flex: none; width: 1.1em; height: 1.1em; }
+button.pg-inst { cursor: pointer; }
+button.pg-inst:hover { background: rgba(127, 220, 200, 0.2); }
+/* (a ~24px tap target without layout height, like the trophy badge's) */
+button.pg-inst::after { content: ""; position: absolute; inset: -0.3em -0.35em; }
+.pg-inst:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.pg-inst-ios { color: var(--cream); box-shadow: inset 0 0 0 1.5px rgba(251, 240, 217, 0.4); background: rgba(251, 240, 217, 0.07); }
+/* on phones / small windows the pill wraps onto a line of its own under 최고 점수 (a long best score leaves no room
+   beside it): short screens make that room inside the card (game.js sets .pg-has-inst while a pill shows) - slimmer
+   margins around the line and the portraits, a slimmer card - so the card keeps fitting without scrolling */
+@container (max-height: 27em) {
+  .pg-title-card.pg-has-inst .pg-best, .pg-touch-on .pg-title-card.pg-has-inst .pg-best { margin: 0.1em 0 0.25em; row-gap: 0.1em; }
+  .pg-card.pg-title-card.pg-has-inst, .pg-touch-on .pg-card.pg-title-card.pg-has-inst { padding-top: 0.45em; padding-bottom: 0.55em; }
+  .pg-title-card.pg-has-inst .pg-pick, .pg-touch-on .pg-title-card.pg-has-inst .pg-pick { margin-top: 0.3em; }
+  .pg-title-card.pg-has-inst .pg-kit { margin-top: 0.25em; }
+}
+/* the header's fullscreen toggle #pg-fs (the deploy only, where the Fullscreen API works): corners out / corners in */
+.pg-icon.is-on .pg-on { display: none; }
+.pg-icon.is-on .pg-off { display: block; }
+/* ---- the standalone deploy only (build.js gives its root element the pg-sa class; nothing here matches the artifact):
+   feels like an app on a phone - no pull-to-refresh and no rubber-band bounce (the page never scrolls; the panels and
+   cards scroll inside themselves, overscroll contained), no double-tap zoom on anything tappable (pinch zoom stays;
+   the touch pads were touch-action: none already) */
+html.pg-sa, html.pg-sa body { overscroll-behavior: none; }
+.pg-sa #pg-app, .pg-sa button, .pg-sa input, .pg-sa select, .pg-sa label, .pg-sa .pg-panel { touch-action: manipulation; }
+/* portrait phones: the screen is as wide as the phone allows - 8px side gutters and a slimmer mirror frame (390 px:
+   1.31x -> 1.41x); the header keeps its 16px inset. (Panels keep the usual gutters.) */
+@media (orientation: portrait) {
+  .pg-sa .pg-touch-on:not(.pg-panel-open)#pg-app { padding-left: max(8px, env(safe-area-inset-left, 0px)); padding-right: max(8px, env(safe-area-inset-right, 0px)); }
+  .pg-sa .pg-touch-on:not(.pg-panel-open) #pg-head { padding-left: 8px; padding-right: 8px; }
+  .pg-sa .pg-touch-on:not(.pg-panel-open) #pg-frame { padding: 6px; border-radius: 14px; }
+  .pg-sa .pg-touch-on:not(.pg-panel-open) #pg-frame::before { left: 2px; top: 2px; width: 3px; height: 3px; }
+  .pg-sa .pg-touch-on:not(.pg-panel-open) #pg-frame::after { right: 2px; top: 2px; width: 3px; height: 3px; }
+}
+/* (that bigger screen puts phones at 23-24.5em of height, just above 내 기록's short-screen compaction at 23em: here it
+   starts a little earlier, so the card keeps fitting) */
+@container (max-height: 24.5em) {
+  .pg-sa .pg-rec-card { padding: 0.6em 0.9em 0.7em; }
+  .pg-sa .pg-rec-card .pg-h2 { font-size: 1.45em; margin-bottom: 0.2em; }
+  .pg-sa .pg-rec-note { display: none; }
+  .pg-sa .pg-rec-stats { margin-top: 0.45em; gap: 0.15em 0.6em; }
+  .pg-sa .pg-rec-ladder { margin-top: 0.45em; padding: 0.2em 0.35em; }
+  .pg-sa .pg-rec-card .pg-row { margin-top: 0.5em; }
+}
+/* landscape phones: the header leaves the middle column - the name to the top of the left pad column, the buttons to
+   the top of the right one (the connection chip under the name) - so the game screen gets the whole height
+   (844x390: 1.39x -> 1.52x; 915x412: 1.49x -> 1.71x). (An open panel keeps the header above it, as before.) */
+@media (orientation: landscape) and (max-height: 560px) {
+  .pg-sa .pg-touch-on:not(.pg-panel-open)#pg-app { position: relative; }
+  .pg-sa .pg-touch-on:not(.pg-panel-open) #pg-head {
+    position: absolute; z-index: 11; top: 0; left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px));
+    width: auto; max-width: none; align-items: flex-start; padding-top: 8px; pointer-events: none;
+  }
+  .pg-sa .pg-touch-on:not(.pg-panel-open) #pg-head > * { pointer-events: auto; }
+  .pg-sa .pg-touch-on:not(.pg-panel-open) .pg-brand { font-size: 16px; gap: 6px; max-width: 150px; padding-top: 4px; }
+  .pg-sa .pg-touch-on:not(.pg-panel-open) .pg-brand .pg-onsen { font-size: 18px; }
+  .pg-sa .pg-touch-on:not(.pg-panel-open) #pg-net-chip { position: absolute; top: 40px; left: 0; max-width: 154px; }
+  .pg-sa .pg-touch-on:not(.pg-panel-open) #pg-stage { padding-top: 6px; }
+}
+/* ---- v4 cloud trophies (the STANDALONE deploy with a cloud config only - game.js shows these while the cloud is on;
+   the markup is hidden everywhere else): the 8x8 pixel cloud on the title badge (mint: saved, dim: waiting, pink: cannot
+   save), the status line and the sign-in button in 내 기록. (Like .pg-tro-row these have a display of their own and rely
+   on the skeleton's [hidden]{display:none!important}) */
+.pg-cloud-ic { width: 0.95em; height: 0.95em; flex: none; shape-rendering: crispEdges; vertical-align: -0.12em; }
+.pg-tro-cloud { display: inline-flex; color: var(--mint); }
+.pg-tro-cloud.is-wait { color: var(--cream-dim); opacity: 0.7; }
+.pg-tro-cloud.is-err { color: var(--pink); }
+/* (the mark starts the line's first row: a 2-line message keeps it beside its first words) */
+.pg-cloud { display: block; margin: 0.5em 0 0; font-size: 0.78em; line-height: 1.3; color: var(--cream-dim); text-align: center; text-wrap: balance; }
+.pg-cloud .pg-cloud-ic { margin-right: 0.35em; }
+/* (each ' · ' part of a line is a unit: a 2-line message breaks after its '·', not mid-phrase; a part longer than the
+   line still wraps inside itself) */
+.pg-cloud-c { display: inline-block; max-width: 100%; }
+.pg-cloud.is-in { color: var(--mint); }
+.pg-cloud.is-msg { color: var(--cream); }
+.pg-cloud.is-err { color: var(--pink); }
+.pg-cloud-btn { white-space: nowrap; }
+.pg-cloud-btn[aria-busy="true"] { opacity: 0.7; cursor: progress; }
+/* narrow screens (the league name has stepped aside already): the badge with its mark still shares the 최고 점수 line
+   (a 7-digit best score at 1x) - slimmer gaps, padding and mark make the room */
+@container (max-width: 30em) {
+  .pg-tro.has-cloud { gap: 0.18em; padding-right: 0.4em; }
+  .pg-tro.has-cloud .pg-cloud-ic { width: 0.85em; height: 0.85em; }
+  .pg-best:has(> .pg-tro.has-cloud) { column-gap: 0.4em; }
+}
+/* short screens: the status line takes the ladder's place (the card keeps its height; the deploy compacts earlier) */
+@container (max-height: 23em) { .pg-rec-card.has-cloud .pg-rec-ladder { display: none; } .pg-cloud { margin-top: 0.4em; } }
+@container (max-height: 24.5em) { .pg-sa .pg-rec-card.has-cloud .pg-rec-ladder { display: none; } .pg-sa .pg-cloud { margin-top: 0.4em; } }
+/* (a little earlier still for the ladder alone: a phone just above that (390x844: 25.2em) has room for a new player's
+   2-line note AND a 2-line cloud line only without it) */
+@container (max-height: 25.5em) { .pg-sa .pg-rec-card.has-cloud .pg-rec-ladder { display: none; } }
+/* ---- v4 shop (design/shop.md §9): the title's 상점 button at the end of the start row (no height of its own; icon-only
+   and a 2.05em square where the screen is narrow, the start buttons trimming their side padding for it), the hub panel
+   #pg-hub [상점 · 마이페이지] (a full-stage panel like 친구와 하기 / the room), the room's 꾸미기 */
+.pg-btn.pg-shopbtn { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 0.3em; flex: none;
+  padding-left: 0.75em; padding-right: 0.8em; background: var(--mint); box-shadow: 0 0.16em 0 var(--mint-2), 0 0.3em 0.8em rgba(0, 0, 0, 0.35); }
+.pg-btn.pg-shopbtn:active { box-shadow: 0 0.06em 0 var(--mint-2); }
+/* (the icon is taller than the label's line: its negative margins keep the row as tall as the start buttons) */
+.pg-shopbtn .pg-ic { width: 1.2em; height: 1.2em; margin: -0.1em 0; vertical-align: 0; }
+/* (the dot stays inside the button's width: a labelled button ends the row exactly where the card's room ends) */
+.pg-shopbtn .pg-tro-new { top: -0.2em; right: 0; }
+@container (max-width: 30em) {
+  .pg-shopbtn-tx { display: none; }
+  .pg-title-card .pg-btn.pg-shopbtn { width: 2.05em; padding-left: 0; padding-right: 0; }
+}
+@container (max-width: 26em) { .pg-title-card .pg-btn:not(.pg-shopbtn) { padding-left: 0.65em; padding-right: 0.65em; } }
+/* (a touch screen from 26.5em - a 390 px phone - has the room for the label: its em is the 12.5 px floor) */
+@container (min-width: 26.5em) and (max-width: 30em) {
+  .pg-touch-on .pg-shopbtn-tx { display: inline; }
+  .pg-touch-on .pg-title-card .pg-btn.pg-shopbtn { width: auto; padding-left: 0.75em; padding-right: 0.8em; }
+}
+/* (the start row asks the card for its whole width - the card grows to it where the screen has room) */
+.pg-title-card .pg-row { min-width: max-content; }
+/* (game.js shopBtnFit measures the row - the width rules above only hold until it has: is-label shows the label where
+   the row has room for it, is-snug first trims the start buttons' side padding a little (a 360 px phone), is-tight is
+   the icon alone - a narrow screen, or a fallback font mid-load) */
+.pg-title-card .pg-row .pg-btn.pg-shopbtn.is-label { width: auto; padding-left: 0.75em; padding-right: 0.8em; }
+.pg-shopbtn.is-label .pg-shopbtn-tx { display: inline; }
+.pg-title-card .pg-row.is-snug .pg-btn:not(.pg-shopbtn) { padding-left: 0.55em; padding-right: 0.55em; }
+.pg-title-card .pg-row.is-snug .pg-btn.pg-shopbtn.is-label { padding-left: 0.6em; padding-right: 0.65em; }
+.pg-title-card .pg-row .pg-btn.pg-shopbtn.is-tight { width: 2.05em; padding-left: 0; padding-right: 0; }
+.pg-shopbtn.is-tight .pg-shopbtn-tx { display: none; }
+/* touch: a ~44 px target without layout width (it stays inside the row's gap and the card's margins) */
+.pg-touch-on .pg-shopbtn::after { content: ""; position: absolute; inset: -0.3em -0.25em; }
+@keyframes pg-nudge { 0%, 100% { transform: none; } 50% { transform: translateY(-0.12em) scale(1.06); } }
+.pg-shopbtn.is-nudge { animation: pg-nudge 0.6s ease-in-out 2; }
+@media (prefers-reduced-motion: reduce) { .pg-shopbtn.is-nudge { animation: none; } }
+/* the hub: tabs + the shared coin chip on top; each tab a preview (32x32 at 3x) beside its info, then the slot tabs /
+   equipment boxes and a grid of 44 px cells; the message line shares the 닫기 row (so a message never moves the rest) */
+/* (a 5-digit balance on the narrowest panels: the chip wraps under the tabs rather than overflowing) */
+.pg-hub-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.4em 0.5em; margin: 0 0 0.6em; }
+.pg-tabs { display: flex; gap: 0.3em; min-width: 0; }
+.pg-tabs [role="tab"] { position: relative; font: inherit; font-family: var(--font-body); font-weight: 700; line-height: 1.1; padding: 0.4em 1em; min-height: 40px; border-radius: 999px; cursor: pointer;
+  white-space: nowrap; color: var(--cream); background: rgba(6, 22, 25, 0.6); border: 1.5px solid var(--panel-line); }
+.pg-tabs [aria-selected="true"] { background: rgba(255, 212, 71, 0.18); border-color: var(--duck); color: var(--duck); }
+.pg-touch-on .pg-tabs [role="tab"] { min-height: 44px; }
+.pg-coins { flex: none; margin: 0 0 0 auto; display: inline-flex; align-items: center; gap: 0.3em; padding: 0.25em 0.8em 0.25em 0.6em; border-radius: 999px; white-space: nowrap;
+  font-family: var(--font-sign); font-size: 1.1em; line-height: 1; color: #ffc9dc; background: rgba(246, 166, 189, 0.12); box-shadow: inset 0 0 0 1.5px rgba(246, 166, 189, 0.5); }
+.pg-coins b { font-weight: 400; }
+.pg-coins .pg-ic { width: 1.05em; height: 1.05em; vertical-align: 0; }
+.pg-shop-top, .pg-my-top { display: flex; gap: 0.75em; align-items: stretch; }
+/* (looks-per-animal.md 4.2: the preview's animal named on a pill that straddles its top border - outside the canvas, so
+   a hopping hat is never under it; it takes 6 px of the gap under the tab row, no layout height) */
+.pg-look-wrap { position: relative; flex: none; align-self: flex-start; }
+.pg-look-name { position: absolute; left: 50%; top: -6px; transform: translateX(-50%); z-index: 1; padding: 0 0.55em; border-radius: 999px; pointer-events: none;
+  font: 700 10px/13px var(--font-body); white-space: nowrap; color: var(--cream); background: #0b2427; box-shadow: inset 0 0 0 1.5px var(--panel-line); }
+/* 마이페이지's row of six (a radiogroup: the animal every 마이페이지 action dresses), each its bust in its own set; the 등 /
+   효과 dot on a bust dressed there (the bust shows only 머리 / 얼굴 / 목) */
+.pg-anis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0.3em; margin: 0.4em 0 0; }
+.pg-anis [role="radio"] { position: relative; font: inherit; min-width: 0; height: 36px; padding: 0; display: grid; place-items: center; cursor: pointer;
+  border-radius: 0.7em; background: rgba(6, 22, 25, 0.6); border: 1.5px solid var(--panel-line); }
+.pg-anis [role="radio"]:hover { background: rgba(127, 220, 200, 0.14); }
+.pg-anis [aria-checked="true"] { background: rgba(255, 212, 71, 0.16); border-color: var(--duck); box-shadow: 0 0 0 2px rgba(255, 212, 71, 0.3); }
+.pg-anis [role="radio"]:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.pg-anis canvas { width: 32px; height: 32px; image-rendering: pixelated; image-rendering: crisp-edges; image-rendering: pixelated; }
+.pg-ani-more { position: absolute; top: 2px; right: 2px; width: 6px; height: 6px; border-radius: 50%; background: var(--duck); box-shadow: 0 0 0 1px var(--ink); pointer-events: none; }
+/* touch: a 44 px tall target that reaches into the gaps above and below (never into a neighbour) */
+.pg-touch-on .pg-anis [role="radio"]::after { content: ""; position: absolute; inset: -4px 0; }
+.pg-look-view { flex: none; align-self: flex-start; padding: 0; line-height: 0; border-radius: 0.7em; overflow: hidden; cursor: pointer; background: #0b2427; border: 1.5px solid var(--panel-line); }
+.pg-look-view canvas { display: block; width: 96px; height: 96px; image-rendering: pixelated; image-rendering: crisp-edges; image-rendering: pixelated; }
+.pg-look-view:focus-visible, .pg-tabs [role="tab"]:focus-visible, .pg-slot5 [role="tab"]:focus-visible, .pg-eqslots [role="tab"]:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+/* (a cell's keyboard focus: a white dashed ring further out - never the worn cell's solid duck ring) */
+.pg-item:focus-visible { outline: 2px dashed #ffffff; outline-offset: 4px; }
+.pg-shop-info, .pg-my-info { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 0.3em; }
+.pg-shop-name { margin: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 0.15em 0.45em; line-height: 1.2; min-height: 1.4em; }
+.pg-shop-name b { font-family: var(--font-sign); font-weight: 400; font-size: 1.15em; color: var(--cream); }
+.pg-rar { flex: none; font-style: normal; font-family: var(--font-body); font-weight: 700; font-size: 0.74em; line-height: 1; padding: 0.22em 0.6em 0.2em; border-radius: 999px;
+  background: var(--rar, var(--cream-dim)); color: var(--ink); white-space: nowrap; }
+.pg-rar:empty { display: none; }
+/* (two lines held: the button below keeps its place whichever item is picked) */
+.pg-shop-desc { margin: 0; font-size: 0.86em; line-height: 1.35; min-height: 2.7em; color: var(--cream-dim); }
+#pg-shop-buy { margin-top: auto; align-self: stretch; max-width: 15em; font-size: 1em; line-height: 1.15; white-space: normal; text-align: center; }
+#pg-shop-buy .pg-ic { width: 1.05em; height: 1.05em; margin: 0 0.12em 0 0.05em; vertical-align: -0.12em; }
+#pg-shop-buy.is-armed { background: var(--pink); box-shadow: 0 0.16em 0 var(--pink-2), 0 0.3em 0.8em rgba(0, 0, 0, 0.35); }
+/* (aria-disabled, not disabled: a focused button keeps the focus as its state changes) */
+#pg-shop-buy[aria-disabled="true"] { cursor: default; transform: none; background: #8a9b98; box-shadow: 0 0.16em 0 #5d6d6a; }
+/* (the take-off verb as a ghost button: it lands where 사기 was, so it must not look like the 사기 just tapped twice) */
+#pg-shop-buy[data-k="off"] { background: transparent; color: var(--cream); box-shadow: inset 0 0 0 1.5px var(--panel-line); }
+.pg-slot5, .pg-eqslots { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.3em; margin: 0.6em 0 0.5em; }
+.pg-slot5 [role="tab"], .pg-eqslots [role="tab"] { font: inherit; min-width: 0; min-height: 40px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.15em;
+  padding: 0.25em 0.1em 0.2em; border-radius: 0.7em; cursor: pointer; font-weight: 700; font-size: 0.82em; line-height: 1.1; white-space: nowrap;
+  color: var(--cream); background: rgba(6, 22, 25, 0.6); border: 1.5px solid var(--panel-line); }
+.pg-slot5 [aria-selected="true"], .pg-eqslots [aria-selected="true"] { background: rgba(255, 212, 71, 0.16); border-color: var(--duck); color: var(--duck); }
+.pg-touch-on .pg-slot5 [role="tab"] { min-height: 44px; }
+#pg-hub-my .pg-eqslots { margin-top: 0.4em; }
+.pg-slot5 canvas { width: 16px; height: 16px; image-rendering: pixelated; image-rendering: crisp-edges; image-rendering: pixelated; }
+.pg-eqslots canvas { width: 32px; height: 32px; image-rendering: pixelated; image-rendering: crisp-edges; image-rendering: pixelated; }
+.pg-items { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); grid-auto-rows: 44px; gap: 6px; }
+.pg-items:empty { display: none; }
+.pg-item { --rar: var(--cream-dim); font: inherit; position: relative; min-width: 0; padding: 0; display: grid; place-items: center; cursor: pointer; border-radius: 0.6em;
+  color: var(--cream); background: rgba(6, 22, 25, 0.7); border: 2px solid var(--rar); }
+.pg-item:hover { background: rgba(127, 220, 200, 0.12); }
+.pg-item > canvas { width: 32px; height: 32px; image-rendering: pixelated; image-rendering: crisp-edges; image-rendering: pixelated; }
+/* (the 상점's cells: the art in a 36x28 canvas over its price - [coin]60 in coin pink, dim when the balance does not
+   cover it or the league is not reached; an owned cell keeps the line's room, so every art sits at one height) */
+.pg-item.has-pr { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; }
+.pg-item.has-pr > canvas { width: 36px; height: 28px; }
+.pg-item-pr { display: flex; align-items: center; gap: 1px; height: 9px; font: 700 10px/9px var(--font-body); letter-spacing: 0; white-space: nowrap; color: #ffc9dc; }
+.pg-item-pr canvas { width: 8px; height: 8px; image-rendering: pixelated; image-rendering: crisp-edges; image-rendering: pixelated; }
+.pg-item.is-poor .pg-item-pr { color: #93a8a5; }
+.pg-item.is-poor .pg-item-pr canvas { opacity: 0.55; }
+.pg-item.is-own .pg-item-pr { visibility: hidden; }
+/* selected (shown above): white inside the rarity border; worn: a duck ring outside it (+ the check); locked: the art
+   at 40 %. 마이페이지 marks the worn one exactly so (its selection is what is worn: no white as well) */
+.pg-item[aria-selected="true"] { background: rgba(255, 255, 255, 0.14); box-shadow: inset 0 0 0 2px #ffffff; }
+.pg-item.is-worn { box-shadow: 0 0 0 2px var(--duck); }
+.pg-item.is-worn[aria-selected="true"] { box-shadow: inset 0 0 0 2px #ffffff, 0 0 0 2px var(--duck); }
+#pg-my-grid .pg-item.is-worn[aria-selected="true"] { background: rgba(255, 212, 71, 0.12); box-shadow: 0 0 0 2px var(--duck); }
+.pg-item.is-lock > canvas { opacity: 0.4; }
+.pg-item i { position: absolute; display: block; line-height: 0; pointer-events: none; }
+.pg-item i canvas { width: 12px; height: 12px; image-rendering: pixelated; image-rendering: crisp-edges; image-rendering: pixelated; }
+.pg-item .pg-item-ck, .pg-item .pg-item-lk { top: 1px; right: 1px; }
+.pg-item.is-none { border-style: dashed; border-color: rgba(127, 220, 200, 0.45); color: var(--cream-dim); font-size: 0.78em; font-weight: 700; }
+/* 전설: a 2-frame shimmer of the border */
+@keyframes pg-shim { 50% { border-color: #ffe4ad; } }
+.pg-item.r3 { animation: pg-shim 1.2s steps(1) infinite; }
+@media (prefers-reduced-motion: reduce) { .pg-item.r3 { animation: none; } }
+.pg-my-nick { margin: 0; display: flex; align-items: center; gap: 0.5em; color: var(--mint); font-weight: 700; }
+.pg-my-nick .pg-input { flex: 1 1 auto; width: 100%; min-width: 0; max-width: 12em; }
+.pg-my-stat { margin: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 0.15em 0.6em; }
+.pg-my-lg { font-size: 0.86em; color: var(--lgc, var(--cream-dim)); }
+.pg-my-note { margin: 0; font-size: 0.84em; line-height: 1.35; color: var(--cream); }
+.pg-my-note:empty { display: none; }
+.pg-my-note small { display: block; margin-top: 0.2em; font-size: 0.92em; color: var(--cream-dim); }
+.pg-my-empty { margin: 0.1em 0 0; display: flex; align-items: center; flex-wrap: wrap; gap: 0.4em 0.75em; font-size: 0.92em; color: var(--cream-dim); }
+.pg-hub-foot { display: flex; align-items: center; justify-content: flex-end; gap: 0.6em; margin-top: 0.7em; }
+.pg-hub-msg { flex: 1 1 auto; min-width: 0; margin: 0; font-size: 0.88em; font-weight: 700; line-height: 1.3; color: var(--duck); text-align: left; }
+.pg-panel .pg-hub-foot .pg-btn { flex: none; }
+/* (looks-per-animal.md 4.0: three tabs and a 4-digit chip on one row at 320 - ~9 px to spare; game.js hubTopFit adds
+   is-snug where the chip still wraps under the tabs: tighter tabs, the chip's coin icon gone) */
+@media (max-width: 380px) { .pg-tabs { gap: 0.2em; } .pg-tabs [role="tab"] { padding-left: 0.45em; padding-right: 0.45em; } .pg-hub-top { column-gap: 0.35em; }
+  .pg-coins { font-size: 1em; padding-left: 0.45em; padding-right: 0.55em; } }
+.pg-hub-top.is-snug .pg-tabs [role="tab"] { padding-left: 0.35em; padding-right: 0.35em; }
+.pg-hub-top.is-snug .pg-coins .pg-ic { display: none; }
+/* ---- v4 뽑기 (design/gacha.md 6.2 - 6.11): the third hub tab - its info column (the pity line in duck, a duplicate's
+   refund in coin pink), the two draw buttons in a row of their own (two lines: the action over its price; pink when
+   armed, grey when not possible), 건너뛰기 at the row's right end mid-show, the caption, the 10-cell grids (5 x 2; one row
+   of ten where the card is >= 494 px inside), the odds panel's tables; NEW dots on cells (top-left: the check keeps the
+   top-right), the tab / equipment-box dots */
+.pg-hub-card { container: hubcard / inline-size; }
+.pg-tabs .pg-tro-new { top: -0.2em; right: -0.15em; }
+.pg-eqslots [role="tab"] { position: relative; }
+.pg-eqslots .pg-tro-new { top: 2px; right: 2px; width: 7px; height: 7px; }
+.pg-gacha-line { margin: 0; font-size: 0.9em; font-weight: 700; line-height: 1.3; color: var(--duck); }
+.pg-gacha-line:empty { display: none; }
+.pg-gacha-line.is-dup { color: #ffc9dc; }
+.pg-shop-desc.pg-gacha-sub { min-height: 0; }
+.pg-gacha-batch { display: block; font-weight: 700; color: var(--cream); }
+.pg-gacha-btns { display: flex; align-items: stretch; gap: 0.5em; margin: 0.6em 0 0.45em; }
+.pg-panel .pg-btn.pg-gacha-btn { flex: 1 1 0; min-width: 0; max-width: 15em; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.12em;
+  font-size: 1em; line-height: 1.1; padding: 0.4em 0.6em; min-height: 46px; white-space: normal; text-align: center; }
+.pg-panel .pg-btn.pg-gacha-btn[hidden], #pg-gacha-skip[hidden] { display: none; }
+.pg-gacha-act { font-weight: 400; }
+.pg-gacha-pr { display: inline-flex; align-items: center; gap: 0.15em; font-family: var(--font-body); font-weight: 700; font-size: 0.8em; }
+.pg-gacha-pr .pg-ic { width: 1.1em; height: 1.1em; }
+.pg-btn.pg-gacha-btn.is-armed { background: var(--pink); box-shadow: 0 0.16em 0 var(--pink-2), 0 0.3em 0.8em rgba(0, 0, 0, 0.35); }
+.pg-btn.pg-gacha-btn[aria-disabled="true"] { cursor: default; transform: none; background: #8a9b98; box-shadow: 0 0.16em 0 #5d6d6a; }
+.pg-gacha-btn[data-k="poor"] .pg-gacha-pr { opacity: 0.7; }
+.pg-btn.pg-gacha-btn[data-k="ok"], .pg-btn.pg-gacha-btn[data-k="off"] { background: transparent; color: var(--cream); box-shadow: inset 0 0 0 1.5px var(--panel-line); }
+#pg-gacha-skip { flex: none; margin-left: auto; align-self: center; }
+.pg-gacha-h { margin: 0 0 0.3em; font-size: 0.82em; font-weight: 700; line-height: 1.25; color: var(--cream-dim); }
+.pg-gacha-h b { color: var(--duck); }
+.pg-items.pg-items10 { grid-template-columns: repeat(5, minmax(44px, 56px)); justify-content: start; }
+@container hubcard (min-width: 494px) { .pg-items.pg-items10 { grid-template-columns: repeat(10, minmax(44px, 1fr)); } }
+#pg-gacha-grid .pg-item-pr { color: var(--cream-dim); }
+#pg-gacha-grid .pg-item.is-dup .pg-item-pr { color: #ffc9dc; }
+.pg-item.is-dr .pg-item-pr { color: var(--cream); }
+.pg-item .pg-item-nw { top: 2px; left: 2px; width: 7px; height: 7px; border-radius: 50%; background: var(--pink); box-shadow: 0 0 0 1.5px var(--ink); }
+.pg-item.is-flash { background: var(--rar); }
+@media (prefers-reduced-motion: reduce) { .pg-item.is-flash { background: rgba(6, 22, 25, 0.7); } }
+#pg-shop-buy[data-k="draw"] { background: var(--mint); box-shadow: 0 0.16em 0 var(--mint-2), 0 0.3em 0.8em rgba(0, 0, 0, 0.35); }
+.pg-gacha-odds { margin: 0.1em 0 0.6em; padding: 0.55em 0.65em; border-radius: 0.7em; background: rgba(6, 22, 25, 0.6); border: 1.5px solid var(--panel-line); font-size: 0.84em; line-height: 1.35; }
+.pg-gacha-odds[hidden] { display: none; }
+.pg-odds { width: 100%; border-collapse: collapse; }
+.pg-odds caption { text-align: left; font-weight: 700; color: var(--duck); margin-bottom: 0.2em; }
+.pg-odds th, .pg-odds td { padding: 0.25em 0.3em; text-align: left; vertical-align: top; font-weight: 400; color: var(--cream); border-top: 1px solid rgba(127, 220, 200, 0.18); }
+.pg-odds thead th { color: var(--cream-dim); font-weight: 700; border-top: 0; white-space: nowrap; }
+.pg-odds tbody th { font-weight: 700; white-space: nowrap; }
+.pg-odds small { display: block; font-weight: 400; }
+.pg-odds-rules { margin: 0.5em 0; padding-left: 1.1em; color: var(--cream-dim); }
+.pg-odds-rules li { margin: 0.15em 0; }
+.pg-odds-all summary { cursor: pointer; font-weight: 700; color: var(--mint); padding: 0.35em 0; }
+.pg-odds-all summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.pg-odds-items tbody th { font-weight: 400; white-space: normal; }
+.pg-odds-items td { white-space: nowrap; text-align: right; }
+.pg-odds-items canvas { width: 16px; height: 16px; margin-right: 0.3em; vertical-align: -0.3em; image-rendering: pixelated; image-rendering: crisp-edges; image-rendering: pixelated; }
+.pg-odds-dr { font-style: normal; font-size: 0.85em; padding: 0 0.4em; border-radius: 999px; background: rgba(255, 212, 71, 0.2); color: var(--duck); white-space: nowrap; }
+/* the room: 꾸미기 at the end of the 내 캐릭터 heading */
+.pg-box h3.pg-h3-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5em; }
+.pg-h3-row .pg-btn { letter-spacing: 0; }
+#pg-fontwarm {
+  position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: hidden;
+  opacity: 0; pointer-events: none; white-space: nowrap; font-size: 16px;
+}
+.pg-fw-sign { font-family: var(--font-sign); }
+.pg-fw-body { font-family: var(--font-body); }
+[hidden] { display: none !important; }
+</style>
+
+<div id="pg-app">
+  <header id="pg-head">
+    <h1 class="pg-brand"><span class="pg-onsen" aria-hidden="true">♨</span><span class="pg-brand-t">뽀득뽀득 목욕탕</span></h1>
+    <span id="pg-net-chip" class="pg-chip" role="status" aria-live="polite" hidden></span>
+    <div class="pg-tools">
+      <button id="pg-sound" class="pg-icon" type="button" aria-pressed="false" aria-label="소리 끄기" title="소리 끄기 (M)">
+        <svg class="pg-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor" stroke="none"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19 6a8.5 8.5 0 0 1 0 12"/></svg>
+        <svg class="pg-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor" stroke="none"/><path d="M17 9.5l5 5M22 9.5l-5 5"/></svg>
+      </button>
+      <button id="pg-pausebtn" class="pg-icon" type="button" aria-label="일시정지" title="일시정지 (P)">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1.2"/><rect x="14" y="5" width="4" height="14" rx="1.2"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="pg-stage">
+    <div id="pg-frame">
+      <div id="pg-screen">
+        <canvas id="pg-canvas" width="256" height="224" aria-label="뽀득뽀득 목욕탕 게임 화면"></canvas>
+        <div id="pg-tags" aria-hidden="true"></div>
+        <div id="pg-words" aria-hidden="true"></div>
+
+        <div id="pg-banner" class="pg-banner" hidden aria-live="polite">
+          <div class="pg-banner-in"><span id="pg-banner-sub"></span><span id="pg-banner-main"></span></div>
+        </div>
+
+        <section id="pg-title" class="pg-ov" aria-label="타이틀">
+          <div class="pg-card pg-title-card">
+            <h2 class="pg-logo"><span>꽥꽥이와 친구들의</span>뽀득뽀득 목욕탕</h2>
+            <p class="pg-tagline">거품으로 때를 가두고 톡! 뽀득 콤보로 간식이 와르르</p>
+            <div id="pg-pick" class="pg-pick" role="radiogroup" aria-label="캐릭터 고르기"></div>
+            <div id="pg-kit" class="pg-kit" aria-live="polite">
+              <p class="pg-kit-head"><b id="pg-pick-name">꽥꽥이</b><span id="pg-pick-animal" class="pg-kit-animal">고무 오리</span><i id="pg-pick-role" class="pg-kit-role">만능</i><em id="pg-pick-badge" class="pg-kit-badge">처음이라면 추천</em></p>
+              <p id="pg-pick-perk" class="pg-kit-tag">처음이라면 꽥꽥이! 둥실 날고 메아리 쏘기</p>
+              <div id="pg-pick-stats" class="pg-kit-stats"></div>
+              <p class="pg-kit-line"><b>특기</b><span id="pg-pick-move">둥실 활공</span><span id="pg-pick-movehow" class="pg-kit-how">떨어질 때 점프를 꾹! 둥실둥실 천천히</span></p>
+              <p class="pg-kit-line pg-kit-bubline"><b>거품</b><span id="pg-pick-bub">메아리 거품</span><span id="pg-pick-bubdesc" class="pg-kit-how">멀리 갔다가 다시 돌아와요</span></p>
+            </div>
+            <p class="pg-keys">←→ 캐릭터 고르기 · Enter 혼자 하기 · ↑/Z 점프 · X 거품</p>
+            <p class="pg-best"><span class="pg-best-hi">최고 점수 <b id="pg-title-hi">0</b></span><button id="pg-tro" class="pg-tro" type="button"
+              aria-label="내 트로피 30개 · 때밀이 견습 · 내 기록 보기"><canvas id="pg-tro-lg" class="pg-ic pg-lg" width="8" height="8" aria-hidden="true"></canvas><canvas
+              class="pg-ic pg-cup" width="8" height="8" aria-hidden="true"></canvas><b id="pg-tro-n">30</b><i id="pg-tro-cloud" class="pg-tro-cloud" hidden><svg class="pg-ic pg-cloud-ic" viewBox="0 0 8 8" aria-hidden="true" focusable="false"><path fill="currentColor" d="M4 2h2v1H4zM1 3h2v1H1zM4 3h3v1H4zM0 4h8v2H0zM1 6h6v1H1z"/></svg></i><span id="pg-tro-name" class="pg-tro-name">때밀이 견습</span><i id="pg-tro-new" class="pg-tro-new" hidden></i></button></p>
+            <div class="pg-row">
+              <button id="pg-start" class="pg-btn" type="button" data-primary>혼자 하기</button>
+              <button id="pg-friends-btn" class="pg-btn pg-alt" type="button">친구와 하기</button>
+              <button id="pg-shop-btn" class="pg-btn pg-shopbtn" type="button" title="상점" aria-label="상점 · 비누 코인 0개"><canvas id="pg-shop-ic" class="pg-ic" width="8" height="8"
+                aria-hidden="true"></canvas><span class="pg-shopbtn-tx">상점</span><i id="pg-shop-new" class="pg-tro-new" hidden></i></button>
+            </div>
+          </div>
+        </section>
+
+        <!-- v4 trophies: 내 기록 (opened from the title's trophy badge; the attract demo keeps running behind) -->
+        <section id="pg-rec" class="pg-ov" aria-labelledby="pg-rec-h" hidden>
+          <div class="pg-card pg-rec-card">
+            <h2 class="pg-h2" id="pg-rec-h">내 기록</h2>
+            <div class="pg-rec-lg" id="pg-rec-lg"><canvas id="pg-rec-lgart" class="pg-lg" width="8" height="8" aria-hidden="true"></canvas>
+              <div class="pg-rec-lgtx"><b id="pg-rec-lgname">때밀이 견습</b><span id="pg-rec-next">다음 리그까지 30개</span>
+                <i class="pg-rec-bar" aria-hidden="true"><i id="pg-rec-fill"></i></i></div>
+              <b class="pg-rec-n"><canvas class="pg-ic pg-cup" width="8" height="8" aria-hidden="true"></canvas><span id="pg-rec-n">30</span></b></div>
+            <dl class="pg-rec-stats">
+              <dt>최고 트로피</dt><dd id="pg-rec-best">30</dd><dt>배틀</dt><dd id="pg-rec-win">0승 / 0판</dd>
+              <dt>뽀득 KO</dt><dd id="pg-rec-ko">0</dd><dt>혼자 최고 점수</dt><dd id="pg-rec-hi">0</dd>
+            </dl>
+            <ol id="pg-rec-ladder" class="pg-rec-ladder" aria-label="리그"></ol>
+            <p id="pg-rec-note" class="pg-rec-note"></p>
+            <p id="pg-cloud" class="pg-cloud" hidden aria-live="polite"><svg class="pg-ic pg-cloud-ic" viewBox="0 0 8 8" aria-hidden="true" focusable="false"><path fill="currentColor" d="M4 2h2v1H4zM1 3h2v1H1zM4 3h3v1H4zM0 4h8v2H0zM1 6h6v1H1z"/></svg><span id="pg-cloud-tx"></span></p>
+            <div class="pg-row"><button id="pg-cloud-btn" class="pg-btn pg-ghost pg-cloud-btn" type="button" hidden>구글로 로그인</button><button id="pg-rec-close" class="pg-btn" type="button" data-primary>닫기</button></div>
+          </div>
+        </section>
+
+        <section id="pg-podium" class="pg-ov pg-podium" aria-label="결과 발표" hidden>
+          <div>
+            <h2 class="pg-podium-title">결과 발표!<span id="pg-podium-tag" class="pg-podium-tag" hidden></span></h2>
+            <p class="pg-wait" data-net-wait hidden>방장이 다음 판을 고르고 있어요</p>
+            <p id="pg-podium-note" class="pg-wait" hidden></p>
+          </div>
+          <p id="pg-podium-sum" class="pg-sr" aria-live="polite"></p>
+          <div>
+            <div class="pg-row pg-podium-btns">
+              <button id="pg-podium-again" class="pg-btn" type="button" data-primary>한 판 더</button>
+              <button id="pg-podium-room" class="pg-btn pg-ghost" type="button" hidden>방으로</button>
+              <button id="pg-podium-lobby" class="pg-btn pg-ghost" type="button">로비로</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="pg-pause" class="pg-ov" aria-label="일시정지" hidden>
+          <div class="pg-card">
+            <h2 class="pg-h2" id="pg-pause-h">잠깐 쉬는 중</h2>
+            <p class="pg-sub" id="pg-pause-sub">따끈한 물에 몸 좀 녹이고 가요</p>
+            <div class="pg-stampcard" data-stampcard role="img" aria-label="목욕 도장 카드">
+              <div class="pg-stampcard-head"><span>목욕 도장 카드</span><b data-stampcount>0/10</b></div>
+              <ol class="pg-slots" aria-hidden="true"><li data-slot></li><li data-slot></li><li data-slot></li><li data-slot></li><li data-slot></li><li data-slot></li><li data-slot></li><li data-slot></li><li data-slot></li><li data-slot></li></ol>
+              <p class="pg-stampcard-foot">도장 10개 = 무료 입장권 (한 판 더!)</p>
+            </div>
+            <div class="pg-row">
+              <button id="pg-resume" class="pg-btn" type="button" data-primary>계속하기</button>
+              <button id="pg-pause-home" class="pg-btn pg-ghost" type="button">처음으로</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="pg-over" class="pg-ov" aria-label="게임 오버" hidden>
+          <div class="pg-card">
+            <h2 class="pg-h2 pg-pink">목욕 끝!</h2>
+            <span id="pg-over-new" class="pg-new" hidden>최고 기록 달성!</span><span id="pg-over-promo" class="pg-new pg-promo" hidden>승급! 뽀득 새내기</span>
+            <dl class="pg-stats">
+              <dt>점수</dt><dd id="pg-over-score">0</dd>
+              <div class="pg-tro-row pg-hi-row"><dt>최고 점수</dt><dd id="pg-over-hi">0</dd></div>
+              <dt>도달한 탕</dt><dd id="pg-over-round">1번째 탕</dd>
+              <div id="pg-over-trow" class="pg-tro-row" hidden><dt>트로피</dt><dd id="pg-over-tro"><canvas class="pg-ic pg-cup" width="8" height="8" aria-hidden="true"></canvas><span>+0</span> <small>30개</small></dd></div>
+              <div id="pg-over-crow" class="pg-tro-row" hidden><dt>비누 코인</dt><dd id="pg-over-coin"><canvas class="pg-ic pg-coin" width="8" height="8" aria-hidden="true"></canvas><span>+0</span> <small>0개</small></dd></div>
+            </dl>
+            <div id="pg-over-team" class="pg-team" hidden></div>
+            <div class="pg-stampcard" data-stampcard role="img" aria-label="목욕 도장 카드">
+              <div class="pg-stampcard-head"><span>목욕 도장 카드</span><b data-stampcount>0/10</b></div>
+              <ol class="pg-slots" aria-hidden="true"><li data-slot></li><li data-slot></li><li data-slot></li><li data-slot></li><li data-slot></li><li data-slot></li><li data-slot></li><li data-slot></li><li data-slot></li><li data-slot></li></ol>
+              <p class="pg-stampcard-foot">도장 10개 = 무료 입장권 (한 판 더!)</p>
+            </div>
+            <p class="pg-wait" data-net-wait hidden>방장이 다음 판을 고르고 있어요</p>
+            <div class="pg-row">
+              <button id="pg-retry" class="pg-btn" type="button" data-primary>다시 하기</button>
+              <button id="pg-over-home" class="pg-btn pg-ghost" type="button">처음으로</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="pg-ending" class="pg-ov" aria-label="엔딩" hidden>
+          <div class="pg-card">
+            <h2 class="pg-h2 pg-duck">모든 탕을 반짝반짝<br>청소했어요!</h2>
+            <p class="pg-sub" id="pg-end-sub">꽥꽥이 덕분에 목욕탕이 뽀득뽀득해졌어요</p>
+            <span id="pg-end-promo" class="pg-new pg-promo" hidden>승급! 뽀득 새내기</span>
+            <dl class="pg-stats"><dt>점수</dt><dd id="pg-end-score">0</dd>
+              <div id="pg-end-trow" class="pg-tro-row" hidden><dt>트로피</dt><dd id="pg-end-tro"><canvas class="pg-ic pg-cup" width="8" height="8" aria-hidden="true"></canvas><span>+0</span> <small>30개</small></dd></div>
+              <div id="pg-end-crow" class="pg-tro-row" hidden><dt>비누 코인</dt><dd id="pg-end-coin"><canvas class="pg-ic pg-coin" width="8" height="8" aria-hidden="true"></canvas><span>+0</span> <small>0개</small></dd></div></dl>
+            <div id="pg-end-team" class="pg-team" hidden></div>
+            <p class="pg-wait" data-net-wait hidden>방장이 다음 판을 고르고 있어요</p>
+            <div class="pg-row">
+              <button id="pg-end-next" class="pg-btn" type="button" data-primary>2회차 도전</button>
+              <button id="pg-end-home" class="pg-btn pg-ghost" type="button">처음으로</button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <section id="pg-friends" class="pg-panel" aria-labelledby="pg-friends-h" hidden>
+      <div class="pg-card pg-pcard">
+        <h2 id="pg-friends-h" class="pg-h2">친구와 하기</h2>
+        <div id="pg-net-note" class="pg-note" role="note" hidden></div>
+        <div class="pg-field">
+          <label for="pg-nick">내 이름</label>
+          <input id="pg-nick" class="pg-input" type="text" maxlength="12" autocomplete="nickname" spellcheck="false" enterkeyhint="done">
+          <span class="pg-mychar"><canvas id="pg-mychar-art" width="16" height="16" aria-hidden="true"></canvas><b id="pg-mychar-name">꽥꽥이</b></span>
+          <span id="pg-mytro" class="pg-mytro" aria-label="내 트로피 30개"></span>
+        </div>
+        <div class="pg-box">
+          <h3>방 만들기</h3>
+          <div class="pg-seg" role="radiogroup" aria-label="모드" data-modes>
+            <button type="button" role="radio" data-mode="coop" aria-checked="true">같이 하기</button>
+            <button type="button" role="radio" data-mode="battle" aria-checked="false">배틀</button>
+          </div>
+          <p class="pg-desc" id="pg-mode-desc">2~4명이 힘을 합쳐 모든 탕을 청소해요</p>
+          <div class="pg-opts" id="pg-host-opts" data-opts hidden></div>
+          <div class="pg-row" style="margin-top:0"><button id="pg-host" class="pg-btn" type="button">방 만들기</button></div>
+        </div>
+        <div class="pg-box">
+          <h3>코드로 참여</h3>
+          <form id="pg-join-form" class="pg-joinrow" autocomplete="off">
+            <input id="pg-code" class="pg-input" type="text" maxlength="4" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" placeholder="AB12" aria-label="방 코드 4자리">
+            <button id="pg-join" class="pg-btn" type="submit">참여</button>
+          </form>
+        </div>
+        <div class="pg-box" id="pg-games-box" hidden>
+          <h3>열린 방</h3>
+          <ul id="pg-games" class="pg-games" aria-label="열린 방 목록"></ul>
+          <p id="pg-games-empty" class="pg-sub">아직 열린 방이 없어요</p>
+        </div>
+        <p id="pg-friends-err" class="pg-err" role="alert"></p>
+        <div class="pg-row"><button id="pg-friends-back" class="pg-btn pg-ghost" type="button">뒤로</button></div>
+      </div>
+    </section>
+
+    <section id="pg-room" class="pg-panel" aria-labelledby="pg-room-h" hidden>
+      <div class="pg-card pg-pcard">
+        <div class="pg-room-top">
+          <div class="pg-room-code"><span id="pg-room-h">방 코드</span><b id="pg-room-code">----</b></div>
+          <div class="pg-room-side">
+            <button id="pg-copy" class="pg-btn pg-ghost pg-small" type="button">코드 복사</button>
+            <span id="pg-room-mode" class="pg-badge">같이 하기</span>
+            <span id="pg-room-bet" class="pg-badge pg-bet" hidden><canvas class="pg-ic pg-cup" width="8" height="8" aria-hidden="true"></canvas><span id="pg-room-bet-n">10개씩</span></span>
+            <span id="pg-room-prac" class="pg-badge pg-prac" hidden>연습 경기</span>
+          </div>
+        </div>
+        <p id="pg-room-hint" class="pg-room-hint" aria-live="polite"></p>
+        <ol id="pg-room-players" class="pg-cards4" aria-label="참가자"></ol>
+        <div class="pg-box">
+          <h3 class="pg-h3-row">내 캐릭터 <button id="pg-room-look" class="pg-btn pg-ghost pg-small" type="button">꾸미기</button></h3>
+          <div id="pg-room-pick" class="pg-pick pg-pick-sm" role="radiogroup" aria-label="캐릭터 다시 고르기"></div>
+          <div id="pg-room-kit" class="pg-kit pg-kit-sm" aria-live="polite">
+            <p class="pg-kit-head"><b id="pg-room-pname">꽥꽥이</b><i id="pg-room-role" class="pg-kit-role">만능</i></p>
+            <div id="pg-room-stats" class="pg-kit-stats"></div>
+            <p class="pg-kit-line"><b>특기</b><span id="pg-room-pperk">둥실 활공</span></p>
+            <p id="pg-room-twin" class="pg-kit-twin" hidden></p>
+          </div>
+        </div>
+        <div class="pg-box" id="pg-room-optbox">
+          <h3>게임 설정</h3>
+          <p id="pg-room-sum" class="pg-room-sum" hidden></p>
+          <div class="pg-seg" role="radiogroup" aria-label="모드" data-modes>
+            <button type="button" role="radio" data-mode="coop" aria-checked="true">같이 하기</button>
+            <button type="button" role="radio" data-mode="battle" aria-checked="false">배틀</button>
+          </div>
+          <div class="pg-opts" id="pg-room-opts" data-opts hidden style="margin-top:0.65em"></div>
+          <ul id="pg-room-rules" class="pg-rules" aria-label="규칙"></ul>
+        </div>
+        <div class="pg-room-actions">
+          <p id="pg-room-msg" class="pg-sub" role="status" aria-live="polite"></p>
+          <div class="pg-row">
+            <button id="pg-ready" class="pg-btn" type="button" aria-pressed="false">준비</button>
+            <button id="pg-go" class="pg-btn" type="button" disabled>시작</button>
+            <button id="pg-room-leave" class="pg-btn pg-ghost" type="button">나가기</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- v4 shop (design/shop.md 9.2-9.4): 상점 and 마이페이지 in one full-stage panel, opened from the title (the 상점
+         button, the trophy badge) or the room (꾸미기); game.js builds the slot tabs, the grids and the equipment boxes -->
+    <section id="pg-hub" class="pg-panel" aria-labelledby="pg-hub-h" hidden>
+      <div class="pg-card pg-pcard pg-hub-card">
+        <h2 id="pg-hub-h" class="pg-sr">상점, 뽑기, 마이페이지</h2>
+        <div class="pg-hub-top">
+          <div class="pg-tabs" role="tablist" aria-label="상점, 뽑기, 마이페이지">
+            <button type="button" role="tab" id="pg-tab-shop" data-hub="shop" aria-selected="true" aria-controls="pg-hub-shop">상점</button>
+            <button type="button" role="tab" id="pg-tab-draw" data-hub="draw" aria-selected="false" aria-controls="pg-hub-draw" tabindex="-1">뽑기<i id="pg-tab-draw-new" class="pg-tro-new" hidden></i></button>
+            <button type="button" role="tab" id="pg-tab-my" data-hub="my" aria-selected="false" aria-controls="pg-hub-my" tabindex="-1">마이페이지<i id="pg-tab-my-new" class="pg-tro-new" hidden></i></button>
+          </div>
+          <p class="pg-coins" id="pg-hub-coins" role="img" aria-label="비누 코인 0개"><canvas class="pg-ic pg-coin" width="8" height="8" aria-hidden="true"></canvas><b id="pg-hub-co">0</b></p>
+        </div>
+        <div id="pg-hub-shop" class="pg-hub-pane" role="tabpanel" aria-labelledby="pg-tab-shop">
+          <div class="pg-shop-top">
+            <div class="pg-look-wrap">
+              <button id="pg-shop-view" class="pg-look-view" type="button" aria-label="미리 보기: 꽥꽥이 · 눌러서 다른 동물로"><canvas width="32" height="32"></canvas></button>
+              <span id="pg-shop-aname" class="pg-look-name" aria-hidden="true">꽥꽥이</span>
+            </div>
+            <div class="pg-shop-info">
+              <p class="pg-shop-name"><b id="pg-shop-iname"></b><i id="pg-shop-rar" class="pg-rar"></i></p>
+              <p id="pg-shop-desc" class="pg-shop-desc"></p>
+              <button id="pg-shop-buy" class="pg-btn" type="button"></button>
+            </div>
+          </div>
+          <div id="pg-shop-slots" class="pg-slot5" role="tablist" aria-label="부위"></div>
+          <div id="pg-shop-grid" class="pg-items" role="listbox" aria-label="아이템"></div>
+        </div>
+        <!-- v4 뽑기 (design/gacha.md 6.2): the machine (or the hub's animal) beside the pity line, the two draw buttons,
+             the collection / the ten results, the odds panel; the reveal's one announcement -->
+        <div id="pg-hub-draw" class="pg-hub-pane" role="tabpanel" aria-labelledby="pg-tab-draw" hidden>
+          <div class="pg-shop-top">
+            <div class="pg-look-wrap">
+              <button id="pg-gacha-view" class="pg-look-view" type="button" tabindex="-1" aria-hidden="true"><canvas width="32" height="32"></canvas></button>
+              <span class="pg-look-name" aria-hidden="true" hidden></span>
+            </div>
+            <div class="pg-shop-info">
+              <p class="pg-shop-name"><b id="pg-gacha-name">비누 캡슐 뽑기</b><i id="pg-gacha-rar" class="pg-rar"></i></p>
+              <p id="pg-gacha-line" class="pg-gacha-line"></p>
+              <p id="pg-gacha-sub" class="pg-shop-desc pg-gacha-sub"></p>
+            </div>
+          </div>
+          <div class="pg-gacha-btns">
+            <button id="pg-gacha-one" class="pg-btn pg-gacha-btn" type="button"></button>
+            <button id="pg-gacha-ten" class="pg-btn pg-gacha-btn" type="button"></button>
+            <button id="pg-gacha-skip" class="pg-btn pg-ghost pg-small" type="button" hidden>건너뛰기</button>
+          </div>
+          <p id="pg-gacha-h" class="pg-gacha-h">뽑기 전용 아이템 <b>0/10</b></p>
+          <div id="pg-gacha-odds" class="pg-gacha-odds" hidden></div>
+          <div id="pg-gacha-grid" class="pg-items pg-items10" role="listbox" aria-labelledby="pg-gacha-h"></div>
+          <p id="pg-gacha-sr" class="pg-sr" role="status" aria-live="polite"></p>
+        </div>
+        <div id="pg-hub-my" class="pg-hub-pane" role="tabpanel" aria-labelledby="pg-tab-my" hidden>
+          <div class="pg-my-top">
+            <div class="pg-look-wrap">
+              <button id="pg-my-view" class="pg-look-view" type="button" aria-label="꽥꽥이 · 눌러서 다른 동물로"><canvas width="32" height="32"></canvas></button>
+              <span id="pg-my-aname" class="pg-look-name" aria-hidden="true">꽥꽥이</span>
+            </div>
+            <div class="pg-my-info">
+              <label class="pg-my-nick"><span>이름</span><input id="pg-my-nick" class="pg-input" type="text" maxlength="12" autocomplete="nickname" spellcheck="false" enterkeyhint="done"></label>
+              <p class="pg-my-stat"><span id="pg-my-tro"></span><span id="pg-my-lg" class="pg-my-lg"></span></p>
+              <p id="pg-my-note" class="pg-my-note"></p>
+            </div>
+          </div>
+          <div id="pg-my-anis" class="pg-anis" role="radiogroup" aria-label="꾸밀 동물"></div>
+          <div id="pg-my-slots" class="pg-eqslots" role="tablist" aria-label="꽥꽥이 꾸미기"></div>
+          <div id="pg-my-grid" class="pg-items" role="listbox" aria-label="내 아이템"></div>
+          <p id="pg-my-empty" class="pg-my-empty" hidden><span>아직 없어요 · 상점에서 골라 봐요</span><button id="pg-my-go" class="pg-btn pg-ghost pg-small" type="button">상점 가기</button></p>
+        </div>
+        <div class="pg-hub-foot">
+          <p id="pg-hub-msg" class="pg-hub-msg" role="status" aria-live="polite"></p>
+          <button id="pg-my-rec" class="pg-btn pg-ghost pg-small" type="button" hidden>내 기록</button>
+          <button id="pg-gacha-odds-btn" class="pg-btn pg-ghost pg-small" type="button" aria-expanded="false" aria-controls="pg-gacha-odds" hidden>확률 보기</button>
+          <button id="pg-hub-close" class="pg-btn pg-ghost" type="button">닫기</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer id="pg-hints" aria-label="조작법">
+    <span><kbd>←</kbd><kbd>→</kbd> 이동</span>
+    <span><kbd>↑</kbd> / <kbd>Z</kbd> 점프</span>
+    <span><kbd>X</kbd> / <kbd>Space</kbd> 거품</span>
+    <span><kbd>P</kbd> 일시정지</span>
+    <span><kbd>M</kbd> 소리</span>
+  </footer>
+
+  <div id="pg-touch" aria-hidden="true">
+    <div id="pg-dpad" class="pg-pad">
+      <div id="pg-t-left" class="pg-tb">◀</div>
+      <div id="pg-t-right" class="pg-tb">▶</div>
+    </div>
+    <div class="pg-pad">
+      <div id="pg-t-jump" class="pg-tb">점프<small id="pg-t-jump-sub" class="pg-tb-sub" hidden></small></div>
+      <div id="pg-t-shoot" class="pg-tb">거품</div>
+    </div>
+  </div>
+  <!-- invisible text that makes the browser fetch the Korean web-font slices used later by banners and
+       result screens, so they never first appear in the fallback font (game.js appends the round names) -->
+  <div id="pg-fontwarm" aria-hidden="true"><span class="pg-fw-sign">준비! 서둘러! 샤워기 고장! 무료 입장권! 청소 완료! 샴푸! 고무 슬리퍼! 입욕제! 목욕 끝! 최고 기록 달성! 목욕 도장 카드 점수 도달한 탕 번째 회차 도전 다시 하기 처음으로 계속하기 잠깐 쉬는 중 모든 탕을 반짝반짝 청소했어요! 0123456789,·/</span><span class="pg-fw-body">때가 화났어요 뜨거운 물방울 조심! 세신 보너스 초 도장 개 · 한 판 더 거품이 크고 멀리 더 빠르고 높이 때가 모두 불었어요 번째 탕 회차 점수 최고 점수 도달한 탕 따끈한 물에 몸 좀 녹이고 가요 꽥꽥이 덕분에 목욕탕이 뽀득뽀득해졌어요 도장 10개 = 무료 입장권 (한 판 더!) 0123456789+ 특기 거품 속도 점프 사거리 연사 5점 중 능력 꺼짐 모두 같은 기본 능력이에요 처음이라면 추천 왕방울 온탕 보호막 만능 든든 돌격 저격 곡예 함정 꾹: 활공 두 번: 쿵 대시 쭉 2단 착지 때 또</span></div>
+</div>
+<!--SCRIPTS-->
