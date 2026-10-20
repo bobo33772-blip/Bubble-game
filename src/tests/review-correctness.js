@@ -79,7 +79,7 @@
       D.pause(); D.toTitle(); D.step(10);
       const t = G.mode === 'title' && !document.getElementById('pg-title').hidden && document.getElementById('pg-pause').hidden;
       D.start(0); D.step(5);
-      ok('dying -> pause -> title -> start is clean', wasDying && t && G.mode === 'playing' && G.lives === 3 && G.score === 0 && !G.p.dead && !G.drops.length && !G.hurry && !G.scald, JSON.stringify({ wasDying, t, mode: G.mode, lives: G.lives, dead: G.p.dead }));
+      ok('dying -> pause -> title -> start is clean', wasDying && t && G.mode === 'playing' && G.lives === 4 && G.score === 0 && !G.p.dead && !G.drops.length && !G.hurry && !G.scald, JSON.stringify({ wasDying, t, mode: G.mode, lives: G.lives, dead: G.p.dead }));
     }
 
     // ------------------------------------------------------------------ 4. game over / ending screens skipped by one action key

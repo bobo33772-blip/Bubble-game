@@ -27,7 +27,7 @@
     ok('24 entries with bosses at 6/12/18/24', LV.length === 24 && [5, 11, 17, 23].every((i) => LV[i].boss) && LV.filter((L) => L.boss).length === 4);
     D.seed(2024);
     D.start(0); D.setInvincible(true);
-    ok('game starts on 1번째 탕', S().phase === 'playing' && S().round === 0 && S().lives === 3 && S().stamps === 0);
+    ok('game starts on 1번째 탕', S().phase === 'playing' && S().round === 0 && S().lives === 4 && S().stamps === 0);
 
     let totalKills = 0;
     for (let i = 0; i < LV.length; i++) {
