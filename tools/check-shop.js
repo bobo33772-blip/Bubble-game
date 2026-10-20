@@ -225,19 +225,39 @@ if (K && fs.existsSync(RULES)) {
     else notes.push('rules: GENERATED block matches the catalog');
   }
 } else if (K) notes.push('rules: no firebase/firestore.rules - skipped');
-// (gacha.md 7.7 / looks 6.7: the rules file speaks the cloud version game.js writes)
-{
-  const cv = /\bCL_V = (\d+)/.exec(game), cf = /const CL_FIELDS = \[([^\]]*)\]/.exec(game);
-  if (cv && +cv[1] >= 4 && fs.existsSync(RULES)) {
-    const r = fs.readFileSync(RULES, 'utf8'), miss = [];
+// (gacha.md 7.7 / looks-per-animal.md 6.7 item 5, compat review #12: the rules file speaks the cloud version game.js
+// writes - the header's `v: <CL_V>`, createOk and metaOk take d.v == CL_V, slotOk and sumOk route it; from v 4
+// slotShape3, poolIds and CL_FIELDS with 'dn'). Returns the missing parts ([] = in step)
+function rulesVsCl(r, c, cf) {
+  const miss = [];
+  const fn = (name) => { const i = r.indexOf('function ' + name + '('); if (i < 0) return ''; const j = r.indexOf('\n    function ', i + 1); return r.slice(i, j < 0 ? r.length : j); };
+  const hv = /^\/\/\s+v: (\d+),/m.exec(r);
+  if (!hv || +hv[1] !== c) miss.push(`the header's v: ${c} (it says ${hv ? hv[1] : 'nothing'})`);
+  for (const f of ['createOk', 'metaOk']) if (!new RegExp('d\\.v == ' + c + '\\b').test(fn(f))) miss.push(f + ' d.v == ' + c);
+  if (!new RegExp('d\\.v == ' + c + '\\b').test(fn('slotOk'))) miss.push('slotOk routing v ' + c);
+  if (!new RegExp('\\bv == ' + c + '\\b').test(fn('sumOk'))) miss.push('sumOk routing v ' + c);
+  if (c >= 4) {
     if (!/function slotShape3\(/.test(r)) miss.push('slotShape3');
     if (!/function poolIds\(/.test(r)) miss.push('poolIds');
-    if (!/d\.v == 4/.test(r)) miss.push('d.v == 4');
     if (!cf || !/'dn'/.test(cf[1])) miss.push("CL_FIELDS 'dn' (game.js)");
-    if (miss.length) bad('rules vs CL_V ' + cv[1] + ': missing ' + miss.join(', '));
-    else notes.push('rules: speak document v ' + cv[1]);
+  }
+  return miss;
+}
+{
+  const cv = /\bCL_V = (\d+)/.exec(game), cf = /const CL_FIELDS = \[([^\]]*)\]/.exec(game);
+  if (cv && +cv[1] >= 2 && fs.existsSync(RULES)) {
+    const r = fs.readFileSync(RULES, 'utf8'), c = +cv[1], miss = rulesVsCl(r, c, cf);
+    if (miss.length) bad('rules vs CL_V ' + c + ': missing ' + miss.join(', '));
+    else notes.push('rules: speak document v ' + c);
+    // (the check itself: a copy whose header names another version, or whose createOk lost the version, must fail)
+    const wrongHead = r.replace(/^(\/\/\s+v: )\d+,/m, (m, a) => a + (c + 1) + ',');
+    const wrongCreate = r.replace(fn0(r, 'createOk'), (x) => x.split('d.v == ' + c).join('d.v == ' + (c + 9)));
+    if (!rulesVsCl(wrongHead, c, cf).length) bad('rules vs CL_V self-test: a rules file with a wrong header passed');
+    else if (!rulesVsCl(wrongCreate, c, cf).length) bad('rules vs CL_V self-test: a rules file whose createOk lacks d.v == ' + c + ' passed');
+    else notes.push('rules vs CL_V self-test: a wrong header / createOk fails, the real file passes');
   }
 }
+function fn0(r, name) { const i = r.indexOf('function ' + name + '('); const j = r.indexOf('\n    function ', i + 1); return i < 0 ? '\u0000' : r.slice(i, j < 0 ? r.length : j); }
 
 for (const n of notes) console.log(n);
 if (fails.length) { for (const f of fails) console.log('FAIL ' + f); console.log(`CHECK-SHOP FAIL (${fails.length})`); process.exit(1); }

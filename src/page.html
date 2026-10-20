@@ -865,6 +865,29 @@ html.pg-sa, html.pg-sa body { overscroll-behavior: none; }
 .pg-cloud.is-err { color: var(--pink); }
 .pg-cloud-btn { white-space: nowrap; }
 .pg-cloud-btn[aria-busy="true"] { opacity: 0.7; cursor: progress; }
+/* the login screen before the title (game.js makes it: the deploy with the cloud on and the PR preview only): the
+   title's logo, one line why, 구글로 시작하기 / 로그인 없이 하기 one above the other, the cloud's state under them */
+#pg-login.pg-ov { background: linear-gradient(180deg, rgba(6, 22, 25, 0.35), rgba(6, 22, 25, 0.7) 55%, rgba(6, 22, 25, 0.85)); }
+.pg-login-card { width: 24em; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; padding: 1.1em 1.4em 1em; }
+.pg-login-card::-webkit-scrollbar { display: none; }
+.pg-login-why { margin: 0.75em auto 0.95em; max-width: 19em; color: var(--cream); font-size: 1em; line-height: 1.5; text-wrap: balance; }
+.pg-login-btns { display: flex; flex-direction: column; align-items: stretch; gap: 0.6em; width: 15em; max-width: 100%; margin: 0 auto; }
+.pg-login-btns .pg-btn { white-space: nowrap; }
+.pg-touch-on .pg-login-btns .pg-btn { min-height: 44px; }
+.pg-login-go { display: inline-flex; align-items: center; justify-content: center; gap: 0.4em; }
+.pg-login-go .pg-cloud-ic { width: 0.85em; height: 0.85em; }
+.pg-login-go[aria-busy="true"] { opacity: 0.7; cursor: progress; }
+.pg-login-go:disabled { opacity: 0.45; cursor: not-allowed; filter: grayscale(0.6); }
+.pg-login-st { margin: 0.8em auto 0; max-width: 21em; font-size: 0.78em; line-height: 1.4; color: var(--cream-dim); text-wrap: balance; }
+.pg-login-st.is-in, .pg-login-st.is-msg { color: var(--cream); }
+.pg-login-st.is-err, .pg-login-st.is-pv { color: var(--pink); }
+@container (max-height: 23em) {
+  .pg-login-card { padding: 0.7em 1em 0.75em; }
+  .pg-login-why { margin: 0.45em auto 0.6em; }
+  .pg-login-btns { gap: 0.45em; }
+  .pg-login-st { margin-top: 0.55em; }
+}
+@container (max-width: 30em) { .pg-login-btns .pg-btn { font-size: 1.15em; } }
 /* narrow screens (the league name has stepped aside already): the badge with its mark still shares the 최고 점수 line
    (a 7-digit best score at 1x) - slimmer gaps, padding and mark make the room */
 @container (max-width: 30em) {

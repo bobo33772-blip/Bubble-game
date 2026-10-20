@@ -244,6 +244,11 @@ const LIST = [
     V(`cloud-${s}-${w}`, HTTP + 'test-cloud.html?shot=' + s, 'rt60000', (out) => (/CLOUD SHOT error/.test(out) ? 'shot error' : /CLOUD SHOT READY/.test(out) ? true : 'no CLOUD SHOT READY'), { done: 'CLOUD SHOT READY', shot: `cloud-${s}-${w}.png`, w, h }))),
   // (v4 shop 9.4) 마이페이지 signed out on the deploy with the cloud: the note's second line is the sign-in pitch
   ...[[900, 760], [390, 844]].map(([w, h]) => V(`cloud-my-out-${w}`, HTTP + 'test-cloud.html?shot=my-out', 'rt60000', (out) => (/CLOUD SHOT error/.test(out) ? 'shot error' : /CLOUD SHOT READY/.test(out) ? true : 'no CLOUD SHOT READY'), { done: 'CLOUD SHOT READY', shot: `cloud-my-out-${w}.png`, w, h })),
+  // the login screen before the title (design/cloud-trophies.md "As built (login screen)"): phones upright / on their side,
+  // the 1x desktop screen (256x224) and a PR preview's look (C:/Temp/bogeul/cloud-login-*.png; the shot checks the fit)
+  ...[[320, 568], [390, 844], [844, 390]].map(([w, h]) => V(`cloud-login-${w}`, HTTP + 'test-cloud.html?shot=login', 'rt60000', (out) => (/CLOUD SHOT error/.test(out) ? 'shot error' : /CLOUD SHOT READY/.test(out) ? true : 'no CLOUD SHOT READY'), { done: 'CLOUD SHOT READY', shot: `cloud-login-${w}.png`, w, h })),
+  V('cloud-login-1x', HTTP + 'test-cloud.html?shot=login-1x', 'rt60000', (out) => (/CLOUD SHOT error/.test(out) ? 'shot error' : /CLOUD SHOT READY/.test(out) ? true : 'no CLOUD SHOT READY'), { done: 'CLOUD SHOT READY', shot: 'cloud-login-1x.png' }),
+  V('cloud-login-pv-390', HTTP + 'test-cloud.html?shot=login-pv', 'rt60000', (out) => (/CLOUD SHOT error/.test(out) ? 'shot error' : /CLOUD SHOT READY/.test(out) ? true : 'no CLOUD SHOT READY'), { done: 'CLOUD SHOT READY', shot: 'cloud-login-pv-390.png', w: 390, h: 844 }),
   V('cloud-title-in-1x', HTTP + 'test-cloud.html?shot=title-in-1x', 'rt60000', (out) => (/CLOUD SHOT READY/.test(out) && !/CLOUD SHOT error/.test(out) ? true : 'no shot'), { done: 'CLOUD SHOT READY', shot: 'cloud-title-in-1x.png' }),
   // ---- v3 screenshots to LOOK at (C:/Temp/bogeul/v3-*.png): the title + picker on desktop and a real phone viewport,
   // and the online scenes of test-mp-net.html (?shot=..., the chosen player's frame fills the window)
@@ -277,7 +282,8 @@ function genPlatformPages() {
   const dep = fs.readFileSync(path.join(ROOT, 'deploy', 'index.html'), 'utf8');
   const tag = dep.match(/<script defer src="(https:\/\/[^"]*peerjs[^"]*)"[^>]*><\/script>/);
   if (!tag) throw new Error('no PeerJS tag in deploy/index.html');
-  const fake = `${SC} type="application/x-inert" src="${tag[1]}">${SE}${SC}>(function(){var P=null;try{P=window.parent!==window?window.parent.__FP:null;}catch(e){}if(!P)return;var late=new URLSearchParams(location.search).get('late');function def(){window.Peer=P.Peer(window);}if(late==='manual')window.__rpdDefinePeer=def;else def();})();${SE}`;
+  // (the deploy's login screen stays away: this browser chose to play as a guest - design/cloud-trophies.md "As built (login screen)")
+  const fake = `${SC} type="application/x-inert" src="${tag[1]}">${SE}${SC}>try{localStorage.setItem('ppogeul-login','1');}catch(e){}(function(){var P=null;try{P=window.parent!==window?window.parent.__FP:null;}catch(e){}if(!P)return;var late=new URLSearchParams(location.search).get('late');function def(){window.Peer=P.Peer(window);}if(late==='manual')window.__rpdDefinePeer=def;else def();})();${SE}`;
   fs.writeFileSync(`${T}/rrp-peer-frame.html`, dep.replace(tag[0], () => fake));
   const pdrv = fs.readFileSync(path.join(ROOT, 'src', 'tests', 'review-peer-deploy.js'), 'utf8');
   fs.writeFileSync(`${T}/rrp-peer-main.html`, `<!doctype html><html><head><meta charset="utf-8"><title>rpd</title></head><body style="margin:0;background:#061518">${SC}>\n${pdrv}\n${SE}</body></html>`);

@@ -282,6 +282,9 @@ const FAKE_BIP = (outcome) => `(() => { const e = new Event('beforeinstallprompt
   const pg = targets.find((t) => t.type === 'page');
   pageSid = (await send('Target.attachToTarget', { targetId: pg.targetId, flatten: true })).result.sessionId;
   for (const d of ['Runtime.enable', 'Page.enable', 'Log.enable']) await send(d, {}, pageSid);
+  // (the deploy with the cloud shows a login screen before the title to a browser that never chose: this one has played
+  // as a guest - the app checks below are about the title; src/tests/cloud.js checks the login screen)
+  await send('Page.addScriptToEvaluateOnNewDocument', { source: "try { localStorage.setItem('ppogeul-login', '1'); } catch (e) { /* ignore */ }" }, pageSid);
   await emulate(900, 760, false);
   const finish = async (code) => {
     try { await sendT('Browser.close', {}, null, 5000); } catch (e) { /* ignore */ }
