@@ -206,7 +206,7 @@ window.PG = window.PG || {};
   const BOSS_TYPES = Object.keys(BOSS_DEF);
   // ---- v4 trophies (트로피, design/trophies.md): the constants live up here - REQUIRED / SPR_SIZE and the font warm-up
   // read them at load (the trophy code itself is its own section after the word pops)
-  const TRO_KEY = 'ppogeul-trophy', TRO_V = 4, TRO_MAX = 99999, TRO_GIFT = 100;   // (TRO_V 2: + the shop's coins and items, shop.md 5; 3: the worn set per animal, design/looks-per-animal.md; 4: the 뽑기, gacha.md)
+  const TRO_KEY = 'ppogeul-trophy', TRO_V = 5, TRO_MAX = 99999, TRO_GIFT = 100;   // (TRO_V 2: + the shop's coins and items, shop.md 5; 3: the worn set per animal, design/looks-per-animal.md; 4: the 뽑기, gacha.md; 5: the 2026-10 trophy balance, design/trophies.md - no new field, but a v 4 page clamps de to its DAY_CAP 20)
   const LEAGUES = [
     { name: '때밀이 견습', min: 0, col: '#6fd08a' },     // lg_0 green 이태리타올 (placement never costs here)
     { name: '뽀득 새내기', min: 60, col: '#ff9ec4' },    // lg_1 pink soap + bubble
@@ -3801,13 +3801,14 @@ window.PG = window.PG || {};
     ce: 0, sp: 0, own: [], eq: LOOKS0, lh: 0, cd: 0, cde: 0, bd: 0, bs: 0, sh: 0, cv: 0, dn: 0, pt: 0, gd: [], dl: null, ds: 0, nw: [], gs: 0 }; }
   // untrusted (hand edits, other versions): clamped field by field; null = start fresh, 'newer' = a newer page's data.
   // v 1 (before the shop) reads with no coins and nothing worn, v 2 (one worn set) with that set copied to all six
-  // animals - lossless migrations, written back as v 4 at once (troLoad); v 3 (looks) reads with no draws; v > 4 is a
-  // newer page's (read-only - an older page can never strip dn / gd / pt / dl, gacha.md 5.1)
+  // animals - lossless migrations, written back as v 5 at once (troLoad); v 3 (looks) reads with no draws; v 4 (before the
+  // trophy balance) reads as is; v > 5 is a newer page's (read-only - an older page can never strip dn / gd / pt / dl,
+  // gacha.md 5.1, nor clamp de to an older DAY_CAP: a v 4 page's 20 would reopen today's trophy bonus, trophies.md)
   function troParse(raw) {
     let o = null; try { o = JSON.parse(raw); } catch (e) { o = null; }
     if (!o || typeof o !== 'object' || Array.isArray(o)) return null;
     if (typeof o.v === 'number' && o.v > TRO_V) return 'newer';
-    if ((o.v !== 1 && o.v !== 2 && o.v !== 3 && o.v !== TRO_V) || typeof o.dev !== 'string' || !/^[0-9a-z]{8}$/.test(o.dev)) return null;
+    if ((o.v !== 1 && o.v !== 2 && o.v !== 3 && o.v !== 4 && o.v !== TRO_V) || typeof o.dev !== 'string' || !/^[0-9a-z]{8}$/.test(o.dev)) return null;
     const I = (v, hi) => nInt(v, 0, hi, 0), t = I(o.t, TRO_MAX);
     const esc = (Array.isArray(o.esc) ? o.esc : []).filter((e) => e && typeof e === 'object' && typeof e.m === 'string' && MID_RE.test(e.m) && typeof e.tab === 'string' && ID6_RE.test(e.tab))
       .slice(-8).map((e) => ({ m: e.m, tab: e.tab, h: I(e.h, 56), s: STAKES.includes(e.s) ? e.s : 0, n: nInt(e.n, 2, 4, 2),

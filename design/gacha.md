@@ -24,7 +24,7 @@ Decided by the lead, and binding here:
 
 | Topic | Agreed |
 |---|---|
-| Store versions | `TRO_V 3` = looks (30-character `eq`, `lh`). **`TRO_V 4` = this doc** (`dn pt gd dl ds nw gs`, 5.1). One bump per feature: never one number for two schemas (an older page of the same number would strip the fields it does not know). |
+| Store versions | `TRO_V 3` = looks (30-character `eq`, `lh`). **`TRO_V 4` = this doc** (`dn pt gd dl ds nw gs`, 5.1). (As built later: `TRO_V 5` = the trophy balance, no new field, so a v 4 page cannot clamp `de` to 20; trophies.md.) One bump per feature: never one number for two schemas (an older page of the same number would strip the fields it does not know). |
 | Cloud versions | `CL_V 3` = looks (30-character `eq`, slots `slotShape2`). **`CL_V 4` = this doc** (slots `slotShape3` with `dn`, `gd`; `eq` stays 30 characters). |
 | Release gate | check-shop's table: store v 4 needs cloud v ≥ 4. Pass **G2 moves both** (store and cloud), so the gate holds after every pass and no deploy can carry draws into a cloud that cannot hold them. |
 | Catalog policy | A new ownable catalog id is a new store and cloud version; check-shop pins `OWNABLE = {2: 40, 3: 40, 4: 50}` (draw-only ids count only from `TRO_V 4`; in G1 they exist hidden and unobtainable). |

@@ -213,7 +213,7 @@
     const top = SH.give(50), top2 = SH.give(50);
     ok('cap: the balance stops at 99,999 (no more coins are added)', top.give === 9 && S().co === 99999 && top2.give === 0 && S().co === 99999, [top, top2, S().co]);
     // a read-only store (a newer page's) gives nothing
-    localStorage.setItem('ppogeul-trophy-shopro', JSON.stringify({ v: 5, dev: 'abcdefgh', t: 1 }));
+    localStorage.setItem('ppogeul-trophy-shopro', JSON.stringify({ v: 6, dev: 'abcdefgh', t: 1 }));
     T.ns('shopro');
     ok('cap: a read-only store gives nothing and buys nothing', SH.give(10, true) === null && S().ro && SH.buy('h1').why === 'ro' && SH.wear('n', 'n1') === false);
     T.today(null);
@@ -260,7 +260,7 @@
     ok('v1 -> v2: every trophy field identical, the holds kept', keep.every((k) => ts[k] === v1[k]) && same(ts.esc, esc) && !ts.ro, keep.filter((k) => ts[k] !== v1[k]));
     // (S5: the cloud's v 2 link record reads a v 1 one's c / v with no coins - its own fields equal after the clamps)
     const v1Of = (x) => ({ t: x.t, w: x.w, g: x.g, ko: x.ko, de: x.de, day: x.day }), noCoins = (x) => x.ce === 0 && x.sp === 0 && same(x.o, []) && x.bd === 0 && x.bs === 0;
-    ok('v1 -> v4: written back as v 4 (the 뽑기) with the link record kept (equal after its clamps, no coins in it), no coins, every animal bare, lh 0', r && r.v === 4 && r.lh === 0 && r.cs && r.cs.u === 'uid1' && r.cs.k === 'abcdefgh' && same(v1Of(r.cs.c), cs.c) && same(v1Of(r.cs.v), cs.v) && noCoins(r.cs.c) && noCoins(r.cs.v) && r.cs.n === 3 &&
+    ok('v1 -> v5: written back as v 5 (the trophy balance, after the 뽑기's v 4) with the link record kept (equal after its clamps, no coins in it), no coins, every animal bare, lh 0', r && r.v === 5 && r.lh === 0 && r.cs && r.cs.u === 'uid1' && r.cs.k === 'abcdefgh' && same(v1Of(r.cs.c), cs.c) && same(v1Of(r.cs.v), cs.v) && noCoins(r.cs.c) && noCoins(r.cs.v) && r.cs.n === 3 &&
       r.ce === 0 && r.sp === 0 && same(r.own, []) && r.eq === '0'.repeat(30) && r.bd === 0 && r.sh === 0, r);
     ok('v1 -> v2: the coins read 0 and nothing is worn', S().co === 0 && S().look === '00000');
     // (looks-per-animal.md 11.1) a v 2 store: its one worn set copied to all six animals, lh 1, written back AT LOAD as v 3
@@ -269,16 +269,16 @@
     localStorage.setItem('ppogeul-trophy-shopv2', JSON.stringify(v2));
     T.ns('shopv2');
     const r2 = raw(), same2 = Object.keys(v2).filter((k) => k !== 'v' && k !== 'eq').every((k) => same(r2[k], v2[k]));
-    ok('v2 -> v3: every animal wears the old set (50306), lh 1, written back at load as v 4 (gacha.md 5.1) with 50306 x 6 and every other field identical',
-      ANIS.every((c) => SH.look(c) === '50306') && S().lh === 1 && r2 && r2.v === 4 && r2.eq === '50306'.repeat(6) && r2.lh === 1 && same2, [r2, ANIS.map((c) => SH.look(c))]);
+    ok('v2 -> v3: every animal wears the old set (50306), lh 1, written back at load as v 5 (the trophy balance) with 50306 x 6 and every other field identical',
+      ANIS.every((c) => SH.look(c) === '50306') && S().lh === 1 && r2 && r2.v === 5 && r2.eq === '50306'.repeat(6) && r2.lh === 1 && same2, [r2, ANIS.map((c) => SH.look(c))]);
     localStorage.setItem('ppogeul-trophy-shopv2b', JSON.stringify(Object.assign({}, v2, { eq: '00000' })));
     T.ns('shopv2b');
     ok('v2 -> v3: a bare v 2 store gets lh 0', S().lh === 0 && raw().lh === 0 && S().eqs === '0'.repeat(30), [S().lh, S().eqs]);
-    // a newer page's v 5 (after the 뽑기's v 4): read-only, its key untouched; a v 3 store is read
-    const v4 = JSON.stringify({ v: 5, dev: 'abcdefgh', t: 777, ce: 50, own: ['h1'], extra: 1 });
+    // a newer page's v 6 (after the trophy balance's v 5): read-only, its key untouched; a v 3 store is read
+    const v4 = JSON.stringify({ v: 6, dev: 'abcdefgh', t: 777, ce: 50, own: ['h1'], extra: 1 });
     localStorage.setItem('ppogeul-trophy-shopv4', v4);
     T.ns('shopv4'); SH.give(10, true); SH.buy('h1'); T.set({ t: 9 });
-    ok('v 5 on disk: read-only, never written', T.state().ro && localStorage.getItem('ppogeul-trophy-shopv4') === v4);
+    ok('v 6 on disk: read-only, never written', T.state().ro && localStorage.getItem('ppogeul-trophy-shopv4') === v4);
     localStorage.setItem('ppogeul-trophy-shopv3', JSON.stringify(Object.assign({}, v2, { v: 3, eq: '50000' + '00300'.repeat(4) + '00006', lh: 1 })));
     T.ns('shopv3');
     ok('v 3 on disk: read as it is (its own lh kept)', !T.state().ro && S().lh === 1 && SH.look('duck') === '50000' && SH.look('cat') === '00300' && SH.look('frog') === '00006', [S().eqs, S().lh]);
@@ -980,7 +980,7 @@
     ok('subj: the six subjects - 꽥꽥이가 까삐가 해롱이가 펭펭이가 냥냥이가 개굴이가', D.chars().map((c) => SH.subj(c.id)).join(' ') === '꽥꽥이가 까삐가 해롱이가 펭펭이가 냥냥이가 개굴이가', D.chars().map((c) => SH.subj(c.id)));
     SH.close();
     // read-only (a newer page's store): every state says so
-    localStorage.setItem('ppogeul-trophy-shopro2', JSON.stringify({ v: 5, dev: 'abcdefgh', t: 1 }));
+    localStorage.setItem('ppogeul-trophy-shopro2', JSON.stringify({ v: 6, dev: 'abcdefgh', t: 1 }));
     T.ns('shopro2'); SH.open('shop'); await sleep(30); pickCell('h1');
     ok('ro: a read-only store - "이 브라우저에서는 저장되지 않아요" (disabled)', btnK() === 'ro' && btnT() === '이 브라우저에서는 저장되지 않아요' && $('pg-shop-buy').getAttribute('aria-disabled') === 'true');
     SH.close();
@@ -1087,7 +1087,7 @@
     ok('my: the starter note goes once any animal (here the frog) wears the ribbon', st0 === '처음 선물: 초록 때타월 리본을 해 봐요' && SH.look('frog') === '00100' && SH.look('duck') === '00000' && $('pg-my-note').textContent !== st0 && S().hub.msg === SJ('frog') + ' 했어요', [st0, $('pg-my-note').textContent, S().hub.msg]);
     SH.close();
     // a read-only store / storage that keeps nothing
-    localStorage.setItem('ppogeul-trophy-shopro3', JSON.stringify({ v: 5, dev: 'abcdefgh', t: 1 }));
+    localStorage.setItem('ppogeul-trophy-shopro3', JSON.stringify({ v: 6, dev: 'abcdefgh', t: 1 }));
     T.ns('shopro3'); SH.open('my'); await sleep(20);
     ok('my: a read-only store -> "이 브라우저에서는 저장되지 않아요"', $('pg-my-note').textContent === '이 브라우저에서는 저장되지 않아요', $('pg-my-note').textContent);
     SH.close();

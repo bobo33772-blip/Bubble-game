@@ -67,7 +67,21 @@ dropped: +36 / −2 / −8. 기권승: +30 (4 players, stake 10: the pot 40 − 
   56 + 171 = 227 ≤ 250, and a battle of 2 minutes or more passes `rise * 500 <= 10000 + dt` (`clStep` splits a bigger
   rise anyway). **Deploy the rules before the client:** an older rule refuses a write with `de` over 20, and that browser
   would not sync again until the next day.
-- **Old cached pages** (`NET_V` unchanged) clamp the base to their own range (+14 at most) and pay no +5: harmless.
+- **Store v 5** (`TRO_V` 4 → 5, no new field; `tools/check-shop.js` gates it on cloud v ≥ 4). A v 4 page reads `de` with
+  its own `DAY_CAP` 20 and every `troMut` writes the whole store back, so a v 4 tab left open in the same browser (a stale
+  artifact tab, an installed app window) would put today's bonus back to 20 on each write, and with the cloud on every
+  incoming update: the daily cap would stop working while it stays open. Now this page writes the store as v 5 at load,
+  and a v 4 page reads it as `'newer'` and turns read-only, the same valve the shop, the looks and the 뽑기 used. That old
+  tab says to reload and writes nothing, the cloud included. Another browser on an old page keeps its own store and
+  clamps only its own slot's bonus, so it cannot reopen this one's.
+- **Old cached pages in a room** (`NET_V` unchanged) play by their own table. Each page's own store stays consistent with
+  what it paid, but the pages can disagree on what they show:
+  - New host, older guest: the older guest clamps its place points to its old range (1st at most +10 in 1v1, +12 with 3
+    players, +14 with 4) and pays itself no +5, while the new pages' podiums show the new numbers for it. A new host's
+    기권승 row has place points 0, so an older guest counts it as a game but not a win (승); it is right again once that
+    page reloads.
+  - Older host, new guest: the guest is paid the old table (14 / 6 / −2 / −6 with 4 players, within its own range), but
+    its rules line prints the new one ("1등 +16 · …"). The +5 it still adds itself.
 
 The sections below are the v1 spec, updated in place where a number changed; where anything still differs, this note
 wins.
@@ -146,8 +160,10 @@ The follow-up of the balance pass. A player who cannot cover the room's stake us
     un-readies it.
   - When short, it still blocks 시작 and 한 판 더 ("트로피가 모자란 친구가 있어요 · …").
   - Its stake counts in the pot when its count covers it, because it pays from its own hold.
-  - It ignores `R.f` and `r[5]`, and its own result is exact. Only its display differs: a friend playing without the
-    stake shows "트로피 부족" in its room, that friend's podium change is off by the stake, and cups fly to 1st.
+  - It ignores `R.f` and `r[5]`, and pays exactly its own hold's stake. Its place points follow its own older table (see
+    "Old cached pages in a room" above), so they can be lower than the new pages show. Its display also differs: a
+    friend playing without the stake shows "트로피 부족" in its room, that friend's podium change is off by the stake, and
+    cups fly to 1st.
 - **Older host, new guest page.** No `R.f` arrives, so `NET.hz` is false and the guest behaves exactly as before. It
   cannot ready while short, a count below the stake at "시작!" is practice for it, and it sends no `st`. The old
   5-element rows make it pay its own hold's stake.

@@ -33,7 +33,7 @@
   // ---------------------------------------------------------------- 1. the store
   function storeTests() {
     let s = fresh();
-    ok('store: a fresh store has the gift (100), v 4 (the 뽑기, design/gacha.md 5.1) and an 8-character dev', s.t === 100 && s.best === 100 && /^[0-9a-z]{8}$/.test(s.dev) && raw() && raw().v === 4 && raw().t === 100, [s.t, s.dev, raw()]);
+    ok('store: a fresh store has the gift (100), v 5 (the trophy balance; the 뽑기's fields from v 4, design/gacha.md 5.1) and an 8-character dev', s.t === 100 && s.best === 100 && /^[0-9a-z]{8}$/.test(s.dev) && raw() && raw().v === 5 && raw().t === 100, [s.t, s.dev, raw()]);
     ok('store: ... already in 뽀득 새내기, the best league reached too (bl 1: no 승급! for it, the shop locks read it)', s.lg === 1 && s.bl === 1 && raw().bl === 1, [s.lg, s.bl]);
     const dev = s.dev, name = 'u' + nsN;
     T.ns(name);
@@ -45,6 +45,11 @@
     T.hold(MID(40), 0, 2, 0); T.fast(true);
     const rl = T.result(MID(40), [[0, 1, 12, 0, 0], [1, 2, -6, 0, 0]], 0, true); T.fast(false);
     ok('store: ... so its next result shows no false 승급!', rl && rl.promo === -1 && S().bl === 3, rl);
+    // a v 4 store (before the trophy balance): read as is, today's bonus up to 40 kept, written back as v 5 - so a v 4 page
+    // still open in this browser reads 'newer' and never clamps de back to its 20
+    localStorage.setItem('ppogeul-trophy-v4de', JSON.stringify({ v: 4, dev: 'abcdefgh', t: 140, best: 150, bl: 1, g: 9, day: 20261019, de: 33 }));
+    s = T.ns('v4de');
+    ok('store: a v 4 store -> read (t 140, de 33 kept), written back as v 5 at load', s.t === 140 && s.de === 33 && !s.ro && raw() && raw().v === 5 && raw().de === 33, [s, raw()]);
     // clamps: hand-edited / hostile values
     const now = Date.now(), e = (i, o) => Object.assign({ m: MID(i), tab: 'zzzzzz', h: 16, s: 10, n: 4, p: 0, st: 'open', t0: now }, o || {});
     const bad = { v: 1, dev: 'abcdefgh', t: 1e9, best: -5, bl: 99, w: -1, g: 1e9, ko: 'x', day: 0, de: 999, seen: 'yes',
@@ -54,15 +59,15 @@
     ok('store: t 1e9 -> 99999, best >= t, bl <= 6, negatives -> 0, g <= 1e6, de <= 40', s.t === 99999 && s.best === 99999 && s.bl === 6 && s.w === 0 && s.g === 1e6 && s.ko === 0 && s.de === 40 && s.seen === 1, s);
     ok('store: bad mids / tabs dropped, more than 8 holds trimmed to the newest 8, each hold clamped', s.esc.length === 8 && s.esc.every((q) => /^abc123\.\d+$/.test(q.m) && q.tab === 'zzzzzz') && s.esc[0].m === MID(4) && s.esc.every((q) => q.h <= 56 && [0, 5, 10, 20, 50].includes(q.s) && q.n >= 2 && q.n <= 4 && (q.st === 'open' || q.st === 'wait')), s.esc.map((q) => [q.m, q.h, q.s, q.n, q.st]));
     // a newer page's data: read-only, never overwritten
-    const newer = JSON.stringify({ v: 5, dev: 'abcdefgh', t: 777, extra: [1, 2] }); // (v 5: newer than this page's v 4)
+    const newer = JSON.stringify({ v: 6, dev: 'abcdefgh', t: 777, extra: [1, 2] }); // (v 6: newer than this page's v 5)
     localStorage.setItem('ppogeul-trophy-newer', newer);
     s = T.ns('newer');
-    ok('store: v 5 on disk -> read-only (a fresh store in memory)', s.ro === true && s.t === 100, s);
+    ok('store: v 6 on disk -> read-only (a fresh store in memory)', s.ro === true && s.t === 100, s);
     T.openRec(); T.closeRec(); T.set({ t: 99 });
     ok('store: ... and the key is unchanged afterwards', localStorage.getItem('ppogeul-trophy-newer') === newer);
     localStorage.setItem('ppogeul-trophy-junk', '{not json');
     s = T.ns('junk');
-    ok('store: unreadable JSON -> a fresh store (the gift), written back as valid JSON', s.t === 100 && !s.ro && raw() && raw().v === 4, [s.t, localStorage.getItem('ppogeul-trophy-junk')]);
+    ok('store: unreadable JSON -> a fresh store (the gift), written back as valid JSON', s.t === 100 && !s.ro && raw() && raw().v === 5, [s.t, localStorage.getItem('ppogeul-trophy-junk')]);
     // blocked storage: everything in memory, no exceptions
     const P = Storage.prototype, gi = P.getItem, si = P.setItem;
     let threw = null;

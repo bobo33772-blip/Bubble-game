@@ -173,16 +173,17 @@ if (K) {
 // ---------------------------------------------------------------- the release gate (shop.md 19 S5, review 2026-10-18)
 // a store never goes into a cloud document that cannot hold it (looks-per-animal.md 0.1): store v 2 (coins) needs
 // cloud v >= 2 - a v1 page keeps no coin fields, so coins earned while signed in would be lost at sign-out; v 3 (a worn
-// set per animal) needs >= 3 - a v 2 document takes one set of 5 characters; v 4 (the 뽑기) needs >= 4. And a new
+// set per animal) needs >= 3 - a v 2 document takes one set of 5 characters; v 4 (the 뽑기) needs >= 4; v 5 (the trophy
+// balance, design/trophies.md: no new field - a v 4 page would clamp de to 20, so it reads 'newer') needs >= 4. And a new
 // ownable catalog id is a new store version (an older page of the same version would drop the id it does not know and
 // write the store back): the catalog's size is pinned per TRO_V
 {
   const tv = /\bTRO_V = (\d+)/.exec(game), cv = /\bCL_V = (\d+)/.exec(game);
-  const GATE = { 2: 2, 3: 3, 4: 4 }, WHY = { 2: 'coins (shop.md 8)', 3: 'a set per animal: a v 2 document takes one set of 5 characters', 4: 'the 뽑기 (gacha.md 7)' };
-  const OWNABLE = { 2: 40, 3: 40, 4: 50 };
+  const GATE = { 2: 2, 3: 3, 4: 4, 5: 4 }, WHY = { 2: 'coins (shop.md 8)', 3: 'a set per animal: a v 2 document takes one set of 5 characters', 4: 'the 뽑기 (gacha.md 7)', 5: 'the trophy balance: no new field' };
+  const OWNABLE = { 2: 40, 3: 40, 4: 50, 5: 50 };
   if (!tv || !cv) bad('game.js: TRO_V / CL_V not found');
   else {
-    const t = +tv[1], c = +cv[1], need = GATE[t] || (t > 4 ? t : 0);
+    const t = +tv[1], c = +cv[1], need = GATE[t] || (t > 5 ? t : 0);
     if (c < need) bad(`release gate: the store is v ${t} (${WHY[t] || 'newer'}) but the cloud document v ${c} - the cloud must be v ${need}`);
     else notes.push(`release gate: store v ${t}, cloud document v ${c}`);
     // (gacha.md 0.1: the draw-only ids count from store v 4 - in G1 they exist hidden and unobtainable)

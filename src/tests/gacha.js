@@ -6,7 +6,7 @@
 // statistics of drawPick with the real crypto RNG (tiers, items, chi-square) and drawInt's range / fallback; 4. the pace
 // (drawPace: 20,000 seeded collections, 3.7's numbers). (G2): 5. the commit before the animation (the store as written,
 // a "reload" draws nothing, the 10회, done / read-only / poor); 6. refunds (full, never clamped, the log parses); 7. the
-// store v 4 (migrations from v 3 / 2 / 1, a v 5 store read-only, every clamp); 8. two tabs (the other tab's write
+// store v 4 (migrations from v 3 / 2 / 1, a v 6 store read-only, every clamp; written back as v 5, the trophy balance); 8. two tabs (the other tab's write
 // followed at its storage event, drawLost: a lost batch caught by its id, none after two batches one after the other).
 // Every store test runs in its own namespace (PG.debug.tro.ns).
 // Prints "GACHA PASS|FAIL <name>", "GACHA INFO ..." and "GACHA DONE pass=N fail=M".
@@ -142,9 +142,9 @@
     ok('commit: n other than 1 / 10 -> bad', DR.commit(2).why === 'bad' && DR.commit(0).why === 'bad' && raw().dn === 0);
     fresh({ ce: 5000, own: DR.consts().only.slice(), dn: 30 });
     ok('commit: every draw-only item owned -> done (nothing spent)', DR.state().done && DR.commit(1).why === 'done' && DR.commit(10).why === 'done' && raw().sp === 0, DR.state());
-    localStorage.setItem('ppogeul-trophy-gachanewer', JSON.stringify({ v: 5, dev: 'abcdefgh', t: 9, ce: 5000 }));
+    localStorage.setItem('ppogeul-trophy-gachanewer', JSON.stringify({ v: 6, dev: 'abcdefgh', t: 9, ce: 5000 }));
     T.ns('gachanewer');
-    ok('commit: a read-only store (v 5 on disk) -> ro, the key untouched', T.state().ro && DR.commit(1).why === 'ro' && JSON.parse(localStorage.getItem('ppogeul-trophy-gachanewer')).v === 5);
+    ok('commit: a read-only store (v 6 on disk) -> ro, the key untouched', T.state().ro && DR.commit(1).why === 'ro' && JSON.parse(localStorage.getItem('ppogeul-trophy-gachanewer')).v === 6);
   }
 
   // ---------------------------------------------------------------- 6. refunds
@@ -176,17 +176,17 @@
     localStorage.setItem('ppogeul-trophy-gachav3', JSON.stringify(v3));
     T.ns('gachav3');
     const o = raw(), keep = Object.keys(v3).filter((k) => k !== 'v' && k !== 'cs');
-    ok('store: a v 3 store (coins, items, six worn sets, a link record, a hold) -> v 4, every v 3 field identical, written back at load',
-      o.v === 4 && keep.every((k) => same(o[k], v3[k])) && o.cs && o.cs.u === cs.u && o.cs.k === cs.k && o.cs.n === 2 && o.cs.ev === eqs && !T.state().ro, keep.filter((k) => !same(o[k], v3[k])));
+    ok('store: a v 3 store (coins, items, six worn sets, a link record, a hold) -> v 5, every v 3 field identical, written back at load',
+      o.v === 5 && keep.every((k) => same(o[k], v3[k])) && o.cs && o.cs.u === cs.u && o.cs.k === cs.k && o.cs.n === 2 && o.cs.ev === eqs && !T.state().ro, keep.filter((k) => !same(o[k], v3[k])));
     ok('store: ... with no draws: dn 0, pt 0, gd [], dl null, ds 0, nw [], gs 0', o.dn === 0 && o.pt === 0 && same(o.gd, []) && o.dl === null && o.ds === 0 && same(o.nw, []) && o.gs === 0, o);
     localStorage.setItem('ppogeul-trophy-gachav2', JSON.stringify({ v: 2, dev: 'abcd1234', t: 50, best: 50, esc: [], ce: 90, sp: 0, own: ['h1'], eq: '10000' }));
     T.ns('gachav2'); const o2 = raw();
     localStorage.setItem('ppogeul-trophy-gachav1', JSON.stringify({ v: 1, dev: 'abcd1234', t: 50, best: 50, esc: [] }));
     T.ns('gachav1'); const o1 = raw();
-    ok('store: v 2 and v 1 migrate the same way (looks\' migration, then no draws), written back as v 4', o2.v === 4 && o2.eq === '10000'.repeat(6) && o2.lh === 1 && o2.dn === 0 && same(o2.gd, []) && o1.v === 4 && o1.dn === 0 && o1.dl === null && same(o1.own, []), [o2, o1]);
-    const v5 = JSON.stringify({ v: 5, dev: 'abcd1234', t: 50, dn: 7, gd: ['hd'] });
-    localStorage.setItem('ppogeul-trophy-gachav5', v5); T.ns('gachav5');
-    ok('store: a v 5 store -> read-only, untouched', T.state().ro && localStorage.getItem('ppogeul-trophy-gachav5') === v5);
+    ok('store: v 2 and v 1 migrate the same way (looks\' migration, then no draws), written back as v 5', o2.v === 5 && o2.eq === '10000'.repeat(6) && o2.lh === 1 && o2.dn === 0 && same(o2.gd, []) && o1.v === 5 && o1.dn === 0 && o1.dl === null && same(o1.own, []), [o2, o1]);
+    const v6 = JSON.stringify({ v: 6, dev: 'abcd1234', t: 50, dn: 7, gd: ['hd'] });
+    localStorage.setItem('ppogeul-trophy-gachav6', v6); T.ns('gachav6');
+    ok('store: a v 6 store -> read-only, untouched', T.state().ro && localStorage.getItem('ppogeul-trophy-gachav6') === v6);
     // the clamps
     const B = { v: 4, dev: 'abcd1234', t: 30, best: 30, esc: [], ce: 0, sp: 0, own: ['h1', 'hd', 'f9', 'h8', 'b7'], dn: -5, pt: 99,
       gd: ['h1', 'zz', 'h2', 'h8', 'n1', 'constructor', 'b7', 'b7'], dl: null, ds: 99, nw: ['h1', 'h2', 'zz', 'hd', 'hd'] };
@@ -327,7 +327,7 @@
     s = DR.tap('one');
     ok('two tabs: armed here, the other tab spent the coins -> the second tap says "{n}개 더 모아요", nothing animates', s.msg === '100개 더 모아요' && s.dn === 3 && s.view === 'machine' && !s.anim, [s.msg, s.dn]);
     // a read-only store: one button
-    localStorage.setItem('ppogeul-trophy-gacharo', JSON.stringify({ v: 5, dev: 'abcdefgh', t: 9, ce: 5000 }));
+    localStorage.setItem('ppogeul-trophy-gacharo', JSON.stringify({ v: 6, dev: 'abcdefgh', t: 9, ce: 5000 }));
     T.ns('gacharo'); D.toTitle(); await sleep(20); s = DR.open('title');
     ok('read-only: one button "이 브라우저에서는 저장되지 않아요" (disabled), 10회 hidden', s.ro && s.btn[0].k === 'ro' && s.btn[0].dis && s.btn[0].t === '이 브라우저에서는 저장되지 않아요' && s.btn[1].hidden, s.btn);
     SH.close();
