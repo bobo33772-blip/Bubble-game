@@ -12,22 +12,201 @@ when playing with friends.
 
 ---
 
+## As built: the 2026-10 balance pass (option B)
+
+The v1 numbers paid too little next to the stakes. 1st place got +14 at most while a stake could be 50 and the gift was
+30, so the stakes decided everything, one loss could block the next stake, and players hit 0 (simulated: 9% of battles
+blocked, 40% of players at 0 at least once, at equal skill; with one much stronger friend 48% blocked). The pass changed:
+
+| What | v1 | Now |
+|---|---|---|
+| Starting gift `TRO_GIFT` | 30 (때밀이 견습) | **100** (뽀득 새내기, `bl` 1 from the start) |
+| Place points `BASE` | 1v1 +10 / −6; 3p +12 / +3 / −6; 4p +14 / +6 / −2 / −6 | 1v1 **+12** / −6; 3p **+15 / +5** / −6; 4p **+16 / +8 / +2** / −6 |
+| Held at "시작!" | stake + 6 | unchanged: last place is still −6 |
+| 목욕 보너스 | +1 per 3 탕, +2 a boss, +4 the ending | **+2 / +4 / +8** |
+| Caps | 15 a run, 20 a local day | **30 a run, 40 a day** (`RUN_CAP`, `DAY_CAP`) |
+| A real battle | nothing extra | **+5 오늘 트로피 보너스** (`TRO_PLAY`) from the same daily pool |
+| 기권승 | 1st-place base + the pot | **the pot only** (no base, no +5), like the coins' walkover |
+| Cloud rule | `de` ≤ 20 | `de` ≤ 40 (firestore.rules and its copy in src/tests/cloud.js) |
+
+Results now for distinct places (net = base + share − stake; the +5 is not in it):
+
+| Stake | 1v1 | 3 players | 4 players |
+|---|---|---|---|
+| 0 | +12 / −6 | +15 / +5 / −6 | +16 / +8 / +2 / −6 |
+| 5 | +17 / −11 | +25 / 0 / −11 | +31 / +3 / −3 / −11 |
+| 10 | +22 / −16 | +35 / −5 / −16 | +46 / −2 / −8 / −16 |
+| 20 | +32 / −26 | +55 / −15 / −26 | +76 / −12 / −18 / −26 |
+| 50 | +62 / −56 | +115 / −45 / −56 | +166 / −42 / −48 / −56 |
+
+Ties at stake 10: 4 players 2nd = 3rd +46 / −5 / −5 / −16; 1st = 2nd +22 / +22 / −8 / −16; 3 players 1st = 2nd +15 / +15 /
+−16; 2nd = 3rd +35 / −10 / −10 ((5 − 6) / 2 rounds to 0). One left on purpose (4 players): +46 / −2 / −8; one link
+dropped: +36 / −2 / −8. 기권승: +30 (4 players, stake 10: the pot 40 − 10), +10 (1v1, stake 10), 0 at stake 0.
+
+- **The +5 (`troReal`, `troApply`).** Every finished trophy battle that was a real match pays each player +5 from
+  today's trophy bonus pool (`day` / `de`, at most `DAY_CAP` 40 a local day, shared with the 목욕 보너스). Real = more
+  than one finisher (never a 기권승), at least `COIN.minF` played on the clock it ended on (the host's `G.podium.te`; a
+  guest takes its result only after the battle clock anyway), and at least `COIN.gameShots` (5) bubbles that player blew
+  (`CO.bshots`): the same test as the battle coins. Each client adds it to its own store inside `troApply`'s mutation,
+  after its own hold for that match id is found, so practice, a hold it could not cover, a refund, a void match, a leaver
+  and a replayed result never pay it.
+- **Shown apart from the net.** The podium's rows, cups and my block's 2nd line use the net. Once my change has counted
+  up, a separate line `#pg-podium-bonus` (class `pg-wait pg-tbonus`) reads "오늘 트로피 보너스 +5"; the sr summary reads
+  ", 내 트로피 -1개, 오늘 트로피 보너스 +5개, 지금 104개".
+- **Why 40 a day with 30 a run:** one good solo run still leaves at least 10 (two battles' +5) for battles that day; the
+  +5 is what keeps losing players off 0 (simulated without it: 70% at 0 against a strong friend, with it 24%).
+- **The ladder is unchanged.** A new store starts at 100 in 뽀득 새내기 with `bl` 1 (`troFresh`), and `troParse` raises a
+  stored `bl` below its count's league (`max(bl, leagueOf(t))`, quietly): no false "승급!", and the shop's league
+  locks and the rules' `leagueNeed` read the right value. New players therefore skip 견습 and its protection; the
+  protection code stays for anyone below 60.
+- **No top-up for existing players.** An unplayed store from before still holds 30; its 내 기록 line names its own gift
+  (`S.best`), never the constant.
+- **Copy:** 내 기록 "오늘 트로피 보너스 N/40개 · 목욕도 배틀도 받아요" ("오늘 보너스" is the coins' day bonus); the room adds
+  "끝까지 한 판마다 오늘 트로피 보너스 +5 (하루 40개까지)" after the rules line; "처음 선물로 트로피 100개를 받았어요!".
+- **Cloud:** the biggest single change is +16 + 150 + 5 = +171; with the hold synced before it, one write carries at most
+  56 + 171 = 227 ≤ 250, and a battle of 2 minutes or more passes `rise * 500 <= 10000 + dt` (`clStep` splits a bigger
+  rise anyway). **Deploy the rules before the client:** an older rule refuses a write with `de` over 20, and that browser
+  would not sync again until the next day.
+- **Store v 5** (`TRO_V` 4 → 5, no new field; `tools/check-shop.js` gates it on cloud v ≥ 4). A v 4 page reads `de` with
+  its own `DAY_CAP` 20 and every `troMut` writes the whole store back, so a v 4 tab left open in the same browser (a stale
+  artifact tab, an installed app window) would put today's bonus back to 20 on each write, and with the cloud on every
+  incoming update: the daily cap would stop working while it stays open. Now this page writes the store as v 5 at load,
+  and a v 4 page reads it as `'newer'` and turns read-only, the same valve the shop, the looks and the 뽑기 used. That old
+  tab says to reload and writes nothing, the cloud included. Another browser on an old page keeps its own store and
+  clamps only its own slot's bonus, so it cannot reopen this one's.
+- **Old cached pages in a room** (`NET_V` unchanged) play by their own table. Each page's own store stays consistent with
+  what it paid, but the pages can disagree on what they show:
+  - New host, older guest: the older guest clamps its place points to its old range (1st at most +10 in 1v1, +12 with 3
+    players, +14 with 4) and pays itself no +5, while the new pages' podiums show the new numbers for it. A new host's
+    기권승 row has place points 0, so an older guest counts it as a game but not a win (승); it is right again once that
+    page reloads.
+  - Older host, new guest: the guest is paid the old table (14 / 6 / −2 / −6 with 4 players, within its own range), but
+    its rules line prints the new one ("1등 +16 · …"). The +5 it still adds itself.
+
+The sections below are the v1 spec, updated in place where a number changed; where anything still differs, this note
+wins.
+
+## As built: 안 걸고 참여 (short of the stake: play without it)
+
+The follow-up of the balance pass. A player who cannot cover the room's stake used to block the room (`canStart`,
+한 판 더). Now that player joins the match **without the stake**, and the pot counts only the stakes actually put in.
+
+**Rules**
+
+- **Who.** Anyone in a staked ranked battle whose count is below the stake at "시작!", or a guest that readied while
+  short. That includes the host on a 한 판 더. In the room the host still picks only stakes it covers, and
+  `troLowerStake` still lowers them.
+- **What that player gets.** Its place points (`BASE`, with 견습 protection as always) and the +5 like everyone else.
+  Its hold is `min(t, 0 + 6)`. A count below a stake of at most 50 is below 60, so in practice this player is 견습:
+  it holds 0 and cannot lose.
+- **What it never gets: a share of the pot.** Nothing in, nothing out. The pot is the stakes put in by finishers and
+  by `gg` leavers who put one in. The best-placed tie group with at least one stake in takes it, split among those
+  members (floor).
+- **Examples** (4 players, stake 10, net = base + share − the stake put in):
+
+| Case | Result |
+|---|---|
+| 4th without the stake (pot 30) | +36 / −2 / −8 / −6 |
+| 1st without it: the 2nd takes the pot | +16 / +28 / −8 / −16 |
+| 1st and 2nd without it: the 3rd takes the pot of 2 | +16 / +8 / +12 / −16 |
+| Tie for 1st, one of them without it | +12 / +32 / −8 / −16 |
+| 무승부 of 3 (one without it) and a staked leaver | 0 / +5 / +5 |
+| 1v1 기권승 for the one without it | 0 (the leaver's stake stays lost) |
+
+- **Consent.** A guest that readies while short readies without the stake (`TRO.free`). It stays without it for that
+  ready, through every rematch, even if its count rises before "시작!": a ready never puts in more than it agreed to.
+  A guest that readied while covering the stake but is short at "시작!" also plays without it. Back in the room,
+  everyone readies again (`TRO.free` resets with `TRO.agreed`).
+- **The old quirk is fixed.** The pot used to be `s × (finishers + leavers)`. A finisher that held nothing still paid
+  the winner trophies nobody had lost: one short at "시작!", or one shown a forged stake. Now that finisher's stake is
+  not in the pot.
+
+**Code**
+
+- `troTable(n, s, fin, gl, gz)`: each `fin` entry gets `z` (no stake in), and `gz` is how many of the `gl` gg leavers
+  put none in. Every row gets a 6th element `st`: 1 = in the pot, 0 = not. At stake 0 it is always 1.
+- `troEscrow(mid, s, n, min, nos)`, by `nos`:
+  - 0: a count below the stake plays the match as practice for me (an older host's room).
+  - 1: a count below the stake holds without it (`s` 0).
+  - 2: holds without the stake anyway (`TRO.free`).
+  - `troPut(mid)` is the stake my hold put in.
+- `troApply`: the stake I pay is my hold's `s`, and 0 when `row[5] === 0`. My share is capped at that stake × n, so a
+  hold without a stake can never share in the pot, whatever the row says. It returns `put`.
+- Host: `troHostGo` keeps `M.st[slot]`, whose stake is in the pot:
+  - its own, from its hold;
+  - a guest page with the rule, from that guest's `st` (0 until it arrives);
+  - an older guest page, 1 when its count covers the stake.
+  - `troHostResult` passes `z` and `gz` from `M.st`.
+- `troSeatFree(r)`: does this seat play without the stake? `canAfford(r) = troCovers(r) || troSeatFree(r)`. `canStart`,
+  the `rd` / `cup` gates and the room UI use it. `troCanRematch` still waits for every guest's `cup`, but only an older
+  guest page must still cover the stake.
+- Podium: rows read `r[5]` (net = base + share − the stake put in), and the cups fly to whoever took the pot. My
+  `#pg-podium-bonus` reads "안 걸고 참여 · 오늘 트로피 보너스 +5". The sr summary reads ", 내 트로피 +16개 (안 걸고 참여), …".
+
+**Network** (`NET_V` stays 4; every field is validated, and an older page ignores it)
+
+| Where | New | Validation |
+|---|---|---|
+| `hi` | `z: 1`: this page has the rule | host: `r.z = m.z === 1` |
+| `rd` | `z: 1`, `f: 1 / 0`: readied without the stake | `r.z = m.z === 1`; `r.ready = on && b === stake && canAfford(r)`; `r.free = r.ready && r.z && m.f === 1` |
+| `st` (new, guest → host, reliable) | `{t:'st', m: mid, s}`, sent right after the guest's hold at "시작!" (stake > 0, a host with the rule): s is the stake it put in, or 0 | only for `TRO.match.mid` and the sender's own slot in that match: `M.st[slot] = m.s === M.s ? 1 : 0` |
+| `R.f` (room phase) | the slots that play without the stake; its presence means the host has the rule (`NET.hz`, kept for the session) | guest: `nInt` each entry, at most 4; display only |
+| `tro` rows | `r[5]` | guest: `row[5] === 0` → pays no stake; anything else → its own hold's |
+
+**Older pages in the room, and why that is safe**
+
+- **New host, older guest page.** It sends no `z`, so the host treats it the old way:
+  - It can ready only while covering the stake: its own UI refuses, the host refuses a short `rd`, and a short `cup`
+    un-readies it.
+  - When short, it still blocks 시작 and 한 판 더 ("트로피가 모자란 친구가 있어요 · …").
+  - Its stake counts in the pot when its count covers it, because it pays from its own hold.
+  - It ignores `R.f` and `r[5]`, and pays exactly its own hold's stake. Its place points follow its own older table (see
+    "Old cached pages in a room" above), so they can be lower than the new pages show. Its display also differs: a
+    friend playing without the stake shows "트로피 부족" in its room, that friend's podium change is off by the stake, and
+    cups fly to 1st.
+- **Older host, new guest page.** No `R.f` arrives, so `NET.hz` is false and the guest behaves exactly as before. It
+  cannot ready while short, a count below the stake at "시작!" is practice for it, and it sends no `st`. The old
+  5-element rows make it pay its own hold's stake.
+- **Nobody ever pays more than their own hold.** A stake is taken only from my own hold, `row[5] = 0` can only lower
+  what I pay, and a hold without a stake caps its own share at 0.
+- **Limits (13).** A modified guest can claim in `st` a stake it never held. The winner then gets up to one unpaid
+  stake, the same class as a self-reported count, and it takes nothing from anyone. A modified host can mark anyone
+  `st 0`, so they pay no stake; that only shrinks its own pot.
+
+**Copy** (in `TRO_TEXT` and the font test)
+
+- Seat mark `.pg-pc-free` "안 걸고 참여", under the count (aria ", 안 걸고 참여"). Ready button "안 걸고 준비". Guest
+  message "트로피가 모자라요 · 안 걸고 같이 해요". "트로피 부족" is left for an older page or an older host's room.
+- Rules, when someone plays without the stake: "판돈 30개 (3명이 10개씩): 건 사람 중 1등이 다 가져요" replaces
+  "모두 10개씩 …", and "안 걸고 참여: 등수 점수만 받아요 · 1등 +16 · 2등 +8 · 3등 +2 · 4등 -6" follows. While nobody is
+  short: "트로피가 모자라면 안 걸고 참여해요 (등수 점수만 받아요)".
+- Podium: the host's note "다음 판은 안 걸고 하는 친구가 있어요" (or "내 트로피가 모자라서 다음 판은 안 걸고 해요"). The
+  guest's wait line "… · 다음 판도 10개씩 · 나는 안 걸고 해요".
+
+**Tests:** `src/tests/trophies.js` covers the table, holds, applies, the +5 and the fonts. `src/tests/trophies-net.js`
+covers §2 (ready without the stake; an older page's `rd` refused), §6 (a short guest no longer blocks 한 판 더; an older
+page still does), the forged stake (the pot is only the host's own 10) and §13. §13 uses 4 frames: one player can't
+cover 10, the pot is the 3 stakes, and payouts are right on every page. In its rematch, a staker now short and the one
+who readied without the stake both play without it.
+
+---
+
 ## 0. Decisions in one table
 
 | Question | Decision |
 |---|---|
 | What is a trophy | A count kept per device (0..99999) in localStorage, read and written only through `sget`/`sset`. It is drawn as a pixel cup (sprite `trophy`, 8x8), never as an emoji. |
 | Ladder | 7 leagues: 때밀이 견습 0 → 뽀득 새내기 60 → 온탕 단골 150 → 양머리 고수 300 → 세신 달인 500 → 사우나 명인 800 → 목욕탕 왕 1200. The league is always derived from the count, so it can go down again. "승급!" shows only the first time a league is reached. |
-| Starting gift | **30** (처음 선물). That is enough to bet 5, 10 or 20. |
-| Battles (트로피 경기) | Points by place: 1v1 +10 / −6; 3 players +12 / +3 / −6; 4 players +14 / +6 / −2 / −6. Tied players average their places' points. When every finisher is tied, it is a draw (무승부) and nobody gets place points. |
+| Starting gift | **100** (처음 선물; 30 in v1). One loss at stake 50 still leaves 44. A new store starts in 뽀득 새내기. |
+| Battles (트로피 경기) | Points by place: 1v1 +12 / −6; 3 players +15 / +5 / −6; 4 players +16 / +8 / +2 / −6, plus +5 오늘 트로피 보너스 for a real match (see As built). Tied players average their places' points. When every finisher is tied, it is a draw (무승부) and nobody gets place points. |
 | Beginner protection | While the count is under 60 (때밀이 견습), placement never costs trophies. A bet still can. |
 | 트로피 걸기 | The host picks one stake for everyone: 0 / 5 / 10 / 20 / 50. **Everyone puts it in and 1st place takes the pot.** A tie for 1st splits the pot (rounded down). The room shows the final result for each place in one line. |
 | When trophies are held | At "시작!", the end of the 3-2-1 countdown. Each client then holds its stake + 6 from its own count (only the stake, in 견습). That is exactly the result for last place. Leaving during 3-2-1 is free. |
 | Consent | Being ready means ready **for that stake**. A stake change un-readies everyone, and `rd` carries the stake the guest saw. A guest only puts in the stake it readied for. A rematch (한 판 더) keeps the stake, and leaving at the podium is free. |
 | Not enough trophies | A player who cannot cover the stake cannot ready (tag 트로피 부족), and the host cannot start. 한 판 더 waits until every guest has reported its new count and stays off while anyone is short. |
 | Leaving | Leaving on purpose (나가기, 로비로, the host's 방으로 mid-match, closing the tab) counts as last place, and that player's stake goes to the winner. If the link drops while you are watching, you get your trophies back (refund). If it drops while you were away (tab hidden, phone switched apps, offline), it counts as last place. If the host leaves or the page hot-reloads, everyone gets a refund. If no result comes within 15 s after the match, you get a refund. |
-| Walkover (기권승) | A walkover pays only when the others left on purpose. Otherwise it is void and the trophies are refunded, so cutting your own network can never win a match. |
-| Co-op / solo | **목욕 보너스**: progress only, nothing can be lost. +1 for every 3 탕 cleared, +2 for each boss, +4 for the ending. At most 15 per run and 20 per day; solo and co-op share the daily cap. Every co-op teammate gets the same amount. |
+| Walkover (기권승) | A walkover pays only when the others left on purpose, and then only the pot (no 1st-place base, no +5). Otherwise it is void and the trophies are refunded, so cutting your own network can never win a match. |
+| Co-op / solo | **목욕 보너스**: progress only, nothing can be lost. +2 for every 3 탕 cleared, +4 for each boss, +8 for the ending. At most 30 per run and 40 per day; solo, co-op and the battles' +5 share the daily cap. Every co-op teammate gets the same amount. |
 | 연습 경기 | No trophies change when the players are tabs of one browser (bc), when two players share one device's store, or when a page has no trophies (an old v4 page). |
 | Integrity | The host computes the result. Each client applies only its own row, exactly once, against an escrow it actually holds. It clamps the row with its own numbers (players, stake). It only accepts the result after the match could really have been played. A hostile host can take at most stake + 6 per real match, which is the same as beating you. |
 | Title | A trophy badge sits inline on the existing 최고 점수 line, so the title card gets no taller. It opens a new **내 기록** overlay. |
@@ -63,7 +242,7 @@ when playing with friends.
 
 ```js
   // ---- v4 trophies (트로피): constants up here - REQUIRED / SPR_SIZE and the font warm-up read them at load
-  const TRO_KEY = 'ppogeul-trophy', TRO_V = 1, TRO_MAX = 99999, TRO_GIFT = 30;
+  const TRO_KEY = 'ppogeul-trophy', TRO_V = 1, TRO_MAX = 99999, TRO_GIFT = 100;   // (as built: TRO_V 4, the shop / looks / 뽑기)
   const LEAGUES = [
     { name: '때밀이 견습', min: 0, col: '#6fd08a' },     // lg_0 green 이태리타올 (placement never costs here)
     { name: '뽀득 새내기', min: 60, col: '#ff9ec4' },    // lg_1 pink soap + bubble
@@ -74,8 +253,9 @@ when playing with friends.
     { name: '목욕탕 왕', min: 1200, col: '#ffd447' },    // lg_6 bathhouse crown
   ];
   const STAKES = [0, 5, 10, 20, 50];
-  const BASE = { 2: [10, -6], 3: [12, 3, -6], 4: [14, 6, -2, -6] };     // by place; n = players at 시작!
-  const RUN_CAP = 15, DAY_CAP = 20;                                       // 목욕 보너스 per run / per local day
+  const BASE = { 2: [12, -6], 3: [15, 5, -6], 4: [16, 8, 2, -6] };     // by place; n = players at 시작! (last place -6: the hold stays s + 6)
+  // 목욕 보너스 per run / the 오늘 트로피 보너스 per local day (solo, co-op and battles share it) / per real battle (troReal)
+  const RUN_CAP = 30, DAY_CAP = 40, TRO_PLAY = 5;
   const TRO_WAIT_MS = 15000, TRO_AWAY_MS = 30000, TRO_STALE_MS = 15 * 60000, TRO_SLACK_MS = 15000;
   const MID_RE = /^[0-9a-z]{6}\.\d{1,9}$/, ID6_RE = /^[0-9a-z]{6}$/;
   const leagueOf = (t) => { let i = 0; while (i + 1 < LEAGUES.length && t >= LEAGUES[i + 1].min) i++; return i; };
@@ -84,7 +264,7 @@ when playing with friends.
 ```
 
 - `S.bl` (the best league reached) decides "승급!". It shows only when you enter a league above your best. Dropping, or coming back into a league you had before, is silent.
-- Pace at stake 0: an average 1v1 player gains +2 per game, and +3 in 3–4 player games. A winner gains +10 to +14, and a 견습 player loses nothing by placement. Leaving 견습 takes a few wins; 목욕탕 왕 takes hundreds of games or brave betting.
+- Pace at stake 0 (v1 numbers; as built a real match adds +5 each and 1st gets +12 to +16): an average 1v1 player gains +2 per game, and +3 in 3–4 player games. A winner gains +10 to +14, and a 견습 player loses nothing by placement. Leaving 견습 takes a few wins; 목욕탕 왕 takes hundreds of games or brave betting.
 
 ---
 
@@ -101,6 +281,7 @@ when playing with friends.
   function troTable(n, s, fin, gl) {
     const m = fin.length, pot = s * (m + gl), B = BASE[n];
     if (!m || (m === 1 && !gl)) return [];
+    if (m === 1) return [[fin[0].slot, 1, 0, pot, fin[0].k]];  // 기권승 (as built): the pot only, no 1st-place base
     if (m >= 2 && fin.every((r) => sameRes(r, fin[0]))) return fin.map((r) => [r.slot, 1, 0, Math.floor(pot / m), r.k]); // 무승부
     const out = [];
     for (let i = 0; i < m;) {                                   // a tie group shares its places' points; a tie for 1st, the pot
@@ -120,28 +301,28 @@ Results for distinct places (1st..last), simulated:
 
 | Stake | 1v1 | 3 players | 4 players |
 |---|---|---|---|
-| 0 | +10 / −6 | +12 / +3 / −6 | +14 / +6 / −2 / −6 |
-| 5 | +15 / −11 | +22 / −2 / −11 | +29 / +1 / −7 / −11 |
-| 10 | +20 / −16 | +32 / −7 / −16 | +44 / −4 / −12 / −16 |
-| 20 | +30 / −26 | +52 / −17 / −26 | +74 / −14 / −22 / −26 |
-| 50 | +60 / −56 | +112 / −47 / −56 | +164 / −44 / −52 / −56 |
+| 0 | +12 / −6 | +15 / +5 / −6 | +16 / +8 / +2 / −6 |
+| 5 | +17 / −11 | +25 / 0 / −11 | +31 / +3 / −3 / −11 |
+| 10 | +22 / −16 | +35 / −5 / −16 | +46 / −2 / −8 / −16 |
+| 20 | +32 / −26 | +55 / −15 / −26 | +76 / −12 / −18 / −26 |
+| 50 | +62 / −56 | +115 / −45 / −56 | +166 / −42 / −48 / −56 |
 
 - **Held at "시작!" = stake + 6** (only the stake in 견습). That is the same for every n, because last place is always −6. Finishing last therefore costs exactly the amount held, and so does leaving.
-- **Most you can win** = BASE[n][0] + stake × (n − 1), so +164 at 4 players and stake 50.
+- **Most you can win** = BASE[n][0] + stake × (n − 1), so +166 at 4 players and stake 50 (+5 more from the day's pool for a real match).
 
 Ties and leavers (stake 10):
 
 | Case | Result |
 |---|---|
-| 4 players, 2nd = 3rd | +44 / −8 / −8 / −16 (points (6 − 2) / 2 = 2 each) |
-| 4 players, 1st = 2nd | +20 / +20 / −12 / −16 (points (14 + 6) / 2 = 10 each, pot 40 / 2 = 20 each) |
-| 3 players, 1st = 2nd | +13 / +13 / −16 |
-| 3 players, 2nd = 3rd | +32 / −11 / −11 (points (3 − 6) / 2 = −1.5, rounded to −1) |
+| 4 players, 2nd = 3rd | +46 / −5 / −5 / −16 (points (8 + 2) / 2 = 5 each) |
+| 4 players, 1st = 2nd | +22 / +22 / −8 / −16 (points (16 + 8) / 2 = 12 each, pot 40 / 2 = 20 each) |
+| 3 players, 1st = 2nd | +15 / +15 / −16 |
+| 3 players, 2nd = 3rd | +35 / −10 / −10 (points (5 − 6) / 2 = −0.5, rounded to 0) |
 | 1v1 tie, or all 4 tied | 무승부: 0 for everyone |
-| 4 players, one left on purpose | +44 / −4 / −12 for the finishers. The leaver lost 16 through the trophies it held. |
-| 4 players, one link dropped (no gg) | +34 / −4 / −12. The dropped stake is not in the pot; the dropped player's own client refunds or forfeits it (5.4). |
-| 4 players, three left on purpose (기권승) | +44 |
-| 1v1, the other left on purpose | +20 (기권승) |
+| 4 players, one left on purpose | +46 / −2 / −8 for the finishers. The leaver lost 16 through the trophies it held. |
+| 4 players, one link dropped (no gg) | +36 / −2 / −8. The dropped stake is not in the pot; the dropped player's own client refunds or forfeits it (5.4). |
+| 4 players, three left on purpose (기권승) | +30 (the pot only: 40 − 10) |
+| 1v1, the other left on purpose | +10 (기권승: the pot 20 − 10) |
 | 1v1 or 4 players, everyone else dropped, no gg | void: the host's held trophies are refunded |
 | 4 players, three finishers all tied, one left on purpose | 무승부 for the three: 40 / 3 = 13 each → +3 each |
 
@@ -149,7 +330,7 @@ Rules attached to the table:
 
 - **Places** come from `G.podium.order`. Ties for trophies use (score, kos, koed) only.
 - **견습 protection** is applied twice. The host applies it in the table with each player's reported count at "시작!", so every screen shows the same numbers. Each client also enforces it on its own row from its own escrow (`e.p`).
-- **A win** is `place === 1 && base > 0`, so a tie for 1st counts and a draw does not. Only wins and games feed the stats.
+- **A win** is `place === 1 && (base > 0 || a 기권승: my row alone with base 0)`, so a tie for 1st counts and a draw does not. Only wins and games feed the stats.
 - **Walkover.** Only `gg` (6.3) puts a leaver's stake into the pot and makes a walkover pay. A host whose own network dies sees every guest drop without `gg`, so the match is void and the host gets its trophies back. Its guests see the link drop while they are watching, so they are refunded too. Cutting the network can therefore dodge a loss (the same as any dropped link), but it can never win.
 
 ### 3.2 트로피 걸기 (betting)
@@ -158,13 +339,13 @@ Rules attached to the table:
 - **Affordability:** `canAfford(r) = stakeNow() === 0 || (r.id === NET.selfId ? TRO.s.t : r.cup) >= stakeNow()`. The host checks counts reported by guests (`hi`, `rd`, `cup`). A guest's own UI checks its real count.
   - The host's stake buttons above its own count are disabled, with the title "내 트로피가 모자라요".
   - `netAttach` (host) and `netToRoom` lower a stake the host can no longer cover to the largest one it can. The room message then says "걸기를 낮췄어요: 10개씩" (or "…: 안 걸기") for 4 s.
-  - `canStart()` also requires `NET.roster.every(canAfford)`.
+  - `canStart()` also requires `NET.roster.every(canAfford)`. (As built: `canAfford` is "covers it, or plays without it" - 안 걸고 참여 above; only an older guest page short of the stake still blocks.)
 - **Consent:**
   - Any change of the stake un-readies every guest. The host clears `r.ready`. The guest, in `guestRoom`, sees `NET.ready && bet !== TRO.agreed`, clears `NET.ready` and shows "걸기가 바뀌었어요: 10개씩 · 다시 준비해 주세요" (or "…: 안 걸기 …") for 4 s.
   - `rd` carries the stake the guest saw (`b`). The host accepts a ready only if `b === stakeNow()` and the guest can afford it. This closes the race of a ready sent just before the stake changes.
   - When a guest readies, it records `TRO.agreed = stakeNow()`. `TRO.agreed` goes back to −1 on `netAttach`, `guestToRoom`, un-ready and a stake change; a rematch keeps it. At "시작!" the guest puts in a nonzero stake only if the stake still equals `TRO.agreed`. Otherwise it plays the match as practice for itself, so a host cannot raise the stake after the ready, even by forging R or by force-starting.
-- **Held at "시작!"** (5.1): the host in `updateCountdown` on the 시작! frame, a guest on the first `'p'` snapshot of the game id. Amount: `min(t, s + (견습 ? 0 : 6))`. If `t < s` (another tab spent trophies since the ready), the player plays this match as practice for itself. The sfx `stake` plays when s > 0.
-- **Rematch (한 판 더)** is a new game id, so trophies are held again at its "시작!". After a staked result, the button and `primaryAction` stay off until every present guest has reported its count for that result (`cup` with `m`, 6.3) and everyone, the host included, can still cover the stake. The host's podium note then reads "트로피가 모자란 친구가 있어요 · 방으로 가서 걸기를 바꿔요" (or "내 트로피가 모자라요 · 방으로 가서 걸기를 바꿔요"). The guest's wait note reads "방장이 다음 판을 고르고 있어요 · 다음 판도 10개씩", and a guest who does not want that can leave at the podium for free.
+- **Held at "시작!"** (5.1): the host in `updateCountdown` on the 시작! frame, a guest on the first `'p'` snapshot of the game id. Amount: `min(t, s + (견습 ? 0 : 6))`. If `t < s` (another tab spent trophies since the ready), the player plays this match as practice for itself. (As built: where the host has 안 걸고 참여, it plays without the stake instead, and tells the host with `st`.) The sfx `stake` plays when s > 0.
+- **Rematch (한 판 더)** is a new game id, so trophies are held again at its "시작!". After a staked result, the button and `primaryAction` stay off until every present guest has reported its count for that result (`cup` with `m`, 6.3) and everyone, the host included, can still cover the stake. (As built: only an older guest page must still cover it; anyone else short plays the next match without the stake, and the note reads "다음 판은 안 걸고 하는 친구가 있어요".) The host's podium note then reads "트로피가 모자란 친구가 있어요 · 방으로 가서 걸기를 바꿔요" (or "내 트로피가 모자라요 · 방으로 가서 걸기를 바꿔요"). The guest's wait note reads "방장이 다음 판을 고르고 있어요 · 다음 판도 10개씩", and a guest who does not want that can leave at the podium for free.
 
 ### 3.3 목욕 보너스 (solo and co-op): progress only, nothing to lose
 
@@ -175,7 +356,7 @@ Rules attached to the table:
     const R = TRO.run; if (!R || !troBonusOk()) return null;
     const N = LEVELS.length, end = G.loop * N + G.round + (ended ? 1 : 0), cleared = Math.max(0, end - R.at);
     let boss = 0; for (let i = R.at; i < end; i++) if (LEVELS[i % N].boss) boss++;
-    const P = Math.min(RUN_CAP, Math.floor(cleared / 3) + 2 * boss + (ended ? 4 : 0));
+    const P = Math.min(RUN_CAP, 2 * Math.floor(cleared / 3) + 4 * boss + (ended ? 8 : 0));
     return troMut((S) => {
       const day = troToday(); if (S.day !== day) { S.day = day; S.de = 0; }
       const want = Math.max(0, P - R.got), give = Math.min(want, DAY_CAP - S.de);
@@ -188,12 +369,12 @@ Rules attached to the table:
 ```
 
 - Examples:
-  - Game over in the 4th 탕 (3 cleared): +1.
-  - Game over in the 7th 탕 (6 cleared, boss 1 beaten): 2 + 2 = +4.
-  - Full clear: 8 + 8 + 4 = 20, capped at **15**.
-  - Two full clears in one day: 15, then 5 (the daily cap of 20).
-- 2회차 is a new run, offline and online alike, so it has its own cap of 15 under the daily 20. Showing a card twice never pays twice, because of `R.got`.
-- Why solo earns: a player with no friends online can still grow and buy back into betting. The daily cap keeps grinding the first rounds from beating battles as the way up. Battles have no cap.
+  - Game over in the 4th 탕 (3 cleared): +2.
+  - Game over in the 7th 탕 (6 cleared, boss 1 beaten): 4 + 4 = +8.
+  - Full clear: 16 + 16 + 8 = 40, capped at **30**.
+  - Two full clears in one day: 30, then 10 (the daily cap of 40, which the battles' +5 also draws from).
+- 2회차 is a new run, offline and online alike, so it has its own cap of 30 under the daily 40. Showing a card twice never pays twice, because of `R.got`.
+- Why solo earns: a player with no friends online can still grow and buy back into betting. The daily cap keeps grinding the first rounds from beating battles as the way up. Battles' place points have no cap; their +5 comes from the same daily pool.
 - `TRO.run` is cleared by `toTitle`, `idleWorld` and a battle's `resetGame`.
 
 ### 3.4 What never matters
@@ -534,6 +715,7 @@ Rules attached to the table:
 
 - **Host with trophies, guest without:** the guest sends no `cu`, so `r.cup` is −1. It cannot ready for a stake and plays stake 0 as an unranked player whose row it never applies.
 - **Host without trophies, guest with:** `R` has no `ms`, so it is practice for the guest.
+- (As built, 안 걸고 참여: `hi` / `rd` carry `z`, `rd` `f`, the new `st`, `R.f` and the rows' `r[5]` - each side ignores what an older page does not know; see the as-built note.)
 - Neither direction can lose or mint trophies, so no version bump is needed.
 
 ### 6.8 net.js: `leave()` must not drop the last reliable messages
@@ -624,8 +806,8 @@ Shared pieces:
   - The win line is "W승 / G판". 혼자 최고 점수 is `G.hiscore` (no new storage).
   - The note, first match wins:
     1. storage blocked or read-only → "이 브라우저에서는 기록이 저장되지 않아요"
-    2. `S.g === 0 && S.de === 0` → "처음 선물로 트로피 30개를 받았어요! 친구와 배틀할 때 걸어 봐요"
-    3. otherwise "오늘 목욕 보너스 6/20개 · 배틀은 제한이 없어요"
+    2. `S.g === 0 && S.de === 0` → "처음 선물로 트로피 100개를 받았어요! 친구와 배틀할 때 걸어 봐요" (the number is the store's own `S.best`: an unplayed store from v1 says 30)
+    3. otherwise "오늘 트로피 보너스 6/40개 · 목욕도 배틀도 받아요"
 - **Behaviour:**
   - `openRec()` sets `S.seen = 1` (through `troMut`) and calls `showOverlay('rec')`. G.mode stays `'title'`, and the demo runs behind.
   - `onKeyDown`: when `shownOverlay === 'rec'`, Escape, Enter, jump and shoot close it. Check this before the title branch and before `togglePause`. `primaryAction` also starts with `if (shownOverlay === 'rec') { closeRec(); return; }`.
@@ -654,8 +836,9 @@ After `.pg-mychar` in `.pg-field`: `<span id="pg-mytro" class="pg-mytro" aria-la
   - The `_key` must include `cup`, the stake and `q`.
 - **Guest summary** (`#pg-room-sum`): the battle parts gain "트로피 10개씩" or "트로피 안 걸기", plus "연습 경기" when `q ≠ 0`.
 - **Rules** (`#pg-room-rules`), put before the two existing lines. The numbers come from `troTable` with n = the roster size, clamped to 2..4, and distinct places:
-  - Battle, `q` 0, stake 0: "트로피 경기: 1등 +14 · 2등 +6 · 3등 -2 · 4등 -6"
-  - Battle, `q` 0, stake > 0: "모두 10개씩 걸고 1등이 다 가져요: 1등 +44 · 2등 -4 · 3등 -12 · 4등 -16"
+  - Battle, `q` 0, stake 0: "트로피 경기: 1등 +16 · 2등 +8 · 3등 +2 · 4등 -6"
+  - Battle, `q` 0, stake > 0: "모두 10개씩 걸고 1등이 다 가져요: 1등 +46 · 2등 -2 · 3등 -8 · 4등 -16"
+  - Battle, `q` 0 (as built): "끝까지 한 판마다 오늘 트로피 보너스 +5 (하루 40개까지)"
   - Battle, `q` 0: "견습 리그는 등수로 잃지 않아요 · 판 중간에 나가면 꼴찌로 쳐요"
   - `q` 1: "연습 경기예요: 이 브라우저의 탭끼리는 트로피가 바뀌지 않아요"
   - `q` 2: "연습 경기예요: 같은 기기에서 들어온 친구가 있어요"
@@ -709,7 +892,8 @@ No change in v1.
   - `<p id="pg-podium-note" class="pg-wait" hidden>` is shown to the host only, after the existing guest wait note. It carries the rematch-gate texts (3.2) or "친구가 나가서 이번 판은 무효예요" for a void result. The host never sees the guest wait note, and a guest never sees this one, so there is one line at most.
   - The guest wait note reads "방장이 다음 판을 고르고 있어요 · 다음 판도 10개씩" when the stake is above 0.
   - `#pg-podium-again` is disabled while `!troCanRematch()`; `primaryAction` checks the same. `troPodiumUI()` updates the button and the note on podium show, on `cup` and on roster changes.
-  - `#pg-podium-sum` (sr-only, `aria-live`) gets ", 내 트로피 +14개, 지금 44개" appended, or "연습 경기라 트로피는 그대로예요".
+  - `#pg-podium-sum` (sr-only, `aria-live`) gets ", 내 트로피 +16개, 지금 121개" appended (as built, with a real match's bonus: ", 내 트로피 +16개, 오늘 트로피 보너스 +5개, 지금 121개"), or "연습 경기라 트로피는 그대로예요".
+  - (as built) `<p id="pg-podium-bonus" class="pg-wait pg-tbonus" hidden>` after the note: "오늘 트로피 보너스 +5" (my bonus of this match, apart from the net), shown once my change has counted up.
 
 ### 8.9 Game-over and ending cards (목욕 보너스)
 
@@ -772,7 +956,8 @@ YkLYYykY   ..kLYk..   .ktTtTkk   .....kk.    kkkkkkkk    kwwwwwwk    .kkLLkk.   
 ```js
   const TRO_TEXT = LEAGUES.map((l) => l.name).join(' ') +
     ' 내 트로피 내 기록 트로피 개 개씩 개부터 최고 트로피 배틀 승 판 뽀득 KO 혼자 최고 점수 리그 다음 리그까지 최고 리그예요! 닫기' +
-    ' 오늘 목욕 보너스 배틀은 제한이 없어요 이 브라우저에서는 기록이 저장되지 않아요 처음 선물로 트로피 30개를 받았어요! 친구와 배틀할 때 걸어 봐요' +
+    ' 오늘 트로피 보너스 목욕도 배틀도 받아요 이 브라우저에서는 기록이 저장되지 않아요 처음 선물로 트로피 100개를 받았어요! 친구와 배틀할 때 걸어 봐요' +
+    ' 끝까지 한 판마다 하루 개까지' +
     ' 트로피 걸기 안 걸기 트로피 부족 연습 경기 트로피가 모자라요 방장에게 걸기를 낮춰 달라고 해요 트로피가 모자란 친구가 있어요 걸기를 낮춰 주세요 내 트로피가 모자라요' +
     ' 걸기를 낮췄어요: 걸기가 바뀌었어요: 다시 준비해 주세요 트로피 경기: 모두 개씩 걸고 1등이 다 가져요: 1등 2등 3등 4등' +
     ' 견습 리그는 등수로 잃지 않아요 판 중간에 나가면 꼴찌로 쳐요 연습 경기예요: 이 브라우저의 탭끼리는 트로피가 바뀌지 않아요 같은 기기에서 들어온 친구가 있어요' +
@@ -799,12 +984,12 @@ YkLYYykY   ..kLYk..   .ktTtTkk   .....kk.    kkkkkkkk    kwwwwwwk    .kkLLkk.   
 | Host 방으로 mid-match | The host forfeits (its confirm says so); guests `'wait'` 15 s → refund. During 3-2-1 it costs nothing. |
 | Host's own network dies (peer) | All guests drop without `gg` → walkover void → the host is refunded. Guests: refunded if they were watching. |
 | Artifact hot reload mid-match | `reload` → refund for the reloading page; the others see `host_left` (refund) or a leaver without `gg`. |
-| Rematch (한 판 더) | New gid, new mid, held again at its "시작!". After a staked result it waits for every guest's `cup` and is blocked while anyone is short. |
+| Rematch (한 판 더) | New gid, new mid, held again at its "시작!". After a staked result it waits for every guest's `cup`; anyone short plays it without the stake (안 걸고 참여), and only an older guest page short of it blocks it. |
 | A result arrives after the next match began (stake 0, a quick rematch) | The old hold is `'wait'` since `guestBegin`; the `tro` still applies within 15 s, otherwise refund. |
 | A result arrives before the battle clock could have run (hostile host) | Not applied; it ends as `'wait'` → refund. |
 | Ties / full tie | Averaged place points (rounded); a tie for 1st splits the pot (floor); all tied → 무승부 (0 each, or the leavers' stakes split). |
-| Someone at 0 trophies | Can play stake 0 (견습: placement never costs). Cannot ready for any stake. 목욕 보너스 refills. |
-| Count changed between ready and 시작! (another tab) | Holds what it has: `min(t, s + 6)`. If `t < s`, it plays practice for itself. The floor at 0 keeps every result legal. |
+| Someone at 0 trophies | Can play stake 0 (견습: placement never costs). Readies for any stake without it (안 걸고 참여: place points and the +5, never the pot). 목욕 보너스 refills. |
+| Count changed between ready and 시작! (another tab) | Holds what it has: `min(t, s + 6)`. If `t < s`, it plays without the stake and says so (`st`), so the pot is still only what was put in; with an older host, practice for itself. A guest that readied without the stake stays without it even if its count rose. The floor at 0 keeps every result legal. |
 | Stake changed while guests are ready | Everyone is un-readied on both sides, and the guest is told. An in-flight `rd` with the old stake is refused. |
 | Host's count drops below the stake | `netToRoom` lowers the stake and says so. |
 | Guest's real count differs from its report | The host gates on the report. The guest's own client holds and settles what it really has. |
@@ -813,7 +998,7 @@ YkLYYykY   ..kLYk..   .ktTtTkk   .....kk.    kkkkkkkk    kwwwwwwk    .kkLLkk.   
 | A tab crashed with trophies held | Another load closes the hold after 15 min (open → forfeit, wait → refund). |
 | Day changes mid-session | `troToday()` is read at award time; `S.de` resets on a new day. |
 | Storage blocked / newer schema on disk | In memory for the session / read-only fresh store; 내 기록 says so; nothing is overwritten. |
-| Unreadable or hand-broken store | A fresh store (gift 30, new `dev`). |
+| Unreadable or hand-broken store | A fresh store (gift 100, new `dev`). |
 | 2회차 | A new run (its own 15) under the daily 20, offline and online alike. |
 | Battle stats in practice | Not counted: stats move only where trophies do. |
 
@@ -823,8 +1008,8 @@ YkLYYykY   ..kLYk..   .ktTtTkk   .....kk.    kkkkkkkk    kwwwwwwk    .kkLLkk.   
 
 | Who | Can | Cannot |
 |---|---|---|
-| Hostile host (modified page) | Give me last place: −(stake + 6) per match, the same as beating me, and not faster than the battle clock. Gift me trophies. Claim practice. Refuse to pay (refund after 15 s). Keep rematching (I can leave at the podium for free). | Take more than I hold. Apply a result twice, or for a match I did not hold for. Change my players or stake (my escrow is the truth). Raise the stake after I readied (I only hold the stake I agreed to). Make me hold over bc. Learn my device id (per-room hash only). |
-| Hostile guest | Lie about its count (it then risks less than its stake; the others lose at most what an honest winner would take). Skip its own hold. Send `gg` or `cup` (moves only its own stake, or blocks a rematch, which the host avoids with 방으로). | Change anyone else's count. Block results (reliable host → guest messages). See or copy another player's device hash (the host never sends it on). |
+| Hostile host (modified page) | Give me last place: −(stake + 6) per match, the same as beating me, and not faster than the battle clock. Gift me trophies. Claim practice. Refuse to pay (refund after 15 s). Keep rematching (I can leave at the podium for free). | Take more than I hold. Apply a result twice, or for a match I did not hold for. Change my players or stake (my escrow is the truth). Raise the stake after I readied (I only hold the stake I agreed to). Make me pay a stake I did not put in, or let a hold without one share the pot (`row[5]` can only lower what I pay). Make me hold over bc. Learn my device id (per-room hash only). |
+| Hostile guest | Lie about its count (it then risks less than its stake; the others lose at most what an honest winner would take). Skip its own hold. Send `gg` or `cup` (moves only its own stake, or blocks a rematch, which the host avoids with 방으로). Claim in `st` a stake it never held (안 걸고 참여: the winner gets up to one stake nobody paid; nobody loses one). | Change anyone else's count. Block results (reliable host → guest messages). See or copy another player's device hash (the host never sends it on). |
 | Local user | Edit localStorage; play extra browser profiles against each other (about +10..14 per real 2-minute match, or a fresh profile's gift through stakes). | Nothing beyond their own count. Without accounts this is the limit, and it is stated in the code comment. |
 | Anyone | Dodge a loss by cutting their own network while keeping the tab visible and the OS online (refund, like any dropped link). | Win by cutting the network: a walkover without `gg` is void. |
 
@@ -857,7 +1042,7 @@ YkLYYykY   ..kLYk..   .ktTtTkk   .....kk.    kkkkkkkk    kwwwwwwk    .kkLLkk.   
 It runs offline in virtual time and prints "TRO PASS|FAIL …" and "TRO DONE pass=N fail=M".
 
 1. **Store:**
-   - A fresh store has 30, v 1 and an 8-character `dev`, and round-trips.
+   - A fresh store has 100 (as built; 30 in v1), v 1 and an 8-character `dev`, and round-trips.
    - Clamps: `t: 1e9` → 99999, negatives → 0, bad mids or tabs dropped, more than 8 holds trimmed.
    - `v: 2` → read-only, and the key is unchanged afterwards. Unreadable JSON → fresh.
    - With localStorage stubbed to throw → `mem`, and no exceptions.
@@ -911,7 +1096,7 @@ It runs offline in virtual time and prints "TRO PASS|FAIL …" and "TRO DONE pas
    - A guest's link is cut (close its session without `gg`): refund for it, its stake not in the pot.
 8. The host leaves mid-match: guests are refunded (`host_left`).
 9. The host aborts (`mp.toRoom()` mid-match): the host forfeits; guests are refunded after `expire()`.
-10. **1v1 walkover:** the guest leaves with 나가기 → host +10 + s. The guest's link is cut instead → void, and the host is refunded.
+10. **1v1 walkover:** the guest leaves with 나가기 → host + s (as built: the pot only, no base). The guest's link is cut instead → void, and the host is refunded.
 11. Without `allowBc` → q 1: no count changes anywhere.
 12. **Co-op:** a game over in the 4th 탕 gives every frame the same +1 and no losses. Practice co-op gives nothing.
 

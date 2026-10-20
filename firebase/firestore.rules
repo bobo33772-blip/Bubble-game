@@ -89,7 +89,7 @@ service cloud.firestore {
       return isInt(x.t, -999999, 999999)
         && isInt(x.g, 0, 10000000) && isInt(x.w, 0, x.g) && isInt(x.ko, 0, 10000000)
         && isInt(x.best, 0, 99999) && isInt(x.bl, 0, 6) && isInt(x.seen, 0, 1) && isInt(x.hi, 0, 999999999)
-        && isInt(x.day, 0, 99991231) && isInt(x.de, 0, 20)
+        && isInt(x.day, 0, 99991231) && isInt(x.de, 0, 40)
         && isInt(x.n, 1, 1000000000)
         && x.at == request.time;
     }
