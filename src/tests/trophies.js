@@ -33,7 +33,7 @@
   // ---------------------------------------------------------------- 1. the store
   function storeTests() {
     let s = fresh();
-    ok('store: a fresh store has the gift (100), v 5 (the trophy balance; the 뽑기's fields from v 4, design/gacha.md 5.1) and an 8-character dev', s.t === 100 && s.best === 100 && /^[0-9a-z]{8}$/.test(s.dev) && raw() && raw().v === 5 && raw().t === 100, [s.t, s.dev, raw()]);
+    ok('store: a fresh store has the gift (100), v 5 (the trophy balance; the 뽑기 fields from v 4, design/gacha.md 5.1) and an 8-character dev', s.t === 100 && s.best === 100 && /^[0-9a-z]{8}$/.test(s.dev) && raw() && raw().v === 5 && raw().t === 100, [s.t, s.dev, raw()]);
     ok('store: ... already in 뽀득 새내기, the best league reached too (bl 1: no 승급! for it, the shop locks read it)', s.lg === 1 && s.bl === 1 && raw().bl === 1, [s.lg, s.bl]);
     const dev = s.dev, name = 'u' + nsN;
     T.ns(name);

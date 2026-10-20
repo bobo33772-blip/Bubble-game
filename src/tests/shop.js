@@ -260,7 +260,7 @@
     ok('v1 -> v2: every trophy field identical, the holds kept', keep.every((k) => ts[k] === v1[k]) && same(ts.esc, esc) && !ts.ro, keep.filter((k) => ts[k] !== v1[k]));
     // (S5: the cloud's v 2 link record reads a v 1 one's c / v with no coins - its own fields equal after the clamps)
     const v1Of = (x) => ({ t: x.t, w: x.w, g: x.g, ko: x.ko, de: x.de, day: x.day }), noCoins = (x) => x.ce === 0 && x.sp === 0 && same(x.o, []) && x.bd === 0 && x.bs === 0;
-    ok('v1 -> v5: written back as v 5 (the trophy balance, after the 뽑기's v 4) with the link record kept (equal after its clamps, no coins in it), no coins, every animal bare, lh 0', r && r.v === 5 && r.lh === 0 && r.cs && r.cs.u === 'uid1' && r.cs.k === 'abcdefgh' && same(v1Of(r.cs.c), cs.c) && same(v1Of(r.cs.v), cs.v) && noCoins(r.cs.c) && noCoins(r.cs.v) && r.cs.n === 3 &&
+    ok('v1 -> v5: written back as v 5 (the trophy balance, after the 뽑기 v 4) with the link record kept (equal after its clamps, no coins in it), no coins, every animal bare, lh 0', r && r.v === 5 && r.lh === 0 && r.cs && r.cs.u === 'uid1' && r.cs.k === 'abcdefgh' && same(v1Of(r.cs.c), cs.c) && same(v1Of(r.cs.v), cs.v) && noCoins(r.cs.c) && noCoins(r.cs.v) && r.cs.n === 3 &&
       r.ce === 0 && r.sp === 0 && same(r.own, []) && r.eq === '0'.repeat(30) && r.bd === 0 && r.sh === 0, r);
     ok('v1 -> v2: the coins read 0 and nothing is worn', S().co === 0 && S().look === '00000');
     // (looks-per-animal.md 11.1) a v 2 store: its one worn set copied to all six animals, lh 1, written back AT LOAD as v 3
