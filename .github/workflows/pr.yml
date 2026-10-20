@@ -68,7 +68,7 @@ jobs:
     steps:
       - name: Firebase 연결 전이라 건너뛰어요
         if: env.HAS_FB != 'true'
-        run: echo "::notice::미리보기는 Firebase 연결 뒤에 만들어져요 (배포 키: FIREBASE-SETUP.md). 지금은 건너뛰어요."
+        run: echo "::notice::미리보기는 Firebase 연결 뒤에 만들어져요 (배포 키는 FIREBASE-SETUP.md). 지금은 건너뛰어요."
       - uses: actions/checkout@v4
         if: env.HAS_FB == 'true'
       - uses: actions/setup-node@v4
