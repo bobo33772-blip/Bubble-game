@@ -12,11 +12,10 @@
 const { spawn, spawnSync } = require('child_process');
 const fs = require('fs');
 const [file = 'preview.html', out = '-', w = '900', h = '760', budget = '4000', doneRe = 'DONE'] = process.argv.slice(2);
-const CH = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const T = 'C:/Temp/bogeul';
+const { CH, T } = require('./env');
 const prof = `${T}/chrome-profile-${process.pid}`;
-const url = /^https?:\/\//i.test(file) ? file : `file:///${T}/${file}`;
-const shotPath = out.includes(':') ? out : `${T}/${out}`;
+const url = /^https?:\/\//i.test(file) ? file : require('./env').fileUrl(file);
+const shotPath = require('./env').inT(out);
 
 if (/^rt\d+$/i.test(budget)) {
   realtime(parseInt(budget.slice(2), 10)).catch((e) => { console.log('run-chrome realtime error: ' + (e && e.message)); process.exit(3); });

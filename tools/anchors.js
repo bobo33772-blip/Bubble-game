@@ -500,7 +500,7 @@ ${SHARED.map(String).join('\n')}
 <` + `/script></body></html>`;
 }
 function writeSheet(code) {
-  const T = 'C:/Temp/bogeul'; fs.mkdirSync(T, { recursive: true });
+  const { T } = require('./env'); fs.mkdirSync(T, { recursive: true });
   fs.writeFileSync(path.join(T, 'shop-art.html'), sheetHtml(code));
   return T + '/shop-art.html';
 }

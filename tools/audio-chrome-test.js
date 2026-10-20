@@ -25,7 +25,7 @@ const V4_SOUNDS = [['pop', 1], ['pop', 2], ['pop', 3], ['pop', 4], ['pop', 5], [
   ['flap', null], ['slam', null], ['quake', null], ['dash', null], ['slide', 1], ['slide', 2], ['slide', 3], ['djump', null],
   ['hop', 1], ['hop', 2], ['b_echo', 0], ['b_echo', 1], ['b_onsen', null], ['b_splash', null], ['b_icicle', null],
   ['b_yarn', 0], ['b_yarn', 1], ['b_egg', 0], ['b_egg', 1]];
-const T = 'C:/Temp/bogeul';
+const { T } = require('./env');
 fs.mkdirSync(T, { recursive: true });
 
 const head = `<!doctype html><html><head><meta charset="utf-8"><title>audio test</title></head><body><pre id="out">running</pre>

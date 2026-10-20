@@ -1,5 +1,5 @@
 // Runs EVERY headless driver in src/tests (and the screenshot scenes) and prints one summary.
-// Usage: node bogeul/tools/run-all.js [name-filter ...] [--jobs=4] [--no-build] [--list]
+// Usage: node bogeul/tools/run-all.js [name-filter ...] [--exact] [--jobs=4] [--no-build] [--list]
 //   - builds first (node build.js) unless --no-build
 //   - starts tools/serve.js on :8765 for the multi-iframe drivers (or reuses one that is already running)
 //   - virtual-time drivers and the node checks (runner 'node': a tools/*.js script) run in parallel (--jobs), real-time
@@ -13,7 +13,7 @@ const path = require('path');
 const http = require('http');
 
 const ROOT = path.join(__dirname, '..');
-const T = 'C:/Temp/bogeul';
+const { T } = require('./env');
 const LOGS = `${T}/runall`;
 const HTTP = 'http://localhost:8765/';
 const args = process.argv.slice(2);
@@ -171,6 +171,8 @@ const LIST = [
   V('check-sprites', 'check-sprites.js', 0, has(/^OK: \d+ required sprites/m), { runner: 'node' }),
   V('check-integration', 'check-integration.js', 0, has(/INTEGRATION OK/), { runner: 'node' }),
   V('net-node', 'net-node-test.js', 0, has(/NET NODE OK/), { runner: 'node' }),
+  // the two shipped pages' contracts (artifact / standalone) + the standalone page playing solo without PeerJS
+  V('check-pages', 'check-pages.js', 0, has(/^PAGES OK: \d+ passed, 0 failed/m), { runner: 'node' }),
   V('sprites-scene', 'test-sprites-scene.html', 6000, has(/SCENE mode/), { shot: 'runall-sprites-scene.png' }),
   // ---- real time (one at a time)
   V('realinput', 'test-realinput.html', 40000, doneZero('REAL'), { runner: 'cdp', done: 'REAL DONE' }),
@@ -316,7 +318,10 @@ function portOpen() {
 
 (async () => {
   let list = LIST;
-  if (filters.length) list = list.filter((j) => filters.some((f) => j.name === f || j.name.startsWith(f + '-') || j.name.includes(f)));
+  // (--exact: only the jobs named exactly - CI's subset, .github/workflows/pr.yml)
+  const exact = args.includes('--exact');
+  if (filters.length) list = list.filter((j) => filters.some((f) => j.name === f || (!exact && (j.name.startsWith(f + '-') || j.name.includes(f)))));
+  if (exact && list.length !== new Set(filters).size) { console.log('RUN-ALL: unknown job(s): ' + filters.filter((f) => !LIST.some((j) => j.name === f)).join(', ')); process.exit(1); }
   if (args.includes('--list')) { for (const j of list) console.log(j.name.padEnd(22) + j.page); return; }
   if (!args.includes('--no-build')) {
     const b = spawnSync(process.execPath, [path.join(ROOT, 'build.js')], { encoding: 'utf8' });

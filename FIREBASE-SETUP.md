@@ -129,11 +129,11 @@
    ```
    firebase login
    ```
-3. `bogeul\firebase\.firebaserc` 파일을 메모장으로 열어 `YOUR-PROJECT-ID`를 **내 프로젝트 ID**로 바꿔 저장해요.
+3. `bogeul\.firebaserc` 파일을 메모장으로 열어 `YOUR-PROJECT-ID`를 **내 프로젝트 ID**로 바꿔 저장해요.
    (`node build.js`가 이미 바꿔 놓았으면 그대로 둬요.)
 4. 올려요:
    ```
-   cd "C:\Users\뽀숑\OneDrive\바탕 화면\미니게임\bogeul\firebase"
+   cd "C:\Users\뽀숑\OneDrive\바탕 화면\미니게임\bogeul"
    firebase deploy --only hosting,firestore:rules
    ```
 5. 끝나면 `Hosting URL: https://프로젝트ID.web.app`이 보여요.

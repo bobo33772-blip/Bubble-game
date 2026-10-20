@@ -492,7 +492,7 @@ function report() {
 }
 
 // ---------------------------------------------------------------- contact sheet
-const T = 'C:/Temp/bogeul';
+const { T } = require('./env');
 const [SC = '4', FILT = '', NAME = 'sheet.html'] = process.argv.slice(2);
 fs.mkdirSync(T, { recursive: true });
 const html = `<!doctype html><html><head><meta charset="utf-8"><style>

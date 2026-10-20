@@ -19,15 +19,21 @@
 // (checked: not even the word). Always written for the tests (C:/Temp only, never deploy/):
 //   C:/Temp/bogeul/deploy-cloud/  the deploy page with a made-up config (src/tests/cloud.js fakes the SDK in its frames)
 //   C:/Temp/bogeul/deploy-nocfg/  the deploy page without one
-// and bogeul/firebase/.firebaserc gets the projectId while it still says YOUR-PROJECT-ID.
+// and bogeul/.firebaserc gets the projectId while it still says YOUR-PROJECT-ID.
 // Usage: node bogeul/build.js   (tools only: PG_FIREBASE_CONFIG=<file> reads another config file and leaves .firebaserc
 // alone; PG_BUILD_TEMP=<dir> writes the C:/Temp/bogeul outputs there - tools/check-cloud.js builds a copy that way)
+// PG_PREVIEW=<PR number> (CI: .github/workflows/pr.yml, a Firebase Hosting preview channel): deploy/ becomes a PREVIEW of
+// the standalone page - a "미리보기 #n" badge, its own save slot (every localStorage key + "@pr<n>": it never reads,
+// migrates or overwrites the real records), no manifest link and no service worker (nothing installs), no Firebase
+// config, noindex; only index.html + the icons, no itch zip. dist/ and the C:/Temp outputs are the same as without it
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
 const root = __dirname;
 const TMP = process.env.PG_BUILD_TEMP || 'C:/Temp/bogeul';
+const PREVIEW = process.env.PG_PREVIEW || '';
+if (PREVIEW && !/^[1-9]\d{0,6}$/.test(PREVIEW)) throw new Error('PG_PREVIEW must be a PR number, not ' + JSON.stringify(PREVIEW));
 const src = path.join(root, 'src');
 const ORDER = ['sprites.js', 'levels.js', 'audio.js', 'net.js', 'game.js'];
 const PEERJS = 'https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js';
@@ -125,7 +131,7 @@ const fbAlt = (f) => `https://cdn.jsdelivr.net/npm/firebase@${FIREBASE_V}/${f}`;
 // the config (tools/fb-config.js: lenient - the console's snippet pasted as it is works too - and checked: a bad file
 // stops the build with a message in Korean and English). PG_FIREBASE_CONFIG=<file> reads another file (tools only)
 const { fbCheck, readFirebaseConfig } = require('./tools/fb-config');
-const fbConf = readFirebaseConfig(process.env.PG_FIREBASE_CONFIG || path.join(root, 'firebase.config.json'));
+const fbConf = PREVIEW ? null : readFirebaseConfig(process.env.PG_FIREBASE_CONFIG || path.join(root, 'firebase.config.json'));
 // hosts that serve many people's pages from one origin (itch.io's games, its old CDN, Newgrounds' uploads): a page there
 // - or in any frame - never signs in, since every page of that origin could read the stored session (game.js clHere;
 // the itch zip is also marked `away` by tools/pack-itch.js). Never add these to Firebase's authorized domains
@@ -214,10 +220,30 @@ const cloudTags = (deploy.match(/window\.PG_CLOUD=/g) || []).length;
 if (fbConf ? cloudTags !== 1 || !FIREBASE_SDK.every(([f, sri]) => deploy.includes(sri) && deploy.includes(fbUrl(f)) && deploy.includes(fbAlt(f)))
   : cloudTags !== 0 || /firebase/i.test(deploy)) throw new Error('the deploy page must carry the cloud config exactly when firebase.config.json exists');
 if (fbConf ? !FIREBASE_SDK.every(([f]) => sw.includes(JSON.stringify(fbUrl(f))) && sw.includes(JSON.stringify(fbAlt(f)))) : /firebase-[a-z]+-compat\.js/.test(sw)) throw new Error('sw.js must list the SDK files exactly when firebase.config.json exists');
+// ---- the PR preview (PG_PREVIEW, see the top): the deploy page above, changed only here
+const PV_KEY = '@pr' + PREVIEW;
+// (in the head before every other script: Storage's getItem / setItem / removeItem add the suffix; a 'storage' event
+// from another tab reaches the game with the suffix taken off - and one for a real record not at all)
+const PV_STORE = `<script>(function(){try{var S=Storage.prototype,X=${JSON.stringify(PV_KEY)},g=S.getItem,s=S.setItem,r=S.removeItem,mine=new WeakSet();` +
+  'S.getItem=function(k){return g.call(this,k+X);};S.setItem=function(k,v){return s.call(this,k+X,v);};S.removeItem=function(k){return r.call(this,k+X);};' +
+  "addEventListener('storage',function(e){if(mine.has(e))return;e.stopImmediatePropagation();var k=e.key;if(typeof k!=='string'||k.slice(-X.length)!==X)return;" +
+  "var n=new StorageEvent('storage',{key:k.slice(0,-X.length),oldValue:e.oldValue,newValue:e.newValue,url:e.url,storageArea:e.storageArea});mine.add(n);dispatchEvent(n);},true);}catch(e){}})();</script>\n";
+const PV_BADGE = `<div id="pg-preview-badge" style="position:fixed;left:6px;bottom:calc(6px + env(safe-area-inset-bottom,0px));z-index:2147483647;pointer-events:none;padding:2px 8px;border-radius:9px;background:rgba(214,40,90,.9);color:#fff;font:700 12px/1.5 system-ui,sans-serif">미리보기 #${PREVIEW}</div>\n`;
+function previewOf(html) {
+  const swap = (h, from, to) => { if (!h.includes(from)) throw new Error('preview build: the deploy page lacks ' + from.slice(0, 50)); return h.replace(from, () => to); };
+  let p = swap(html, `<title>${titleText}</title>\n`, `${PV_STORE}<title>미리보기 #${PREVIEW} · ${titleText}</title>\n<meta name="robots" content="noindex">\n`);
+  p = swap(p, '<link rel="manifest" href="manifest.webmanifest">\n', '');
+  p = swap(p, `<script>${SW_REG}</script>\n`, '');
+  p = swap(p, '\n</body>\n</html>\n', `\n${PV_BADGE}</body>\n</html>\n`);
+  if (/<link\b[^>]*\brel=["']?manifest|serviceWorker\s*\.\s*register|PG_CLOUD\s*=|firebase/i.test(p)) throw new Error('preview build: manifest / service worker / Firebase left in the page');
+  return p;
+}
+const outFiles = PREVIEW ? [['index.html', previewOf(deploy)], ...icons.map((i) => [i.src, i.buf])] : deployFiles;
+if (PREVIEW) fs.rmSync(path.join(root, 'deploy'), { recursive: true, force: true });   // (no manifest, sw.js or zip left from before)
 // written into deploy/ and copied for the http tests (tools/pwa-check.js serves C:/Temp/bogeul/deploy/ - workers
-// need http, not file://)
-for (const dir of [path.join(root, 'deploy'), path.join(TMP, 'deploy')]) {
-  for (const [f, data] of deployFiles) { const p = path.join(dir, ...f.split('/')); fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, data); }
+// need http, not file://; a preview is not copied)
+for (const dir of PREVIEW ? [path.join(root, 'deploy')] : [path.join(root, 'deploy'), path.join(TMP, 'deploy')]) {
+  for (const [f, data] of outFiles) { const p = path.join(dir, ...f.split('/')); fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, data); }
 }
 
 // Mimic the artifact skeleton so the local preview behaves like the published page.
@@ -246,9 +272,9 @@ for (const [dir, html] of [['deploy-cloud', deployOf('cloud-test', FAKE_FB, FAKE
     const p = path.join(T, dir, ...f.split('/')); fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, data);
   }
 }
-// Firebase Hosting (bogeul/firebase/): the project id goes into .firebaserc while it still has the placeholder
+// Firebase Hosting (bogeul/firebase.json): the project id goes into .firebaserc while it still has the placeholder
 if (fbConf && !process.env.PG_FIREBASE_CONFIG) {
-  const rc = path.join(root, 'firebase', '.firebaserc');
+  const rc = path.join(root, '.firebaserc');
   try { const t = fs.readFileSync(rc, 'utf8'); if (t.includes('YOUR-PROJECT-ID')) fs.writeFileSync(rc, t.replace('YOUR-PROJECT-ID', fbConf.cfg.projectId)); } catch (e) { /* no firebase folder: nothing to fill in */ }
 }
 
@@ -269,5 +295,6 @@ if (fs.existsSync(testsDir)) {
 const kb = (f) => (fs.statSync(f).size / 1024).toFixed(1);
 console.log(`built dist/ppogeul-bath.html (${kb(path.join(root, 'dist', 'ppogeul-bath.html'))} KB), deploy/index.html (${kb(path.join(root, 'deploy', 'index.html'))} KB, build ${BUILD}, ${fbConf ? 'Firebase: ' + fbConf.cfg.projectId : 'no Firebase'}; + manifest, sw.js, ${icons.length} icons) and ${T}/preview.html`);
 // the itch.io upload, always in step with deploy/ (tools/pack-itch.js: index.html at the zip root, the rest beside it)
+if (PREVIEW) { console.log(`PREVIEW #${PREVIEW}: deploy/ holds the preview page (save keys +${PV_KEY}, no manifest / service worker / Firebase, no itch zip)`); process.exit(0); }
 const itch = require('./tools/pack-itch').pack(path.join(root, 'deploy', 'ppodeuk-bath-itch.zip'));
 console.log(`packed deploy/ppodeuk-bath-itch.zip (${(itch.size / 1024).toFixed(1)} KB, ${itch.entries.length} files) for itch.io`);
