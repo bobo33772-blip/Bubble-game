@@ -146,7 +146,7 @@
       D.seed(3); D.start(0); step(30);
       const s = S();
       if (s.mode !== 'solo' || s.phase !== 'playing' || s.role !== 'host' || s.timeLeft !== null || s.teamLives !== null) return JSON.stringify({ m: s.mode, p: s.phase, r: s.role, t: s.timeLeft });
-      if (s.players.length !== 1 || G.p !== G.players[0] || s.player.x !== s.players[0].x || s.lives !== 3) return 'player mismatch';
+      if (s.players.length !== 1 || G.p !== G.players[0] || s.player.x !== s.players[0].x || s.lives !== 4) return 'player mismatch';
       if (visibleTags().length) return 'name tags shown in solo';
     });
 
@@ -384,9 +384,9 @@
       D.seed(31); D.start(0); step(5);
       const slot = D.local.addPlayer('frog', '개구리친구');
       const s = S();
-      if (slot !== 1 || s.mode !== 'coop' || s.players.length !== 2 || s.lives !== 4 || s.players[1].nick !== '개구리친구') return JSON.stringify({ slot, m: s.mode, n: s.players.length, l: s.lives });
+      if (slot !== 1 || s.mode !== 'coop' || s.players.length !== 2 || s.lives !== 5 || s.players[1].nick !== '개구리친구') return JSON.stringify({ slot, m: s.mode, n: s.players.length, l: s.lives });
       D.local.removePlayer(1);
-      if (S().players.length !== 1 || S().lives !== 4) return 'remove keeps lives';
+      if (S().players.length !== 1 || S().lives !== 5) return 'remove keeps lives';
     });
 
     // ================================================================== 4. battle (배틀)
