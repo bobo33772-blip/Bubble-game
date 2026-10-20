@@ -30,7 +30,7 @@
     t('start round 0', () => {
       const s = D.start(0);
       if (s.phase !== 'playing') return 'mode ' + s.phase;
-      if (s.round !== 0 || s.lives !== 3 || s.score !== 0) return JSON.stringify(s);
+      if (s.round !== 0 || s.lives !== 4 || s.score !== 0) return JSON.stringify(s);
       if (!s.enemies.length || s.enemies.some((e) => e.state !== 'descend')) return 'enemies not descending';
       if (!document.getElementById('pg-title').hidden) return 'title overlay still shown';
     });
@@ -369,7 +369,7 @@
     t('retry from game over', () => {
       document.getElementById('pg-retry').click();
       const s = S();
-      if (s.phase !== 'playing' || s.lives !== 3 || s.score !== 0 || s.stamps !== 0) return JSON.stringify(s).slice(0, 200);
+      if (s.phase !== 'playing' || s.lives !== 4 || s.score !== 0 || s.stamps !== 0) return JSON.stringify(s).slice(0, 200);
     });
     t('trapped enemy escapes angry', () => {
       D.gotoRound(0); D.step(130); D.setInvincible(true);

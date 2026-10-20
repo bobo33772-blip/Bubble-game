@@ -24,7 +24,7 @@
     // 2. Enter starts the game (first gesture unlocks audio)
     await tap('Enter', 'Enter');
     await wait(100);
-    ok('Enter starts a game', S().phase === 'playing' && S().round === 0 && S().lives === 3, JSON.stringify({ m: S().phase, r: S().round }));
+    ok('Enter starts a game', S().phase === 'playing' && S().round === 0 && S().lives === 4, JSON.stringify({ m: S().phase, r: S().round }));
     ok('title overlay hidden', $('pg-title').hidden);
     ok('round banner shown', !$('pg-banner').hidden && $('pg-banner-main').textContent.length > 0);
     await wait(1600);
@@ -138,7 +138,7 @@
     let hs = null; try { hs = localStorage.getItem('ppogeul-hiscore'); } catch (er) { hs = 'n/a'; }
     ok('hi-score persisted', hs === 'n/a' || +hs === S().hiscore, 'stored ' + hs + ' vs ' + S().hiscore);
     await tap('Enter', 'Enter'); await wait(150);
-    ok('Enter retries from game over', S().phase === 'playing' && S().lives === 3 && S().score === 0);
+    ok('Enter retries from game over', S().phase === 'playing' && S().lives === 4 && S().score === 0);
 
     ok('no uncaught page errors', errors === 0, errors + ' errors');
     console.log('REAL DONE pass=' + pass + ' fail=' + fail);

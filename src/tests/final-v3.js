@@ -343,7 +343,7 @@
     const playing = await until(() => S(fr).phase === 'playing' && S(fr).mode === 'solo', 6000);
     const s0 = S(fr);
     ok('solo: 혼자 하기 starts round 1 as the picked animal (solo, host, offline)', !!playing && s0.round === 0 && s0.role === 'host' && !s0.online &&
-      s0.players.length === 1 && s0.players[0].char === 'otter' && s0.lives === 3, { phase: s0.phase, mode: s0.mode, round: s0.round, p: s0.players.map((p) => p.char) });
+      s0.players.length === 1 && s0.players[0].char === 'otter' && s0.lives === 4, { phase: s0.phase, mode: s0.mode, round: s0.round, p: s0.players.map((p) => p.char) });
     await sleep(2400);
     // round 1: every enemy trapped in the otter's own bubble and popped by touching it
     const G = fr.G, E = G.enemies.slice();

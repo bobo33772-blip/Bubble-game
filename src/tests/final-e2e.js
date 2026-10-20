@@ -77,7 +77,7 @@
     D.seed(4242);
     let st = D.start(0);
     t('start(0) begins round 1 fresh', () => {
-      if (st.phase !== 'playing' || st.round !== 0 || st.lives !== 3 || st.score !== 0 || st.loop !== 0) return JSON.stringify(st).slice(0, 200);
+      if (st.phase !== 'playing' || st.round !== 0 || st.lives !== 4 || st.score !== 0 || st.loop !== 0) return JSON.stringify(st).slice(0, 200);
       if (!$('pg-title').hidden) return 'title overlay still visible';
       if (st.enemies.some((e) => e.state !== 'descend')) return 'enemies should start descending';
       if ($('pg-banner').hidden || $('pg-banner-main').textContent !== LV[0].name) return 'banner "' + $('pg-banner-main').textContent + '"';
@@ -182,8 +182,8 @@
         if (Math.abs(s2.player.x - px) > 1 || Math.abs(s2.player.y - py) > 1) return 'duck at ' + s2.player.x + ',' + s2.player.y + ' want ' + px + ',' + py;
         if ($('pg-banner').hidden || $('pg-banner-main').textContent !== Ln.name) return 'banner "' + $('pg-banner-main').textContent + '" want ' + Ln.name;
         if (s2.enemies.length !== Ln.enemies.length || s2.enemies.some((e) => e.state !== 'descend')) return 'new enemies not descending';
-        if (s2.lives !== 3) return 'lives ' + s2.lives;
-        if (s2.stamps < stampsAfterR1 && s2.lives === 3) return 'stamps lost across rounds: ' + s2.stamps;
+        if (s2.lives !== 4) return 'lives ' + s2.lives;
+        if (s2.stamps < stampsAfterR1 && s2.lives === 4) return 'stamps lost across rounds: ' + s2.stamps;
       });
     }
 
@@ -198,8 +198,8 @@
     D.setInvincible(false);
     stepUntil(() => S().enemies.every((e) => e.state === 'active'), 200);
     const scoreBeforeDeaths = S().score;
-    for (let k = 1; k <= 3; k++) {
-      t('death ' + k + ': enemy contact -> dying animation -> ' + (k < 3 ? 'respawn with invulnerability' : 'game over'), () => {
+    for (let k = 1; k <= 4; k++) {
+      t('death ' + k + ': enemy contact -> dying animation -> ' + (k < 4 ? 'respawn with invulnerability' : 'game over'), () => {
         const lives0 = S().lives;
         if (!killDuck()) return 'no active enemy';
         D.step(1);
@@ -210,7 +210,7 @@
         if (used < 0) return 'stuck dying';
         const s = S();
         if (s.lives !== lives0 - 1) return 'lives ' + s.lives;
-        if (k < 3) {
+        if (k < 4) {
           if (s.phase !== 'playing' || s.player.dead) return 'mode ' + s.phase;
           if (!(G.p.invuln > 60)) return 'invuln ' + G.p.invuln;
           const L = LV[s.round];
@@ -242,7 +242,7 @@
       D.step(70);
       $('pg-retry').click();
       const s = S();
-      if (s.phase !== 'playing' || s.round !== 0 || s.lives !== 3 || s.score !== 0 || s.loop !== 0) return JSON.stringify(s).slice(0, 160);
+      if (s.phase !== 'playing' || s.round !== 0 || s.lives !== 4 || s.score !== 0 || s.loop !== 0) return JSON.stringify(s).slice(0, 160);
       if (s.stamps) return 'stamps not reset: ' + s.stamps;
       if (!$('pg-over').hidden) return 'overlay still visible';
       if (s.hiscore !== hi) return 'hi-score lost';
@@ -349,7 +349,7 @@
     D.setInvincible(false);
     // re-enter the round so there are active enemies again, then lose all lives
     D.gotoRound(2); D.step(140);
-    for (let k = 0; k < 3; k++) { killDuck(); D.step(100); }
+    for (let k = 0; k < 4; k++) { killDuck(); D.step(100); }
     D.step(70);
     log('E2E SHOT READY mode=' + D.getState().phase + ' score=' + D.getState().score);
   }

@@ -17,6 +17,7 @@ window.PG = window.PG || {};
   const SHOT_SPEED = 3.5, SHOT_FRAMES = 22, SHOT_CD = 14, AUTO_CD = 24; // (today's base bubble: KIT_BASE runs these numbers)
   const EMPTY_LIFE = 720, FLASH = 120, SPECIAL_LIFE = 900, ITEM_LIFE = 600;
   const CHAIN_DIST = 18, CLUSTER = 16, MAX_BUBBLES = 36;
+  const SOLO_LIVES = 4;   // 혼자 하기: lives at the start (3 until 2026-10-20 - the user asked for one more)
   // a floating EMPTY bubble by mode - 2-4 players fill the screen four times as fast, so there it goes sooner and each
   // player keeps only a few: [life (frames from the blow; the blink starts here), blink frames, floating empties one
   // player may keep (0: no cap), all players' together (0: no cap)]. Solo stays EMPTY_LIFE + FLASH (14 s), no cap;
@@ -1225,7 +1226,7 @@ window.PG = window.PG || {};
 
   // ------------------------------------------------------------------ game state
   const G = {
-    mode: 'title', attract: true, round: 0, loop: 0, score: 0, hiscore: 0, lives: 3, stamps: 0,
+    mode: 'title', attract: true, round: 0, loop: 0, score: 0, hiscore: 0, lives: SOLO_LIVES, stamps: 0,
     frame: 0, roundT: 0, roundClock: 0, roundDeaths: 0, introT: 0, clearT: -1, hurry: false, scald: false, dropT: 0, dropN: 0,
     enemies: [], bubbles: [], items: [], bolts: [], parts: [], kfx: [], pops: [], wisps: [], drops: [], ice: [], pickup: null,
     shake: 0, banner: null, bannerQ: [], invincible: false, manual: false, music: null, pausedFrom: null,
@@ -1499,7 +1500,7 @@ window.PG = window.PG || {};
     G.gameMode = gameMode;
     setupPlayers(list);
     G.attract = false; G.score = 0; G.stamps = 0; G.loop = 0; G.newHi = false; G.stampFlash = 0; G.ticketFlash = 0;
-    G.lives = gameMode === 'coop' ? 3 + (G.players.length - 1) : 3;
+    G.lives = gameMode === 'coop' ? 3 + (G.players.length - 1) : gameMode === 'solo' ? SOLO_LIVES : 3;   // (solo: SOLO_LIVES; co-op: the team's 3 + 1 a partner)
     G.stampT = 0; // re-rolled by startRound
     G.bannerQ = []; G.battle = null; G.podium = null; G.coopOverT = 0; G.words = []; G.menuOpen = false;
     G.perksOff = gameMode === 'battle' && G.opts.perks === false;
@@ -1548,7 +1549,7 @@ window.PG = window.PG || {};
     G.gameMode = 'solo'; G.online = false; G.role = 'host'; G.perksOff = false; G.battle = null; G.podium = null; G.words = []; G.menuOpen = false;
     TRO.run = null; TRO.pod = null; CO.run = null; CO.pod = null;
     setupPlayers([{ char: G.sel, look: myLook(G.sel) }]); // (the attract demo wears my pick's set: shop.md 6.5, looks-per-animal.md 3)
-    G.attract = true; G.score = 0; G.lives = 3; G.stamps = 0; G.loop = 0; G.banner = null; G.bannerQ = []; G.stampT = 0; G.power = null;
+    G.attract = true; G.score = 0; G.lives = SOLO_LIVES; G.stamps = 0; G.loop = 0; G.banner = null; G.bannerQ = []; G.stampT = 0; G.power = null;
     startRound(0);
     G.mode = 'title';
     setMusic('title');
@@ -9614,7 +9615,7 @@ window.PG = window.PG || {};
     G.gameMode = 'solo'; G.online = false; G.role = 'host'; G.perksOff = false; G.battle = null; G.podium = null; G.words = []; G.menuOpen = false;
     G.localSlot = 0; TRO.run = null; TRO.pod = null; CO.run = null; CO.pod = null;
     setupPlayers([{ char: G.sel, look: myLook(G.sel) }]);
-    G.attract = true; G.score = 0; G.lives = 3; G.stamps = 0; G.loop = 0; G.banner = null; G.bannerQ = []; G.stampT = 0; G.power = null;
+    G.attract = true; G.score = 0; G.lives = SOLO_LIVES; G.stamps = 0; G.loop = 0; G.banner = null; G.bannerQ = []; G.stampT = 0; G.power = null;
     startRound(0);
     G.mode = 'title';
   }

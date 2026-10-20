@@ -209,7 +209,7 @@
     // ---- start through the real title button
     D.seed(4242);
     $('pg-start').click(); step(1);
-    ok('시작하기 starts 1번째 탕', G.mode === 'playing' && G.round === 0 && G.lives === 3 && G.score === 0 && G.stamps === 0 && $('pg-title').hidden && G.loop === 0);
+    ok('시작하기 starts 1번째 탕', G.mode === 'playing' && G.round === 0 && G.lives === 4 && G.score === 0 && G.stamps === 0 && $('pg-title').hidden && G.loop === 0);
     D.setInvincible(true);
 
     let stampBubblePopped = 0, powerPicked = null;
@@ -307,7 +307,7 @@
     }
     note('power-up picked in rounds 1-5: ' + (powerPicked || 'none') + ', stamp bubbles popped: ' + stampBubblePopped + ', stamps ' + G.stamps + ', lives ' + G.lives + ', score ' + G.score);
     ok('at least one 도장 거품 popped in rounds 1-5', stampBubblePopped >= 1);
-    ok('free-entry tickets: lives 3 + tickets', G.lives === 3 + sfxLog.filter((n) => n === 'ticket').length, 'lives ' + G.lives);
+    ok('free-entry tickets: lives 4 + tickets', G.lives === 4 + sfxLog.filter((n) => n === 'ticket').length, 'lives ' + G.lives);
 
     // ---- boss 1 (index 5)
     bossFull(5, true);
@@ -525,6 +525,7 @@
     D.seed(99);
     D.start(5); D.setInvincible(false);
     const tag = 'DEATH';
+    G.lives = 3; // (the three deaths below: boss, scald drop, last life -> game over; a solo game now starts with SOLO_LIVES 4)
     until(() => G.boss.state === 'fight', 300);
     G.p.invuln = 9999; // no accidental death while hurting the boss
     D.damageBoss();
@@ -576,7 +577,7 @@
     ok(tag + ' game-over card: score + round', +$('pg-over-score').textContent.replace(/[^0-9]/g, '') === G.score && $('pg-over-round').textContent.indexOf('3번째 탕') >= 0, $('pg-over-round').textContent);
     step(70);
     $('pg-retry').click(); step(1);
-    ok(tag + ' 다시 하기 restarts a fresh game', G.mode === 'playing' && G.round === 0 && G.lives === 3 && G.score === 0 && G.stamps === 0 && $('pg-over').hidden && !G.p.dead, G.mode);
+    ok(tag + ' 다시 하기 restarts a fresh game', G.mode === 'playing' && G.round === 0 && G.lives === 4 && G.score === 0 && G.stamps === 0 && $('pg-over').hidden && !G.p.dead, G.mode);
   }
 
   function pauseAndTicket() {

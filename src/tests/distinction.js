@@ -46,8 +46,9 @@
   } catch (e) { /* ignore */ }
 
   // the solo baseline (§2.14 test 1): three canvas hashes taken with ?base=1 on the build BEFORE pass D3 changed any
-  // drawing (2026-10-17): the start, mid-round after walking / jumping, a duck bubble in flight
-  const BASE = [-221629064, 347395985, -1000955601];
+  // drawing (2026-10-17): the start, mid-round after walking / jumping, a duck bubble in flight. Re-taken 2026-10-20 when
+  // 혼자 하기 went to 4 lives (SOLO_LIVES): the HUD shows a 4th life icon, nothing else moved
+  const BASE = [1098794199, 1667819248, 319467662];
   const SLOT_COLS = ['#ffd447', '#f6a6bd', '#7fdcc8', '#8dc9ff'];
   const SLOT_RAMP = [
     ['#fff1a6', '#ffd447', '#e39a1e', '#a8661a'],

@@ -112,7 +112,7 @@
       const m2 = G.mode;
       D.step(35); key('keydown', 'KeyX', 'x'); key('keyup', 'KeyX', 'x');
       const m3 = G.mode;
-      ok('game over: X/Space ignored for ~1 s, then a fresh X retries', r1 && m1 === 'gameover' && m2 === 'gameover' && m3 === 'playing' && G.lives === 3 && G.score === 0, [r1, m1, m2, m3].join(','));
+      ok('game over: X/Space ignored for ~1 s, then a fresh X retries', r1 && m1 === 'gameover' && m2 === 'gameover' && m3 === 'playing' && G.lives === 4 && G.score === 0, [r1, m1, m2, m3].join(','));
       r1 = toGameOver();
       key('keydown', 'Enter', 'Enter'); key('keyup', 'Enter', 'Enter');
       ok('game over: Enter retries immediately', r1 && G.mode === 'playing', G.mode);
