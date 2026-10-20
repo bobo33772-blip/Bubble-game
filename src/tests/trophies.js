@@ -3,7 +3,8 @@
 //   node bogeul/tools/run-chrome.js test-trophies.html tro-unit.png 900 760 90000 "TROPHY DONE"
 //   a real phone viewport (the fit part only): node bogeul/tools/cdp-run.js "test-trophies.html#fit" C:/Temp/bogeul/tro-fit-320.png 320 568 30000 "TROPHY DONE" 1
 // Checks: the store (fresh, clamps, a newer schema, unreadable JSON, blocked storage), read-modify-write and the storage
-// event, the rules table (every row of §3.1, the ties and leavers, random invariants), applying a result (hostile rows,
+// event, the rules table (every row of §3.1, the ties and leavers, 안 걸고 참여's pot of the stakes put in, random
+// invariants), holding without the stake and what a row may make such a hold pay, applying a result (hostile rows,
 // once, too early, 견습, the floor at 0, the stats, 승급 once), holding and every way a hold ends (§5.4, stale foreign
 // holds), the 목욕 보너스 (runs, caps, days, 2회차, nothing for local co-op / the demo), the title badge and 내 기록 (keys,
 // focus, never a solo start), the fit of the title / 내 기록 / 목욕 끝 cards at 1x, 2x and a 320 px phone, the 트로피 row and
@@ -123,20 +124,45 @@
     ok('rules: a tie on (score, kos, koed) only - the host\'s slot 0 does not win a tie', same(T.table(2, 0, [{ slot: 0, sc: 5, k: 1, ko: 0, p: 0 }, { slot: 1, sc: 5, k: 1, ko: 0, p: 0 }], 0).map((r) => r[1]), [1, 1]));
     ok('rules: kos break a score tie', same(nets(2, 0, [{ slot: 1, sc: 5, k: 2, ko: 0, p: 0 }, { slot: 0, sc: 5, k: 1, ko: 0, p: 0 }], 0), [12, -6]));
     ok('rules: 견습 at 시작! loses nothing by place (its base 0), a bet still can', same(nets(2, 10, [{ slot: 0, sc: 9, k: 0, ko: 0, p: 1 }, { slot: 1, sc: 1, k: 0, ko: 0, p: 1 }], 0), [22, -10]));
+    // 안 걸고 참여 (z 1: put no stake in): only the stakes put in are in the pot, and only those who put one in share it -
+    // the best-placed group with a stake in takes it. Each row's r[5] says whether its stake is in (net: no stake when 0)
+    const zf = (n, zs) => fins(n).map((r, i) => Object.assign(r, { z: zs.includes(i) ? 1 : 0 }));
+    const netsZ = (n, s, fin, gl, gz) => T.table(n, s, fin, gl, gz).map((r) => r[2] + r[3] - (r[5] === 0 ? 0 : s));
+    const tieZ = (n, groups, zs) => tie(n, groups).map((r, i) => Object.assign(r, { z: zs.includes(i) ? 1 : 0 }));
+    const FREE = [
+      ['4 players at 10, the 4th without the stake: the pot is the 3 stakes (30)', netsZ(4, 10, zf(4, [3]), 0, 0), [36, -2, -8, -6]],
+      ['... the 1st without it: its place points only, the best with a stake in (2nd) takes the pot', netsZ(4, 10, zf(4, [0]), 0, 0), [16, 28, -8, -16]],
+      ['... 1st and 2nd without it: the 3rd takes the pot of 2 stakes', netsZ(4, 10, zf(4, [0, 1]), 0, 0), [16, 8, 12, -16]],
+      ['... a tie for 1st, one of the two without it: the other takes the whole pot', netsZ(4, 10, tieZ(4, [2, 1, 1], [0]), 0, 0), [12, 32, -8, -16]],
+      ['1v1, both without it: place points only', netsZ(2, 10, zf(2, [0, 1]), 0, 0), [12, -6]],
+      ['4 players, one without the stake left on purpose: its stake is not in the pot', netsZ(4, 10, zf(3, []), 1, 1), [36, -2, -8]],
+      ['1v1 기권승 for one without the stake: nothing (the leaver\'s stake is not its to take)', netsZ(2, 10, zf(1, [0]), 1, 0), [0]],
+      ['1v1 기권승, the leaver without the stake: my own stake back (0)', netsZ(2, 10, zf(1, []), 1, 1), [0]],
+      ['4 players, 무승부 of 3 (one without it) + a leaver: the pot of 3 split between the 2 with a stake in', netsZ(4, 10, tieZ(3, [3], [0]), 1, 0), [0, 5, 5]],
+    ];
+    for (const [name, got, want] of FREE) ok('rules (안 걸고): ' + name + ' -> ' + want.join(' / '), same(got, want), got);
+    ok('rules (안 걸고): r[5] says whose stake is in (1 / 0); at stake 0 every row is 1', same(T.table(4, 10, zf(4, [3]), 0, 0).map((r) => r[5]), [1, 1, 1, 0]) && same(T.table(2, 0, zf(2, [1]), 0, 0).map((r) => r[5]), [1, 1]));
     // random invariants
     let worst = { lo: 0, hi: 0 }, viol = [];
     let seed = 12345; const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
     for (let it = 0; it < 4000; it++) {
       const n = 2 + Math.floor(rnd() * 3), m = 1 + Math.floor(rnd() * n), gl = Math.floor(rnd() * (n - m + 1)), s = [0, 5, 10, 20, 50][Math.floor(rnd() * 5)];
-      const fin = Array.from({ length: m }, (_, i) => ({ slot: i, sc: Math.floor(rnd() * 3) * 100, k: Math.floor(rnd() * 2), ko: 0, p: rnd() < 0.3 ? 1 : 0 }));
+      // (z: 안 걸고 참여 on a quarter of the finishers, gz of the gg leavers too)
+      const fin = Array.from({ length: m }, (_, i) => ({ slot: i, sc: Math.floor(rnd() * 3) * 100, k: Math.floor(rnd() * 2), ko: 0, p: rnd() < 0.3 ? 1 : 0, z: rnd() < 0.25 ? 1 : 0 }));
       fin.sort((a, b) => b.sc - a.sc || b.k - a.k);
-      const rows = T.table(n, s, fin, gl), pot = s * (m + gl), shares = rows.reduce((a, r) => a + r[3], 0);
+      const gz = Math.floor(rnd() * (gl + 1)), put = fin.filter((f) => !(s > 0 && f.z)).length;
+      const rows = T.table(n, s, fin, gl, gz), pot = s * (put + gl - gz), shares = rows.reduce((a, r) => a + r[3], 0);
       if (m === 1 && !gl) { if (rows.length) viol.push(['m1', n, s]); continue; }
       if (rows.length !== m) viol.push(['rows', n, m, gl]);
-      if (shares > pot || shares < pot - 3) viol.push(['pot', n, m, gl, s, shares, pot]);
-      for (const r of rows) { const v = r[2] + r[3] - s; worst.lo = Math.min(worst.lo, v + s + 6); worst.hi = Math.max(worst.hi, v); if (v < -(s + 6) || v > 166) viol.push(['net', n, m, gl, s, v]); }
+      // (no finisher with a stake in: nobody takes the pot - the leavers' stakes simply stay lost)
+      if (put ? shares > pot || shares < pot - 3 : shares !== 0) viol.push(['pot', n, m, gl, gz, s, shares, pot]);
+      for (const r of rows) {
+        const st = r[5] === 0 ? 0 : s, v = r[2] + r[3] - st;
+        if (r[5] === 0 && r[3] !== 0) viol.push(['z share', n, m, s, r]);
+        worst.lo = Math.min(worst.lo, v + st + 6); worst.hi = Math.max(worst.hi, v); if (v < -(st + 6) || v > 166) viol.push(['net', n, m, gl, s, v]);
+      }
     }
-    ok('rules: 4000 random results - the shares never pass the pot (and lose at most 3 to the floor), every net in -(s+6)..+166, m = 1 without gg is void', !viol.length, viol.slice(0, 5));
+    ok('rules: 4000 random results (안 걸고 참여 too) - the shares never pass the stakes put in (and lose at most 3 to the floor), a row without a stake shares nothing, every net in -(stake + 6)..+166, m = 1 without gg is void', !viol.length, viol.slice(0, 5));
     log('TROPHY INFO random: lowest net + s + 6 = ' + worst.lo + ', highest net ' + worst.hi);
   }
 
@@ -193,6 +219,21 @@
     T.hold(MID(13), 10, 2, 0);
     r = T.result(MID(13), [[2, 1, 0, 20, 0]], 2, true);
     ok('apply: a 기권승 (my row alone: base 0, the pot) is a win: +20 - 10 = +10', r && r.win && r.net === 10 && r.now === 78 && S().w === 3, r);
+    // 안 걸고 참여: a hold without the stake (nos 1: short of it; nos 2: readied without it), and what a row may make it pay
+    fresh(7);
+    ok('hold: short of the stake with 안 걸고 참여 (nos 1): held without it - s 0; a 견습 (7) holds 0', T.hold(MID(60), 10, 4, 0, 1) === true && S().esc[0].s === 0 && S().esc[0].h === 0 && S().t === 7, S().esc);
+    r = T.result(MID(60), [[1, 1, 16, 999, 0, 1]], 1, false);
+    ok('apply: without the stake, a hostile share (999, a row saying staked) is capped at 0: +16 only (7 -> 23), a win', r && r.net === 16 && r.put === 0 && r.win && S().t === 23, [r, S().t]);
+    fresh(100);
+    ok('hold: nos 2 (readied without the stake) holds without it even when the count covers it: s 0, h 6', T.hold(MID(61), 10, 2, 0, 2) === true && S().esc[0].s === 0 && S().esc[0].h === 6 && S().t === 94, S().esc);
+    r = T.result(MID(61), [[1, 2, -6, 0, 0, 0]], 1, false);
+    ok('apply: ... and its last place costs only the place points: -6 (not -16)', r && r.net === -6 && S().t === 94, r);
+    T.hold(MID(62), 10, 2, 0);
+    r = T.result(MID(62), [[1, 2, -6, 20, 0, 0]], 1, false);
+    ok('apply: a staked hold whose row says the pot did not get it (r[5] 0): no stake paid, no share: -6', r && r.net === -6 && r.put === 0 && S().t === 88, [r, S().t]);
+    T.hold(MID(63), 10, 2, 0, 1);
+    r = T.result(MID(63), [[1, 1, 12, 20, 0]], 1, false);
+    ok('apply: covering it with nos 1 puts the stake in as before (an older host\'s 5-element row): +12 + 20 - 10', r && r.net === 22 && r.put === 10 && S().t === 110, [r, S().t]);
     // the +5 오늘 트로피 보너스 of a real battle (B1): the same daily pool as the 목욕 보너스, apart from the net
     T.today(20261030); fresh(100);
     const two = (a, b) => [[0, 1, a, 0, 0], [1, 2, b, 0, 0]];
@@ -219,6 +260,10 @@
     T.hold(MID(57), 0, 2, 0);
     r = T.result(MID(57), two(12, -6), 0, true, true);
     ok('play bonus: a new day starts the pool again', r && r.bonus === 5 && S().de === 5 && S().day === 20261031, [r, S().de]);
+    T.set({ t: 7, best: 7 });
+    T.hold(MID(58), 10, 2, 0, 1);
+    r = T.result(MID(58), [[0, 1, 12, 0, 0, 0], [1, 2, -6, 20, 0, 1]], 0, true, true);
+    ok('play bonus: 안 걸고 참여 (no stake in) gets its place points and the +5 like everyone: 7 + 12 + 5', r && r.net === 12 && r.bonus === 5 && r.put === 0 && S().t === 24 && S().de === 10, [r, S().t, S().de]);
     T.today(null);
   }
 
@@ -425,7 +470,12 @@
       '끝까지 갈수록 모두 트로피를 받아요 (잃지 않아요)', '트로피 10개씩 걸어요!', '연습 경기 · 트로피 없음', '트로피 경기', '결과 발표!', '무승부', '기권승', '연습',
       '내 트로피가 모자라요 · 방으로 가서 걸기를 바꿔요', '트로피가 모자란 친구가 있어요 · 방으로 가서 걸기를 바꿔요', '친구가 나가서 이번 판은 무효예요',
       '방장이 다음 판을 고르고 있어요 · 다음 판도 10개씩', '트로피', '+15', '31개', '오늘 보너스 끝', '한 번 더 누르면 나가요 · 트로피 -16', '한 번 더 누르면 모두 방으로 · 내 트로피 -16',
-      '걸었던 트로피를 돌려받았어요', '이번 판은 진 걸로 쳤어요'].concat(L, L.map((n) => '승급! ' + n));
+      '걸었던 트로피를 돌려받았어요', '이번 판은 진 걸로 쳤어요',
+      // (안 걸고 참여)
+      '안 걸고 참여', '안 걸고 준비', '트로피가 모자라요 · 안 걸고 같이 해요', '판돈 30개 (3명이 10개씩): 건 사람 중 1등이 다 가져요',
+      '안 걸고 참여: 등수 점수만 받아요 · 1등 +16 · 2등 +8 · 3등 +2 · 4등 -6', '트로피가 모자라면 안 걸고 참여해요 (등수 점수만 받아요)',
+      '내 트로피가 모자라서 다음 판은 안 걸고 해요', '다음 판은 안 걸고 하는 친구가 있어요', '방장이 다음 판을 고르고 있어요 · 다음 판도 10개씩 · 나는 안 걸고 해요',
+      '안 걸고 참여 · 오늘 트로피 보너스 +5', '내 트로피 +16개 (안 걸고 참여), 오늘 트로피 보너스 +5개, 지금 28개'].concat(L, L.map((n) => '승급! ' + n));
     const miss = new Set();
     for (const s of strs) for (const ch of s) if (/[\uac00-\ud7a3]/.test(ch) && warm.indexOf(ch) < 0) miss.add(ch);
     ok('fonts: every syllable of every trophy string is in #pg-fontwarm (both faces get it)', miss.size === 0, [...miss].join(''));
