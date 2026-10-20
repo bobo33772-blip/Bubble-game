@@ -7212,6 +7212,41 @@ window.PG = window.PG || {};
   const ACTIONS = ['left', 'right', 'jump', 'shoot'];
   const keys = { left: false, right: false, jump: false, shoot: false };
   const touchIn = { left: false, right: false, jump: false, shoot: false };
+  // the left thumb's floating joystick (#pg-stick-zone, page.html): a touch anywhere in the zone puts the ring under the
+  // thumb; the knob follows the thumb up to the ring's edge (further, the ring slides after it, so a turn-around is never
+  // more than one radius away); its sideways lean drives left / right with a dead zone and hysteresis (on past 0.3 of
+  // the radius, off under 0.2: a thumb resting near the middle never flickers). Up / down do nothing - pushing up does
+  // NOT jump: a walking thumb drifts up and down, and every drift would be a jump (or a 꾹 glide / 두 번 move); 점프 is
+  // the right thumb's own button. One finger owns the stick (another finger in the zone is ignored); 점프 / 거품 are
+  // other elements with their own pointers, so both thumbs work at once
+  const STICK = { id: null, ox: 0, oy: 0, zl: 0, zt: 0, R: 50, dx: 0, dy: 0, nx: 0, dir: 0 };
+  const STICK_ON = 0.3, STICK_OFF = 0.2;
+  function stickDir(nx, dir) {
+    if (dir && dir * nx >= STICK_OFF) return dir;
+    return nx >= STICK_ON ? 1 : nx <= -STICK_ON ? -1 : 0;
+  }
+  function stickApply() {
+    touchIn.left = STICK.dir < 0; touchIn.right = STICK.dir > 0;
+    if (dom.stick) { dom.stick.classList.toggle('is-l', STICK.dir < 0); dom.stick.classList.toggle('is-r', STICK.dir > 0); }
+  }
+  function stickMove(cx, cy) {
+    let dx = cx - STICK.zl - STICK.ox, dy = cy - STICK.zt - STICK.oy;
+    const R = STICK.R, d = Math.hypot(dx, dy);
+    if (d > R) { const k = (d - R) / d; STICK.ox += dx * k; STICK.oy += dy * k; dx -= dx * k; dy -= dy * k; }
+    STICK.dx = dx; STICK.dy = dy; STICK.nx = dx / R;
+    STICK.dir = stickDir(STICK.nx, STICK.dir);
+    stickApply();
+    if (dom.stick) { const b = dom.stick.style; b.left = (STICK.ox - R).toFixed(1) + 'px'; b.top = (STICK.oy - R).toFixed(1) + 'px'; b.bottom = 'auto'; }
+    if (dom.stickKnob) dom.stickKnob.style.transform = 'translate(' + dx.toFixed(1) + 'px,' + dy.toFixed(1) + 'px)';
+  }
+  // (a lifted / cancelled thumb, blur, a hidden page, the rotate screen: the stick lets go and goes back to rest)
+  function stickReset() {
+    STICK.id = null; STICK.dir = 0; STICK.nx = 0; STICK.dx = 0; STICK.dy = 0;
+    touchIn.left = false; touchIn.right = false;
+    if (dom.stickZone) dom.stickZone.classList.remove('is-on');
+    if (dom.stick) { dom.stick.classList.remove('is-l', 'is-r'); const b = dom.stick.style; b.left = ''; b.top = ''; b.bottom = ''; }
+    if (dom.stickKnob) dom.stickKnob.style.transform = '';
+  }
   const dbgIns = [0, 1, 2, 3].map(() => ({ left: false, right: false, jump: false, shoot: false }));
   const latch = { jump: false, shoot: false };
   const prevIns = [0, 1, 2, 3].map(() => ({ jump: false, shoot: false }));
@@ -8937,7 +8972,7 @@ window.PG = window.PG || {};
     dom.soundBtn.classList.toggle('is-muted', m);
   }
   function toggleMute() { firstGesture(); Snd.setMuted(!Snd.muted()); updateMuteUI(); }
-  function clearKeys() { for (const k in keys) keys[k] = false; for (const k in touchIn) touchIn[k] = false; }
+  function clearKeys() { for (const k in keys) keys[k] = false; for (const k in touchIn) touchIn[k] = false; STICK.dir = 0; if (dom.stick) dom.stick.classList.remove('is-l', 'is-r'); }
   function primaryAction() {
     if (shownOverlay === 'hub' || shownOverlay === 'login') return;   // (the 상점 / 마이페이지 / the login screen: nothing starts a game behind it)
     if (shownOverlay === 'rec') { closeRec(); return; } // (내 기록 over the title: never a solo start)
@@ -9045,6 +9080,7 @@ window.PG = window.PG || {};
     if (dom.app) dom.app.classList.toggle('pg-touch-on', on);
     syncJumpSub();
     fit();
+    if (on) orientLock();
   }
   function bindTouch() {
     const holds = [['pg-t-jump', 'jump'], ['pg-t-shoot', 'shoot']];
@@ -9061,41 +9097,79 @@ window.PG = window.PG || {};
       listen(el, 'pointerup', up); listen(el, 'pointercancel', up); listen(el, 'lostpointercapture', up);
       listen(el, 'contextmenu', (e) => e.preventDefault());
     }
-    const pad = $('pg-dpad');
-    if (pad) {
-      const ptrs = new Map();
-      const sync = () => {
-        let l = false, r = false; for (const v of ptrs.values()) { if (v < 0) l = true; else if (v > 0) r = true; }
-        touchIn.left = l; touchIn.right = r;
-        if (dom.tLeft) dom.tLeft.classList.toggle('on', l);
-        if (dom.tRight) dom.tRight.classList.toggle('on', r);
-      };
-      const side = (e) => { const rc = pad.getBoundingClientRect(); return e.clientX < rc.left + rc.width / 2 ? -1 : 1; };
-      listen(pad, 'pointerdown', (e) => {
+    const zone = $('pg-stick-zone');
+    if (zone) {
+      listen(zone, 'pointerdown', (e) => {
         e.preventDefault(); firstGesture(); if (e.pointerType === 'touch') setTouchMode(true);
-        try { pad.setPointerCapture(e.pointerId); } catch (er) { /* ignore */ }
-        ptrs.set(e.pointerId, side(e)); sync();
+        if (STICK.id !== null) return;
+        STICK.id = e.pointerId;
+        try { zone.setPointerCapture(e.pointerId); } catch (er) { /* ignore */ }
+        const zr = zone.getBoundingClientRect();
+        STICK.zl = zr.left; STICK.zt = zr.top; STICK.R = (dom.stick && dom.stick.offsetWidth / 2) || 50;
+        STICK.ox = e.clientX - zr.left; STICK.oy = e.clientY - zr.top; STICK.dir = 0;
+        zone.classList.add('is-on');
+        stickMove(e.clientX, e.clientY);
       });
-      listen(pad, 'pointermove', (e) => { if (ptrs.has(e.pointerId)) { ptrs.set(e.pointerId, side(e)); sync(); } });
-      const up = (e) => { ptrs.delete(e.pointerId); sync(); };
-      listen(pad, 'pointerup', up); listen(pad, 'pointercancel', up); listen(pad, 'lostpointercapture', up);
-      listen(pad, 'contextmenu', (e) => e.preventDefault());
+      // (on the window: the captured pointer's events bubble here, and a thumb that slid off the zone still steers)
+      listen(window, 'pointermove', (e) => { if (STICK.id !== null && e.pointerId === STICK.id) stickMove(e.clientX, e.clientY); }, { passive: true });
+      const up = (e) => { if (STICK.id !== null && e.pointerId === STICK.id) stickReset(); };
+      listen(window, 'pointerup', up); listen(window, 'pointercancel', up); listen(zone, 'lostpointercapture', up);
+      listen(zone, 'contextmenu', (e) => e.preventDefault());
     }
     listen(window, 'pointerdown', (e) => { if (e.pointerType === 'touch') setTouchMode(true); }, { passive: true });
     listen(window, 'touchstart', () => setTouchMode(true), { passive: true });
   }
+  // the notch / home-indicator insets in px (a hidden probe padded with env(safe-area-inset-*))
+  function safeInsets() {
+    let el = dom.sai;
+    if (!el) {
+      el = dom.sai = document.createElement('div'); el.setAttribute('aria-hidden', 'true');
+      el.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;pointer-events:none;' +
+        'padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)';
+      document.body.appendChild(el);
+    }
+    const cs = getComputedStyle(el), n = (v) => parseFloat(v) || 0;
+    return { t: n(cs.paddingTop), r: n(cs.paddingRight), b: n(cs.paddingBottom), l: n(cs.paddingLeft) };
+  }
+  let landForce = null; // (PG.debug.forceLand: a test that sizes the stage as an upright phone inside a wide window)
   function fit() {
     if (!dom.stage || !dom.screen) return;
+    // touch + a viewport wider than tall: the landscape layout (page.html .pg-land) - the screen takes the whole height,
+    // with an empty column on each side for the thumbs (never over the play field) and any fraction of a scale
+    // (image-rendering: pixelated keeps the pixels crisp). Everything else (desktop, upright phones and tablets) as before
+    const touch = touchMode || !!(dom.app && dom.app.classList.contains('pg-touch-on'));
+    const vw = window.innerWidth || 0, vh = window.innerHeight || 0, land = landForce !== null ? landForce : !!(touch && vw > vh);
+    if (dom.app) dom.app.classList.toggle('pg-land', land);
+    rotSync(touch, vw, vh);
+    const open = !!(dom.app && dom.app.classList.contains('pg-panel-open')), cols = land && !open;
     const r = dom.stage.getBoundingClientRect();
     let pad = 0;
     if (dom.frame) { const cs = getComputedStyle(dom.frame); pad = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.borderLeftWidth) || 0); }
-    const aw = Math.max(64, r.width - pad * 2 - 2), ah = Math.max(56, r.height - pad * 2 - 2);
+    let aw = Math.max(64, r.width - pad * 2 - 2);
+    const ah = Math.max(56, r.height - pad * 2 - 2), ins = cols ? safeInsets() : null, edge = cols ? Math.max(ins.l, ins.r) : 0;
+    // (each thumb column at least 22% of the height: 104 px on a 360 px phone, 169 px on a 768 px tablet)
+    if (cols) aw = Math.max(64, Math.min(aw, vw - 2 * (edge + clamp(Math.round(vh * 0.22), 104, 180)) - pad * 2 - 2));
     let s = Math.min(aw / W, ah / H);
-    if (s >= 2) s = Math.floor(s);
+    if (s >= 2 && !land) s = Math.floor(s);
     s = Math.max(0.25, s);
     dom.screen.style.width = Math.floor(W * s) + 'px';
     dom.screen.style.height = Math.floor(H * s) + 'px';
     screenScale = Math.floor(W * s) / W;
+    if (dom.app) {
+      const st = dom.app.style;
+      if (cols) {
+        // the columns' width (viewport edge to the mirror frame), the 점프 button's size and the stick's radius from what
+        // is left of a column after the insets: narrow -> 거품 stacked over 점프, wide -> side by side, 거품 a little higher
+        const side = Math.max(0, Math.floor((vw - Math.floor(W * s) - pad * 2 - 4) / 2)), u = side - edge - 12, col = u < 2 * 58 + 18;
+        st.setProperty('--pg-side', side + 'px');
+        st.setProperty('--pg-tb', (col ? clamp(u - 12, 54, 72) : clamp(Math.floor((u - 18) / 2), 58, 80)) + 'px');
+        st.setProperty('--pg-sr', clamp(Math.round(u * 0.36), 40, 62) + 'px');
+        dom.app.classList.toggle('pg-land-col', col);
+      } else if (st.getPropertyValue('--pg-side')) {
+        for (const k of ['--pg-side', '--pg-tb', '--pg-sr']) st.removeProperty(k);
+        dom.app.classList.remove('pg-land-col');
+      }
+    }
     // phones: never below ~12.5 px so overlay text stays readable at 1.2-1.3x canvas scale
     dom.screen.style.setProperty('--fs', clamp(s * 6, touchMode ? 12.5 : 11, 22).toFixed(2) + 'px');
     shopBtnFit();          // (v4 shop: the 상점 button's label only where it fits)
@@ -9116,7 +9190,7 @@ window.PG = window.PG || {};
     dom.banner = $('pg-banner'); dom.bannerMain = $('pg-banner-main'); dom.bannerSub = $('pg-banner-sub');
     dom.titleHi = $('pg-title-hi'); dom.overScore = $('pg-over-score'); dom.overHi = $('pg-over-hi'); dom.overRound = $('pg-over-round'); dom.overNew = $('pg-over-new');
     dom.endScore = $('pg-end-score'); dom.endNext = $('pg-end-next');
-    dom.soundBtn = $('pg-sound'); dom.pauseBtn = $('pg-pausebtn'); dom.tLeft = $('pg-t-left'); dom.tRight = $('pg-t-right');
+    dom.soundBtn = $('pg-sound'); dom.pauseBtn = $('pg-pausebtn'); dom.stickZone = $('pg-stick-zone'); dom.stick = $('pg-stick'); dom.stickKnob = $('pg-stick-knob');
     dom.podium = $('pg-podium'); dom.friends = $('pg-friends'); dom.podiumSum = $('pg-podium-sum');
     dom.overTeam = $('pg-over-team'); dom.endTeam = $('pg-end-team'); dom.endSub = $('pg-end-sub');
     dom.pick = $('pg-pick'); dom.pickName = $('pg-pick-name'); dom.pickPerk = $('pg-pick-perk');
@@ -9164,10 +9238,10 @@ window.PG = window.PG || {};
     click('pg-pausebtn', togglePause);
     listen(window, 'keydown', onKeyDown);
     listen(window, 'keyup', onKeyUp);
-    listen(window, 'blur', () => { clearKeys(); });
+    listen(window, 'blur', () => { stickReset(); clearKeys(); });
     // (trophies: hidden / shown / resumed / on- and offline mark "away" for 30 s; a guest that goes hidden tells the host
     // "if I am gone at the end, I left on purpose" (gg) and takes it back when visible; closing the tab forfeits)
-    listen(document, 'visibilitychange', () => { TRO.awayAt = Date.now(); troGg(document.hidden ? 1 : 0); if (document.hidden) { clearKeys(); saveHi(); clFlush(); if (!G.manual) pauseGame(); } else clBack(); });
+    listen(document, 'visibilitychange', () => { TRO.awayAt = Date.now(); troGg(document.hidden ? 1 : 0); if (document.hidden) { stickReset(); clearKeys(); saveHi(); clFlush(); if (!G.manual) pauseGame(); } else clBack(); });
     listen(window, 'pagehide', () => { saveHi(); troSessionEnd('left'); clFlush(); });
     // (pageshow: only a page coming back from the back-forward cache - the first load is not a return)
     listen(window, 'pageshow', (e) => { if (e && e.persisted) TRO.awayAt = Date.now(); });
@@ -9180,10 +9254,80 @@ window.PG = window.PG || {};
     listen(window, 'pointerdown', () => firstGesture(), { passive: true });
     bindTouch();
     if (mq('(pointer: coarse)') && !mq('(pointer: fine)')) setTouchMode(true);
+    rotSetup();
     listen(window, 'resize', fit);
+    listen(window, 'orientationchange', () => { fit(); setTimeout(fit, 300); });
+    if (window.visualViewport) listen(window.visualViewport, 'resize', fit);
+    listen(document, 'fullscreenchange', orientLock);
+    noZoomSetup();
     if (typeof ResizeObserver === 'function' && dom.stage) { try { const ro = new ResizeObserver(fit); ro.observe(dom.stage); LISTENERS.push([{ removeEventListener() { ro.disconnect(); } }, 'resize', null, null]); } catch (e) { /* ignore */ } }
     fit();
     updateMuteUI();
+  }
+
+  // ------------------------------------------------------------------ phones: no zoom, landscape
+  // no double-tap zoom and no pinch anywhere in the game (page.html's touch-action does most of it; iOS needs this):
+  // Safari's pinch gestures are cancelled, and so is a quick second tap on the game's own surfaces (the canvas, the cards'
+  // text, the frame, the background, the touch controls) - never on a button, an input or a panel, which keep their taps,
+  // typing and scrolling (their touch-action: manipulation already stops the zoom there)
+  const TAP_OK = 'button, a, input, select, textarea, label, [contenteditable], [role="button"], [role="tab"], [role="radio"], [tabindex], .pg-panel';
+  function noZoomSetup() {
+    const no = (e) => { if (e.cancelable !== false) e.preventDefault(); };
+    for (const t of ['gesturestart', 'gesturechange', 'gestureend']) listen(document, t, no, { passive: false });
+    let last = 0;
+    listen(document, 'touchend', (e) => {
+      const now = Date.now(), quick = now - last < 350; last = now;
+      const t = e.target;
+      if (!quick || !e.cancelable || (t && t.closest && t.closest(TAP_OK))) return;
+      e.preventDefault();
+    }, { passive: false });
+  }
+  // the deploy (.pg-sa: the hosted page, the PR preview, itch) on a phone held upright: "가로로 돌려 주세요" over
+  // everything, the touch controls let go and a game pauses (an online one opens its menu). Phone-sized = the screen's
+  // short side under 600 px (an iPad keeps its upright layout). Made here: the artifact never has it (inside the Claude
+  // app the page may not turn with the phone - its upright layout stays playable). An installed Android app is locked
+  // to landscape by the manifest (and orientLock); iPhone ignores both, so this screen is what turns it there
+  const ROT_TEXT = '가로로 돌려 주세요 휴대폰을 눕히면 게임 화면이 커져요';
+  const ROT_SVG = '<svg class="pg-rot-ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+    '<g class="pg-rot-a"><rect x="8" y="3" width="8" height="18" fill="#fbf0d9"/><rect x="9" y="5" width="6" height="13" fill="#1d5953"/>' +
+    '<rect x="11" y="4" width="2" height="1" fill="#071619"/><rect x="11" y="19" width="2" height="1" fill="#071619"/>' +
+    '<rect x="16" y="2" width="3" height="1" fill="#f6a6bd"/><rect x="19" y="3" width="1" height="1" fill="#f6a6bd"/><rect x="20" y="4" width="1" height="5" fill="#f6a6bd"/>' +
+    '<rect x="18" y="6" width="1" height="1" fill="#f6a6bd"/><rect x="19" y="7" width="1" height="1" fill="#f6a6bd"/><rect x="21" y="7" width="1" height="1" fill="#f6a6bd"/><rect x="22" y="6" width="1" height="1" fill="#f6a6bd"/></g>' +
+    '<g class="pg-rot-b"><rect x="3" y="8" width="18" height="8" fill="#fbf0d9"/><rect x="5" y="9" width="13" height="6" fill="#1d5953"/>' +
+    '<rect x="4" y="11" width="1" height="2" fill="#071619"/><rect x="19" y="11" width="1" height="2" fill="#071619"/>' +
+    '<rect x="7" y="12" width="2" height="2" fill="#ffd447"/><rect x="9" y="12" width="1" height="1" fill="#e89a17"/>' +
+    '<rect x="13" y="10" width="2" height="1" fill="#7fdcc8"/><rect x="12" y="11" width="1" height="2" fill="#7fdcc8"/><rect x="15" y="11" width="1" height="2" fill="#7fdcc8"/><rect x="13" y="13" width="2" height="1" fill="#7fdcc8"/></g></svg>';
+  function rotSetup() {
+    if (!document.documentElement.classList.contains('pg-sa') || dom.rotate) return;
+    const el = document.createElement('div');
+    el.id = 'pg-rotate'; el.className = 'pg-rotate'; el.hidden = true;
+    el.setAttribute('role', 'alertdialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-labelledby', 'pg-rot-t');
+    el.innerHTML = ROT_SVG + '<p id="pg-rot-t" class="pg-rot-t"><em>가로로</em> 돌려 주세요</p><p class="pg-rot-s">휴대폰을 눕히면 게임 화면이 커져요</p>';
+    listen(el, 'contextmenu', (e) => e.preventDefault());
+    document.body.appendChild(el);
+    dom.rotate = el;
+    try { for (const q of ['.pg-fw-body', '.pg-fw-sign']) { const fw = document.querySelector('#pg-fontwarm ' + q); if (fw) fw.textContent += ' ' + ROT_TEXT; } } catch (e) { /* ignore */ }
+  }
+  function rotSync(touch, vw, vh) {
+    const el = dom.rotate;
+    if (!el) return;
+    let sw = vw, sh = vh;
+    try { if (screen && screen.width > 0) { sw = screen.width; sh = screen.height; } } catch (e) { /* ignore */ }
+    const on = !!(touch && vh > vw && Math.min(sw, sh) < 600 && Math.min(vw, vh) < 600);
+    if (el.hidden === !on) return;
+    el.hidden = !on;
+    if (on) { stickReset(); clearKeys(); pauseGame(); }
+  }
+  // the deploy on a touch device, installed or in fullscreen (where browsers allow it - Android Chrome): ask for the
+  // landscape lock. Refused elsewhere (a tab, iPhone, desktop): ignored, the rotate screen does the asking
+  function orientLock() {
+    try {
+      if (!touchMode || !document.documentElement.classList.contains('pg-sa')) return;
+      const o = screen.orientation;
+      if (!o || typeof o.lock !== 'function' || !(fsDoc() || pwaIsApp())) return;
+      const pr = o.lock('landscape');
+      if (pr && typeof pr.catch === 'function') pr.catch(() => { /* refused: not allowed here */ });
+    } catch (e) { /* not available */ }
   }
 
   // ------------------------------------------------------------------ v4 app install + fullscreen (STANDALONE deploy only)
@@ -11439,6 +11583,15 @@ window.PG = window.PG || {};
     draw: drawDebugApi(),
     // the standalone deploy's install UI: its state; set = { ios, inApp, framed, installed } to stage a platform
     // (only where PWA.on: the artifact keeps every field false and shows nothing whatever is set)
+    // the joystick and the phone layout (src/tests/touch.js)
+    stick() {
+      const a = dom.app ? dom.app.classList : null, st = dom.app ? dom.app.style : null;
+      return { id: STICK.id, dir: STICK.dir, nx: +STICK.nx.toFixed(3), dx: +STICK.dx.toFixed(1), dy: +STICK.dy.toFixed(1), R: STICK.R, on: Object.assign({}, touchIn),
+        land: !!(a && a.contains('pg-land')), col: !!(a && a.contains('pg-land-col')), side: st ? st.getPropertyValue('--pg-side') : '', tb: st ? st.getPropertyValue('--pg-tb') : '',
+        sr: st ? st.getPropertyValue('--pg-sr') : '', rotate: dom.rotate ? !dom.rotate.hidden : null, scale: +screenScale.toFixed(3), mode: G.mode };
+    },
+    stickReset() { stickReset(); },
+    forceLand(v) { landForce = v === null || v === undefined ? null : !!v; fit(); },
     pwa(set) {
       if (PWA.on && set && typeof set === 'object') { for (const k of ['ios', 'inApp', 'framed', 'installed']) if (k in set) PWA[k] = !!set[k]; pwaSync(); }
       const vis = (el) => !!(el && !el.hidden);

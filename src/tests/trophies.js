@@ -456,7 +456,9 @@
     setScale(1); await fitAt('1x (256x224)');
     setScale(2); await fitAt('2x (512x448)');
     window.dispatchEvent(new Event('touchstart'));                    // a phone: touch mode, then a 320 px wide screen
+    D.forceLand(false);                                               // (an upright phone: never the landscape layout)
     setScale(278 / 256); await fitAt('320x568 phone (touch, 278x243)');
+    D.forceLand(null);
     T.today(null);
   }
 

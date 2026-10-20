@@ -1,7 +1,8 @@
 // Runs EVERY headless driver in src/tests (and the screenshot scenes) and prints one summary.
 // Usage: node bogeul/tools/run-all.js [name-filter ...] [--exact] [--jobs=4] [--no-build] [--list]
 //   - builds first (node build.js) unless --no-build
-//   - starts tools/serve.js on :8765 for the multi-iframe drivers (or reuses one that is already running)
+//   - starts tools/serve.js on :8765 (PG_HTTP_PORT=<port> for another) for the multi-iframe drivers, or reuses one that
+//     is already running there - only when it serves this build (another worktree's server would test another build)
 //   - virtual-time drivers and the node checks (runner 'node': a tools/*.js script) run in parallel (--jobs), real-time
 //     ones (rt / cdp) run one at a time afterwards
 //   - a job passes when its pass test matches AND the page logged no console error / warning and no uncaught exception
@@ -15,7 +16,8 @@ const http = require('http');
 const ROOT = path.join(__dirname, '..');
 const { T } = require('./env');
 const LOGS = `${T}/runall`;
-const HTTP = 'http://localhost:8765/';
+const PORT = +process.env.PG_HTTP_PORT || 8765;
+const HTTP = `http://localhost:${PORT}/`;
 const args = process.argv.slice(2);
 const opt = (k, d) => { const a = args.find((x) => x.startsWith(`--${k}=`)); return a ? a.split('=')[1] : d; };
 const JOBS = Math.max(1, parseInt(opt('jobs', '4'), 10) || 4);
@@ -33,9 +35,11 @@ const summaryZero = (tag) => (out) => {
   return +m[2] === 0 && !/pending/.test(m[3]) ? true : m[0];
 };
 const has = (re) => (out) => (re.test(out) ? true : `no ${re}`);
+const NOTCH = { 844: { PG_CDP_INSETS: '{"left":47,"right":47,"bottom":21}' }, 932: { PG_CDP_INSETS: '{"left":59,"right":59,"bottom":21}' } };
+const touchShot = (out) => { const bad = out.match(/TOUCH FAIL.*/); return bad ? bad[0].slice(0, 200) : /TOUCH SHOT READY (?!error)/.test(out) ? true : 'no TOUCH SHOT READY'; };
 const shotOk = (out) => { const bad = out.match(/MPNET FAIL.*|SHOT error.*/); return bad ? bad[0].slice(0, 160) : /SHOT READY/.test(out) ? true : 'no SHOT READY'; };
 
-// [name, page, budget, pass, extra]  extra: {w, h, shot, runner:'cdp'|'node', done, rt, mobile, serial}
+// [name, page, budget, pass, extra]  extra: {w, h, shot, runner:'cdp'|'node', done, rt, mobile, serial, env: {more env vars}}
 const V = (name, page, budget, pass, extra) => Object.assign({ name, page, budget: String(budget), pass, w: 900, h: 760 }, extra || {});
 const LIST = [
   // ---- v1 / v2 engine drivers (virtual time)
@@ -228,6 +232,20 @@ const LIST = [
   // install pill / iOS hint / fullscreen toggle (none of it in the artifact or a frame), the itch zip, phone layouts
   // (390x844 / 360x780 / 844x390 with notch insets, a 1x window) -> C:/Temp/bogeul/pwa-*.png. Serial: it times a timeout
   V('pwa', 'pwa-check.js', 0, doneZero('PWA'), { runner: 'node', serial: true }),
+  // ---- phones and tablets on their side (src/tests/touch.js: the artifact page, mobile emulation with touch): the
+  // joystick (dead zone + hysteresis, drag right -> walks right, release -> stops, 점프 / 거품 with the stick held,
+  // cancel / blur / lost capture let go) and no double-tap zoom; the landscape layout at every common size (the screen
+  // fills the height, the thumb columns beside it, the header buttons in the right one) -> C:/Temp/bogeul/touch-*.png
+  // to LOOK at; the room and the login screen on a phone on its side
+  // (iPhone-like notch / home-indicator insets on 844x390 and 932x430: tools/cdp-run.js PG_CDP_INSETS)
+  V('touch-input', 'test-touch.html#input', 30000, doneZero('TOUCH'), { w: 844, h: 390, runner: 'cdp', mobile: true, done: 'TOUCH DONE' }),
+  ...[[640, 360], [740, 360], [844, 390], [915, 412], [932, 430], [1024, 768], [1180, 820]].flatMap(([w, h]) => ['play', 'title'].map((sc) =>
+    V(`touch-${sc}-${w}`, `test-touch.html#shot=${sc}`, 20000, touchShot, { shot: `touch-${sc}-${w}x${h}.png`, w, h, runner: 'cdp', mobile: true, done: 'TOUCH SHOT READY', env: NOTCH[w] }))),
+  ...[['hub', 640, 360], ['hub', 844, 390], ['hub', 1024, 768], ['over', 640, 360], ['over', 932, 430], ['rec', 640, 360], ['rec', 844, 390]].map(([sc, w, h]) =>
+    V(`touch-${sc}-${w}`, `test-touch.html#shot=${sc}`, 20000, touchShot, { shot: `touch-${sc}-${w}x${h}.png`, w, h, runner: 'cdp', mobile: true, done: 'TOUCH SHOT READY' })),
+  V('touch-room-844', HTTP + 'test-shop.html?net=bc#shot=room&st=my&close=1', 60000, has(/SHOP SHOT READY/), { done: 'SHOP SHOT READY', shot: 'touch-room-844x390.png', w: 844, h: 390, runner: 'cdp', mobile: true }),
+  ...[[640, 360], [844, 390]].map(([w, h]) => V(`touch-login-${w}`, HTTP + 'test-cloud.html?shot=login', 60000, (out) => (/CLOUD SHOT error/.test(out) ? 'shot error' : /CLOUD SHOT READY/.test(out) ? true : 'no CLOUD SHOT READY'),
+    { done: 'CLOUD SHOT READY', shot: `touch-login-${w}x${h}.png`, w, h, runner: 'cdp', mobile: true })),
   // ---- cloud trophies (design/cloud-trophies.md 13): Google sign-in + Firestore on the deploy with a cloud config, against
   // a fake SDK with a JS port of the security rules (the deploy-cloud fixture in frames of the artifact-skeleton page):
   // inert on the artifact, the design's sync simulation, first upload / cloud wins / sign-out, pushes / holds / a staked
@@ -297,7 +315,7 @@ function runJob(j) {
     if (j.runner === 'cdp' && j.mobile) a.push('1');
     if (j.runner === 'node') a = [path.join(__dirname, j.page)]; // (a node check in tools/: no browser)
     const t0 = Date.now();
-    const ch = spawn(process.execPath, a, { cwd: ROOT });
+    const ch = spawn(process.execPath, a, { cwd: ROOT, env: j.env ? Object.assign({}, process.env, j.env) : process.env });
     let out = '';
     ch.stdout.on('data', (d) => { out += d; });
     ch.stderr.on('data', (d) => { out += d; });
@@ -319,7 +337,10 @@ function runJob(j) {
 }
 
 function portOpen() {
-  return new Promise((r) => { const q = http.get(HTTP + 'preview.html', (res) => { res.resume(); r(res.statusCode === 200); }); q.on('error', () => r(false)); q.setTimeout(1500, () => { q.destroy(); r(false); }); });
+  // (open and serving this T: its preview.html is ours; another build there -> stop, it would test the wrong page)
+  let mine = ''; try { mine = fs.readFileSync(`${T}/preview.html`, 'utf8'); } catch (e) { /* not built */ }
+  return new Promise((r) => { const q = http.get(HTTP + 'preview.html', (res) => { let b = ''; res.setEncoding('utf8'); res.on('data', (d) => { b += d; });
+    res.on('end', () => { if (res.statusCode === 200 && b !== mine) { console.log(`RUN-ALL: :${PORT} serves another build - set PG_HTTP_PORT to a free port`); process.exit(2); } r(res.statusCode === 200); }); }); q.on('error', () => r(false)); q.setTimeout(1500, () => { q.destroy(); r(false); }); });
 }
 
 (async () => {
@@ -337,7 +358,7 @@ function portOpen() {
   fs.mkdirSync(LOGS, { recursive: true });
   if (list.some((j) => /\/rrp-/.test(j.page))) genPlatformPages();
   let srv = null;
-  if (list.some((j) => j.page.startsWith('http')) && !(await portOpen())) srv = require('./serve').start(8765, T, { quiet: true });
+  if (list.some((j) => j.page.startsWith('http')) && !(await portOpen())) srv = require('./serve').start(PORT, T, { quiet: true });
   const results = [];
   const queue = list.filter((j) => !isRealtime(j));
   const report = (r) => { results.push(r); console.log(`${r.ok ? 'PASS' : 'FAIL'} ${r.name.padEnd(22)} ${String(r.secs).padStart(4)} s ${r.why}`); };

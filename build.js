@@ -103,11 +103,11 @@ const icons = ICONS.map(([file, size, purpose]) => {
 const appleIcon = icons.find((i) => i.file.startsWith('apple-touch-icon'));
 // display: fullscreen where the platform has it (Android: no status / navigation bar - landscape gains ~24px of
 // canvas height, and an edge swipe first reveals the bars instead of leaving the game mid-run), else standalone
-// (iOS has no fullscreen mode, desktop shows a window). No orientation: the game lays out portrait and landscape,
-// and the player's rotation lock stays theirs. launch_handler: reopening the app focuses the open game (desktop)
+// (iOS has no fullscreen mode, desktop shows a window). orientation landscape: the installed app opens on its side like a
+// game (Android honours it; iPhone ignores it - the page asks with its "가로로 돌려 주세요" screen). launch_handler: reopening the app focuses the open game (desktop)
 const manifest = {
   id: './', name: titleText, short_name: SHORT_NAME, description: DESCRIPTION, lang: 'ko', dir: 'ltr',
-  start_url: './', scope: './', display: 'standalone', display_override: ['fullscreen', 'standalone'],
+  start_url: './', scope: './', display: 'standalone', display_override: ['fullscreen', 'standalone'], orientation: 'landscape',
   background_color: BG, theme_color: BG, categories: ['games'], launch_handler: { client_mode: ['focus-existing', 'auto'] },
   icons: icons.filter((i) => i.purpose).map((i) => ({ src: i.src, sizes: `${i.size}x${i.size}`, type: 'image/png', purpose: i.purpose })),
 };
@@ -170,7 +170,7 @@ const deployOf = (build, fb, extra) => `<!doctype html>
 <html lang="ko" class="pg-sa">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>${titleText}</title>
 <meta name="description" content="${attr(DESCRIPTION)}">
 <meta name="theme-color" content="${BG}">
