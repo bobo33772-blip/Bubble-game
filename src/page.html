@@ -874,8 +874,13 @@ html.pg-sa, html.pg-sa body { overscroll-behavior: none; }
 .pg-login-btns { display: flex; flex-direction: column; align-items: stretch; gap: 0.6em; width: 15em; max-width: 100%; margin: 0 auto; }
 .pg-login-btns .pg-btn { white-space: nowrap; }
 .pg-touch-on .pg-login-btns .pg-btn { min-height: 44px; }
-.pg-login-go { display: inline-flex; align-items: center; justify-content: center; gap: 0.4em; }
-.pg-login-go .pg-cloud-ic { width: 0.85em; height: 0.85em; }
+/* 구글로 시작하기: the game's pill (its 3D bottom edge, the sign font) in the panels' cream with ink text - Google's light
+   sign-in style - and Google's G on a white disc at the start */
+.pg-login-go { display: inline-flex; align-items: center; justify-content: center; gap: 0.5em; background: #fff8ea; color: #1f1f1f;
+  box-shadow: 0 0.16em 0 #d9c9a3, 0 0.3em 0.8em rgba(0, 0, 0, 0.35), inset 0 0 0 1.5px #e8dcc0; }
+.pg-login-go:active { box-shadow: 0 0.06em 0 #d9c9a3, inset 0 0 0 1.5px #e8dcc0; }
+.pg-login-g { flex: none; display: grid; place-items: center; width: 1.45em; height: 1.45em; border-radius: 50%; background: #ffffff; box-shadow: 0 0 0 1px #e8dcc0; }
+.pg-login-g svg { width: 0.95em; height: 0.95em; display: block; }
 .pg-login-go[aria-busy="true"] { opacity: 0.7; cursor: progress; }
 .pg-login-go:disabled { opacity: 0.45; cursor: not-allowed; filter: grayscale(0.6); }
 .pg-login-st { margin: 0.8em auto 0; max-width: 21em; font-size: 0.78em; line-height: 1.4; color: var(--cream-dim); text-wrap: balance; }
