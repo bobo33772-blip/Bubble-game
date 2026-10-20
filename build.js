@@ -19,7 +19,7 @@
 // (checked: not even the word). Always written for the tests (C:/Temp only, never deploy/):
 //   C:/Temp/bogeul/deploy-cloud/  the deploy page with a made-up config (src/tests/cloud.js fakes the SDK in its frames)
 //   C:/Temp/bogeul/deploy-nocfg/  the deploy page without one
-// and bogeul/firebase/.firebaserc gets the projectId while it still says YOUR-PROJECT-ID.
+// and bogeul/.firebaserc gets the projectId while it still says YOUR-PROJECT-ID.
 // Usage: node bogeul/build.js   (tools only: PG_FIREBASE_CONFIG=<file> reads another config file and leaves .firebaserc
 // alone; PG_BUILD_TEMP=<dir> writes the C:/Temp/bogeul outputs there - tools/check-cloud.js builds a copy that way)
 // PG_PREVIEW=<PR number> (CI: .github/workflows/pr.yml, a Firebase Hosting preview channel): deploy/ becomes a PREVIEW of
@@ -272,9 +272,9 @@ for (const [dir, html] of [['deploy-cloud', deployOf('cloud-test', FAKE_FB, FAKE
     const p = path.join(T, dir, ...f.split('/')); fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, data);
   }
 }
-// Firebase Hosting (bogeul/firebase/): the project id goes into .firebaserc while it still has the placeholder
+// Firebase Hosting (bogeul/firebase.json): the project id goes into .firebaserc while it still has the placeholder
 if (fbConf && !process.env.PG_FIREBASE_CONFIG) {
-  const rc = path.join(root, 'firebase', '.firebaserc');
+  const rc = path.join(root, '.firebaserc');
   try { const t = fs.readFileSync(rc, 'utf8'); if (t.includes('YOUR-PROJECT-ID')) fs.writeFileSync(rc, t.replace('YOUR-PROJECT-ID', fbConf.cfg.projectId)); } catch (e) { /* no firebase folder: nothing to fill in */ }
 }
 

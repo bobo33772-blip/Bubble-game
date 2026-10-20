@@ -11,3 +11,7 @@ firebase/.firebase/
 *.log
 .DS_Store
 Thumbs.db
+# Firebase CLI
+.firebase/
+firebase-debug.log*
+firebase-debug.*.log*

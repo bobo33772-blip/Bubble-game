@@ -73,5 +73,4 @@ jobs:
         with:
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BUBBLE_C3AD4 || secrets.FIREBASE_SERVICE_ACCOUNT }}
           projectId: ${{ vars.FIREBASE_PROJECT_ID || 'bubble-c3ad4' }}
-          entryPoint: firebase
           channelId: live

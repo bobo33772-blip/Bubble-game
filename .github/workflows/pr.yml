@@ -89,7 +89,6 @@ jobs:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BUBBLE_C3AD4 || secrets.FIREBASE_SERVICE_ACCOUNT }}
           projectId: ${{ vars.FIREBASE_PROJECT_ID || 'bubble-c3ad4' }}
-          entryPoint: firebase
           expires: 7d
       - name: 미리보기 주소
         if: env.HAS_FB == 'true'
