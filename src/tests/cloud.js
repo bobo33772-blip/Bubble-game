@@ -1028,13 +1028,13 @@
   const LG = (fr) => fr.D().login.state();
   const key = (fr, code) => { const W = fr.win(), t = W.document.activeElement && W.document.activeElement !== W.document.body ? W.document.activeElement : W; t.dispatchEvent(new W.KeyboardEvent('keydown', { code, key: code === 'Space' ? ' ' : code, bubbles: true, cancelable: true })); };
   async function loginTests() {
-    const TX = { why: '로그인하면 모은 트로피·코인·아이템이 계정에 쏙! 폰에서도 PC에서도 이어서 놀아요', note: '이름·메일은 저장하지 않아요 · 로그인은 나중에 내 기록에서도 할 수 있어요' };
+    const TX = { why: '어서 오세요, 손님!', note: '' };
     // 1. at load, not linked, no choice yet: the screen instead of the title (this frame boots as a top-level tab: 'out')
     const a = await loginFrame('LG1', 'plg1', { ns: 'tlg1' });
     let s = LG(a);
     ok('login: at load (not linked, never a guest) the login screen shows instead of the title', s.shown && a.$('pg-title').hidden && !a.$('pg-login').hidden && a.D().G.mode === 'title', s);
     ok('login: logo, the why line, 구글로 시작하기 and 로그인 없이 하기; the line under them says what is kept', a.$('pg-login-h').textContent.indexOf('뽀득뽀득 목욕탕') >= 0 && a.$('pg-login-why').textContent === TX.why
-      && s.btn === 'Google로 계속하기' && !s.btnHidden && !s.btnDisabled && a.$('pg-login-guest').textContent === '로그인 없이 놀기' && s.line === TX.note, s);
+      && s.btn === 'Google로 계속하기' && !s.btnHidden && !s.btnDisabled && a.$('pg-login-guest').textContent === '손님으로 입장하기' && s.line === TX.note, s);
     ok('login: a labelled region (its heading), the Google button described by the why line, a polite live line', a.$('pg-login').getAttribute('aria-labelledby') === 'pg-login-h' && a.$('pg-login-go').getAttribute('aria-describedby') === 'pg-login-why pg-login-st' && a.$('pg-login-st').getAttribute('aria-live') === 'polite');
     await until(() => LG(a).focus === 'pg-login-go', 1000);
     ok('login: the keyboard starts on 구글로 시작하기', LG(a).focus === 'pg-login-go', LG(a).focus);

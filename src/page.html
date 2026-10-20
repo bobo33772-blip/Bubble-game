@@ -870,7 +870,20 @@ html.pg-sa, html.pg-sa body { overscroll-behavior: none; }
 #pg-login.pg-ov { background: linear-gradient(180deg, rgba(6, 22, 25, 0.35), rgba(6, 22, 25, 0.7) 55%, rgba(6, 22, 25, 0.85)); }
 .pg-login-card { width: 24em; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; padding: 1.1em 1.4em 1em; }
 .pg-login-card::-webkit-scrollbar { display: none; }
-.pg-login-why { margin: 0.75em auto 0.95em; max-width: 19em; color: var(--cream); font-size: 1em; line-height: 1.5; text-wrap: balance; }
+.pg-login-why { margin: 0.55em auto 0.85em; max-width: 19em; color: var(--duck); font-family: var(--font-sign); font-size: 1.15em; line-height: 1.3; text-wrap: balance; }
+/* the tub: six busts side by side, the lower third under a mint water band with a white rim (the 탕), each bobbing on
+   its own beat; still under reduced motion */
+.pg-login-tub { position: relative; display: flex; justify-content: center; gap: 0.1em; width: max-content; max-width: 100%; margin: 0.55em auto 0; padding: 0 0.45em; }
+.pg-login-tub::after { content: ""; position: absolute; left: 0; right: 0; bottom: -0.1em; height: 0.95em; border-radius: 0.2em 0.2em 0.65em 0.65em;
+  background: linear-gradient(180deg, rgba(143, 227, 255, 0.55), rgba(63, 174, 156, 0.85)); box-shadow: inset 0 0.12em 0 rgba(255, 255, 255, 0.55); }
+.pg-login-ani { position: relative; width: 2.6em; height: 2.6em; image-rendering: pixelated; image-rendering: crisp-edges; image-rendering: pixelated; }
+@keyframes pg-login-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-0.16em); } }
+@media (prefers-reduced-motion: no-preference) {
+  .pg-login-ani { animation: pg-login-bob 2.4s ease-in-out infinite; }
+  .pg-login-ani:nth-child(2) { animation-delay: -0.4s; } .pg-login-ani:nth-child(3) { animation-delay: -0.8s; }
+  .pg-login-ani:nth-child(4) { animation-delay: -1.2s; } .pg-login-ani:nth-child(5) { animation-delay: -1.6s; } .pg-login-ani:nth-child(6) { animation-delay: -2s; }
+}
+.pg-login-st:empty { display: none; }
 .pg-login-btns { display: flex; flex-direction: column; align-items: stretch; gap: 0.6em; width: 15em; max-width: 100%; margin: 0 auto; }
 .pg-login-btns .pg-btn { white-space: nowrap; }
 .pg-touch-on .pg-login-btns .pg-btn { min-height: 44px; }
@@ -889,7 +902,8 @@ html.pg-sa, html.pg-sa body { overscroll-behavior: none; }
 .pg-login-st.is-err, .pg-login-st.is-pv { color: var(--pink); }
 @container (max-height: 23em) {
   .pg-login-card { padding: 0.7em 1em 0.75em; }
-  .pg-login-why { margin: 0.45em auto 0.6em; }
+  .pg-login-why { margin: 0.35em auto 0.5em; }
+  .pg-login-tub { margin-top: 0.3em; } .pg-login-ani { width: 2.1em; height: 2.1em; }
   .pg-login-btns { gap: 0.45em; }
   .pg-login-st { margin-top: 0.55em; }
 }

@@ -6898,8 +6898,9 @@ window.PG = window.PG || {};
   // PR preview, its Google button off - a browser that is not linked and never chose to play as a guest sees it before
   // the title. Made here (the artifact's markup has none of it); nothing at all without the cloud or a preview
   const PREVIEW = (() => { let v = ''; try { v = window.PG_PREVIEW; } catch (e) { v = ''; } return typeof v === 'string' && /^[1-9]\d{0,6}$/.test(v) ? v : ''; })();
-  const LG_TX = { why: '로그인하면 모은 트로피·코인·아이템이 계정에 쏙! 폰에서도 PC에서도 이어서 놀아요', go: 'Google로 계속하기', guest: '로그인 없이 놀기',
-    note: '이름·메일은 저장하지 않아요 · 로그인은 나중에 내 기록에서도 할 수 있어요', pv: '미리보기에서는 로그인을 할 수 없어요' };
+  // (the screen is the bathhouse's front desk: a greeting, the six regulars soaking in the tub, two ways in - no
+  // explanation; the line under the buttons speaks only when the sign-in has something to say)
+  const LG_TX = { why: '어서 오세요, 손님!', go: 'Google로 계속하기', guest: '손님으로 입장하기', note: '', pv: '미리보기에서는 로그인을 할 수 없어요' };
   const LOGIN_TEXT = Object.keys(LG_TX).map((k) => LG_TX[k]).join(' ') + ' ' + CL_TX.authing + ' ' + CL_TX.linking;
   const LOGIN = { el: null, go: null, goTx: null, guest: null, st: null, rec: false, inUI: false };
   const lgOn = () => CLOUD.on || !!PREVIEW;
@@ -6922,6 +6923,9 @@ window.PG = window.PG || {};
     const logo = dom.title && dom.title.querySelector('.pg-logo');
     const hd = logo ? logo.cloneNode(true) : h('h2', 'pg-logo', GAME_NAME); hd.id = 'pg-login-h';
     const why = h('p', 'pg-login-why', LG_TX.why); why.id = 'pg-login-why';
+    // the tub: the six animals' busts (each in its own worn set) bobbing in the water, decoration only
+    const tub = h('div', 'pg-login-tub'); tub.setAttribute('aria-hidden', 'true');
+    for (const c of CHAR_IDS) { const cv = portraitCanvas(c, 'portrait_', 32, myLook(c)); cv.className = 'pg-login-ani'; tub.appendChild(cv); }
     const btns = h('div', 'pg-login-btns');
     const go = h('button', 'pg-btn pg-login-go'); go.type = 'button'; go.id = 'pg-login-go';
     // (Google's four-colour "G", unaltered, on its own white disc - Google's sign-in branding; static markup only)
@@ -6937,7 +6941,7 @@ window.PG = window.PG || {};
     if (PREVIEW && !CLOUD.on) { go.disabled = true; guest.setAttribute('data-primary', ''); } else go.setAttribute('data-primary', '');
     btns.append(go, guest);
     const st = h('p', 'pg-login-st'); st.id = 'pg-login-st'; st.setAttribute('aria-live', 'polite');
-    card.append(hd, why, btns, st); sec.appendChild(card);
+    card.append(hd, tub, why, btns, st); sec.appendChild(card);
     dom.screen.insertBefore(sec, dom.title || null);
     Object.assign(LOGIN, { el: sec, go, goTx, guest, st });
     dom.login = sec;
@@ -6991,7 +6995,7 @@ window.PG = window.PG || {};
     // (each ' · ' part a unit, as 내 기록's line: a 2-line text breaks after its '·', never before it)
     if (LOGIN.st._t !== line) {
       LOGIN.st._t = line; LOGIN.st.textContent = '';
-      String(line).split(' · ').forEach((p, i, a) => { if (i) LOGIN.st.appendChild(document.createTextNode(' ')); LOGIN.st.appendChild(h('span', 'pg-cloud-c', p + (i < a.length - 1 ? ' ·' : ''))); });
+      if (line) String(line).split(' · ').forEach((p, i, a) => { if (i) LOGIN.st.appendChild(document.createTextNode(' ')); LOGIN.st.appendChild(h('span', 'pg-cloud-c', p + (i < a.length - 1 ? ' ·' : ''))); });
     }
     if (LOGIN.st.className !== cls) LOGIN.st.className = cls;
     if (LOGIN.go.hidden !== hide) {
