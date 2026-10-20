@@ -8,11 +8,11 @@
   function metrics(tag) {
     const de = document.documentElement, $ = (id) => document.getElementById(id);
     const scr = box($('pg-screen')), fr = box($('pg-frame'));
-    const tl = box($('pg-t-left')), tr = box($('pg-t-right')), tj = box($('pg-t-jump')), ts = box($('pg-t-shoot'));
+    const tl = box($('pg-stick')), tr = null, tj = box($('pg-t-jump')), ts = box($('pg-t-shoot'));
     const touchOn = $('pg-app').classList.contains('pg-touch-on');
     const ov = (a, b) => a && b && a.l < b.r && a.r > b.l && a.t < b.b && a.b > b.t;
     let overlap = [];
-    if (touchOn) for (const [n, b] of [['left', tl], ['right', tr], ['jump', tj], ['shoot', ts]]) { if (ov(b, fr)) overlap.push(n + '/frame'); if (ov(b, scr)) overlap.push(n + '/screen'); if (b && (b.b > innerHeight || b.r > innerWidth || b.l < 0)) overlap.push(n + '/offscreen'); }
+    if (touchOn) for (const [n, b] of [['stick', tl], ['jump', tj], ['shoot', ts]]) { if (ov(b, fr)) overlap.push(n + '/frame'); if (ov(b, scr)) overlap.push(n + '/screen'); if (b && (b.b > innerHeight || b.r > innerWidth || b.l < 0)) overlap.push(n + '/offscreen'); }
     const card = document.querySelector('.pg-ov:not([hidden]) .pg-card');
     const cb = box(card);
     let fonts = '';

@@ -106,17 +106,18 @@
     ok('popping trapped enemies scores >= 500 (뽀득 combo)', S().score - sc0 >= 500, 'score ' + sc0 + '->' + S().score);
 
     // 10. touch buttons via pointer events
-    const tj = $('pg-t-jump'), ts = $('pg-t-shoot'), pad = $('pg-dpad');
+    const tj = $('pg-t-jump'), ts = $('pg-t-shoot'), pad = $('pg-stick-zone');
     $('pg-app').classList.add('pg-touch-on'); window.dispatchEvent(new Event('resize')); await wait(50);
     const pr = pad.getBoundingClientRect();
     const pd = (el, type, x, y, id) => el.dispatchEvent(new PointerEvent(type, { pointerId: id, pointerType: 'touch', clientX: x, clientY: y, bubbles: true, cancelable: true, isPrimary: id === 1 }));
     const tx0 = S().player.x;
-    pd(pad, 'pointerdown', pr.right - 10, pr.top + pr.height / 2, 1);
+    pd(pad, 'pointerdown', pr.left + pr.width / 2, pr.top + pr.height * 0.7, 1);
+    pd(pad, 'pointermove', pr.left + pr.width / 2 + D.stick().R * 0.8, pr.top + pr.height * 0.7, 1);
     const tb = S().bubbles.length;
     pd(ts, 'pointerdown', 0, 0, 2); await wait(60); pd(ts, 'pointerup', 0, 0, 2);
     await wait(300);
-    pd(pad, 'pointerup', pr.right - 10, pr.top + pr.height / 2, 1);
-    ok('touch ▶ + 거품 together (multi-touch)', S().player.x > tx0 + 5 || S().player.x >= 222, 'dx=' + (S().player.x - tx0));
+    pd(pad, 'pointerup', pr.left + pr.width / 2, pr.top + pr.height * 0.7, 1);
+    ok('touch joystick right + 거품 together (multi-touch)', S().player.x > tx0 + 5 || S().player.x >= 222, 'dx=' + (S().player.x - tx0));
     ok('touch 거품 blows a bubble', S().bubbles.length > 0 && D.G.p.shootCd >= 0, 'bubbles ' + tb + '->' + S().bubbles.length);
     await wait(900);
     const jy0 = S().player.y; let jmin = jy0;

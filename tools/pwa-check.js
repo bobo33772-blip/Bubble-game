@@ -21,11 +21,14 @@
 //             KakaoTalk's in-app browser neither, an installed app (display-mode, else iOS navigator.standalone)
 //             neither, the itch upload in a frame neither (and registers no worker); the fullscreen toggle enters /
 //             leaves fullscreen; the artifact preview has not one of these elements, no worker, nothing warmed
-//   phones    390x844 and 360x780 portrait, 844x390 landscape (mobile UA, touch, notch insets) and a 1x desktop window,
-//             with a 7-digit best score: the title card fits with the pill / hint (beside the trophy badge or on a line
-//             of its own), a round plays, nothing scrolls the page (no pull-to-refresh / bounce, no double-tap zoom),
-//             the pads stay off the screen and inside the viewport, nothing sits under the insets, the header keeps its
-//             buttons off the screen, the screen uses the space; the 목욕 끝 card and 내 기록 fit
+//   phones    on their side: 844x390 and 932x430 (notch insets), 640x360, 568x320 (mobile UA, touch) and a 1x desktop
+//             window, with a 7-digit best score: the title card fits with the pill / hint (beside the trophy badge or on
+//             a line of its own), a round plays, nothing scrolls the page (no pull-to-refresh / bounce), no double-tap
+//             zoom (a real double tap leaves the zoom at 1, here and on the artifact page), the joystick / 점프 / 거품
+//             stay off the screen and inside the viewport, nothing sits under the insets, the header keeps its buttons
+//             off the screen, the screen uses the space; the 목욕 끝 card and 내 기록 fit. Upright (390x844): the
+//             "가로로 돌려 주세요" screen covers the game and pauses a round (back on its side: the pause menu); an
+//             upright tablet (768x1024) keeps its layout
 //             -> screenshots C:/Temp/bogeul/pwa-*.png
 //   updates   a worker whose page is still the old build (a stale CDN edge) fails its install and leaves the working one
 //             in place; a next deploy (new page + worker) installs in the background, replaces the old shell cache and
@@ -67,7 +70,7 @@ function fileChecks() {
   ok(man.name === '뽀득뽀득 목욕탕' && man.short_name === '뽀득목욕탕' && man.lang === 'ko' && man.start_url === './' && man.scope === './' && man.id === './', 'manifest names / lang / start_url / scope / id', { name: man.name, short: man.short_name, lang: man.lang, start: man.start_url, scope: man.scope, id: man.id });
   ok(man.display === 'standalone' && Array.isArray(man.display_override) && man.display_override[0] === 'fullscreen', 'manifest display standalone, display_override fullscreen first', { display: man.display, over: man.display_override });
   ok(/^#[0-9a-f]{6}$/i.test(man.background_color) && man.theme_color === man.background_color && man.background_color.toLowerCase() === '#0a2327', 'manifest colours = the page --bg #0a2327');
-  ok(!('orientation' in man), 'manifest locks no orientation (portrait and landscape both lay out; the rotation lock stays the player\'s)');
+  ok(man.orientation === 'landscape', 'manifest orientation landscape (the installed app opens on its side; iPhone: the rotate screen)', man.orientation);
   const icons = man.icons || [];
   const want = [['192x192', 'any'], ['512x512', 'any'], ['512x512', 'maskable']];
   ok(want.every(([s, p]) => icons.some((i) => i.sizes === s && i.purpose === p && i.type === 'image/png')), 'manifest icons: 192 any, 512 any, 512 maskable', icons.map((i) => i.sizes + ' ' + i.purpose));
@@ -216,13 +219,13 @@ const LAYOUT = `(() => {
   const de = document.documentElement, $ = (id) => document.getElementById(id);
   const box = (el) => { if (!el || el.hidden) return null; const r = el.getBoundingClientRect(); return r.width ? { l: Math.round(r.left), t: Math.round(r.top), r: Math.round(r.right), b: Math.round(r.bottom), w: Math.round(r.width), h: Math.round(r.height) } : null; };
   const ov = (a, c) => !!(a && c && a.l < c.r && a.r > c.l && a.t < c.b && a.b > c.t);
-  const scr = box($('pg-screen')), pads = ['pg-t-left', 'pg-t-right', 'pg-t-jump', 'pg-t-shoot'].map((id) => box($(id)));
+  const scr = box($('pg-screen')), pads = ['pg-stick', 'pg-t-jump', 'pg-t-shoot'].map((id) => box($(id)));
   const touch = $('pg-app').classList.contains('pg-touch-on');
   const card = document.querySelector('#pg-title:not([hidden]) .pg-card'), cb = box(card);
   const pill = box($('pg-install')) || box($('pg-ioshint')), tro = box($('pg-tro'));
   const head = ['pg-fs', 'pg-sound', 'pg-pausebtn'].map((id) => box($(id))).filter(Boolean);
   return { vw: innerWidth, vh: innerHeight, scrollW: Math.max(de.scrollWidth, document.body.scrollWidth), scrollH: Math.max(de.scrollHeight, document.body.scrollHeight),
-    scrollY: scrollY, touch, scr, scale: scr ? +(scr.w / 256).toFixed(3) : 0, fs: getComputedStyle($('pg-screen')).getPropertyValue('--fs'),
+    scrollY: scrollY, touch, land: $('pg-app').classList.contains('pg-land'), rotate: !!($('pg-rotate') && !$('pg-rotate').hidden), scr, scale: scr ? +(scr.w / 256).toFixed(3) : 0, fs: getComputedStyle($('pg-screen')).getPropertyValue('--fs'),
     padsOverScreen: touch && pads.some((p) => ov(p, scr)), padsInside: !touch || pads.every((p) => p && p.l >= 0 && p.t >= 0 && p.r <= innerWidth && p.b <= innerHeight),
     padsOverlapEachOther: touch && pads.some((p, i) => pads.some((q, j) => j > i && ov(p, q))),
     headInside: head.every((h) => h.l >= 0 && h.r <= innerWidth && h.t >= 0), headButtons: head.length,
@@ -397,18 +400,18 @@ async function secUI() {
   // iPhone Safari: the hint; KakaoTalk's in-app browser: nothing (this desktop Chrome's own beforeinstallprompt is kept from
   // the game meanwhile - a real iPhone never fires one)
   const noBip = (await send('Page.addScriptToEvaluateOnNewDocument', { source: NO_BIP }, pageSid)).result.identifier;
-  await emulate(390, 844, true, UA_IPHONE);
+  await emulate(844, 390, true, UA_IPHONE);
   await go(APP); await until('!!(window.PG && PG.debug && PG.debug.pwa)');
   st = await ev(STATE);
   ok(st.ios && st.iosHint && !st.install, 'an iPhone: the "공유 → 홈 화면에 추가" hint instead', st);
   const ios = await ev(LAYOUT);
-  ok(ios.pillInCard && ios.cardFits && !ios.padsOverScreen, 'the iOS hint fits in the title card at 390x844', { pill: ios.pill, card: ios.card, inline: ios.pillOnTroLine });
-  await shot('pwa-ios-390.png');
-  await emulate(375, 667, true, UA_IPHONE);
+  ok(ios.pillInCard && ios.cardFits && !ios.padsOverScreen, 'the iOS hint fits in the title card at 844x390', { pill: ios.pill, card: ios.card, inline: ios.pillOnTroLine });
+  await shot('pwa-ios-844.png');
+  await emulate(667, 375, true, UA_IPHONE);
   await go(APP); await until('!!(window.PG && PG.debug && PG.debug.pwa)');
   const ios375 = await ev(LAYOUT);
-  ok(ios375.pillInCard && ios375.cardFits && !ios375.padsOverScreen, 'the iOS hint fits in the title card at 375x667 (iPhone SE)', ios375);
-  await shot('pwa-ios-375.png');
+  ok(ios375.pillInCard && ios375.cardFits && !ios375.padsOverScreen, 'the iOS hint fits in the title card at 667x375 (iPhone SE on its side)', ios375);
+  await shot('pwa-ios-667.png');
   await emulate(390, 844, true, UA_KAKAO);
   await go(APP); await until('!!(window.PG && PG.debug && PG.debug.pwa)');
   st = await ev(STATE);
@@ -477,9 +480,9 @@ async function hubCheck(tag, whole) {
 async function secPhones() {
   // ---------------------------------------------------------------- 6. phones (mobile UA + touch; notch insets where possible)
   const PH = [
-    ['390', 390, 844, { top: 47, bottom: 34 }],
-    ['360', 360, 780, { top: 24, bottom: 0 }],
     ['844', 844, 390, { left: 47, right: 47, bottom: 21 }],
+    ['932', 932, 430, { left: 59, right: 59, bottom: 21 }],
+    ['640', 640, 360, { left: 24 }],
   ];
   const hi = (await send('Page.addScriptToEvaluateOnNewDocument', { source: "try { localStorage.setItem('ppogeul-hiscore', '1234560'); } catch (e) { /* ignore */ }" }, pageSid)).result.identifier;
   for (const [tag, w, h, insets] of PH) {
@@ -490,26 +493,47 @@ async function secPhones() {
     await sleep(300);
     const t = await ev(LAYOUT);
     ok(t.touch && t.scrollW <= t.vw && t.scrollH <= t.vh && t.scrollY === 0, `${tag}: touch layout, the page does not scroll`, { vw: t.vw, vh: t.vh, scrollW: t.scrollW, scrollH: t.scrollH });
-    if (tag === '390') {
+    ok(t.land && !t.rotate, `${tag}: the landscape layout, no rotate screen`, { land: t.land, rotate: t.rotate });
+    if (tag === '844') {
       // no pull-to-refresh / bounce (overscroll-behavior on the root), no double-tap zoom on what is tapped, the pads
       // take every gesture themselves (headless Chrome has no pull-to-refresh to try: the styles that stop it are checked)
       const ta = await ev(`(() => { const cs = (el) => getComputedStyle(el), $ = (id) => document.getElementById(id);
         return { root: cs(document.documentElement).overscrollBehaviorY, body: cs(document.body).overscrollBehaviorY, app: cs($('pg-app')).touchAction,
           btns: ['pg-start', 'pg-friends-btn', 'pg-install', 'pg-sound', 'pg-fs'].map((id) => cs($(id)).touchAction), pick: cs(document.querySelector('.pg-pick-btn')).touchAction,
-          pads: ['pg-dpad', 'pg-t-jump', 'pg-t-shoot'].map((id) => cs($(id)).touchAction) }; })()`);
+          pads: ['pg-stick-zone', 'pg-t-jump', 'pg-t-shoot'].map((id) => cs($(id)).touchAction) }; })()`);
       ok(ta.root === 'none' && ta.body === 'none' && ta.app === 'manipulation' && ta.btns.every((x) => x === 'manipulation') && ta.pick === 'manipulation' && ta.pads.every((x) => x === 'none'),
-        '390: no pull-to-refresh / bounce, no double-tap zoom on the buttons, the pads keep every gesture', ta);
+        '844: no pull-to-refresh / bounce, no double-tap zoom on the buttons, the pads keep every gesture', ta);
+      // a real double tap (Chrome's own gesture) on the game screen, on the title card's text and on the joystick zone:
+      // the zoom stays 1 - here (the viewport also says user-scalable=no) and on the artifact page (no such meta there:
+      // touch-action alone); and the viewport meta itself
+      const meta = await ev(`document.querySelector('meta[name="viewport"]').content`);
+      ok(/maximum-scale=1/.test(meta) && /user-scalable=no/.test(meta), '844: the viewport says maximum-scale=1, user-scalable=no', meta);
+      for (const page of [null, ORIGIN + '/preview.html']) {
+        if (page) { await go(page); await until('!!(window.PG && PG.debug && PG.debug.stick)'); await sleep(300); }
+        const pts = await ev(`(() => { const c = (id) => { const r = document.getElementById(id).getBoundingClientRect(); return [Math.round(r.left + r.width / 2), Math.round(r.top + r.height * 0.3)]; };
+          return [c('pg-screen'), c('pg-stick-zone'), c('pg-frame')]; })()`);
+        const sc = [];
+        for (const [x, y] of pts) {
+          await send('Input.synthesizeTapGesture', { x, y, tapCount: 2, gestureSourceType: 'touch' }, pageSid);
+          await sleep(450);
+          sc.push(await ev('window.visualViewport ? visualViewport.scale : 1'));
+        }
+        ok(sc.every((v) => Math.abs(v - 1) < 0.001), `844: a double tap on the screen / the joystick zone / the frame does not zoom (${page ? 'the artifact page' : 'the deploy'})`, sc);
+      }
+      await go(APP); await until('!!(window.PG && PG.debug && PG.debug.pwa)');
+      await ev(`document.fonts.ready.then(() => 1)`, 8000).catch(() => 0);
+      await ev(FAKE_BIP('dismissed'));
+      await sleep(300);
     }
     ok(t.cardFits && t.cardInScreen && t.pill && t.pillInCard, `${tag}: the title card fits the screen with the install pill (a 7-digit best score)`, t);
     ok(!t.padsOverScreen && t.padsInside && !t.padsOverlapEachOther, `${tag}: the pads stay off the game screen and inside the viewport`, { scr: t.scr, scale: t.scale });
     ok(t.headInside && t.headButtons === 3 && !t.headOverScreen, `${tag}: the header keeps its 3 buttons inside the viewport, off the game screen`, { head: t.headButtons, over: t.headOverScreen });
-    // the deploy's phone layout: slim gutters in portrait, the header in the pad columns in landscape (the artifact:
-    // 390 -> 1.31x, 360 -> 1.20x, 844x390 -> 1.39x)
-    const minScale = { 390: 1.38, 360: 1.27, 844: 1.45 }[tag];
+    // on its side the screen takes the whole height (before: 844x390 -> 1.52x with the header in the pad columns)
+    const minScale = { 844: 1.55, 932: 1.72, 640: 1.45 }[tag];
     ok(t.scale >= minScale, `${tag}: the game screen uses the phone's space (${t.scale}x >= ${minScale}x)`, t.scr);
     ok(t.row && t.row.one && t.row.fits, `${tag}: the title's 혼자 하기 · 친구와 하기 · 상점 share one row inside the card`, t.row);
     await shot(`pwa-${tag}-title.png`);
-    await hubCheck(tag, tag !== '844');
+    await hubCheck(tag, false);
     const p = await ev(PLAY);
     await sleep(200);
     const tp = await ev(LAYOUT);
@@ -520,7 +544,7 @@ async function secPhones() {
       // the notch: nothing interactive under the insets
       const sa = await ev(`(() => { const r = (id) => { const e = document.getElementById(id); return e && !e.hidden ? e.getBoundingClientRect() : null; };
         const ins = ${JSON.stringify(Object.assign({ top: 0, bottom: 0, left: 0, right: 0 }, insets))};
-        const els = ['pg-fs', 'pg-sound', 'pg-pausebtn', 'pg-t-left', 'pg-t-right', 'pg-t-jump', 'pg-t-shoot', 'pg-screen'].map((id) => [id, r(id)]).filter((x) => x[1]);
+        const els = ['pg-fs', 'pg-sound', 'pg-pausebtn', 'pg-stick', 'pg-t-jump', 'pg-t-shoot', 'pg-screen'].map((id) => [id, r(id)]).filter((x) => x[1]);
         return els.filter(([, b]) => b.top < ins.top || b.bottom > innerHeight - ins.bottom || b.left < ins.left || b.right > innerWidth - ins.right).map(([id]) => id); })()`);
       ok(sa.length === 0, `${tag}: nothing sits under the notch / home-indicator insets`, sa);
     }
@@ -537,16 +561,43 @@ async function secPhones() {
     ok(rec && rec.fits && rec.inScreen, `${tag}: 내 기록 fits`, rec);
     await shot(`pwa-${tag}-rec.png`);
   }
-  // (v4 shop) a 320x568 phone: the title (with the pill) and its start row, the hub's two tabs whole
-  await emulate(320, 568, true, UA_ANDROID);
+  // (v4 shop) a 568x320 phone (the smallest on its side): the title (with the pill) and its start row, the hub
+  await emulate(568, 320, true, UA_ANDROID);
   await go(APP); await until('!!(window.PG && PG.debug && PG.debug.pwa)');
   await ev(`document.fonts.ready.then(() => 1)`, 8000).catch(() => 0);
   await ev(FAKE_BIP('dismissed'));
   await sleep(300);
   const t3 = await ev(LAYOUT);
-  ok(t3.cardFits && t3.cardInScreen && t3.row && t3.row.one && t3.row.fits, '320: the title card fits (with the install pill), 혼자 하기 · 친구와 하기 · 상점 on one row', { fits: t3.cardFits, sh: t3.cardSH, ch: t3.cardCH, row: t3.row });
-  await shot('pwa-320-title.png');
-  await hubCheck('320', true);
+  ok(t3.cardFits && t3.cardInScreen && t3.row && t3.row.one && t3.row.fits && !t3.padsOverScreen && t3.padsInside, '568x320: the title card fits (with the install pill), 혼자 하기 · 친구와 하기 · 상점 on one row, the pads beside the screen', { fits: t3.cardFits, sh: t3.cardSH, ch: t3.cardCH, row: t3.row, scale: t3.scale });
+  await shot('pwa-568-title.png');
+  await hubCheck('568', false);
+  // upright: a round on its side, then the phone turns upright -> "가로로 돌려 주세요" over everything, the round paused;
+  // back on its side -> the screen goes, the pause menu waits for 계속하기. An upright tablet: none of it
+  const ROT = `(() => { const r = document.getElementById('pg-rotate'), b = r && !r.hidden ? r.getBoundingClientRect() : null, s = PG.debug.getState();
+    return { shown: !!b, covers: !!b && b.left <= 0 && b.top <= 0 && b.right >= innerWidth && b.bottom >= innerHeight, text: r ? r.textContent : '', phase: s.phase,
+      top: b ? document.elementFromPoint(innerWidth / 2, innerHeight / 2) === r || r.contains(document.elementFromPoint(innerWidth / 2, innerHeight / 2)) : false,
+      pause: !document.getElementById('pg-pause').hidden, land: document.getElementById('pg-app').classList.contains('pg-land'), stick: PG.debug.stick().on }; })()`;
+  await emulate(844, 390, true, UA_IPHONE, { left: 47, right: 47, bottom: 21 });
+  await go(APP); await until('!!(window.PG && PG.debug && PG.debug.pwa)');
+  await ev(`document.fonts.ready.then(() => 1)`, 8000).catch(() => 0);
+  const r0 = await ev(`(() => { const D = PG.debug; D.seed(3); D.start(1); D.setInvincible(true); D.step(150); return 1; })()`).then(() => ev(ROT));
+  ok(!r0.shown && r0.phase === 'playing', 'on its side: no rotate screen, the round plays', r0);
+  await emulate(390, 844, true, UA_IPHONE, { top: 47, bottom: 34 });
+  await sleep(500);
+  const r1 = await ev(ROT);
+  ok(r1.shown && r1.covers && r1.top && /가로로\s*돌려 주세요/.test(r1.text), 'upright (390x844): "가로로 돌려 주세요" covers the whole game', r1);
+  ok(r1.phase === 'paused' && !r1.stick.left && !r1.stick.right, '... and the round is paused, the controls let go', r1);
+  await shot('pwa-390-rotate.png');
+  await emulate(844, 390, true, UA_IPHONE, { left: 47, right: 47, bottom: 21 });
+  await sleep(500);
+  const r2 = await ev(ROT);
+  ok(!r2.shown && r2.land && r2.phase === 'paused' && r2.pause, 'back on its side: the rotate screen goes, the pause menu waits (계속하기)', r2);
+  await emulate(768, 1024, true, UA_IPHONE.replace('iPhone; CPU iPhone OS', 'iPad; CPU OS'));
+  await go(APP); await until('!!(window.PG && PG.debug && PG.debug.pwa)');
+  await sleep(300);
+  const tab = await ev(LAYOUT), r3 = await ev(ROT);
+  ok(!r3.shown && !tab.land && tab.touch && !tab.padsOverScreen && tab.scale === 2, 'an upright tablet (768x1024): no rotate screen, its upright layout (2x, the pads under the screen)', { rot: r3.shown, land: tab.land, scale: tab.scale });
+  await shot('pwa-768-tablet.png');
   await send('Page.removeScriptToEvaluateOnNewDocument', { identifier: hi }, pageSid);
   // a 1x desktop window (the screen at 256x224): the card fits with the pill, and with the longer iOS hint
   for (const [tag, ua] of [['1x', null], ['1x-ios', UA_IPHONE.replace('iPhone; CPU iPhone OS', 'iPad; CPU OS')]]) {

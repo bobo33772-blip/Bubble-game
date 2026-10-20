@@ -34,7 +34,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       if (re.test(txt)) done = true;
     } else if (m.method === 'Runtime.exceptionThrown') {
       const d = m.params.exceptionDetails; console.log(`PAGE-ERROR: ${(d.exception && d.exception.description) || d.text} @${d.url || ''}:${d.lineNumber}`);
-    } else if (m.method === 'Log.entryAdded' && m.params.entry.level === 'error') {
+    } else if (m.method === 'Log.entryAdded' && m.params.entry.level === 'error' && !/\/favicon\.ico$/.test(m.params.entry.url || '')) { // (an http page's missing favicon is no page error)
       console.log(`CONSOLE log-error: ${m.params.entry.text} ${m.params.entry.url || ''}`);
     }
   });
@@ -42,6 +42,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await send('Runtime.enable'); await send('Page.enable'); await send('Log.enable');
   await send('Emulation.setDeviceMetricsOverride', { width: +w, height: +h, deviceScaleFactor: 1, mobile: mobile === '1' });
   if (mobile === '1') await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+  // (PG_CDP_INSETS='{"left":47,"right":47,"bottom":21}': a phone's notch / home-indicator safe-area insets)
+  if (process.env.PG_CDP_INSETS) await send('Emulation.setSafeAreaInsetsOverride', { insets: JSON.parse(process.env.PG_CDP_INSETS) });
   // (a full http(s) URL too: the multi-iframe pages served by tools/serve.js, on a phone viewport)
   await send('Page.navigate', { url: /^https?:\/\//i.test(file) ? file : require('./env').fileUrl(file) });
   const t0 = Date.now();

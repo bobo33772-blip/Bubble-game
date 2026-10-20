@@ -24,7 +24,9 @@
   --font-sign: "Black Han Sans", "Do Hyeon", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
   --font-body: "Gowun Dodum", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
 }
-html { height: 100%; box-sizing: border-box; overflow: hidden; background: var(--bg); }
+/* (100dvh: the height the phone shows right now - a browser's toolbar coming and going resizes the game, fit() follows;
+   the skeleton's :root pads the notch / home-indicator insets above and below) */
+html { height: 100%; height: 100dvh; box-sizing: border-box; overflow: hidden; background: var(--bg); }
 *, *::before, *::after { box-sizing: inherit; }
 body {
   height: 100%; margin: 0; overflow: hidden;
@@ -604,6 +606,12 @@ kbd {
   background: rgba(127, 220, 200, 0.1); border: 1px solid var(--panel-line); border-bottom-width: 2px;
 }
 #pg-touch { display: none; }
+/* no double-tap zoom anywhere in the game (both builds): touch-action manipulation on the page and on everything tapped
+   (taps, panel scrolling and the inputs work as usual), none on the canvas and the touch controls (they keep every
+   gesture - two thumbs at once never pinch the page). iOS ignores the viewport's user-scalable=no: game.js also cancels
+   its pinch gestures and a quick second tap on the game's surfaces */
+html, body, #pg-app, #pg-app button, #pg-app input, #pg-app select, #pg-app label, .pg-panel { touch-action: manipulation; }
+#pg-canvas, #pg-touch, .pg-pad, .pg-tb, .pg-stick { touch-action: none; }
 .pg-touch-on #pg-hints { display: none; }
 .pg-keys-touch { display: none; margin: 0.55em 0 0; font-size: 0.86em; color: var(--cream-dim); }
 .pg-touch-on .pg-keys { display: none; }
@@ -629,16 +637,70 @@ kbd {
   transition: transform 0.06s, filter 0.1s;
 }
 .pg-tb.on { transform: translateY(3px) scale(0.95); filter: brightness(1.15); box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35), inset 0 2px 0 rgba(255, 255, 255, 0.35); }
-#pg-dpad .pg-tb { background: var(--mint); font-size: 22px; }
 #pg-t-jump { background: var(--pink); align-content: center; }
 /* the animal's JUMP move under the label ("꾹: 활공", "두 번: 쿵"): a small second line inside the same 66px circle */
 .pg-tb-sub { display: block; margin-top: 3px; pointer-events: none; font-family: var(--font-body); font-weight: 700; font-size: 10px; line-height: 1; letter-spacing: -0.02em; white-space: nowrap; opacity: 0.85; }
 #pg-t-shoot { background: var(--duck); width: 74px; height: 74px; font-size: 19px; }
-@media (orientation: landscape) and (max-height: 560px) {
-  .pg-touch-on#pg-app { padding: 0 max(170px, calc(env(safe-area-inset-right, 0px) + 170px)) 6px max(170px, calc(env(safe-area-inset-left, 0px) + 170px)); }
-  .pg-touch-on #pg-touch { left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); }
-  #pg-head { padding-top: 6px; }
+/* the joystick (the left thumb): a mint ring with ◀ ▶ notches and a knob. At rest a faint ring where the thumb usually
+   lands; held, game.js puts the ring under the thumb, the knob follows the thumb up to the ring's edge (the ring slides
+   after a thumb that goes further) and the notch it points to lights up. Only left / right: pushing up never jumps */
+#pg-stick-zone { position: relative; width: min(54vw, 240px); height: 118px; }
+.pg-stick {
+  position: absolute; left: 4px; bottom: 0; width: calc(var(--pg-sr, 50px) * 2); height: calc(var(--pg-sr, 50px) * 2); border-radius: 50%;
+  pointer-events: none; opacity: 0.55; transition: opacity 0.15s;
+  background: radial-gradient(circle, rgba(127, 220, 200, 0.07) 0 50%, rgba(127, 220, 200, 0.22) 51% 100%);
+  border: 3px solid var(--mint-2); box-shadow: 0 0 0 2px var(--ink), inset 0 0 0 2px rgba(7, 22, 25, 0.55), 0 4px 0 rgba(0, 0, 0, 0.3);
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
 }
+.pg-stick::before, .pg-stick::after { content: ""; position: absolute; top: 50%; margin-top: -6px; border: 6px solid transparent; opacity: 0.6; }
+.pg-stick::before { left: 4px; border-left-width: 0; border-right-color: var(--cream); }
+.pg-stick::after { right: 4px; border-right-width: 0; border-left-color: var(--cream); }
+.pg-stick.is-l::before { border-right-color: var(--duck); opacity: 1; }
+.pg-stick.is-r::after { border-left-color: var(--duck); opacity: 1; }
+.pg-stick-knob {
+  position: absolute; left: 50%; top: 50%; width: 48%; height: 48%; margin: -24% 0 0 -24%; border-radius: 50%;
+  background: var(--mint); box-shadow: 0 0 0 2px var(--ink), inset 0 3px 0 rgba(255, 255, 255, 0.4), inset 0 -3px 0 rgba(0, 0, 0, 0.16), 0 3px 0 rgba(0, 0, 0, 0.3);
+}
+#pg-stick-zone.is-on .pg-stick { opacity: 1; transition: none; }
+.pg-stick.is-l .pg-stick-knob, .pg-stick.is-r .pg-stick-knob { background: #b4f3e6; }
+@media (orientation: landscape) and (max-height: 560px) { #pg-head { padding-top: 6px; } }
+/* ---- landscape on a touch device (game.js puts .pg-land on #pg-app when the touch layout's viewport is wider than tall:
+   phones and tablets, both builds): the game screen takes the whole height, the header leaves the top (no name; the
+   buttons go to the top of the right column, the connection chip to the top of the left one), the joystick zone is the
+   whole empty column left of the screen, 점프 / 거품 sit at the bottom of the column right of it. fit() keeps both
+   columns at least --pg-side wide (thumbs never cover the play field) and sets --pg-side, --pg-tb (점프's size) and
+   --pg-sr (the stick's radius); a narrow column (.pg-land-col) stacks 거품 over 점프, a wide one sets them diagonally */
+.pg-touch-on.pg-land#pg-app { padding: 4px 0; gap: 0; }
+.pg-touch-on.pg-land.pg-panel-open#pg-app { padding: 0 max(16px, env(safe-area-inset-right, 0px)) 0 max(16px, env(safe-area-inset-left, 0px)); gap: 6px; }
+.pg-land:not(.pg-panel-open) #pg-head {
+  position: absolute; z-index: 11; top: 0; left: 0; right: 0; width: auto; max-width: none; align-items: flex-start;
+  padding: max(8px, env(safe-area-inset-top, 0px)) max(8px, env(safe-area-inset-right, 0px)) 0 max(8px, env(safe-area-inset-left, 0px));
+  pointer-events: none;
+}
+.pg-land:not(.pg-panel-open) .pg-brand { display: none; }
+.pg-land:not(.pg-panel-open) #pg-net-chip { max-width: calc(var(--pg-side, 150px) - 16px - env(safe-area-inset-left, 0px)); white-space: normal; font-size: 12px; }
+.pg-land:not(.pg-panel-open) .pg-tools {
+  pointer-events: auto; margin-left: auto; flex-wrap: wrap; justify-content: flex-end; gap: 6px;
+  max-width: calc(var(--pg-side, 150px) - 16px - env(safe-area-inset-right, 0px));
+}
+.pg-land #pg-frame { padding: 4px; border-radius: 12px; }
+.pg-land #pg-frame::before { left: 1px; top: 1px; width: 3px; height: 3px; }
+.pg-land #pg-frame::after { right: 1px; top: 1px; width: 3px; height: 3px; }
+.pg-touch-on.pg-land #pg-touch { display: block; left: 0; right: 0; top: 0; bottom: 0; }
+.pg-land #pg-stick-zone { position: absolute; left: 0; top: 0; bottom: 0; width: var(--pg-side, 150px); height: auto; }
+.pg-land .pg-stick {
+  left: calc(env(safe-area-inset-left, 0px) + (var(--pg-side, 150px) - env(safe-area-inset-left, 0px)) / 2 - var(--pg-sr, 50px));
+  bottom: calc(max(14px, env(safe-area-inset-bottom, 0px)) + 4px);
+}
+.pg-land #pg-act {
+  position: absolute; right: 0; bottom: max(14px, env(safe-area-inset-bottom, 0px)); width: var(--pg-side, 150px);
+  padding-right: env(safe-area-inset-right, 0px); justify-content: center; align-items: flex-end; gap: 10px; pointer-events: none;
+}
+.pg-land #pg-act .pg-tb { pointer-events: auto; }
+.pg-land #pg-t-jump { width: var(--pg-tb, 66px); height: var(--pg-tb, 66px); }
+.pg-land #pg-t-shoot { width: calc(var(--pg-tb, 66px) + 8px); height: calc(var(--pg-tb, 66px) + 8px); margin-bottom: calc(var(--pg-tb, 66px) * 0.6); }
+.pg-land.pg-land-col #pg-act { flex-direction: column-reverse; align-items: center; }
+.pg-land.pg-land-col #pg-t-shoot { margin-bottom: 0; }
 @media (max-width: 420px) {
   .pg-brand { font-size: 18px; }
   .pg-icon { width: 36px; height: 36px; }
@@ -657,7 +719,8 @@ kbd {
   #pg-frame::before, #pg-frame::after { display: none; }
   .pg-pad { gap: 8px; }
   .pg-tb { width: 58px; height: 58px; font-size: 15px; }
-  #pg-dpad .pg-tb { font-size: 19px; }
+  .pg-stick { --pg-sr: 44px; }
+  #pg-stick-zone { height: 104px; }
   #pg-t-shoot { width: 64px; height: 64px; font-size: 17px; }
   .pg-touch-on#pg-app { padding-bottom: calc(118px + env(safe-area-inset-bottom, 0px)); }
   .pg-ov { padding: 0.35em; }
@@ -808,10 +871,8 @@ button.pg-inst::after { content: ""; position: absolute; inset: -0.3em -0.35em; 
 .pg-icon.is-on .pg-off { display: block; }
 /* ---- the standalone deploy only (build.js gives its root element the pg-sa class; nothing here matches the artifact):
    feels like an app on a phone - no pull-to-refresh and no rubber-band bounce (the page never scrolls; the panels and
-   cards scroll inside themselves, overscroll contained), no double-tap zoom on anything tappable (pinch zoom stays;
-   the touch pads were touch-action: none already) */
+   cards scroll inside themselves, overscroll contained) */
 html.pg-sa, html.pg-sa body { overscroll-behavior: none; }
-.pg-sa #pg-app, .pg-sa button, .pg-sa input, .pg-sa select, .pg-sa label, .pg-sa .pg-panel { touch-action: manipulation; }
 /* portrait phones: the screen is as wide as the phone allows - 8px side gutters and a slimmer mirror frame (390 px:
    1.31x -> 1.41x); the header keeps its 16px inset. (Panels keep the usual gutters.) */
 @media (orientation: portrait) {
@@ -831,21 +892,31 @@ html.pg-sa, html.pg-sa body { overscroll-behavior: none; }
   .pg-sa .pg-rec-ladder { margin-top: 0.45em; padding: 0.2em 0.35em; }
   .pg-sa .pg-rec-card .pg-row { margin-top: 0.5em; }
 }
-/* landscape phones: the header leaves the middle column - the name to the top of the left pad column, the buttons to
-   the top of the right one (the connection chip under the name) - so the game screen gets the whole height
-   (844x390: 1.39x -> 1.52x; 915x412: 1.49x -> 1.71x). (An open panel keeps the header above it, as before.) */
-@media (orientation: landscape) and (max-height: 560px) {
-  .pg-sa .pg-touch-on:not(.pg-panel-open)#pg-app { position: relative; }
-  .pg-sa .pg-touch-on:not(.pg-panel-open) #pg-head {
-    position: absolute; z-index: 11; top: 0; left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px));
-    width: auto; max-width: none; align-items: flex-start; padding-top: 8px; pointer-events: none;
-  }
-  .pg-sa .pg-touch-on:not(.pg-panel-open) #pg-head > * { pointer-events: auto; }
-  .pg-sa .pg-touch-on:not(.pg-panel-open) .pg-brand { font-size: 16px; gap: 6px; max-width: 150px; padding-top: 4px; }
-  .pg-sa .pg-touch-on:not(.pg-panel-open) .pg-brand .pg-onsen { font-size: 18px; }
-  .pg-sa .pg-touch-on:not(.pg-panel-open) #pg-net-chip { position: absolute; top: 40px; left: 0; max-width: 154px; }
-  .pg-sa .pg-touch-on:not(.pg-panel-open) #pg-stage { padding-top: 6px; }
+/* a phone held upright (the deploy only - game.js makes this on .pg-sa pages): "가로로 돌려 주세요" over everything,
+   the game pauses behind it (iPhone ignores the manifest's landscape lock; an installed Android app never gets here).
+   The pixel phone turns from upright to its side in two frames (no blurry rotation), the arrow shows which way */
+.pg-rotate {
+  position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: max(24px, env(safe-area-inset-top, 0px)) 24px max(24px, env(safe-area-inset-bottom, 0px)); text-align: center; word-break: keep-all;
+  background-color: var(--bg);
+  background-image: radial-gradient(110% 70% at 50% -10%, rgba(127, 220, 200, 0.13), transparent 62%),
+    linear-gradient(var(--grout) 1px, transparent 1px), linear-gradient(90deg, var(--grout) 1px, transparent 1px);
+  background-size: 100% 100%, 26px 26px, 26px 26px; color: var(--cream);
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
 }
+.pg-rotate[hidden] { display: none; }
+.pg-rot-ic { width: 144px; height: 144px; display: block; shape-rendering: crispEdges; }
+.pg-rot-b { opacity: 0; }
+@media (prefers-reduced-motion: no-preference) {
+  .pg-rot-a { animation: pg-rot-a 2.4s steps(1, end) infinite; }
+  .pg-rot-b { animation: pg-rot-b 2.4s steps(1, end) infinite; }
+}
+@keyframes pg-rot-a { 0% { opacity: 1; } 50% { opacity: 0; } }
+@keyframes pg-rot-b { 0% { opacity: 0; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .pg-rot-a { opacity: 0.3; } .pg-rot-b { opacity: 1; } }
+.pg-rot-t { margin: 18px 0 8px; font-family: var(--font-sign); font-weight: 400; font-size: 30px; line-height: 1.15; color: var(--cream); }
+.pg-rot-t em { font-style: normal; color: var(--mint); }
+.pg-rot-s { margin: 0; font-size: 15px; line-height: 1.5; color: var(--cream-dim); }
 /* ---- v4 cloud trophies (the STANDALONE deploy with a cloud config only - game.js shows these while the cloud is on;
    the markup is hidden everywhere else): the 8x8 pixel cloud on the title badge (mint: saved, dim: waiting, pink: cannot
    save), the status line and the sign-in button in 내 기록. (Like .pg-tro-row these have a display of their own and rely
@@ -1444,11 +1515,11 @@ html.pg-sa, html.pg-sa body { overscroll-behavior: none; }
   </footer>
 
   <div id="pg-touch" aria-hidden="true">
-    <div id="pg-dpad" class="pg-pad">
-      <div id="pg-t-left" class="pg-tb">◀</div>
-      <div id="pg-t-right" class="pg-tb">▶</div>
+    <!-- the left thumb's floating joystick: it appears where the thumb lands in this zone (game.js) -->
+    <div id="pg-stick-zone" class="pg-pad">
+      <div id="pg-stick" class="pg-stick"><i id="pg-stick-knob" class="pg-stick-knob"></i></div>
     </div>
-    <div class="pg-pad">
+    <div id="pg-act" class="pg-pad">
       <div id="pg-t-jump" class="pg-tb">점프<small id="pg-t-jump-sub" class="pg-tb-sub" hidden></small></div>
       <div id="pg-t-shoot" class="pg-tb">거품</div>
     </div>
