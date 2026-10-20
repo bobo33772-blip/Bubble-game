@@ -1028,13 +1028,13 @@
   const LG = (fr) => fr.D().login.state();
   const key = (fr, code) => { const W = fr.win(), t = W.document.activeElement && W.document.activeElement !== W.document.body ? W.document.activeElement : W; t.dispatchEvent(new W.KeyboardEvent('keydown', { code, key: code === 'Space' ? ' ' : code, bubbles: true, cancelable: true })); };
   async function loginTests() {
-    const TX = { why: '트로피·코인·아이템을 구글 계정에 저장해서 폰과 PC에서 이어서 해요', note: '구글 계정 이름·메일은 저장하지 않아요 · 로그인은 내 기록에서도 할 수 있어요' };
+    const TX = { why: '로그인하면 모은 트로피·코인·아이템이 계정에 쏙! 폰에서도 PC에서도 이어서 놀아요', note: '이름·메일은 저장하지 않아요 · 로그인은 나중에 내 기록에서도 할 수 있어요' };
     // 1. at load, not linked, no choice yet: the screen instead of the title (this frame boots as a top-level tab: 'out')
     const a = await loginFrame('LG1', 'plg1', { ns: 'tlg1' });
     let s = LG(a);
     ok('login: at load (not linked, never a guest) the login screen shows instead of the title', s.shown && a.$('pg-title').hidden && !a.$('pg-login').hidden && a.D().G.mode === 'title', s);
     ok('login: logo, the why line, 구글로 시작하기 and 로그인 없이 하기; the line under them says what is kept', a.$('pg-login-h').textContent.indexOf('뽀득뽀득 목욕탕') >= 0 && a.$('pg-login-why').textContent === TX.why
-      && s.btn === '구글로 시작하기' && !s.btnHidden && !s.btnDisabled && a.$('pg-login-guest').textContent === '로그인 없이 하기' && s.line === TX.note, s);
+      && s.btn === 'Google로 계속하기' && !s.btnHidden && !s.btnDisabled && a.$('pg-login-guest').textContent === '로그인 없이 놀기' && s.line === TX.note, s);
     ok('login: a labelled region (its heading), the Google button described by the why line, a polite live line', a.$('pg-login').getAttribute('aria-labelledby') === 'pg-login-h' && a.$('pg-login-go').getAttribute('aria-describedby') === 'pg-login-why pg-login-st' && a.$('pg-login-st').getAttribute('aria-live') === 'polite');
     await until(() => LG(a).focus === 'pg-login-go', 1000);
     ok('login: the keyboard starts on 구글로 시작하기', LG(a).focus === 'pg-login-go', LG(a).focus);
@@ -1062,7 +1062,7 @@
     a.D().login.show(true);
     F.failNext('popup', 'auth/popup-blocked'); a.D().login.go();
     await until(() => LG(a).line === '팝업이 막혔어요 · 한 번 더 눌러 주세요', 2000);
-    ok('login: a blocked popup is said on the screen (pink), the button ready again', LG(a).shown && /is-err/.test(LG(a).cls) && LG(a).btn === '구글로 시작하기' && !LG(a).busy, LG(a));
+    ok('login: a blocked popup is said on the screen (pink), the button ready again', LG(a).shown && /is-err/.test(LG(a).cls) && LG(a).btn === 'Google로 계속하기' && !LG(a).busy, LG(a));
     a.D().login.guest();
     ok('login: 로그인 없이 하기 -> the title, remembered for this browser, the failure message gone', LG(a).overlay === 'title' && LG(a).guest === '1' && a.st().msg === null && localStorage.getItem('ppogeul-login-tlg1') === '1', [LG(a), a.st().msg]);
     // 4. the popup left open: 다시 열기 on the screen (tappable), then a busy label while it links
@@ -1113,7 +1113,7 @@
     // 9. a PR preview: the same screen, the Google button off with its note; 로그인 없이 하기 works and is remembered (preview keys)
     const p = await loginFrame('LG4', 'plg4', { src: '/deploy-preview/index.html', ns: null });
     s = LG(p);
-    ok('login: a PR preview shows the screen, 구글로 시작하기 disabled, "미리보기에서는 로그인을 할 수 없어요"', s.shown && s.preview === '999' && s.btnDisabled && s.btn === '구글로 시작하기' && s.line === '미리보기에서는 로그인을 할 수 없어요' && !p.st().on, s);
+    ok('login: a PR preview shows the screen, 구글로 시작하기 disabled, "미리보기에서는 로그인을 할 수 없어요"', s.shown && s.preview === '999' && s.btnDisabled && s.btn === 'Google로 계속하기' && s.line === '미리보기에서는 로그인을 할 수 없어요' && !p.st().on, s);
     await until(() => LG(p).focus === 'pg-login-guest', 1000);
     ok('login: ... the keyboard starts on 로그인 없이 하기 there; the disabled button does nothing', LG(p).focus === 'pg-login-guest' && p.D().login.go().shown, LG(p));
     p.D().login.guest();

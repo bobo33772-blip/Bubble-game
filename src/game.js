@@ -6898,8 +6898,8 @@ window.PG = window.PG || {};
   // PR preview, its Google button off - a browser that is not linked and never chose to play as a guest sees it before
   // the title. Made here (the artifact's markup has none of it); nothing at all without the cloud or a preview
   const PREVIEW = (() => { let v = ''; try { v = window.PG_PREVIEW; } catch (e) { v = ''; } return typeof v === 'string' && /^[1-9]\d{0,6}$/.test(v) ? v : ''; })();
-  const LG_TX = { why: '트로피·코인·아이템을 구글 계정에 저장해서 폰과 PC에서 이어서 해요', go: '구글로 시작하기', guest: '로그인 없이 하기',
-    note: '구글 계정 이름·메일은 저장하지 않아요 · 로그인은 내 기록에서도 할 수 있어요', pv: '미리보기에서는 로그인을 할 수 없어요' };
+  const LG_TX = { why: '로그인하면 모은 트로피·코인·아이템이 계정에 쏙! 폰에서도 PC에서도 이어서 놀아요', go: 'Google로 계속하기', guest: '로그인 없이 놀기',
+    note: '이름·메일은 저장하지 않아요 · 로그인은 나중에 내 기록에서도 할 수 있어요', pv: '미리보기에서는 로그인을 할 수 없어요' };
   const LOGIN_TEXT = Object.keys(LG_TX).map((k) => LG_TX[k]).join(' ') + ' ' + CL_TX.authing + ' ' + CL_TX.linking;
   const LOGIN = { el: null, go: null, goTx: null, guest: null, st: null, rec: false, inUI: false };
   const lgOn = () => CLOUD.on || !!PREVIEW;

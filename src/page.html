@@ -874,13 +874,14 @@ html.pg-sa, html.pg-sa body { overscroll-behavior: none; }
 .pg-login-btns { display: flex; flex-direction: column; align-items: stretch; gap: 0.6em; width: 15em; max-width: 100%; margin: 0 auto; }
 .pg-login-btns .pg-btn { white-space: nowrap; }
 .pg-touch-on .pg-login-btns .pg-btn { min-height: 44px; }
-/* 구글로 시작하기: the game's pill (its 3D bottom edge, the sign font) in white with ink text - Google's light
-   sign-in style - and Google's G at the start */
-.pg-login-go { display: inline-flex; align-items: center; justify-content: center; gap: 0.5em; background: #ffffff; color: #1f1f1f;
-  box-shadow: 0 0.16em 0 #c9c9c9, 0 0.3em 0.8em rgba(0, 0, 0, 0.35), inset 0 0 0 1px #dadce0; }
-.pg-login-go:active { box-shadow: 0 0.06em 0 #c9c9c9, inset 0 0 0 1px #dadce0; }
-.pg-login-g { flex: none; display: grid; place-items: center; width: 1.45em; height: 1.45em; border-radius: 50%; background: #ffffff; box-shadow: 0 0 0 1px #e8dcc0; }
-.pg-login-g svg { width: 0.95em; height: 0.95em; display: block; }
+/* Google로 계속하기: Google's own light sign-in button - white, a thin grey edge, a soft shadow, plain body text, the
+   G at the start - in the game's pill shape (no 3D edge: it reads as the sign-in it is, not as a game button) */
+.pg-login-btns .pg-btn.pg-login-go { display: inline-flex; align-items: center; justify-content: center; gap: 0.6em; font-family: var(--font-body); font-weight: 700;
+  background: #ffffff; color: #1f1f1f; box-shadow: inset 0 0 0 1px #747775, 0 1px 3px rgba(0, 0, 0, 0.3); }
+.pg-login-btns .pg-btn.pg-login-go:hover { filter: none; background: #f2f2f2; }
+.pg-login-btns .pg-btn.pg-login-go:active { transform: none; background: #e8e8e8; box-shadow: inset 0 0 0 1px #747775; }
+.pg-login-g { flex: none; display: block; line-height: 0; }
+.pg-login-g svg { width: 1.05em; height: 1.05em; display: block; }
 .pg-login-go[aria-busy="true"] { opacity: 0.7; cursor: progress; }
 .pg-login-go:disabled { opacity: 0.45; cursor: not-allowed; filter: grayscale(0.6); }
 .pg-login-st { margin: 0.8em auto 0; max-width: 21em; font-size: 0.78em; line-height: 1.4; color: var(--cream-dim); text-wrap: balance; }
