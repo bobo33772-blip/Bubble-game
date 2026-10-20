@@ -390,7 +390,8 @@
     fr.T = () => el.contentWindow.PG.debug.tro;
     fr.st = () => fr.C().state();
     fr.tro = () => fr.T().state();
-    fr.ready = () => until(() => { const w = el.contentWindow; return w && !w.__pgOld && w.PG && w.PG.debug && w.PG.debug.cloud && w.document.readyState !== 'loading' && w.document.getElementById('pg-title') && !w.document.getElementById('pg-title').hidden; }, 15000, 20);
+    // (booted: the title shows - or the login screen before it, design/cloud-trophies.md "As built (login screen)")
+    fr.ready = () => until(() => { const w = el.contentWindow; if (!w || w.__pgOld || !w.PG || !w.PG.debug || !w.PG.debug.cloud || w.document.readyState === 'loading') return false; const t = w.document.getElementById('pg-title'), l = w.document.getElementById('pg-login'); return !!t && (!t.hidden || (!!l && !l.hidden)); }, 15000, 20);
     // fast timers and the test server's clock, the environment of a browser tab (these frames play top-level tabs: a
     // real frame never signs in - opts.env null keeps the real one), then this test's namespace (the cloud boots again in it)
     fr.boot = (ns, fast) => { const C = fr.C(); if (fast !== false) { C.fast(true); C.clock(F.now); } C.env(opts.env === undefined ? {} : opts.env); fr.T().away(false); if (ns) fr.T().ns(ns); return fr.st(); };
@@ -931,6 +932,193 @@
     const v4 = await until(() => F.get('uidDraw3').v === 4 && !c.st().dirty, 5000);
     ok('draws: a v 3 document becomes v 4 at this page\'s first write (its 30-character eq kept), the rules took it', !!v4 && F.get('uidDraw3').eq === X6('10000') && F.writes({ uid: 'uidDraw3', ok: false }).length === 0, F.get('uidDraw3'));
     c.remove();
+  }
+
+  // ================================================================ 12c. looks-per-animal.md 6.7 / 11.3 "L0 cases": store swaps, read-only pages
+  async function l0Tests() {
+    const sh = (fr) => fr.D().shop;
+    const keysOf = (fr) => { const sfx = fr.tro().key.slice('ppogeul-trophy'.length); return [fr.tro().key, 'ppogeul-guest' + sfx, 'ppogeul-park' + sfx, 'ppogeul-cloud' + sfx]; };
+    const snap = (ks) => ks.map((k) => localStorage.getItem(k)).join('|');
+    // (a newer page's store in this browser: the frame gets the storage event -> read-only)
+    const newer = (fr) => { const k = fr.tro().key; const o = JSON.parse(localStorage.getItem(k)); o.v = 99; localStorage.setItem(k, JSON.stringify(o)); };
+    // 1. a linked tab made read-only by a storage event: listening stops, 'newer'; its sign-out writes nothing
+    F.put('uidL0', { v: 1, dev: 'll12ll34', s: { kllllll1: slotOf({ t: 50, best: 50 }) }, last: 'kllllll1' });
+    const a = await frame('L1', 'pl0a', { ns: 'tl0a' });
+    a.T().set({ t: 77, best: 77 });
+    await signIn(a, 'uidL0'); await settle(a);
+    const ka = keysOf(a), g0 = a.st().guest;
+    newer(a);
+    const ro = await until(() => a.st().newer && a.st().msg === 'newer' && !a.st().listening, 3000);
+    ok('L0: a storage event makes the linked tab read-only -> listening stops, the message is \'newer\'', !!ro && a.st().st === 'in', a.st());
+    const s0 = snap(ka), mark = F.now();
+    a.C().signOut(true); await sleep(120);
+    ok('L0: ... a forced sign-out there: still signed in, \'newer\', the guest key untouched (t 77), no key of this browser written',
+      a.st().st === 'in' && a.st().msg === 'newer' && snap(ka) === s0 && a.st().guest === g0 && JSON.parse(g0).t === 77, [a.st().st, a.st().msg, snap(ka) === s0]);
+    a.C().click(); await sleep(120);
+    ok('L0: ... the plain sign-out tap the same, and nothing went to the server', a.st().st === 'in' && a.st().msg === 'newer' && snap(ka) === s0 && F.writes({ uid: 'uidL0', since: mark }).length === 0, F.writes({ uid: 'uidL0', since: mark }));
+    a.remove(); for (const k of ka) localStorage.removeItem(k);
+    // 2. a sign-in on its way when the tab turns read-only: the link does nothing (no document, no key written)
+    const b = await frame('L2', 'pl0b', { ns: 'tl0b' });
+    await b.rec(true); await until(() => b.st().parts[1], 3000);
+    F.popupWait = true; F.prof('pl0b').next = 'uidL0b';
+    b.C().click(); await until(() => b.st().st === 'auth', 2000);
+    await b.rec(false);                                              // (closed: the message waits for 내 기록, not timed out)
+    const kb = keysOf(b);
+    newer(b); await until(() => b.st().newer, 2000);
+    const s1 = snap(kb);
+    F.finishPopup('pl0b'); await sleep(400);
+    ok('L0: a link attempt from a read-only tab does nothing - no document, \'newer\', \'out\', no key written', !F.get('uidL0b') && b.st().msg === 'newer' && b.st().st === 'out' && !b.st().cs && snap(kb) === s1, [F.get('uidL0b'), b.st().st, b.st().msg]);
+    F.popupWait = false;
+    b.C().click(); await sleep(80);
+    ok('L0: ... a tap there now: \'nostore\' (no sign-in from a read-only page), still nothing written', b.st().st === 'nostore' && !F.get('uidL0b') && snap(kb) === s1, b.st());
+    b.remove(); for (const k of kb) localStorage.removeItem(k);
+    // 3. a forced sign-out offline with an unsaved coin award and a purchase: parked, then restored and pushed into the same slot
+    const c = await frame('L3', 'pl0c', { ns: 'tl0c' });
+    sh(c).set({ ce: 1000, sp: 0, own: [], bd: 0, bs: 0, sh: 1 });
+    await signIn(c, 'uidL0c'); await settle(c);
+    const k3 = c.st().cs.k, x0 = F.get('uidL0c').s[k3];
+    F.setOnline('pl0c', false);
+    const gv = sh(c).give(40), bought = sh(c).buy('h1');
+    c.C().signOut(true); await until(() => c.st().st === 'out', 3000);
+    const pk = c.st().park;
+    ok('L0: offline coins + a purchase, forced sign-out -> parked (not dropped), "로그아웃했어요 · 저장 안 된 기록은 다시 로그인하면 올라가요"',
+      gv && gv.give > 0 && bought && /uidL0c/.test(pk) && c.st().msg === 'outkeep' && c.D().cloud.texts().outkeep === '로그아웃했어요 · 저장 안 된 기록은 다시 로그인하면 올라가요', [gv, bought, pk.slice(0, 60), c.st().msg]);
+    F.setOnline('pl0c', true);
+    await signIn(c, 'uidL0c'); await until(() => { const x = F.get('uidL0c').s[k3]; return x && x.o.includes('h1') && x.ce === x0.ce + gv.give && !c.st().dirty; }, 6000);
+    const x1 = F.get('uidL0c').s[k3];
+    ok('L0: ... signing in again restores both and pushes them into the same slot (ce + the award, h1 and its 60 coins)',
+      x1.ce === x0.ce + gv.give && x1.o.includes('h1') && x1.sp === x0.sp + 60 && c.st().cs.k === k3 && c.st().park === '' && Object.keys(F.get('uidL0c').s).length === 1, [x0, x1, c.st().park]);
+    c.remove();
+    // 4. the soft cap's day count survives the swap: guest 100 -> join -> +50 -> sign-out: the guest store says 150
+    F.put('uidL0d', { v: 1, dev: 'dd12dd34', s: { kdddddd1: slotOf({ t: 40, best: 40 }) }, last: 'kdddddd1' });
+    const d = await frame('L4', 'pl0d', { ns: 'tl0d' });
+    sh(d).set({ ce: 0, sp: 0, own: [], bd: 0, bs: 0, sh: 1 });
+    sh(d).give(100);
+    const cd0 = sh(d).state().cd;
+    await signIn(d, 'uidL0d'); await settle(d);
+    const cdeIn = sh(d).state().cde;
+    sh(d).give(50); await settle(d, 6000);
+    d.C().signOut(true); await until(() => d.st().st === 'out', 3000);
+    ok('L0: the soft cap\'s count after sign-in -> play -> sign-out is the day\'s total (150), not the guest\'s old 100', cdeIn === 100 && sh(d).state().cde === 150 && sh(d).state().cd === cd0, [cdeIn, sh(d).state().cde, sh(d).state().cd, cd0]);
+    d.remove();
+    // 5. a worn-set write refused by the server's 2 s rule: the change stays here and goes up at the next push
+    const e = await frame('L5', 'pl0e', { ns: 'tl0e' });
+    sh(e).set({ ce: 500, sp: 0, own: ['h1'], bd: 0, bs: 0, sh: 1 });
+    await signIn(e, 'uidL0e'); await settle(e);
+    const m5 = F.now();
+    F.hold = true;
+    const worn = sh(e).wear('h', 'h1', 'cat');
+    await until(() => e.st().push, 3000);
+    F.get('uidL0e').updatedAt = new F.TS(F.now() + 1500);            // (another device wrote just now: the 2 s per document)
+    F.release();
+    const refused = await until(() => F.writes({ uid: 'uidL0e', since: m5, ok: false }).some((w) => /eq/.test(J(w.upd))), 3000);
+    ok('L0: a worn-set write refused by the 2 s rule -> the cat keeps h1 here', worn && !!refused && sh(e).look('cat')[0] === '1', [worn, F.writes({ uid: 'uidL0e', since: m5 }).map((w) => [w.ok, w.why])]);
+    const upEq = await until(() => { const x = F.get('uidL0e'); return x.eq && x.eq.slice(20, 21) === '1' && !e.st().dirty && !e.st().eqOut; }, 6000);
+    ok('L0: ... and it goes up at the next push', !!upEq && sh(e).look('cat')[0] === '1', F.get('uidL0e').eq);
+    e.remove();
+  }
+
+  // ================================================================ 18. the login screen before the title (the deploy with the cloud; the PR preview)
+  // (every other frame of this page boots past it: run() keeps this browser's default guest choice 'ppogeul-login' = '1';
+  // a login frame is made with it taken away for its load)
+  async function loginFrame(id, prof, opts) {
+    localStorage.removeItem('ppogeul-login');
+    try { return await frame(id, prof, opts); } finally { localStorage.setItem('ppogeul-login', '1'); }
+  }
+  const LG = (fr) => fr.D().login.state();
+  const key = (fr, code) => { const W = fr.win(), t = W.document.activeElement && W.document.activeElement !== W.document.body ? W.document.activeElement : W; t.dispatchEvent(new W.KeyboardEvent('keydown', { code, key: code === 'Space' ? ' ' : code, bubbles: true, cancelable: true })); };
+  async function loginTests() {
+    const TX = { why: '어서 오세요, 손님!', note: '' };
+    // 1. at load, not linked, no choice yet: the screen instead of the title (this frame boots as a top-level tab: 'out')
+    const a = await loginFrame('LG1', 'plg1', { ns: 'tlg1' });
+    let s = LG(a);
+    ok('login: at load (not linked, never a guest) the login screen shows instead of the title', s.shown && a.$('pg-title').hidden && !a.$('pg-login').hidden && a.D().G.mode === 'title', s);
+    ok('login: logo, the why line, 구글로 시작하기 and 로그인 없이 하기; the line under them says what is kept', a.$('pg-login-h').textContent.indexOf('뽀득뽀득 목욕탕') >= 0 && a.$('pg-login-why').textContent === TX.why
+      && s.btn === 'Google로 계속하기' && !s.btnHidden && !s.btnDisabled && a.$('pg-login-guest').textContent === '손님으로 입장하기' && s.line === TX.note, s);
+    ok('login: a labelled region (its heading), the Google button described by the why line, a polite live line', a.$('pg-login').getAttribute('aria-labelledby') === 'pg-login-h' && a.$('pg-login-go').getAttribute('aria-describedby') === 'pg-login-why pg-login-st' && a.$('pg-login-st').getAttribute('aria-live') === 'polite');
+    await until(() => LG(a).focus === 'pg-login-go', 1000);
+    ok('login: the keyboard starts on 구글로 시작하기', LG(a).focus === 'pg-login-go', LG(a).focus);
+    key(a, 'ArrowDown'); await sleep(20);
+    const f1 = LG(a).focus; key(a, 'ArrowUp'); await sleep(20);
+    ok('login: ↓ / ↑ move between the two buttons', f1 === 'pg-login-guest' && LG(a).focus === 'pg-login-go', [f1, LG(a).focus]);
+    a.win().document.activeElement.blur();
+    const sel0 = a.D().G.sel;
+    for (const c of ['Enter', 'Space', 'KeyX', 'KeyZ', 'ArrowRight', 'KeyP', 'Escape']) key(a, c);
+    await sleep(80);
+    ok('login: no game key does anything behind it (no solo start, no pick, no pause; the screen stays)', a.D().G.mode === 'title' && LG(a).shown && a.D().G.sel === sel0, [a.D().G.mode, LG(a).overlay, a.D().G.sel]);
+    // 2. 구글로 시작하기: the existing popup sign-in; linked -> the title; the link's message waits in 내 기록
+    F.prof('plg1').next = 'uidLG1';
+    a.$('pg-login-go').click();
+    await until(() => a.st().st === 'in' && a.st().cs, 5000);
+    await until(() => LG(a).overlay === 'title', 2000);
+    ok('login: 구글로 시작하기 signs in (popup) and uploads; linked -> the title', a.st().cs && a.st().cs.u === 'uidLG1' && !!F.get('uidLG1') && LG(a).overlay === 'title' && !a.$('pg-title').hidden && a.$('pg-login').hidden, [a.st().st, LG(a)]);
+    await a.rec(true);
+    ok('login: ... 내 기록 then shows the link\'s message as today', a.st().line === '구글 계정에 트로피 30개를 저장했어요', a.st().line);
+    ok('login: a linked browser is past it (the load check says no)', LG(a).wanted === false && !a.D().login.show().shown, LG(a));
+    await a.rec(false); await settle(a);
+    a.C().signOut(true); await until(() => a.st().st === 'out', 2000);
+    ok('login: signing out (내 기록 as today) stays on the title, not the login screen', LG(a).overlay === 'title' && !LG(a).shown, LG(a));
+    // 3. failures are said on the screen; 로그인 없이 하기 then goes on and clears them
+    a.D().login.show(true);
+    F.failNext('popup', 'auth/popup-blocked'); a.D().login.go();
+    await until(() => LG(a).line === '팝업이 막혔어요 · 한 번 더 눌러 주세요', 2000);
+    ok('login: a blocked popup is said on the screen (pink), the button ready again', LG(a).shown && /is-err/.test(LG(a).cls) && LG(a).btn === 'Google로 계속하기' && !LG(a).busy, LG(a));
+    a.D().login.guest();
+    ok('login: 로그인 없이 하기 -> the title, remembered for this browser, the failure message gone', LG(a).overlay === 'title' && LG(a).guest === '1' && a.st().msg === null && localStorage.getItem('ppogeul-login-tlg1') === '1', [LG(a), a.st().msg]);
+    // 4. the popup left open: 다시 열기 on the screen (tappable), then a busy label while it links
+    a.D().login.forget(); a.D().login.show();
+    F.popupWait = true; F.prof('plg1').next = 'uidLG2';
+    a.D().login.go(); await sleep(40);
+    ok('login: the Google window open -> "다시 열기" and "구글 창에서 로그인을 마쳐 주세요" (not busy)', LG(a).btn === '다시 열기' && LG(a).line === '구글 창에서 로그인을 마쳐 주세요' && !LG(a).busy, LG(a));
+    F.finishPopup('plg1'); F.popupWait = false;
+    await until(() => a.st().st === 'in' && a.st().cs, 4000);
+    ok('login: ... finished there -> linked, the title', a.st().cs && a.st().cs.u === 'uidLG2' && LG(a).overlay === 'title', LG(a));
+    await settle(a); a.C().signOut(true); await until(() => a.st().st === 'out', 2000);
+    // 5. an installed app on the authDomain: redirect; back from Google (a reload in reality) the screen waits, then the title with 내 기록 open
+    a.D().login.forget(); a.C().env({ app: true, same: true }); a.C().reboot(); a.D().login.show();
+    F.prof('plg1').next = 'uidLG3';
+    a.D().login.go();
+    await until(() => F.calls.some((c) => c.op === 'redirect' && c.frame === 'LG1'), 2000);
+    ok('login: an installed app -> the redirect sign-in, the button busy ("로그인 중…")', LG(a).shown && LG(a).busy && LG(a).btn === '로그인 중…', LG(a));
+    a.C().reboot(); a.D().login.show();
+    const waitShown = LG(a).shown;
+    await until(() => a.st().st === 'in' && a.st().cs && LG(a).overlay !== 'login', 4000);
+    await until(() => a.recShown() && a.st().line === '구글 계정에 트로피 30개를 저장했어요', 2000);
+    ok('login: ... back from the redirect: the screen waits, then the title with 내 기록 open and its message (as from the title)', waitShown && a.st().cs && a.st().cs.u === 'uidLG3' && a.recShown(), [waitShown, a.st().st, a.recShown(), a.st().line]);
+    await a.rec(false); await settle(a); a.C().signOut(true); await until(() => a.st().st === 'out', 2000);
+    // 6. in-app browsers: the other-browser button where one exists (KakaoTalk), the message alone where none does (iOS)
+    a.D().login.forget(); a.C().env({ inApp: true, kakao: true }); a.C().reboot(); a.D().login.show();
+    ok('login: KakaoTalk\'s in-app browser -> "다른 브라우저로 열기" and the in-app line', LG(a).shown && LG(a).btn === '다른 브라우저로 열기' && !LG(a).btnHidden && LG(a).line === a.D().cloud.texts().inapp, LG(a));
+    a.D().login.go();
+    ok('login: ... it opens the game\'s address outside (kakaotalk://web/openExternal)', /^kakaotalk:\/\/web\/openExternal\?url=/.test(a.st().opened), a.st().opened);
+    a.C().env({ inApp: true }); a.C().reboot(); a.D().login.show();
+    ok('login: an in-app browser with no way out -> no dead button, the line says what to do, 로그인 없이 하기 stays', LG(a).shown && LG(a).btnHidden && LG(a).line === a.D().cloud.texts().inapp && !a.$('pg-login-guest').hidden, LG(a));
+    a.C().env({}); a.C().reboot();
+    a.remove();
+    // 7. a real frame of the deploy (its own env: 'frame'): 새 창에서 열기; 로그인 없이 하기 is remembered over a reload
+    const b = await loginFrame('LG2', 'plg2', { ns: null });
+    s = LG(b);
+    ok('login: in a frame -> "새 창에서 열기" and the frame line, at load', s.shown && b.st().st === 'frame' && s.btn === '새 창에서 열기' && !s.btnHidden && s.line === b.D().cloud.texts().frame, [s, b.st().st]);
+    localStorage.removeItem('ppogeul-login');
+    b.D().login.guest();
+    ok('login: ... 로그인 없이 하기 -> the title, the choice kept in this browser (ppogeul-login)', LG(b).overlay === 'title' && localStorage.getItem('ppogeul-login') === '1', LG(b));
+    await b.reload(null);
+    ok('login: ... a reload goes straight to the title', !LG(b).shown && LG(b).overlay === 'title' && !b.$('pg-title').hidden, LG(b));
+    b.remove();
+    localStorage.setItem('ppogeul-login', '1');
+    // 8. the deploy without a config: no login screen at all (nothing made)
+    const c = await loginFrame('LG3', 'plg3', { src: '/deploy-nocfg/index.html' });
+    ok('login: the deploy without a config -> the title, no login screen made', !LG(c).made && !c.$('pg-login') && !c.$('pg-title').hidden, LG(c));
+    c.remove();
+    // 9. a PR preview: the same screen, the Google button off with its note; 로그인 없이 하기 works and is remembered (preview keys)
+    const p = await loginFrame('LG4', 'plg4', { src: '/deploy-preview/index.html', ns: null });
+    s = LG(p);
+    ok('login: a PR preview shows the screen, 구글로 시작하기 disabled, "미리보기에서는 로그인을 할 수 없어요"', s.shown && s.preview === '999' && s.btnDisabled && s.btn === 'Google로 계속하기' && s.line === '미리보기에서는 로그인을 할 수 없어요' && !p.st().on, s);
+    await until(() => LG(p).focus === 'pg-login-guest', 1000);
+    ok('login: ... the keyboard starts on 로그인 없이 하기 there; the disabled button does nothing', LG(p).focus === 'pg-login-guest' && p.D().login.go().shown, LG(p));
+    p.D().login.guest();
+    ok('login: ... 로그인 없이 하기 -> the title, kept under the preview\'s own key', LG(p).overlay === 'title' && localStorage.getItem('ppogeul-login@pr999') === '1' && localStorage.getItem('ppogeul-login') === '1', [LG(p), localStorage.getItem('ppogeul-login@pr999')]);
+    p.remove(); localStorage.removeItem('ppogeul-login@pr999');
   }
 
   async function fixtureTests() {
@@ -1703,9 +1891,12 @@
 
   // ================================================================ screenshot scenes (?shot=...)
   async function shot(scene) {
-    const w = innerWidth, h = innerHeight, phone = w < 600;
+    const w = innerWidth, h = innerHeight, phone = w < 600 || h < 500;     // (844x390: a phone on its side)
     frameBox().style.gap = '0';
-    const fr = await frame('S1', 'ps', { ns: 'shot', w, h, fast: true });
+    // (the login screen: this browser has not chosen yet; login-pv: a PR preview's page)
+    const lg = /^login/.test(scene);
+    if (lg) localStorage.removeItem('ppogeul-login');
+    const fr = await frame('S1', 'ps', { ns: 'shot', w, h, fast: true, src: /^login-pv/.test(scene) ? '/deploy-preview/index.html' : undefined });
     const sc = /-(\d)x$/.exec(scene); if (sc) { setScale(fr, +sc[1]); scene = scene.replace(/-\dx$/, ''); await sleep(100); }
     if (phone) { const W = fr.win(); W.dispatchEvent(new W.Event('touchstart')); await sleep(80); }
     fr.D().pwa({ ios: phone, framed: false });
@@ -1726,6 +1917,9 @@
     else if (scene === 'rec-frame') { C.env({ framed: true }); C.reboot(); await fr.rec(true); await until(() => fr.st().st === 'frame', 2000); }
     // (v4 shop 9.4: 마이페이지 signed out - its note gets the sign-in pitch as a second line; 내 기록 is one tap away)
     else if (scene === 'my-out') { fr.D().shop.set({ ce: 420, sh: 1, own: ['h5'], eq: '50000', bd: 0, bs: 0 }); fr.D().shop.open('my'); fr.D().shop.tick(40); }
+    else if (lg) fr.D().login.show(true);
+    // (looks L0: the two new 2-part lines staged in 내 기록 for one look - by hand: ?shot=rec-say&say=outkeep)
+    else if (scene === 'rec-say') { await signIn(fr, 'uidS'); await settle(fr); await fr.rec(true); await until(() => !fr.st().msg, 2000); C.fast(false); C.say((/[?&]say=([a-z]+)/.exec(location.search) || [])[1] || 'dirty'); }
     await sleep(500);
     if (scene === 'my-out' && !(fr.$('pg-my-note').querySelector('small') && fr.$('pg-my-note').querySelector('small').textContent === fr.D().cloud.texts().pitch)) log('CLOUD SHOT error: 마이페이지 has no pitch line: ' + fr.$('pg-my-note').textContent);
     // (the web fonts' glyph files still on their way - a fresh profile per shot - would leave the shot in the fallback face)
@@ -1735,18 +1929,37 @@
     const zm = /[?&]zoom=([a-z0-9-]+)/.exec(location.search);
     if (zm && fr.$(zm[1])) { const r = fr.$(zm[1]).getBoundingClientRect(); fr.el.style.transformOrigin = '0 0'; fr.el.style.transform = `scale(5) translate(${-r.left + 8}px, ${-r.top + 8}px)`; await sleep(200); }
     log('CLOUD INFO shot ' + scene + ' ' + w + 'x' + h + ': st ' + fr.st().st + ', line "' + fr.st().line + '", mark ' + fr.st().mark);
+    // (the login screen fits: the card inside the game screen without scrolling, no button label clipped, the touch
+    // targets >= 44 px on a phone, the status line at most 2 lines)
+    if (lg) {
+      const W = fr.win(), sc = fr.$('pg-screen').getBoundingClientRect(), card = fr.$('pg-login').querySelector('.pg-login-card'), r = card.getBoundingClientRect(), bad = [];
+      const fs = parseFloat(W.getComputedStyle(fr.$('pg-screen')).fontSize), st = fr.$('pg-login-st'), lh = parseFloat(W.getComputedStyle(st).lineHeight);
+      if (!LG(fr).shown) bad.push('not shown');
+      if (r.top < sc.top - 0.5 || r.bottom > sc.bottom + 0.5 || r.left < sc.left - 0.5 || r.right > sc.right + 0.5) bad.push('card outside the screen ' + J([r.top, r.bottom, sc.top, sc.bottom]));
+      if (card.scrollHeight > card.clientHeight + 1) bad.push('card scrolls ' + card.scrollHeight + '/' + card.clientHeight);
+      for (const b of card.querySelectorAll('button')) {
+        if (b.hidden) continue;
+        if (b.scrollWidth > b.clientWidth + 1) bad.push(b.id + ' label clipped');
+        if (phone && b.getBoundingClientRect().height < 43.5) bad.push(b.id + ' under 44 px');
+      }
+      if (st.getBoundingClientRect().height > 2 * lh + 1) bad.push('status line over 2 lines');
+      log('CLOUD INFO login fit ' + scene + ' ' + w + 'x' + h + ': fs ' + fs + 'px, card ' + Math.round(r.width) + 'x' + Math.round(r.height) + ' in ' + Math.round(sc.width) + 'x' + Math.round(sc.height) + ', line "' + st.textContent + '"');
+      if (bad.length) log('CLOUD SHOT error login fit: ' + bad.join('; '));
+    }
     log('CLOUD SHOT READY ' + scene);
   }
 
   async function run() {
     for (let i = 0; i < 300 && !(window.PG && PG.debug && PG.debug.cloud); i++) await sleep(20);
+    // (this browser has chosen to play as a guest: the deploy frames boot to the title; loginTests / the login shots take it away)
+    localStorage.setItem('ppogeul-login', '1');
     if (SHOT) { F.setSpeed(50); try { await shot(SHOT); } catch (e) { log('CLOUD SHOT error ' + (e && e.stack || e)); log('CLOUD SHOT READY ' + SHOT); } return; }
     if (!/^http/.test(location.protocol)) { fail++; log('CLOUD FAIL this page needs http (tools/serve.js): frames share storage and the fake'); log('CLOUD DONE pass=' + pass + ' fail=' + fail); return; }
     const steps = [inertTests, pureTests, coinPureTests, drawPureTests];
     for (const f of steps) { try { f(); } catch (e) { fail++; log('CLOUD FAIL ' + f.name + ' threw: ' + (e && e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : e)); } }
     F.setSpeed(50);
     const asyncSteps = [fixtureTests, uploadTests, cloudWinsTests, pushTests, twoDeviceTests, offlineTests, tabDeathTests, twoTabTests, foldTests, coinSyncTests, failureTests, relogTests,
-      popupTests, lostAnswerTests, holdRaceTests, drawSyncTests, uiTests, fontTests, noConfigTests, startTests];
+      popupTests, lostAnswerTests, holdRaceTests, drawSyncTests, l0Tests, loginTests, uiTests, fontTests, noConfigTests, startTests];
     for (const f of asyncSteps) {
       const t0 = performance.now();
       try { await f(); } catch (e) { fail++; log('CLOUD FAIL ' + f.name + ' threw: ' + (e && e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : e)); }

@@ -1042,3 +1042,22 @@ Three reviews (economy, compatibility, UX) of this doc and gacha.md. Applied her
 - Accept: run-all `shop shop-fit shop-hub shop-room shop-title pwa trophies cloud-my-out ux-roomrow` **48/48 green**
   (shop 455, shop-fit-320 62, trophies 119, pwa 117). Looked at full-320, ani-320 / 844, hint-390, hintbuy-320 (2-line
   footer), bought-900, title-390.
+
+## As built (L0, 2026-10-20)
+
+- Read-only guards (6.7 item 1): `clSignOut`, `clSignOutNow` (the sign-out's push poll can outlive the switch), `clUnlink`
+  (`false` + `'newer'`), `clRestore`, `clLink` (at the tap and again after the SDK load: a sign-in on its way when the tab
+  turns read-only ends `'out'` with `'newer'`, no document), `clLinkDone` and `clCreateTx` (`{ro: true}`, also checked
+  inside the transaction: no `tx.set`). `clStore` after the `storage` event: read-only -> `clStopListen`,
+  `CLOUD.newer = true`, `clMsg('newer')` once. `clPark` / `clMetaPut` are reached only through these.
+- Forced sign-out (item 2) was in from G2; now `CL_TX.dirty` "저장 안 된 기록이 있어요 · 한 번 더 누르면 로그아웃" and a
+  parked sign-out says `outkeep` "로그아웃했어요 · 저장 안 된 기록은 다시 로그인하면 올라가요" (one line in 내 기록 at 390).
+- Day count (item 3): `clDayCarry(from, to)` in `clUnlink` (leaving store -> the guest store coming back) and `clRestore`
+  (-> the parked copy). `clAdopt`'s pending base (item 4): already right since L1 (`const ev = pending ? ev0 : ...`).
+- check-shop (item 5): `rulesVsCl(text, CL_V, CL_FIELDS)` - the header's `v: <CL_V>`, `d.v == CL_V` in createOk and metaOk,
+  slotOk / sumOk routing it, from v 4 slotShape3 / poolIds / `'dn'`; it self-tests on a copy with a wrong header and one
+  whose createOk lost the version (both must fail). The gate table is unchanged.
+- Tests: cloud.js `l0Tests` (11.3's five cases: read-only by a storage event + forced / plain sign-out write nothing, a
+  link on its way from a read-only tab, the offline coins + purchase park and restore into the same slot, `cde` 100 ->
+  150 across the swap, an `eq` write refused by the 2 s rule then sent again). Shot scene `rec-say&say=<key>` (by hand).
+- Accept: run-all `cloud check-cloud check-shop cloud-rec cloud-title cloud-my-out pwa trophies` green (see the PR).

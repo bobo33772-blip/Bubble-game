@@ -1045,3 +1045,32 @@ shots wait for the frame's `document.fonts.ready` (a fresh profile per shot some
 Outside the cloud: `src/net.js` TUNE.room.findMs is 12000 (a named room's host presence can take seconds to arrive on
 claude.ai); the room's find wait now also ends 1 s before the join's own 15 s deadline, so a wrong code on a slowly
 connecting room says 방을 찾을 수 없어요 rather than the timeout's 연결이 끊겼어요 (tools/net-node-test.js testRoomSlowHost).
+
+## 17. As built (login screen, 2026-10-20)
+
+- A login screen before the title on the deploy with the cloud on (and on a PR preview, its Google button off). game.js
+  makes it (`lgSetupDOM`: `#pg-login`, an overlay like the others - the artifact's markup and behaviour are unchanged,
+  `lgOn()` is false there). Shown at load (`lgBoot`, after `clBoot`) when the store is not linked, `ppogeul-login` (+ test
+  namespace; a preview's Storage adds `@pr<n>`) is not `'1'`, there is no invite link (`?join=CODE`: straight to 친구와 하기),
+  storage works and the page is not read-only, and the cloud's state offers something: `out`, `auth` (a redirect coming
+  back), `inapp`, or `frame` with an outside address (`frame0` / `nostore`: no screen).
+- The title's logo (cloned), "트로피·코인·아이템을 구글 계정에 저장해서 폰과 PC에서 이어서 해요", Google로 계속하기
+  (`clClick`: popup / redirect / 다시 열기 / busy labels / 새 창에서 열기 / 다른 브라우저로 열기 - hidden when there is no
+  way out), 손님으로 입장하기, and one line that follows `clUI` (the cloud's messages and state lines; else
+  "구글 계정 이름·메일은 저장하지 않아요 · 로그인은 내 기록에서도 할 수 있어요"). It warms the SDK as 내 기록 does.
+- Linked (`'in'` with `cs`, also by another tab) -> the title; the link's message waits for 내 기록 as before; a redirect
+  coming back still opens 내 기록 (`clRecOpen` defers it). 손님으로 입장하기 stores `'1'` and clears an unseen failure.
+- **Decision:** signing out (내 기록) returns to the title as before and does not set the guest choice, so a browser that
+  signed in from the screen and later signed out sees the screen again at its next load (one tap past it); a guest who
+  chose 손님으로 입장하기 never sees it again in that browser (sign-in stays in 내 기록).
+- Input: no game key acts behind it (`primaryAction` returns; Enter / Space press the focused button, arrows move between
+  the two, M mutes); focus starts on Google로 계속하기 (the preview: 손님으로 입장하기). Region labelled by its heading, the
+  Google button described by the why line and the live status line.
+- Preview: build.js's preview head sets `window.PG_PREVIEW`; the fixture `deploy-preview/` (PR 999) is built for tests.
+  pwa-check and the peer-deploy frame page seed `ppogeul-login = '1'` (they test the title).
+- Tests: cloud.js `loginTests` (at load, keys, popup sign-in -> title + message, sign-out stays on the title, a blocked
+  popup said there, guest remembered over a reload, the popup left open, redirect and its return, KakaoTalk / iOS
+  in-app, a real frame, no config, the preview). Shots `cloud-login-320|390|844|1x`, `cloud-login-pv-390` (each checks the
+  card fits without scrolling, no clipped label, 44 px targets on phones, a status line of <= 2 lines).
+
+- (2026-10-20, the user) The screen is the bathhouse front desk with no explanation: the logo, the six busts bobbing in a tub, "어서 오세요, 손님!", Google로 계속하기 (Google's light button) and 손님으로 입장하기; the line under the buttons shows only sign-in messages.

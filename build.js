@@ -221,20 +221,23 @@ if (fbConf ? cloudTags !== 1 || !FIREBASE_SDK.every(([f, sri]) => deploy.include
   : cloudTags !== 0 || /firebase/i.test(deploy)) throw new Error('the deploy page must carry the cloud config exactly when firebase.config.json exists');
 if (fbConf ? !FIREBASE_SDK.every(([f]) => sw.includes(JSON.stringify(fbUrl(f))) && sw.includes(JSON.stringify(fbAlt(f)))) : /firebase-[a-z]+-compat\.js/.test(sw)) throw new Error('sw.js must list the SDK files exactly when firebase.config.json exists');
 // ---- the PR preview (PG_PREVIEW, see the top): the deploy page above, changed only here
-const PV_KEY = '@pr' + PREVIEW;
+// (n: the PR number; the test fixture deploy-preview/ below is built with a made-up one)
+const PV_KEY = (n) => '@pr' + n;
 // (in the head before every other script: Storage's getItem / setItem / removeItem add the suffix; a 'storage' event
-// from another tab reaches the game with the suffix taken off - and one for a real record not at all)
-const PV_STORE = `<script>(function(){try{var S=Storage.prototype,X=${JSON.stringify(PV_KEY)},g=S.getItem,s=S.setItem,r=S.removeItem,mine=new WeakSet();` +
+// from another tab reaches the game with the suffix taken off - and one for a real record not at all. PG_PREVIEW: the
+// game shows its login screen with the Google button off - design/cloud-trophies.md "As built (login screen)")
+const PV_STORE = (n) => `<script>window.PG_PREVIEW=${JSON.stringify(String(n))};(function(){try{var S=Storage.prototype,X=${JSON.stringify(PV_KEY(n))},g=S.getItem,s=S.setItem,r=S.removeItem,mine=new WeakSet();` +
   'S.getItem=function(k){return g.call(this,k+X);};S.setItem=function(k,v){return s.call(this,k+X,v);};S.removeItem=function(k){return r.call(this,k+X);};' +
   "addEventListener('storage',function(e){if(mine.has(e))return;e.stopImmediatePropagation();var k=e.key;if(typeof k!=='string'||k.slice(-X.length)!==X)return;" +
   "var n=new StorageEvent('storage',{key:k.slice(0,-X.length),oldValue:e.oldValue,newValue:e.newValue,url:e.url,storageArea:e.storageArea});mine.add(n);dispatchEvent(n);},true);}catch(e){}})();</script>\n";
-const PV_BADGE = `<div id="pg-preview-badge" style="position:fixed;left:6px;bottom:calc(6px + env(safe-area-inset-bottom,0px));z-index:2147483647;pointer-events:none;padding:2px 8px;border-radius:9px;background:rgba(214,40,90,.9);color:#fff;font:700 12px/1.5 system-ui,sans-serif">미리보기 #${PREVIEW}</div>\n`;
-function previewOf(html) {
+const PV_BADGE = (n) => `<div id="pg-preview-badge" style="position:fixed;left:6px;bottom:calc(6px + env(safe-area-inset-bottom,0px));z-index:2147483647;pointer-events:none;padding:2px 8px;border-radius:9px;background:rgba(214,40,90,.9);color:#fff;font:700 12px/1.5 system-ui,sans-serif">미리보기 #${n}</div>\n`;
+function previewOf(html, n) {
+  n = n || PREVIEW;
   const swap = (h, from, to) => { if (!h.includes(from)) throw new Error('preview build: the deploy page lacks ' + from.slice(0, 50)); return h.replace(from, () => to); };
-  let p = swap(html, `<title>${titleText}</title>\n`, `${PV_STORE}<title>미리보기 #${PREVIEW} · ${titleText}</title>\n<meta name="robots" content="noindex">\n`);
+  let p = swap(html, `<title>${titleText}</title>\n`, `${PV_STORE(n)}<title>미리보기 #${n} · ${titleText}</title>\n<meta name="robots" content="noindex">\n`);
   p = swap(p, '<link rel="manifest" href="manifest.webmanifest">\n', '');
   p = swap(p, `<script>${SW_REG}</script>\n`, '');
-  p = swap(p, '\n</body>\n</html>\n', `\n${PV_BADGE}</body>\n</html>\n`);
+  p = swap(p, '\n</body>\n</html>\n', `\n${PV_BADGE(n)}</body>\n</html>\n`);
   if (/<link\b[^>]*\brel=["']?manifest|serviceWorker\s*\.\s*register|PG_CLOUD\s*=|firebase/i.test(p)) throw new Error('preview build: manifest / service worker / Firebase left in the page');
   return p;
 }
@@ -267,7 +270,8 @@ const FAKE_FB = fbCheck({ apiKey: 'AIza' + 'Test0'.repeat(7), authDomain: 'pg-cl
   appId: '1:1234567890:web:0123456789abcdef', home: 'https://pg-cloud-test.firebaseapp.com/' }, 'the test fixture');
 const FAKE_HOOK = '<script>(function(){var F=null;try{F=window.parent!==window?window.parent.__pgFake:null;}catch(e){F=null;}if(!F)return;' +
   'var ap=Node.prototype.appendChild;Node.prototype.appendChild=function(n){if(n&&n.tagName==="SCRIPT"&&n.src&&F.claims(n.src))return F.script(window,n);return ap.call(this,n);};})();</script>\n';
-for (const [dir, html] of [['deploy-cloud', deployOf('cloud-test', FAKE_FB, FAKE_HOOK)], ['deploy-nocfg', deployOf('nocfg-test', null)]]) {
+// (deploy-preview/: a PR preview's page - PG_PREVIEW 999, its own save keys - for the login screen's preview look)
+for (const [dir, html] of [['deploy-cloud', deployOf('cloud-test', FAKE_FB, FAKE_HOOK)], ['deploy-nocfg', deployOf('nocfg-test', null)], ['deploy-preview', previewOf(deployOf('preview-test', null), '999')]]) {
   for (const [f, data] of [['index.html', html], ['manifest.webmanifest', manifestText], ...icons.map((i) => [i.src, i.buf])]) {
     const p = path.join(T, dir, ...f.split('/')); fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, data);
   }
@@ -295,6 +299,6 @@ if (fs.existsSync(testsDir)) {
 const kb = (f) => (fs.statSync(f).size / 1024).toFixed(1);
 console.log(`built dist/ppogeul-bath.html (${kb(path.join(root, 'dist', 'ppogeul-bath.html'))} KB), deploy/index.html (${kb(path.join(root, 'deploy', 'index.html'))} KB, build ${BUILD}, ${fbConf ? 'Firebase: ' + fbConf.cfg.projectId : 'no Firebase'}; + manifest, sw.js, ${icons.length} icons) and ${T}/preview.html`);
 // the itch.io upload, always in step with deploy/ (tools/pack-itch.js: index.html at the zip root, the rest beside it)
-if (PREVIEW) { console.log(`PREVIEW #${PREVIEW}: deploy/ holds the preview page (save keys +${PV_KEY}, no manifest / service worker / Firebase, no itch zip)`); process.exit(0); }
+if (PREVIEW) { console.log(`PREVIEW #${PREVIEW}: deploy/ holds the preview page (save keys +${PV_KEY(PREVIEW)}, no manifest / service worker / Firebase, no itch zip)`); process.exit(0); }
 const itch = require('./tools/pack-itch').pack(path.join(root, 'deploy', 'ppodeuk-bath-itch.zip'));
 console.log(`packed deploy/ppodeuk-bath-itch.zip (${(itch.size / 1024).toFixed(1)} KB, ${itch.entries.length} files) for itch.io`);

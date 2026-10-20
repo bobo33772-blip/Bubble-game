@@ -266,7 +266,7 @@ window.PG = window.PG || {};
     inapp: '앱 안 브라우저에서는 구글 로그인이 안 돼요 · 크롬이나 사파리에서 열어 주세요', nostore: '이 브라우저에서는 로그인을 쓸 수 없어요',
     fail: '로그인하지 못했어요 · 잠시 뒤에 다시 해 주세요', sdk: '로그인 도구를 불러오지 못했어요 · 인터넷이나 광고 차단을 확인해 주세요',
     domain: '승인되지 않은 주소예요: {0}', setup: '로그인이 아직 준비되지 않았어요 · 설정을 확인해 주세요', disabled: '이 계정은 쓸 수 없어요',
-    held: '경기가 끝난 뒤에 해 주세요', relog: '다시 로그인해 주세요', dirty: '저장 안 된 트로피가 있어요 · 한 번 더 누르면 로그아웃',
+    held: '경기가 끝난 뒤에 해 주세요', relog: '다시 로그인해 주세요', dirty: '저장 안 된 기록이 있어요 · 한 번 더 누르면 로그아웃', outkeep: '로그아웃했어요 · 저장 안 된 기록은 다시 로그인하면 올라가요',
     quota: '지금은 저장할 수 없어요 · 나중에 다시 저장돼요', newer: '새 버전에서 저장한 기록이에요 · 새로고침해 주세요', full: '이 기기는 저장할 수 없어요 (기기 16대까지)',
   };
   // (again: 'auth' by popup - the Google window may be a tab the player left; a tap opens it again)
@@ -6310,7 +6310,7 @@ window.PG = window.PG || {};
       clRecOpen();
     });
   }
-  function clRecOpen() { if (!stopped && shownOverlay === 'title') openRec(); }
+  function clRecOpen() { if (stopped) return; if (shownOverlay === 'login') LOGIN.rec = true; else if (shownOverlay === 'title') openRec(); }
   // a sign-in that did not work (4.3)
   function clAuthFail(e) {
     const code = String((e && e.code) || '');
@@ -6336,6 +6336,7 @@ window.PG = window.PG || {};
   // sign-out (4.4): never with a hold open; unsaved trophies are pushed first (up to 4 s), and if they are still not
   // saved the line says so and a second tap (within 8 s) signs out anyway
   function clSignOut(force) {
+    if (TRO.ro) { clMsg('newer'); return; }                 // (looks L0 6.7: a read-only page never writes the cloud's keys)
     if (TRO.s && TRO.s.esc.length) { clMsg('held'); return; }
     const armed = CLOUD.armed && Date.now() - CLOUD.armed < clT(CL_MSG_MS);
     if (force || armed || clDirty(troRead()) !== 'hard') { clSignOutNow(); return; }
@@ -6354,12 +6355,14 @@ window.PG = window.PG || {};
     CLOUD.armed = 0;
     // (gacha.md 3.8, the minimum of looks L0 6.7: a FORCED sign-out with unsaved changes parks the account's copy - the
     // next sign-in of that account here takes it back and pushes them; dropped, an offline draw was a free re-roll)
-    if (!clUnlink(clDirty(troRead()) === 'hard')) { clMsg('held'); return; }       // (a hold opened meanwhile, maybe in another tab: still signed in)
+    if (TRO.ro) { clMsg('newer'); return; }               // (turned read-only while the sign-out waited for its push)
+    const park = clDirty(troRead()) === 'hard';
+    if (!clUnlink(park)) { clMsg('held'); return; }       // (a hold opened meanwhile, maybe in another tab: still signed in)
     CLOUD.mine = false;
     const a = CLOUD.auth;
     CLOUD.user = null; CLOUD.ref = null; CLOUD.refU = ''; CLOUD.err = ''; CLOUD.newer = false; CLOUD.fails = 0; CLOUD.holdUntil = 0; CLOUD.firstDirty = 0; CLOUD.nickOut = '';
     try { if (a) Promise.resolve(a.signOut()).catch(() => { /* the local part happened already */ }); } catch (e) { /* ignore */ }
-    clSet('out'); clMsg('out');
+    clSet('out'); clMsg(park ? 'outkeep' : 'out');
   }
 
   // ---- link, listen, push, adopt (6.3 - 6.7)
@@ -6376,9 +6379,11 @@ window.PG = window.PG || {};
   }
   // the document is created (no document yet: this browser's store becomes the account's, one slot under the key k) or read
   function clCreateTx(k) {
+    if (TRO.ro) return Promise.resolve({ ro: true });      // (looks L0 6.7: never a document from a read-only page's stale copy)
     const ref = clRef();
     return CLOUD.db.runTransaction((tx) => tx.get(ref).then((snap) => {
       if (snap.exists) return { data: snap.data() };
+      if (TRO.ro) return { ro: true };
       // (v 2: the slot carries the store's coins and items, the document its worn set)
       const S = troRead(), slot = clUpload(S), nick = clNickOut(), ts = FV().serverTimestamp(), eq = looksOwned(looksParse(S.eq), S.own || []);
       tx.set(ref, Object.assign({ v: CL_V, dev: S.dev, s: { [k]: Object.assign({}, slot, { at: ts }) }, last: k, updatedAt: ts, eq }, nick ? { nick } : {}));
@@ -6393,11 +6398,13 @@ window.PG = window.PG || {};
   function clLink() {
     if (CLOUD.linking) return CLOUD.linking;
     const u = CLOUD.user; if (!u) return Promise.resolve();
+    if (TRO.ro) { CLOUD.mine = false; if (CLOUD.st === 'link' || CLOUD.st === 'auth') clSet(TRO.s && TRO.s.cs ? 'relog' : 'out'); clMsg('newer'); return Promise.resolve(); }   // (looks L0 6.7)
     const uid = u.uid, gen = CLOUD.gen, same = () => gen === CLOUD.gen && !!CLOUD.user && CLOUD.user.uid === uid;
     clSet('link');
     let tx = null, pk = '';
     const p = CLOUD.linking = clLoad(2).then(() => {
       if (!same()) return null;
+      if (TRO.ro) { CLOUD.mine = false; clSet(TRO.s && TRO.s.cs ? 'relog' : 'out'); clMsg('newer'); return null; }
       clRef();
       // (another account's copy goes first - parked for that account, its unsaved part kept; this browser's own comes
       // back. Never under an open hold, maybe another tab's: signed in, not linked, 'held')
@@ -6423,6 +6430,8 @@ window.PG = window.PG || {};
   // tab linked meanwhile (its record stands) or opened a hold (never joined under a hold: 'held')
   function clLinkDone(res, uid, pk) {
     CLOUD.mine = false;
+    // (looks L0 6.7: a page read-only by now neither joins nor uploads - nothing written)
+    if (TRO.ro || (res && res.ro)) { if (CLOUD.st === 'link') clSet(TRO.s && TRO.s.cs ? 'relog' : 'out'); clMsg('newer'); return; }
     let how = '', had = 0, now = 0, D = null;
     if (res && res.data !== undefined) {
       D = clDoc(res.data);
@@ -6653,12 +6662,19 @@ window.PG = window.PG || {};
   // the account's copy goes from this browser (it is in the cloud) - or, for another account signing in over it (park),
   // is parked for its own next sign-in here (clPark: what it had not pushed is not lost). Never with a hold open (checked
   // in the same read-modify-write: another tab may have opened one meanwhile) -> false, nothing changed
+  // (looks L0 6.7: the soft cap is per browser and day, whichever store is active - the store coming back takes the
+  // leaving store's day count, so a sign-out -> sign-in never restarts the 400-coin day)
+  function clDayCarry(from, to) {
+    if (from.cd > to.cd) { to.cd = from.cd; to.cde = from.cde; } else if (from.cd === to.cd) to.cde = Math.max(to.cde, from.cde);
+  }
   function clUnlink(park) {
+    if (TRO.ro) { clMsg('newer'); return false; }          // (looks L0 6.7: the put-aside store is never erased from here)
     let done = false;
     troMut((S) => {
       if (S.esc.length) return;
       if (park && S.cs) clPark(S);
       const g = troParse(sget(clGuestKey()) || ''), back = g && g !== 'newer' ? g : troFresh();
+      clDayCarry(S, back);
       for (const k of Object.keys(S)) delete S[k];
       Object.assign(S, back); delete S.cs;
       done = true;
@@ -6671,12 +6687,14 @@ window.PG = window.PG || {};
   // this account's parked copy comes back (clLink, before anything is uploaded or joined): this browser's own store is
   // put aside as for a join; false = none, or the store changed meanwhile (linked by another tab, a hold) - kept parked
   function clRestore(uid) {
+    if (TRO.ro) return false;                              // (looks L0 6.7)
     const P = clParked(uid, false); if (!P) return false;
     let done = false;
     troMut((S) => {
       if (S.cs || S.esc.length) return;
       const own = Object.assign({}, S); delete own.cs;
       sset(clGuestKey(), JSON.stringify(own));
+      clDayCarry(S, P);
       for (const k of Object.keys(S)) delete S[k];
       Object.assign(S, P); done = true;
     });
@@ -6705,6 +6723,9 @@ window.PG = window.PG || {};
   // another tab changed the store (after troRead + troSync): it linked -> load / resume here too; it signed out -> 'out'
   function clStore() {
     if (!CLOUD.on || stopped) return;
+    // (looks L0 6.7: a newer page wrote this browser's store - read-only now: stop listening (clCanPush refuses with
+    // CLOUD.newer), say so; nothing of the cloud's is written from here again)
+    if (TRO.ro) { if (!CLOUD.newer) { clStopListen(); CLOUD.newer = true; clMsg('newer'); } clUI(); clBadge(); return; }
     const S = TRO.s;
     if (S && S.cs) {
       if (!CLOUD.auth) { if (CLOUD.st === 'out') clSet('in'); clLoad(1).then(() => { if (!clApp() && CLOUD.auth) clAuthIn(CLOUD.auth.currentUser); }, () => { clUI(); clBadge(); }); return; }
@@ -6814,6 +6835,7 @@ window.PG = window.PG || {};
     });
   }
   function clUI() {
+    if (shownOverlay === 'login') lgUI();      // (the login screen follows the same state)
     if (dom.recCard) dom.recCard.classList.toggle('has-cloud', CLOUD.on);
     const btn = dom.cloudBtn, line = dom.cloud, tx = dom.cloudTx;
     if (!CLOUD.on || !btn || !line || !tx) return;
@@ -6870,6 +6892,140 @@ window.PG = window.PG || {};
     if (!CLOUD.on || CLOUD.st !== 'out' || CLOUD.auth) return;
     const gen = CLOUD.gen;
     clLoad(1).then(() => { if (gen === CLOUD.gen) clApp(); }, () => { /* the tap tries again and says so */ });
+  }
+
+  // ---- the login screen (design/cloud-trophies.md "As built (login screen)"): on the deploy with the cloud on - and on a
+  // PR preview, its Google button off - a browser that is not linked and never chose to play as a guest sees it before
+  // the title. Made here (the artifact's markup has none of it); nothing at all without the cloud or a preview
+  const PREVIEW = (() => { let v = ''; try { v = window.PG_PREVIEW; } catch (e) { v = ''; } return typeof v === 'string' && /^[1-9]\d{0,6}$/.test(v) ? v : ''; })();
+  // (the screen is the bathhouse's front desk: a greeting, the six regulars soaking in the tub, two ways in - no
+  // explanation; the line under the buttons speaks only when the sign-in has something to say)
+  const LG_TX = { why: '어서 오세요, 손님!', go: 'Google로 계속하기', guest: '손님으로 입장하기', note: '', pv: '미리보기에서는 로그인을 할 수 없어요' };
+  const LOGIN_TEXT = Object.keys(LG_TX).map((k) => LG_TX[k]).join(' ') + ' ' + CL_TX.authing + ' ' + CL_TX.linking;
+  const LOGIN = { el: null, go: null, goTx: null, guest: null, st: null, rec: false, inUI: false };
+  const lgOn = () => CLOUD.on || !!PREVIEW;
+  // the guest choice ('1'), per test namespace like the store's keys (a preview's Storage adds its own suffix)
+  const lgKey = () => 'ppogeul-login' + clSfx();
+  // at load: show it? (an invite link goes straight to 친구와 하기; no storage: nothing could be remembered or linked;
+  // a frame with nowhere to go and no sign-in here: nothing to offer)
+  function lgWanted() {
+    if (!lgOn() || NET.joinLink || TRO.mem || TRO.ro || sget(lgKey())) return false;
+    if (!CLOUD.on) return true;
+    if (TRO.s && TRO.s.cs) return false;
+    const st = CLOUD.st;
+    if (st === 'off' || st === 'nostore' || st === 'in' || st === 'relog') return false;
+    return st !== 'frame' || !!clOutsideUrl();
+  }
+  function lgSetupDOM(click) {
+    if (!lgOn() || LOGIN.el || !dom.screen) return;
+    const sec = h('section', 'pg-ov pg-login'); sec.id = 'pg-login'; sec.hidden = true; sec.setAttribute('aria-labelledby', 'pg-login-h');
+    const card = h('div', 'pg-card pg-login-card');
+    const logo = dom.title && dom.title.querySelector('.pg-logo');
+    const hd = logo ? logo.cloneNode(true) : h('h2', 'pg-logo', GAME_NAME); hd.id = 'pg-login-h';
+    const why = h('p', 'pg-login-why', LG_TX.why); why.id = 'pg-login-why';
+    // the tub: the six animals' busts (each in its own worn set) bobbing in the water, decoration only
+    const tub = h('div', 'pg-login-tub'); tub.setAttribute('aria-hidden', 'true');
+    for (const c of CHAR_IDS) { const cv = portraitCanvas(c, 'portrait_', 32, myLook(c)); cv.className = 'pg-login-ani'; tub.appendChild(cv); }
+    const btns = h('div', 'pg-login-btns');
+    const go = h('button', 'pg-btn pg-login-go'); go.type = 'button'; go.id = 'pg-login-go';
+    // (Google's four-colour "G", unaltered, on its own white disc - Google's sign-in branding; static markup only)
+    const gl = h('span', 'pg-login-g'); gl.setAttribute('aria-hidden', 'true');
+    gl.innerHTML = '<svg viewBox="0 0 48 48" width="18" height="18"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>'
+      + '<path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>'
+      + '<path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>'
+      + '<path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
+    go.appendChild(gl);
+    const goTx = h('span', 'pg-login-gotx', LG_TX.go); go.appendChild(goTx);
+    go.setAttribute('aria-describedby', 'pg-login-why pg-login-st');
+    const guest = h('button', 'pg-btn pg-ghost pg-login-guest', LG_TX.guest); guest.type = 'button'; guest.id = 'pg-login-guest';
+    if (PREVIEW && !CLOUD.on) { go.disabled = true; guest.setAttribute('data-primary', ''); } else go.setAttribute('data-primary', '');
+    btns.append(go, guest);
+    const st = h('p', 'pg-login-st'); st.id = 'pg-login-st'; st.setAttribute('aria-live', 'polite');
+    card.append(hd, tub, why, btns, st); sec.appendChild(card);
+    dom.screen.insertBefore(sec, dom.title || null);
+    Object.assign(LOGIN, { el: sec, go, goTx, guest, st });
+    dom.login = sec;
+    click('pg-login-go', lgGo); click('pg-login-guest', lgGuest);
+    try { for (const q of ['.pg-fw-body', '.pg-fw-sign']) { const fw = document.querySelector('#pg-fontwarm ' + q); if (fw && fw.textContent.indexOf(LG_TX.go) < 0) fw.textContent += ' ' + LOGIN_TEXT; } } catch (e) { /* ignore */ }
+  }
+  // boot (after clBoot: the cloud's state is known - a redirect sign-in coming back shows it 'auth')
+  function lgBoot() {
+    if (!LOGIN.el || !lgWanted()) return false;
+    showOverlay('login');
+    clWarm();                                   // (as 내 기록 does: the SDK's first files, so the tap opens the popup at once)
+    return true;
+  }
+  function lgGo() {
+    firstGesture();
+    if (!CLOUD.on || shownOverlay !== 'login') return;
+    if (CLOUD.st === 'in') { lgUI(); return; }
+    if (LOGIN.go.getAttribute('aria-disabled') === 'true') return;
+    clClick(); lgUI();
+  }
+  // 로그인 없이 하기: remembered here, the title (a sign-in already on its way may still finish: the badge then shows it)
+  function lgGuest() {
+    firstGesture();
+    if (shownOverlay !== 'login') return;
+    sset(lgKey(), '1'); LOGIN.rec = false;
+    if (CLOUD.on && CLOUD.msg && CLOUD.msg.err && !CLOUD.msg.at) { clearTimeout(CLOUD.msgT); CLOUD.msg = null; }   // (the screen's failure is over)
+    showOverlay('title');
+  }
+  // signed in and linked: the title (a redirect sign-in that came back opens 내 기록 there, as from the title)
+  function lgDone() {
+    if (shownOverlay !== 'login') return;
+    showOverlay('title');
+    if (LOGIN.rec) { LOGIN.rec = false; openRec(); }
+  }
+  // the screen follows the cloud's state (clUI) - the same labels and lines as 내 기록's row
+  function lgUI() {
+    if (!LOGIN.el || shownOverlay !== 'login' || LOGIN.inUI) return;
+    if (CLOUD.on && CLOUD.st === 'in' && TRO.s && TRO.s.cs) { LOGIN.inUI = true; try { lgDone(); } finally { LOGIN.inUI = false; } return; }
+    let lbl = LG_TX.go, busy = false, hide = false, line = LG_TX.note, cls = 'pg-login-st';
+    if (!CLOUD.on) { line = LG_TX.pv; cls += ' is-pv'; }
+    else {
+      const st = CLOUD.st, again = st === 'auth' && CLOUD.pop, M = CLOUD.msg;
+      if (st === 'frame' || st === 'inapp') { lbl = CL_BTN[st]; hide = !clOutsideUrl(); }
+      else if (again) lbl = CL_BTN.again;
+      else if (st === 'load' || st === 'auth' || st === 'link') { lbl = CL_BTN[st]; busy = true; }
+      else if (st === 'nostore' || st === 'relog') hide = true;
+      if (M) { line = M.txt; cls += M.err ? ' is-err' : ' is-msg'; }
+      else if (st !== 'out') { const [k, c] = clLine(); line = CL_TX[k]; if (c) cls += ' ' + c; }
+    }
+    setTxt(LOGIN.goTx, lbl);
+    // (each ' · ' part a unit, as 내 기록's line: a 2-line text breaks after its '·', never before it)
+    if (LOGIN.st._t !== line) {
+      LOGIN.st._t = line; LOGIN.st.textContent = '';
+      if (line) String(line).split(' · ').forEach((p, i, a) => { if (i) LOGIN.st.appendChild(document.createTextNode(' ')); LOGIN.st.appendChild(h('span', 'pg-cloud-c', p + (i < a.length - 1 ? ' ·' : ''))); });
+    }
+    if (LOGIN.st.className !== cls) LOGIN.st.className = cls;
+    if (LOGIN.go.hidden !== hide) {
+      LOGIN.go.hidden = hide;
+      if (hide && document.activeElement === LOGIN.go) try { LOGIN.guest.focus({ preventScroll: true }); } catch (e) { /* ignore */ }
+    }
+    LOGIN.go.setAttribute('aria-disabled', busy ? 'true' : 'false');
+    if (busy) LOGIN.go.setAttribute('aria-busy', 'true'); else LOGIN.go.removeAttribute('aria-busy');
+  }
+  // ←/→/↑/↓ between the screen's buttons (Tab works as everywhere)
+  function lgArrow(code) {
+    if (!LOGIN.el || !/^Arrow(Left|Right|Up|Down)$/.test(code)) return false;
+    const bs = [LOGIN.go, LOGIN.guest].filter((b) => !b.hidden && !b.disabled);
+    if (!bs.length) return true;
+    const i = bs.indexOf(document.activeElement), d = code === 'ArrowLeft' || code === 'ArrowUp' ? -1 : 1;
+    try { bs[i < 0 ? 0 : (i + d + bs.length) % bs.length].focus({ preventScroll: true }); } catch (e) { /* ignore */ }
+    return true;
+  }
+  function lgDebugApi() {
+    const api = {
+      state: () => ({ on: lgOn(), preview: PREVIEW, made: !!LOGIN.el, shown: shownOverlay === 'login', overlay: shownOverlay || null, key: lgKey(), guest: sget(lgKey()) || '',
+        wanted: lgWanted(), btn: LOGIN.goTx ? LOGIN.goTx.textContent : '', btnHidden: LOGIN.go ? LOGIN.go.hidden : true, btnDisabled: LOGIN.go ? LOGIN.go.disabled : true,
+        busy: LOGIN.go ? LOGIN.go.getAttribute('aria-disabled') === 'true' : false, line: LOGIN.st ? LOGIN.st.textContent : '', cls: LOGIN.st ? LOGIN.st.className : '',
+        focus: document.activeElement && document.activeElement.id || '' }),
+      // (tests) as at load: shown if wanted (force: shown anyway) -> the state
+      show(force) { if (LOGIN.el && (force || lgWanted())) { showOverlay('login'); lgUI(); } return api.state(); },
+      go() { lgGo(); return api.state(); }, guest() { lgGuest(); return api.state(); },
+      forget() { sset(lgKey(), ''); return api.state(); },
+    };
+    return api;
   }
 
   // ---- PG.debug.cloud (11)
@@ -8300,6 +8456,7 @@ window.PG = window.PG || {};
     if (name === 'title' && dom.titleHi) dom.titleHi.textContent = G.hiscore.toLocaleString('ko-KR');
     if (name === 'title') { syncPicker(); troStale(); syncTroBadge(); syncShopBtn(); }
     if (name === 'rec') fillRec();
+    if (name === 'login') lgUI();
     if (name === 'pause' || name === 'over') updateStampCards();
     // an online guest's co-op result counts toward its own best too (the host saves its own; guests never run gameOver)
     if ((name === 'over' || name === 'ending') && G.online && G.role === 'guest' && G.gameMode === 'coop' && G.score > G.hiscore) {
@@ -8352,7 +8509,7 @@ window.PG = window.PG || {};
     syncWords();
   }
   // ---- v3 DOM: the animal picker (title), co-op results, the podium card, name tags and word pops
-  const OVERLAYS = ['title', 'pause', 'over', 'ending', 'podium', 'friends', 'room', 'rec', 'hub'];
+  const OVERLAYS = ['title', 'pause', 'over', 'ending', 'podium', 'friends', 'room', 'rec', 'hub', 'login'];
   // (lk: a worn set - a portrait_ bust wears its 머리 / 얼굴 / 목 (lookPortrait, shop.md 6.8); tw: the seat whose twin
   // colour the bust takes, distinction §2.10 - recoloured first, then the items are drawn on it)
   function portraitCanvas(c, name, size, lk, tw) {
@@ -8681,7 +8838,7 @@ window.PG = window.PG || {};
   function toggleMute() { firstGesture(); Snd.setMuted(!Snd.muted()); updateMuteUI(); }
   function clearKeys() { for (const k in keys) keys[k] = false; for (const k in touchIn) touchIn[k] = false; }
   function primaryAction() {
-    if (shownOverlay === 'hub') return;                 // (the 상점 / 마이페이지: nothing starts a game behind it)
+    if (shownOverlay === 'hub' || shownOverlay === 'login') return;   // (the 상점 / 마이페이지 / the login screen: nothing starts a game behind it)
     if (shownOverlay === 'rec') { closeRec(); return; } // (내 기록 over the title: never a solo start)
     if (G.menuOpen) { resumeGame(); return; }
     // online: only the host picks what comes next (guests wait on the result screens)
@@ -8724,6 +8881,14 @@ window.PG = window.PG || {};
       if (code === 'Escape') { e.preventDefault(); if (!e.repeat) { if (HUB.draw.anim) drawSkip(); else closeHub(); } }
       else if (code === 'KeyM' && !e.repeat) toggleMute();
       else if (hubArrow(e, code)) e.preventDefault();
+      return;
+    }
+    // the login screen: its two buttons (Enter / Space press the focused one, the arrows move between them); no game key
+    // does anything behind it, M mutes
+    if (shownOverlay === 'login') {
+      if (onButton && (code === 'Enter' || code === 'NumpadEnter' || code === 'Space')) { if (e.repeat) e.preventDefault(); return; }
+      if (code === 'KeyM') { if (!e.repeat) toggleMute(); return; }
+      if (lgArrow(code) || KEYMAP[code] || code === 'Enter' || code === 'NumpadEnter' || code === 'Escape' || code === 'KeyP') e.preventDefault();
       return;
     }
     // 내 기록 over the title: Escape / Enter / jump / shoot close it (never a solo start, a pause or an animal pick)
@@ -8893,6 +9058,7 @@ window.PG = window.PG || {};
     hubSetupDOM(click); // (v4 shop: the title's 상점 button, the badge -> 마이페이지, the hub, the room's 꾸미기)
     pwaSetupDOM(click); // (the standalone deploy's install pill / iOS hint / fullscreen toggle; nothing in the artifact)
     clSetupDOM();       // (cloud trophies: the warm-up text; nothing without the cloud)
+    lgSetupDOM(click);  // (the login screen: the deploy with the cloud / a PR preview only)
     click('pg-sound', toggleMute);
     click('pg-pausebtn', togglePause);
     listen(window, 'keydown', onKeyDown);
@@ -11142,6 +11308,8 @@ window.PG = window.PG || {};
     shop: shopDebugApi(),
     // v4 cloud trophies (design/cloud-trophies.md 11): the state, a fake SDK for tests, the pure parts
     cloud: clDebugApi(),
+    // the login screen (design/cloud-trophies.md "As built (login screen)")
+    login: lgDebugApi(),
     // v4 뽑기 (design/gacha.md 12): the pure draw, the odds, a test generator, the pace simulation
     draw: drawDebugApi(),
     // the standalone deploy's install UI: its state; set = { ios, inApp, framed, installed } to stage a platform
@@ -11287,6 +11455,7 @@ window.PG = window.PG || {};
     setupDOM();
     toTitle();
     clBoot(); // (cloud trophies: a linked browser listens again, a sign-in redirect comes back; nothing without the cloud)
+    if (!NET.joinLink) lgBoot(); // (the login screen before the title: not linked, never played as a guest - deploy / preview only)
     if (NET.joinLink) netOpenFriends(''); // (an invite link: straight to 친구와 하기, code filled in)
     render();
     requestAnimationFrame(loop);
