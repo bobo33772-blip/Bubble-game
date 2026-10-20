@@ -206,7 +206,7 @@ window.PG = window.PG || {};
   const BOSS_TYPES = Object.keys(BOSS_DEF);
   // ---- v4 trophies (트로피, design/trophies.md): the constants live up here - REQUIRED / SPR_SIZE and the font warm-up
   // read them at load (the trophy code itself is its own section after the word pops)
-  const TRO_KEY = 'ppogeul-trophy', TRO_V = 4, TRO_MAX = 99999, TRO_GIFT = 30;   // (TRO_V 2: + the shop's coins and items, shop.md 5; 3: the worn set per animal, design/looks-per-animal.md; 4: the 뽑기, gacha.md)
+  const TRO_KEY = 'ppogeul-trophy', TRO_V = 4, TRO_MAX = 99999, TRO_GIFT = 100;   // (TRO_V 2: + the shop's coins and items, shop.md 5; 3: the worn set per animal, design/looks-per-animal.md; 4: the 뽑기, gacha.md)
   const LEAGUES = [
     { name: '때밀이 견습', min: 0, col: '#6fd08a' },     // lg_0 green 이태리타올 (placement never costs here)
     { name: '뽀득 새내기', min: 60, col: '#ff9ec4' },    // lg_1 pink soap + bubble
@@ -217,15 +217,17 @@ window.PG = window.PG || {};
     { name: '목욕탕 왕', min: 1200, col: '#ffd447' },    // lg_6 bathhouse crown
   ];
   const STAKES = [0, 5, 10, 20, 50];
-  const BASE = { 2: [10, -6], 3: [12, 3, -6], 4: [14, 6, -2, -6] };     // by place; n = players at 시작!
-  const RUN_CAP = 15, DAY_CAP = 20;                                       // 목욕 보너스 per run / per local day
+  const BASE = { 2: [12, -6], 3: [15, 5, -6], 4: [16, 8, 2, -6] };     // by place; n = players at 시작! (last place -6: the hold stays s + 6)
+  // 목욕 보너스 per run / the 오늘 트로피 보너스 per local day (solo, co-op and battles share it) / per real battle (troReal)
+  const RUN_CAP = 30, DAY_CAP = 40, TRO_PLAY = 5;
   const TRO_WAIT_MS = 15000, TRO_AWAY_MS = 30000, TRO_STALE_MS = 15 * 60000, TRO_SLACK_MS = 15000;
   const MID_RE = /^[0-9a-z]{6}\.\d{1,9}$/, ID6_RE = /^[0-9a-z]{6}$/;
   const leagueOf = (t) => { let i = 0; while (i + 1 < LEAGUES.length && t >= LEAGUES[i + 1].min) i++; return i; };
   // every Korean string the trophy UI shows (warmed in setupDOM next to V3_TEXT; kept apart from it on purpose)
   const TRO_TEXT = LEAGUES.map((l) => l.name).join(' ') +
     ' 내 트로피 내 기록 트로피 개 개씩 개부터 최고 트로피 배틀 승 판 뽀득 KO 혼자 최고 점수 리그 다음 리그까지 최고 리그예요! 닫기' +
-    ' 오늘 목욕 보너스 배틀은 제한이 없어요 이 브라우저에서는 기록이 저장되지 않아요 처음 선물로 트로피 30개를 받았어요! 친구와 배틀할 때 걸어 봐요' +
+    ' 오늘 트로피 보너스 목욕도 배틀도 받아요 이 브라우저에서는 기록이 저장되지 않아요 처음 선물로 트로피 100개를 받았어요! 친구와 배틀할 때 걸어 봐요' +
+    ' 끝까지 한 판마다 하루 개까지' +
     ' 트로피 걸기 안 걸기 트로피 부족 연습 경기 트로피가 모자라요 방장에게 걸기를 낮춰 달라고 해요 트로피가 모자란 친구가 있어요 걸기를 낮춰 주세요 내 트로피가 모자라요' +
     ' 걸기를 낮췄어요: 걸기가 바뀌었어요: 다시 준비해 주세요 트로피 경기: 모두 개씩 걸고 1등이 다 가져요: 1등 2등 3등 4등' +
     ' 견습 리그는 등수로 잃지 않아요 판 중간에 나가면 꼴찌로 쳐요 연습 경기예요: 이 브라우저의 탭끼리는 트로피가 바뀌지 않아요 같은 기기에서 들어온 친구가 있어요' +
@@ -3788,7 +3790,9 @@ window.PG = window.PG || {};
   // set and not told about per-animal dressing yet - cleared by the first dressing, never synced)
   // (v 4, design/gacha.md 5.1: dn the draws ever made - the account's when linked -, pt the pity, gd the drawn subset of
   // own, dl / ds the last batch and the n of the last one shown, nw the drawn items not looked at, gs the 뽑기 tab seen)
-  function troFresh() { return { v: TRO_V, dev: troRand(8), t: TRO_GIFT, best: TRO_GIFT, bl: 0, w: 0, g: 0, ko: 0, day: 0, de: 0, seen: 0, esc: [],
+  // (bl starts at the gift's league - 100 is 뽀득 새내기 - and troParse never lets it sit below the count's: no 승급! for a
+  // league held from the start, and the shop's league locks read it right; trophies.md 0)
+  function troFresh() { return { v: TRO_V, dev: troRand(8), t: TRO_GIFT, best: TRO_GIFT, bl: leagueOf(TRO_GIFT), w: 0, g: 0, ko: 0, day: 0, de: 0, seen: 0, esc: [],
     ce: 0, sp: 0, own: [], eq: LOOKS0, lh: 0, cd: 0, cde: 0, bd: 0, bs: 0, sh: 0, cv: 0, dn: 0, pt: 0, gd: [], dl: null, ds: 0, nw: [], gs: 0 }; }
   // untrusted (hand edits, other versions): clamped field by field; null = start fresh, 'newer' = a newer page's data.
   // v 1 (before the shop) reads with no coins and nothing worn, v 2 (one worn set) with that set copied to all six
@@ -3803,7 +3807,7 @@ window.PG = window.PG || {};
     const esc = (Array.isArray(o.esc) ? o.esc : []).filter((e) => e && typeof e === 'object' && typeof e.m === 'string' && MID_RE.test(e.m) && typeof e.tab === 'string' && ID6_RE.test(e.tab))
       .slice(-8).map((e) => ({ m: e.m, tab: e.tab, h: I(e.h, 56), s: STAKES.includes(e.s) ? e.s : 0, n: nInt(e.n, 2, 4, 2),
         p: e.p ? 1 : 0, st: e.st === 'wait' ? 'wait' : 'open', t0: nNum(e.t0, 0, 9e15, 0) }));
-    const out = { v: TRO_V, dev: o.dev, t, best: Math.max(t, I(o.best, TRO_MAX)), bl: I(o.bl, LEAGUES.length - 1), w: I(o.w, 1e6),
+    const out = { v: TRO_V, dev: o.dev, t, best: Math.max(t, I(o.best, TRO_MAX)), bl: Math.max(I(o.bl, LEAGUES.length - 1), leagueOf(t)), w: I(o.w, 1e6),
       g: I(o.g, 1e6), ko: I(o.ko, 1e6), day: I(o.day, 99991231), de: I(o.de, DAY_CAP), seen: o.seen ? 1 : 0, esc };
     // (the shop: valid catalog ids only, no duplicates, never the starter, <= 64; the worn set keeps only what is owned)
     const own = Array.from(new Set((Array.isArray(o.own) ? o.own : []).filter((x) => isItemId(x) && x !== STARTER))).slice(0, 64);
@@ -3923,6 +3927,7 @@ window.PG = window.PG || {};
   function troTable(n, s, fin, gl) {
     const m = fin.length, pot = s * (m + gl), B = BASE[n];
     if (!B || !m || (m === 1 && !gl)) return [];
+    if (m === 1) return [[fin[0].slot, 1, 0, pot, fin[0].k]];  // 기권승 (the rest gave up): the pot only, no 1st-place base (coinBattle)
     if (m >= 2 && fin.every((r) => sameRes(r, fin[0]))) return fin.map((r) => [r.slot, 1, 0, Math.floor(pot / m), r.k]); // 무승부
     const out = [];
     for (let i = 0; i < m;) {                                   // a tie group shares its places' points; a tie for 1st, the pot
@@ -3945,8 +3950,8 @@ window.PG = window.PG || {};
   }
 
   // ---- 목욕 보너스 (solo and online co-op): progress only. A run starts at round index loop * N + round (newGame /
-  // newCoop / continueLoop; a guest's co-op run at its first snapshot of a game id); +1 per 3 탕 cleared, +2 per boss, +4
-  // for the ending, at most RUN_CAP a run and DAY_CAP a local day; paid at the 목욕 끝 / ending cards, incrementally
+  // newCoop / continueLoop; a guest's co-op run at its first snapshot of a game id); +2 per 3 탕 cleared, +4 per boss, +8
+  // for the ending, at most RUN_CAP a run and DAY_CAP a local day (the pool battles' +5 comes from too: troApply); paid at the 목욕 끝 / ending cards, incrementally
   function troRunStart() { TRO.run = G.attract || G.gameMode === 'battle' ? null : { at: G.loop * LEVELS.length + G.round, got: 0 }; }
   // offline solo (not the attract demo, not debug local co-op), or online co-op that is ranked (NET.q === 0)
   const troBonusOk = () => !G.attract && (G.online ? G.gameMode === 'coop' && NET.q === 0 : G.gameMode === 'solo');
@@ -3954,7 +3959,7 @@ window.PG = window.PG || {};
     const R = TRO.run; if (!R || !troBonusOk() || !TRO.s) return null;
     const N = LEVELS.length, end = G.loop * N + G.round + (ended ? 1 : 0), cleared = Math.max(0, end - R.at);
     let boss = 0; for (let i = R.at; i < end; i++) if (LEVELS[i % N].boss) boss++;
-    const P = Math.min(RUN_CAP, Math.floor(cleared / 3) + 2 * boss + (ended ? 4 : 0));
+    const P = Math.min(RUN_CAP, 2 * Math.floor(cleared / 3) + 4 * boss + (ended ? 8 : 0));
     return troMut((S) => {
       const day = troToday(); if (S.day !== day) { S.day = day; S.de = 0; }
       const want = Math.max(0, P - R.got), give = Math.min(want, DAY_CAP - S.de);
@@ -3989,8 +3994,19 @@ window.PG = window.PG || {};
     if (TRO.waits.has(mid)) { clearTimeout(TRO.waits.get(mid)); TRO.waits.delete(mid); }
     if (NET.sess && NET.role === 'guest') troCupOut(mid);  // the host's room chips / rematch gate want my new count
   }
-  // a result: my own row only, once, clamped by my own numbers (players and stake from MY hold, never the message's)
-  function troApply(mid, rows, slot, host) {
+  // the +5 (TRO_PLAY) 오늘 트로피 보너스 of a battle is for a real match, the same test as the battle coins (coinBattle): more
+  // than one finisher (a 기권승 never pays it), >= COIN.minF played on the clock it ended on (leftF: the host's G.podium.te;
+  // a guest passes 0 - troApply takes its result only after the battle clock could have run anyway), and >= COIN.gameShots
+  // bubbles I blew this match (CO.bshots, reset at 시작!)
+  function troReal(nf, leftF) {
+    const played = ((G.opts && G.opts.time) || 3) * 3600 - (leftF > COIN.walkF ? leftF : 0);
+    return nf >= 2 && played >= COIN.minF && CO.bshots >= COIN.gameShots;
+  }
+  // a result: my own row only, once, clamped by my own numbers (players and stake from MY hold, never the message's).
+  // real (troReal): + TRO_PLAY from today's trophy bonus pool (day / de, DAY_CAP - shared with the 목욕 보너스), inside the
+  // same mutation, so only a hold of mine that gets a result can pay it (never practice, a refund, a void match); kept
+  // apart from net (the podium shows it as its own mark)
+  function troApply(mid, rows, slot, host, real) {
     const L = TRO.live.get(mid);
     // a guest takes a result only after the match could have been played: a modified host cannot drain anyone faster
     // than the battle clock (rejected = the hold stays -> 'wait' -> refund)
@@ -4003,11 +4019,15 @@ window.PG = window.PG || {};
       const place = nInt(row[1], 1, n, n);
       let base = nInt(row[2], B[n - 1], B[0], B[n - 1]); if (e.p && base < 0) base = 0;
       const share = nInt(row[3], 0, s * n, 0), kos = nInt(row[4], 0, 99, 0);
-      const before = S.t + e.h, after = clamp(before + base + share - s, 0, TRO_MAX), win = place === 1 && base > 0;
-      S.t = after; S.g = Math.min(1e6, S.g + 1); if (win) S.w = Math.min(1e6, S.w + 1);
-      S.ko = Math.min(1e6, S.ko + kos); S.best = Math.max(S.best, after);
+      // (a win: 1st with points, or a 기권승 - my row alone, base 0, the pot only; a 무승부 is 1st with 0 among several)
+      const walk = rows.filter(Array.isArray).length === 1;
+      const before = S.t + e.h, after = clamp(before + base + share - s, 0, TRO_MAX), win = place === 1 && (base > 0 || (walk && base === 0));
+      let bonus = 0;
+      if (real && !walk) { const day = troToday(); if (S.day !== day) { S.day = day; S.de = 0; } bonus = clamp(Math.min(TRO_PLAY, DAY_CAP - S.de), 0, TRO_MAX - after); S.de += bonus; }
+      S.t = after + bonus; S.g = Math.min(1e6, S.g + 1); if (win) S.w = Math.min(1e6, S.w + 1);
+      S.ko = Math.min(1e6, S.ko + kos); S.best = Math.max(S.best, S.t);
       S.esc = S.esc.filter((q) => q !== e);
-      return { place, net: after - before, now: after, win, promo: troPromo(S) };
+      return { place, net: after - before, now: S.t, bonus, win, promo: troPromo(S) };
     });
     if (res) { TRO.live.delete(mid); if (TRO.waits.has(mid)) { clearTimeout(TRO.waits.get(mid)); TRO.waits.delete(mid); } }
     return res;
@@ -4078,7 +4098,7 @@ window.PG = window.PG || {};
     const gl = M.slots.filter((sl) => !fin.some((f) => f.slot === sl) && M.gg.has(sl)).length;
     const rows = troTable(M.n, M.s, fin, gl);
     if (!rows.length) { troClose(M.mid, 'refund', 'void'); troPodium(M.mid, [], M.n, M.s, null, 'void'); return; }
-    const res = troApply(M.mid, rows, 0, true);
+    const res = troApply(M.mid, rows, 0, true, troReal(fin.length, G.podium.te));
     if (NET.sess) NET.sess.send('*', { t: 'tro', m: M.mid, n: M.n, s: M.s, r: rows });
     TRO.lastRes = { mid: M.mid, s: M.s };            // the 한 판 더 gate waits for each guest's 'cup' of this mid
     troPodium(M.mid, rows, M.n, M.s, res);
@@ -4092,11 +4112,11 @@ window.PG = window.PG || {};
   function troResultIn(m) {
     const mid = typeof m.m === 'string' && MID_RE.test(m.m) ? m.m : ''; if (!mid) return;
     const rows = Array.isArray(m.r) ? m.r.slice(0, 4) : [];
-    const res = troApply(mid, rows, NET.slots.get(NET.selfId), false);
+    const res = troApply(mid, rows, NET.slots.get(NET.selfId), false, troReal(rows.filter(Array.isArray).length, 0));
     // display only (8.8). A repeat for a match already shown (a replay, a hostile extra) keeps my own applied change and
     // never restarts the podium's animation
     const P = TRO.pod && TRO.pod.mid === mid ? TRO.pod : null;
-    if (!P || P.t0 < 0) troPodium(mid, rows, nInt(m.n, 2, 4, 2), STAKES.includes(m.s) ? m.s : 0, res || (P && P.net !== null ? { net: P.net, now: P.now, promo: P.promo } : null), undefined, P ? P.at : undefined);
+    if (!P || P.t0 < 0) troPodium(mid, rows, nInt(m.n, 2, 4, 2), STAKES.includes(m.s) ? m.s : 0, res || (P && P.net !== null ? { net: P.net, now: P.now, promo: P.promo, bonus: P.bonus } : null), undefined, P ? P.at : undefined);
     troCupOut(mid);                                                                   // always: the host's rematch gate
     if (shownOverlay === 'podium') { fillPodium(); troPodiumUI(); }
   }
@@ -4160,7 +4180,7 @@ window.PG = window.PG || {};
       const all = Array.from(m.values()), rl = (Array.isArray(rows) ? rows : []).filter(Array.isArray);
       kind = rl.length >= 2 && rl.every((r) => +r[1] === 1 && +r[2] === 0) ? 'draw' : rl.length === 1 ? 'walk' : all.length ? 'win' : 'prac';
     }
-    TRO.pod = { mid, kind, rows: m, n, s, net: res ? res.net : null, now: res ? res.now : null, promo: res ? res.promo : -1,
+    TRO.pod = { mid, kind, rows: m, n, s, net: res ? res.net : null, now: res ? res.now : null, promo: res ? res.promo : -1, bonus: res ? res.bonus | 0 : 0,
       at: at !== undefined ? at : G.podium ? G.podium.t : 0, t0: -1, fl: null, flipAt: -1, landed: 0, upDone: false, promoDone: false };
   }
   // the result of THIS game id only (a late one for the previous game is never drawn on the next podium)
@@ -4191,7 +4211,7 @@ window.PG = window.PG || {};
       if (p) burst(p.x + 8, p.y - 3, 4, ['#ffd447', '#fff1a6', '#ffb24a'], 1.2, 12);
     }
     const end = P.flipAt + (rm ? 0 : 20), mine = P.rows.get(me);
-    if (!P.upDone && t >= end) { P.upDone = true; if (mine && mine.net) troSfx(mine.net > 0 ? 'tro_up' : 'tro_down'); }
+    if (!P.upDone && t >= end) { P.upDone = true; if (mine && mine.net) troSfx(mine.net > 0 ? 'tro_up' : 'tro_down'); troPodBonus(); }
     if (P.promo >= 0 && !P.promoDone && t >= end + 20) { P.promoDone = true; troSfx('promote'); troPodiumTag(); }
   }
   // drawn by drawPodium: a block's 2nd line once flipped (cup + the signed change, counting up) and the flying cups
@@ -4228,12 +4248,20 @@ window.PG = window.PG || {};
     if (el.className !== cls) el.className = cls;
     el.hidden = !txt;
   }
+  // my 오늘 트로피 보너스 of this match (troApply's bonus, apart from the net on my block): its own line once my change has
+  // counted up (troPodiumTick's upDone)
+  function troPodBonus() {
+    const el = $('pg-podium-bonus'); if (!el) return;
+    const P = G.online ? troPodNow() : null, txt = P && P.bonus > 0 && P.upDone ? '오늘 트로피 보너스 +' + P.bonus : '';
+    if (el.textContent !== txt) el.textContent = txt;
+    el.hidden = !txt;
+  }
   function troPodiumUI() {
     if (G.online && NET.sess && NET.q !== 0 && G.podium) {
       const mid = NET.ms + '.' + NET.gid;
       if (!TRO.pod || TRO.pod.mid !== mid) TRO.pod = { mid, kind: 'prac', rows: new Map(), promo: -1, at: 0, t0: -1, fl: null, flipAt: -1, landed: 0 };
     }
-    troPodiumTag();
+    troPodiumTag(); troPodBonus();
     const host = G.online && NET.sess && NET.role === 'host', P = G.online ? troPodNow() : null;
     const again = $('pg-podium-again'), note = $('pg-podium-note');
     const ok = troCanRematch();
@@ -4324,8 +4352,8 @@ window.PG = window.PG || {};
     const de = S.day === troToday() ? S.de : 0;
     // (the deploy with the cloud, in a frame: it is the frame that keeps nothing - the cloud line offers the game's own page)
     setTxt($('pg-rec-note'), TRO.mem || TRO.ro ? (CLOUD.on && clEnv().framed ? CL_NOTE : '이 브라우저에서는 기록이 저장되지 않아요')
-      : S.g === 0 && S.de === 0 ? '처음 선물로 트로피 ' + TRO_GIFT + '개를 받았어요! 친구와 배틀할 때 걸어 봐요'
-        : '오늘 목욕 보너스 ' + de + '/' + DAY_CAP + '개 · 배틀은 제한이 없어요');
+      : S.g === 0 && S.de === 0 ? '처음 선물로 트로피 ' + S.best + '개를 받았어요! 친구와 배틀할 때 걸어 봐요'   // (the store's own gift: 30 before 2026-10)
+        : '오늘 트로피 보너스 ' + de + '/' + DAY_CAP + '개 · 목욕도 배틀도 받아요');
     clUI();                                      // (cloud trophies: the status line and the sign-in button)
   }
   // the 목욕 끝 / ending cards (8.9): the 트로피 row (+N and the count, or "오늘 보너스 끝"), then the 승급 chip
@@ -8656,7 +8684,7 @@ window.PG = window.PG || {};
     if (!dom.podiumSum || !G.podium) return;
     // (an online battle: what it did to my trophies, or that it was practice)
     const P = G.online ? troPodNow() : null, mine = P && P.rows.get(G.localSlot);
-    const tro = !P ? '' : P.kind === 'prac' ? ', 연습 경기라 트로피는 그대로예요' : mine && P.now !== null ? ', 내 트로피 ' + troSigned(mine.net) + '개, 지금 ' + P.now + '개' : '';
+    const tro = !P ? '' : P.kind === 'prac' ? ', 연습 경기라 트로피는 그대로예요' : mine && P.now !== null ? ', 내 트로피 ' + troSigned(mine.net) + '개' + (P.bonus > 0 ? ', 오늘 트로피 보너스 +' + P.bonus + '개' : '') + ', 지금 ' + P.now + '개' : '';
     dom.podiumSum.textContent = G.podium.order.map((slot, i) => {
       const p = G.players.find((q) => q.slot === slot);
       return p ? (i + 1) + '위 ' + nameOf(p) + ' (' + CHARS[p.char].name + ') ' + p.score.toLocaleString('ko-KR') + '점' : '';
@@ -10958,7 +10986,7 @@ window.PG = window.PG || {};
     if (dom.roomRules) {
       // (trophies first: what each place gets - or why nothing changes; co-op: the 목욕 보너스)
       const tro = q === 1 ? ['연습 경기예요: 이 브라우저의 탭끼리는 트로피가 바뀌지 않아요'] : q === 2 ? ['연습 경기예요: 같은 기기에서 들어온 친구가 있어요']
-        : NET.mode === 'battle' ? [troRulesLine(), '견습 리그는 등수로 잃지 않아요 · 판 중간에 나가면 꼴찌로 쳐요'] : ['끝까지 갈수록 모두 트로피를 받아요 (잃지 않아요)'];
+        : NET.mode === 'battle' ? [troRulesLine(), '끝까지 한 판마다 오늘 트로피 보너스 +' + TRO_PLAY + ' (하루 ' + DAY_CAP + '개까지)', '견습 리그는 등수로 잃지 않아요 · 판 중간에 나가면 꼴찌로 쳐요'] : ['끝까지 갈수록 모두 트로피를 받아요 (잃지 않아요)'];
       const rules = tro.concat([coinRule(q)], NET.mode === 'battle'
         ? (NET.opts.monsters === false ? ['몬스터 없이 친구끼리만 겨뤄요'] : []).concat(['갇히면 점프·거품 연타로 빨리 빠져나와요', '갇힌 친구를 터뜨리면 뽀득 KO +500'])
         : ['쓰러진 친구는 거품이 돼요. 거품에 닿으면 바로 살아나요', '목숨은 다 함께 써요']);
@@ -11322,7 +11350,7 @@ window.PG = window.PG || {};
     },
   };
   function troDebugApi() {
-    const podOut = (P) => (P ? { mid: P.mid, kind: P.kind, n: P.n, s: P.s, net: P.net, now: P.now, promo: P.promo, t0: P.t0, flipAt: P.flipAt, landed: P.landed,
+    const podOut = (P) => (P ? { mid: P.mid, kind: P.kind, n: P.n, s: P.s, net: P.net, now: P.now, promo: P.promo, bonus: P.bonus | 0, t0: P.t0, flipAt: P.flipAt, landed: P.landed,
       cups: P.fl ? P.fl.length : 0, rows: Array.from(P.rows || [], ([slot, r]) => ({ slot, place: r.place, net: r.net })) } : null);
     const api = {
       state() {
@@ -11362,7 +11390,7 @@ window.PG = window.PG || {};
       // (unit tests) the pieces themselves: a hold, a close, a result, the 목욕 보너스 / its run, the podium data
       hold: (mid, s, n, min) => troEscrow(mid, s, n, min | 0),
       close: (mid, how, why) => troClose(mid, how, why || 'test'),
-      result: (mid, rows, slot, host) => troApply(mid, rows, slot, !!host),
+      result: (mid, rows, slot, host, real) => troApply(mid, rows, slot, !!host, !!real),
       bonus: (ended) => troBonus(!!ended),
       run: () => (TRO.run ? Object.assign({}, TRO.run) : null),
       leagues: () => LEAGUES.map((l) => Object.assign({}, l)), stakes: () => STAKES.slice(), base: () => JSON.parse(JSON.stringify(BASE)),

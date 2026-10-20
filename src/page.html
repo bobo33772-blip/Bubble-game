@@ -436,6 +436,7 @@ body {
 /* phones: a compact heading + wait note, clear of the winner's name tag */
 .pg-touch-on .pg-ov.pg-podium { padding-top: calc(7.2% + 0.1em); }
 .pg-touch-on .pg-podium-title { font-size: 1.65em; }
+.pg-podium .pg-tbonus { color: var(--duck); }
 .pg-touch-on .pg-podium .pg-wait { margin-top: 0.1em; padding: 0.12em 0.8em; font-size: 0.85em; }
 /* ---- v3 online panels (친구와 하기, the room): they cover the whole stage, so phones get the full height */
 .pg-panel {
@@ -1169,8 +1170,8 @@ html.pg-sa, html.pg-sa body { overscroll-behavior: none; }
             </div>
             <p class="pg-keys">←→ 캐릭터 고르기 · Enter 혼자 하기 · ↑/Z 점프 · X 거품</p>
             <p class="pg-best"><span class="pg-best-hi">최고 점수 <b id="pg-title-hi">0</b></span><button id="pg-tro" class="pg-tro" type="button"
-              aria-label="내 트로피 30개 · 때밀이 견습 · 내 기록 보기"><canvas id="pg-tro-lg" class="pg-ic pg-lg" width="8" height="8" aria-hidden="true"></canvas><canvas
-              class="pg-ic pg-cup" width="8" height="8" aria-hidden="true"></canvas><b id="pg-tro-n">30</b><i id="pg-tro-cloud" class="pg-tro-cloud" hidden><svg class="pg-ic pg-cloud-ic" viewBox="0 0 8 8" aria-hidden="true" focusable="false"><path fill="currentColor" d="M4 2h2v1H4zM1 3h2v1H1zM4 3h3v1H4zM0 4h8v2H0zM1 6h6v1H1z"/></svg></i><span id="pg-tro-name" class="pg-tro-name">때밀이 견습</span><i id="pg-tro-new" class="pg-tro-new" hidden></i></button></p>
+              aria-label="내 트로피 100개 · 뽀득 새내기 · 내 기록 보기"><canvas id="pg-tro-lg" class="pg-ic pg-lg" width="8" height="8" aria-hidden="true"></canvas><canvas
+              class="pg-ic pg-cup" width="8" height="8" aria-hidden="true"></canvas><b id="pg-tro-n">100</b><i id="pg-tro-cloud" class="pg-tro-cloud" hidden><svg class="pg-ic pg-cloud-ic" viewBox="0 0 8 8" aria-hidden="true" focusable="false"><path fill="currentColor" d="M4 2h2v1H4zM1 3h2v1H1zM4 3h3v1H4zM0 4h8v2H0zM1 6h6v1H1z"/></svg></i><span id="pg-tro-name" class="pg-tro-name">뽀득 새내기</span><i id="pg-tro-new" class="pg-tro-new" hidden></i></button></p>
             <div class="pg-row">
               <button id="pg-start" class="pg-btn" type="button" data-primary>혼자 하기</button>
               <button id="pg-friends-btn" class="pg-btn pg-alt" type="button">친구와 하기</button>
@@ -1204,6 +1205,7 @@ html.pg-sa, html.pg-sa body { overscroll-behavior: none; }
             <h2 class="pg-podium-title">결과 발표!<span id="pg-podium-tag" class="pg-podium-tag" hidden></span></h2>
             <p class="pg-wait" data-net-wait hidden>방장이 다음 판을 고르고 있어요</p>
             <p id="pg-podium-note" class="pg-wait" hidden></p>
+            <p id="pg-podium-bonus" class="pg-wait pg-tbonus" hidden></p>
           </div>
           <p id="pg-podium-sum" class="pg-sr" aria-live="polite"></p>
           <div>
@@ -1283,7 +1285,7 @@ html.pg-sa, html.pg-sa body { overscroll-behavior: none; }
           <label for="pg-nick">내 이름</label>
           <input id="pg-nick" class="pg-input" type="text" maxlength="12" autocomplete="nickname" spellcheck="false" enterkeyhint="done">
           <span class="pg-mychar"><canvas id="pg-mychar-art" width="16" height="16" aria-hidden="true"></canvas><b id="pg-mychar-name">꽥꽥이</b></span>
-          <span id="pg-mytro" class="pg-mytro" aria-label="내 트로피 30개"></span>
+          <span id="pg-mytro" class="pg-mytro" aria-label="내 트로피 100개"></span>
         </div>
         <div class="pg-box">
           <h3>방 만들기</h3>

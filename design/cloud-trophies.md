@@ -341,7 +341,7 @@ cloud is what joins them.
 |---|---|---|
 | `t, w, g, ko` | per-slot contribution | counts that move on every device |
 | `best, bl, seen` | per-slot best seen, max | cosmetic, monotone; 승급 shows once per account |
-| `day, de` | per-slot bonus of a day | the daily 목욕 보너스 cap is shared (two devices offline at once may each give up to 20: accepted) |
+| `day, de` | per-slot bonus of a day | the daily trophy bonus cap (40: the 목욕 보너스 and the battles' +5, design/trophies.md As built) is shared (two devices offline at once may each give up to 40: accepted) |
 | `hi` (`G.hiscore`, `ppogeul-hiscore`) | per-slot best score, max | shown in 내 기록; not part of the trophy store (read at push, written on adoption) |
 | `dev` | account field, set at creation | same account = same device (practice when it meets itself) |
 | `nick` (`ppogeul-nick`) | account field, last write wins | a new device starts with the player's name: adopted when the local one is the default (`/^손님\d{2}$/`) |

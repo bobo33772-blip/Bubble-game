@@ -91,7 +91,7 @@
     const only = (ks, allowed) => ks.every((k) => allowed.includes(k));
     function slotCore(x, now) {
       return isInt(x.t, -999999, 999999) && isInt(x.g, 0, 10000000) && isInt(x.w, 0, x.g) && isInt(x.ko, 0, 10000000)
-        && isInt(x.best, 0, 99999) && isInt(x.bl, 0, 6) && isInt(x.seen, 0, 1) && isInt(x.hi, 0, 999999999) && isInt(x.day, 0, 99991231) && isInt(x.de, 0, 20)
+        && isInt(x.best, 0, 99999) && isInt(x.bl, 0, 6) && isInt(x.seen, 0, 1) && isInt(x.hi, 0, 999999999) && isInt(x.day, 0, 99991231) && isInt(x.de, 0, 40)
         && isInt(x.n, 1, 1000000000) && tsIs(x.at, now);
     }
     const slotShape = (x, now) => isMap(x) && hasAll(x, SLOTK) && hasOnly(x, SLOTK) && slotCore(x, now);
@@ -512,9 +512,9 @@
     ok('pure: ... and a later +10 pays the debt first: both views 4', sum() === 4 && A.S.t === 4 && B.S.t === 4, [sum(), A.S.t, B.S.t]);
     // g. today's bonus is one cap for the account; a new day starts at 0
     A.S.de = 15; A.S.t += 15; drain([A, B]);
-    ok('pure: 15 of today\'s 목욕 보너스 on one device: the other\'s view says 15 (5 left today)', B.S.de === 15 && A.S.de === 15, [A.S.de, B.S.de]);
+    ok('pure: 15 of today\'s trophy bonus on one device: the other\'s view says 15 (25 left today)', B.S.de === 15 && A.S.de === 15, [A.S.de, B.S.de]);
     B.S.de += 5; B.S.t += 5; drain([A, B]);
-    ok('pure: ... the other gives the last 5: 20 everywhere', A.S.de === 20 && B.S.de === 20, [A.S.de, B.S.de]);
+    ok('pure: ... the other gives 5 more: 20 everywhere', A.S.de === 20 && B.S.de === 20, [A.S.de, B.S.de]);
     T.today(DAY + 1); adopt(A); adopt(B);
     ok('pure: a new day: today\'s bonus 0 on both, the day moved on', A.S.de === 0 && B.S.de === 0 && A.S.day === DAY + 1, [A.S.de, A.S.day]);
     ok('pure: a bare day change is not dirty (no write just for the date)', C.step(C.mine(A.S, A.cs, A.hi), A.cs.m, A.cs.n, Infinity, 0) !== null && pushDirty(A) === '', [pushDirty(A)]);
@@ -541,14 +541,14 @@
     try { outs = hostile.map((d) => C.doc(d)); } catch (e) { threw = e; }
     ok('pure: clDoc on hostile documents never throws', !threw, threw && String(threw));
     const h9 = outs[9] && outs[9].s && outs[9].s.get('abcdefgh');
-    ok('pure: ... v 5 -> "newer" (v 2: the shop, v 3: a set per animal, v 4: the 뽑기 - read), v "1" / missing / bad -> null or empty, a bad dev -> "", junk numbers clamped (w <= g, best <= 99999, bl <= 6, de <= 20)',
+    ok('pure: ... v 5 -> "newer" (v 2: the shop, v 3: a set per animal, v 4: the 뽑기 - read), v "1" / missing / bad -> null or empty, a bad dev -> "", junk numbers clamped (w <= g, best <= 99999, bl <= 6, de <= 40)',
       outs[4] === 'newer' && outs[5] === null && outs[0] === null && outs[6] && outs[6].s.size === 0 && outs[7].s.size === 0 && outs[9].dev === '' && outs[9].nick === ''
-      && h9 && h9.t === 0 && h9.w === 2 && h9.g === 2 && h9.ko === 0 && h9.best === 99999 && h9.bl === 6 && h9.seen === 1 && h9.hi === 0 && h9.day === 0 && h9.de === 20 && h9.n === 1 && h9.at === 0, h9);
+      && h9 && h9.t === 0 && h9.w === 2 && h9.g === 2 && h9.ko === 0 && h9.best === 99999 && h9.bl === 6 && h9.seen === 1 && h9.hi === 0 && h9.day === 0 && h9.de === 40 && h9.n === 1 && h9.at === 0, h9);
     ok('pure: ... 40 slots -> at most 17 kept; only 8-char keys and "_"', outs[10].s.size <= 17 && outs[11].s.size === 1 && outs[11].s.has('_'), [outs[10].s.size, Array.from(outs[11].s.keys())]);
     // j. the link record from storage
     const csOk = C.parseCs({ u: 'uid1', k: 'abcdefgh', c: { t: -5, w: 1e9, g: 'x', ko: 1, de: 99, day: 1 }, v: { t: 1, w: 0, g: 0, ko: 0, de: 0, day: 1 }, m: { t: 3, n: 7, at: 5 }, n: 2, mt: 'x' });
     ok('pure: clParseCs clamps a record (and n >= m.n), refuses a bad uid / key / missing c or v',
-      csOk && csOk.c.w === 1e7 && csOk.c.g === 0 && csOk.c.de === 20 && csOk.m.n === 7 && csOk.n === 7 && csOk.mt === 0 && !('at' in csOk.m)
+      csOk && csOk.c.w === 1e7 && csOk.c.g === 0 && csOk.c.de === 40 && csOk.m.n === 7 && csOk.n === 7 && csOk.mt === 0 && !('at' in csOk.m)
       && C.parseCs({ u: 'a b', k: 'abcdefgh', c: {}, v: {} }) === null && C.parseCs({ u: 'u', k: 'ABC', c: {}, v: {} }) === null && C.parseCs({ u: 'u', k: 'abcdefgh', c: {} }) === null, csOk);
     // k. the step's caps match the rules
     const m0 = C.zero(), big = { t: 9999, w: 500, g: 400, ko: 9000, best: 9999, bl: 6, seen: 1, hi: 5, day: DAY, de: 3 };
@@ -1053,7 +1053,7 @@
     await until(() => LG(a).overlay === 'title', 2000);
     ok('login: 구글로 시작하기 signs in (popup) and uploads; linked -> the title', a.st().cs && a.st().cs.u === 'uidLG1' && !!F.get('uidLG1') && LG(a).overlay === 'title' && !a.$('pg-title').hidden && a.$('pg-login').hidden, [a.st().st, LG(a)]);
     await a.rec(true);
-    ok('login: ... 내 기록 then shows the link\'s message as today', a.st().line === '구글 계정에 트로피 30개를 저장했어요', a.st().line);
+    ok('login: ... 내 기록 then shows the link\'s message as today', a.st().line === '구글 계정에 트로피 100개를 저장했어요', a.st().line);
     ok('login: a linked browser is past it (the load check says no)', LG(a).wanted === false && !a.D().login.show().shown, LG(a));
     await a.rec(false); await settle(a);
     a.C().signOut(true); await until(() => a.st().st === 'out', 2000);
@@ -1083,7 +1083,7 @@
     a.C().reboot(); a.D().login.show();
     const waitShown = LG(a).shown;
     await until(() => a.st().st === 'in' && a.st().cs && LG(a).overlay !== 'login', 4000);
-    await until(() => a.recShown() && a.st().line === '구글 계정에 트로피 30개를 저장했어요', 2000);
+    await until(() => a.recShown() && a.st().line === '구글 계정에 트로피 100개를 저장했어요', 2000);
     ok('login: ... back from the redirect: the screen waits, then the title with 내 기록 open and its message (as from the title)', waitShown && a.st().cs && a.st().cs.u === 'uidLG3' && a.recShown(), [waitShown, a.st().st, a.recShown(), a.st().line]);
     await a.rec(false); await settle(a); a.C().signOut(true); await until(() => a.st().st === 'out', 2000);
     // 6. in-app browsers: the other-browser button where one exists (KakaoTalk), the message alone where none does (iOS)
@@ -1350,7 +1350,7 @@
     ok('fold: the count is kept: the sum is the old total + 5, 16 browser slots again', F.sum('uidF') === total + 5 && Object.keys(d.s).filter((x) => x !== '_').length === 16 && fr.tro().t === total + 5, [F.sum('uidF'), Object.keys(d.s).length]);
     fr.remove();
     // 16 slots and none idle: this browser cannot save (full), it plays on
-    const s2 = {}; for (let i = 0; i < 16; i++) s2['kg' + String(i).padStart(6, '0')] = slotOf({ t: 5, at: now - 864e5 });
+    const s2 = {}; for (let i = 0; i < 16; i++) s2['kg' + String(i).padStart(6, '0')] = slotOf({ t: 10, at: now - 864e5 });   // (160: more than a fresh browser's gift of 100 - no put-aside message)
     F.put('uidG', { v: 1, dev: 'gg12gg34', s: s2, last: 'kg000000' });
     const g = await frame('A7', 'pg', { ns: 't11b' });
     await signIn(g, 'uidG');
@@ -1358,7 +1358,7 @@
     g.T().set({ t: g.tro().t + 5 });
     await until(() => g.st().err === 'full', 4000);
     await g.rec(true); await until(() => !g.st().msg, 2000);
-    ok('full: no idle slot -> "이 기기는 저장할 수 없어요 (기기 16대까지)", the mark pink, nothing written but the look', g.st().err === 'full' && g.st().line === '이 기기는 저장할 수 없어요 (기기 16대까지)' && g.st().mark === 'pg-tro-cloud is-err' && F.writes({ uid: 'uidG', since: m2, ok: true }).length === 0 && g.tro().t === 85, [g.st().err, g.st().line, g.st().mark]);
+    ok('full: no idle slot -> "이 기기는 저장할 수 없어요 (기기 16대까지)", the mark pink, nothing written but the look', g.st().err === 'full' && g.st().line === '이 기기는 저장할 수 없어요 (기기 16대까지)' && g.st().mark === 'pg-tro-cloud is-err' && F.writes({ uid: 'uidG', since: m2, ok: true }).length === 0 && g.tro().t === 165, [g.st().err, g.st().line, g.st().mark]);
     g.remove();
   }
 
@@ -1468,8 +1468,8 @@
     await e.rec(false);
     e.C().reboot();
     await until(() => e.st().st === 'in' && e.st().cs, 4000);
-    await until(() => e.recShown() && e.st().line === '구글 계정에 트로피 30개를 저장했어요', 2000);
-    ok('fail: ... back from the redirect -> linked, 내 기록 opens with its message', e.st().st === 'in' && e.recShown() && e.st().line === '구글 계정에 트로피 30개를 저장했어요' && e.st().meta === '' && !!F.get('uidE'), [e.st().st, e.recShown(), e.st().line]);
+    await until(() => e.recShown() && e.st().line === '구글 계정에 트로피 100개를 저장했어요', 2000);
+    ok('fail: ... back from the redirect -> linked, 내 기록 opens with its message', e.st().st === 'in' && e.recShown() && e.st().line === '구글 계정에 트로피 100개를 저장했어요' && e.st().meta === '' && !!F.get('uidE'), [e.st().st, e.recShown(), e.st().line]);
     e.C().env({ app: true, same: true });
     ok('fail: an installed app on the authDomain signs in by redirect; a browser tab by popup; a real frame not at all (\'frame\')', e.st().method === 'redirect' && e.C().env({ same: true }).method === 'popup' && e.C().env(null).method === 'frame');
     e.C().env({});
@@ -1642,7 +1642,7 @@
     // ... and a sign-in finished in that window after all still links here
     F.finishPopup('pp');
     await until(() => p.st().st === 'in' && p.st().cs, 3000);
-    ok('popup left open: finished after the watch gave up -> still linked (the upload, "구글 계정에 트로피 30개를 저장했어요")', p.st().cs && p.st().cs.u === 'uidP' && F.sum('uidP') === p.tro().t && p.st().msg === 'up', [p.st().st, p.st().msg, F.get('uidP')]);
+    ok('popup left open: finished after the watch gave up -> still linked (the upload, "구글 계정에 트로피 100개를 저장했어요")', p.st().cs && p.st().cs.u === 'uidP' && F.sum('uidP') === p.tro().t && p.st().msg === 'up', [p.st().st, p.st().msg, F.get('uidP')]);
     await settle(p);
     p.C().signOut(true); await until(() => p.st().st === 'out', 2000);
     // the watch gave up, then 구글로 로그인 again: the new window cancels the old one - the old one's cancel changes nothing
@@ -1678,7 +1678,7 @@
     ok('lost answer: ... its late answer links it as uploaded ("… 77개를 저장했어요"), that key, guest and meta empty', s2.cs && s2.cs.k === meta.pk && s2.msg === 'up' && s2.guest === '' && s2.meta === '' && Object.keys(F.get('uidL').s).length === 1, s2);
     await settle(a);
     a.C().signOut(true); await until(() => a.st().st === 'out', 2000);
-    ok('lost answer: ... sign-out: the 77 in the account only, this browser fresh (not a second 77)', a.tro().t === 30 && F.sum('uidL') === 77, [a.tro().t, F.sum('uidL')]);
+    ok('lost answer: ... sign-out: the 77 in the account only, this browser fresh (not a second 77)', a.tro().t === 100 && F.sum('uidL') === 77, [a.tro().t, F.sum('uidL')]);
     // (b) the answer never comes and the tab is reloaded: the next sign-in knows the slot as this browser's own
     a.T().set({ t: 64, g: 2, w: 1, best: 64 });
     F.tx = (db, fn) => new Promise(() => { orig(db, fn).catch(() => { /* (the test's) */ }); });
@@ -1696,7 +1696,7 @@
     ok('lost answer: ... the next sign-in finishes that upload (its slot, "… 64개를 저장했어요"), never a join over it', s3.cs.k === Object.keys(d3.s)[0] && Object.keys(d3.s).length === 1 && s3.msg === 'up' && s3.guest === '' && a.tro().t === 64, [s3, d3]);
     await settle(a);
     a.C().signOut(true); await until(() => a.st().st === 'out', 2000);
-    ok('lost answer: ... sign-out: the 64 in the account only', a.tro().t === 30 && F.sum('uidL2') === 64, [a.tro().t, F.sum('uidL2')]);
+    ok('lost answer: ... sign-out: the 64 in the account only', a.tro().t === 100 && F.sum('uidL2') === 64, [a.tro().t, F.sum('uidL2')]);
     a.remove();
   }
 

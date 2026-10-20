@@ -9,14 +9,15 @@
 //      un-readies (both sides, the guest told); an rd for the old stake is refused; a forged stake at 시작! holds nothing
 //   4  nothing held during 3-2-1; at "시작!" everyone holds s + 6 once; the countdown says "트로피 10개씩 걸어요!"
 //   5  the result: one 'tro' per guest, counts as troTable says, every guest answers 'cup' + m, a replay changes nothing,
-//      the podium rows agree everywhere, cups fly from the losers, the lines flip
+//      the podium rows agree everywhere, cups fly from the losers, the lines flip; a real match (5 blows each) adds the
+//      +5 오늘 트로피 보너스 apart from the net (its own podium line, the sr line)
 //   6  한 판 더: blocked (button, Enter) while a guest is short, the host's note says so; then a new match id, a new hold
 //      +  a hostile result (base -999) costs exactly s + 6; an early result without fast is not applied -> wait -> refund
 //   7  leavers: 나가기 mid-match = gg + forfeit, its stake in the winner's pot; a cut link = refund, its stake not in the pot
 //   8  the host leaves mid-match: guests refunded.  9  the host's 방으로 mid-match: the host forfeits, guests refunded
 //   10 1v1: leaving during 3-2-1 is free; 승급 on the podium; a walkover after 나가기 pays; after a cut link it is void
 //   11 no allowBc -> 연습 경기 (q 1): nothing changes.  3  two frames sharing one store -> q 2: nothing changes
-//   12 co-op: a game over in the 4th 탕 gives every frame +1; practice co-op gives nothing
+//   12 co-op: a game over in the 4th 탕 gives every frame +2; practice co-op gives nothing
 // Screenshot scenes (?shot=room|roomg|count|podfly|podend|prac|friends: the scene's frame fills the window, then "SHOT READY").
 // Prints "TROPHYNET PASS|FAIL <name>", "TROPHYNET INFO ..." and "TROPHYNET DONE pass=N fail=M".
 (function () {
@@ -102,6 +103,9 @@
     const P = fr.w.BroadcastChannel.prototype;
     if (on) { if (!fr.post) fr.post = P.postMessage; P.postMessage = function () {}; } else if (fr.post) { P.postMessage = fr.post; fr.post = null; }
   }
+  // (my own blows: CO.bshots, the real-match test of the +5 오늘 트로피 보너스 - troReal - and the battle coins)
+  const press = (fr, a, down) => fr.D.press(a, down, slotOf(fr));
+  async function blows(fr, n) { for (let k = 0; k < n; k++) { press(fr, 'shoot', true); await sleep(50); press(fr, 'shoot', false); await sleep(460); } }
   function key(fr, code) { fr.w.dispatchEvent(new fr.w.KeyboardEvent('keydown', { code, key: code, bubbles: true, cancelable: true })); fr.w.dispatchEvent(new fr.w.KeyboardEvent('keyup', { code, key: code, bubbles: true })); }
 
   // ---------------------------------------------------------------- the main run
@@ -138,7 +142,7 @@
     await sleep(300);
     ok('consent: an rd for the old stake (b 5) arriving after the switch is refused', !N(H).roster[1].ready);
     ok('stake: the room shows the stake badge and the rules line for 3 players at 10', !doc(H, 'pg-room-bet').hidden && doc(H, 'pg-room-bet').textContent === '10개씩' &&
-      /모두 10개씩 걸고 1등이 다 가져요: 1등 \+32 · 2등 -7 · 3등 -16/.test(doc(H, 'pg-room-rules').textContent), doc(H, 'pg-room-rules').textContent);
+      /모두 10개씩 걸고 1등이 다 가져요: 1등 \+35 · 2등 -5 · 3등 -16/.test(doc(H, 'pg-room-rules').textContent) && /끝까지 한 판마다 오늘 트로피 보너스 \+5 \(하루 40개까지\)/.test(doc(H, 'pg-room-rules').textContent), doc(H, 'pg-room-rules').textContent);
     // ---- 4. 시작: nothing during 3-2-1, s + 6 at "시작!"
     if (!ok('ready at 10', await readyAll(F))) return;
     H.mp.start();
@@ -160,23 +164,27 @@
     await sleep(400);
     const Rg = N(H).tro.R;
     ok('R (game): no seat counts, ms kept, small (' + bytes(Rg) + ' <= 292 bytes)', Rg && Rg.p.every((e) => e.length === 4) && Rg.ms === R0.ms && bytes(Rg) <= 292, Rg);
-    // ---- 5. the result
+    // ---- 5. the result (a real match: everyone blows 5 bubbles - the +5 오늘 트로피 보너스 on top of the net)
+    await Promise.all(F.map((f) => blows(f, 5))); await sleep(200);
     if (!ok('finish: the battle ends (host 1st, A 2nd, B 3rd)', await finish(F, [[0, 300], [1, 200], [2, 100]]))) return;
     await until(() => F.every((f) => TS(f).esc.length === 0) && A.tros.length && B.tros.length, 4000);
     ok('result: one tro per guest', A.tros.length === 1 && B.tros.length === 1 && A.tros[0].m === mid1, [A.tros.length, B.tros.length]);
-    ok('result: counts as troTable says: +32 / -7 / -16 -> 132 / 93 / 84', same(counts(F), [132, 93, 84]), counts(F));
+    ok('result: counts as troTable says, + 5 each (a real match): +35 / -5 / -16 -> 140 / 100 / 89', same(counts(F), [140, 100, 89]), counts(F));
+    ok('result: the +5 came from today\'s trophy bonus pool on every page (de 5)', F.every((f) => TS(f).de === 5 && TS(f).pod && TS(f).pod.bonus === 5), F.map((f) => [TS(f).de, TS(f).pod && TS(f).pod.bonus]));
     ok('result: games / wins counted (host 1 win)', TS(H).w === 1 && TS(H).g === 1 && TS(A).w === 0 && TS(A).g === 1 && TS(B).g === 1);
     await until(() => N(H).roster.filter((r) => !r.host).every((r) => r.cupM === mid1), 3000);
-    ok('result: every guest answered with its count for this match (cup + m)', N(H).roster[1].cup === 93 && N(H).roster[2].cup === 84 && N(H).roster.filter((r) => !r.host).every((r) => r.cupM === mid1), N(H).roster);
+    ok('result: every guest answered with its count for this match (cup + m)', N(H).roster[1].cup === 100 && N(H).roster[2].cup === 89 && N(H).roster.filter((r) => !r.host).every((r) => r.cupM === mid1), N(H).roster);
     A.T.apply(A.tros[0]);
-    ok('result: a replayed tro changes nothing', TS(A).t === 93 && TS(A).g === 1);
+    ok('result: a replayed tro changes nothing (no second +5 either)', TS(A).t === 100 && TS(A).g === 1 && TS(A).de === 5);
     const pods = F.map((f) => TS(f).pod);
     const netOf = (p, slot) => { const r = p && p.rows.find((x) => x.slot === slot); return r ? r.net : null; };
-    ok('podium: the rows agree on every screen (slot -> change)', pods.every((p) => p && p.kind === 'win' && [0, 1, 2].every((sl) => netOf(p, sl) === [32, -7, -16][sl])), pods);
-    ok('podium: cups fly from the losers (1 for -7, 2 for -16)', await until(() => TS(H).pod.cups === 3 && TS(B).pod.cups === 3, 3000), [TS(H).pod, TS(B).pod]);
+    ok('podium: the rows agree on every screen (slot -> change)', pods.every((p) => p && p.kind === 'win' && [0, 1, 2].every((sl) => netOf(p, sl) === [35, -5, -16][sl])), pods);
+    ok('podium: cups fly from the losers (1 for -5, 2 for -16)', await until(() => TS(H).pod.cups === 3 && TS(B).pod.cups === 3, 3000), [TS(H).pod, TS(B).pod]);
     await until(() => F.every((f) => f.G.podium && f.G.podium.t > TS(f).pod.flipAt + 25 && TS(f).pod.flipAt > 0), 6000);
     ok('podium: every cup landed, then the lines flipped (and counted up)', F.every((f) => TS(f).pod.landed === 3 && TS(f).pod.flipAt >= TS(f).pod.t0 + 40), F.map((f) => TS(f).pod));
-    ok('podium: the sr summary says my change', /내 트로피 \+32개, 지금 132개/.test(doc(H, 'pg-podium-sum').textContent) && /내 트로피 -16개, 지금 84개/.test(doc(B, 'pg-podium-sum').textContent), [doc(H, 'pg-podium-sum').textContent]);
+    ok('podium: the sr summary says my change and the bonus apart', /내 트로피 \+35개, 오늘 트로피 보너스 \+5개, 지금 140개/.test(doc(H, 'pg-podium-sum').textContent) && /내 트로피 -16개, 오늘 트로피 보너스 \+5개, 지금 89개/.test(doc(B, 'pg-podium-sum').textContent), [doc(H, 'pg-podium-sum').textContent, doc(B, 'pg-podium-sum').textContent]);
+    await until(() => F.every((f) => !doc(f, 'pg-podium-bonus').hidden), 3000);
+    ok('podium: every page shows its own "오늘 트로피 보너스 +5" line once the lines flipped', F.every((f) => !doc(f, 'pg-podium-bonus').hidden && doc(f, 'pg-podium-bonus').textContent === '오늘 트로피 보너스 +5'), F.map((f) => [doc(f, 'pg-podium-bonus').hidden, doc(f, 'pg-podium-bonus').textContent]));
     ok('podium: the guest\'s wait line keeps the stake ("다음 판도 10개씩")', /다음 판도 10개씩/.test(doc(A, 'pg-podium').querySelector('[data-net-wait]').textContent));
     // ---- 6. 한 판 더 gate
     ok('rematch: open once every guest reported', N(H).canStart !== undefined && !doc(H, 'pg-podium-again').disabled && H.T.canRematch());
@@ -187,7 +195,7 @@
     doc(H, 'pg-podium-again').click(); await sleep(200);
     ok('rematch: blocked while a guest is short (button off; Enter / the button do nothing)', doc(H, 'pg-podium-again').disabled && N(H).gid === gid1 && S(H).phase === 'podium');
     ok('rematch: the host\'s note says so', !doc(H, 'pg-podium-note').hidden && doc(H, 'pg-podium-note').textContent === '트로피가 모자란 친구가 있어요 · 방으로 가서 걸기를 바꿔요', doc(H, 'pg-podium-note').textContent);
-    B.mp.session().send(hostIdOf(B), { t: 'cup', cu: 84, m: mid1 });
+    B.mp.session().send(hostIdOf(B), { t: 'cup', cu: 89, m: mid1 });
     await until(() => !doc(H, 'pg-podium-again').disabled, 3000);
     A.tros.length = 0; B.tros.length = 0;
     doc(H, 'pg-podium-again').click();
@@ -202,13 +210,13 @@
     B.T.fast(false);
     H.mp.session().send(idOfSlot(H, 2), { t: 'tro', m: mid2, n: 3, s: 10, r: [[2, 1, 14, 30, 0]] });
     await until(() => TS(A).esc.length === 0, 3000); await sleep(200);
-    ok('hostile: a result with base -999 costs exactly s + 6 (93 -> 77)', TS(A).t === 77, TS(A).t);
-    ok('early: a result before the battle clock could run is not applied (the hold stays open)', TS(B).esc.length === 1 && TS(B).esc[0].st === 'open' && TS(B).t === 68, TS(B));
+    ok('hostile: a result with base -999 costs exactly s + 6 (100 -> 84), and pays no +5 (one row: never a real match)', TS(A).t === 84 && TS(A).de === 5, [TS(A).t, TS(A).de]);
+    ok('early: a result before the battle clock could run is not applied (the hold stays open)', TS(B).esc.length === 1 && TS(B).esc[0].st === 'open' && TS(B).t === 73, TS(B));
     await finish(F, [[0, 300], [1, 200], [2, 100]]);
     await until(() => TS(H).esc.length === 0 && TS(B).esc.length === 1 && TS(B).esc[0].st === 'wait', 4000);
-    ok('early: the real (still early) result is not applied either -> the hold waits at the podium', TS(B).esc[0] && TS(B).esc[0].st === 'wait' && TS(H).t === 164, [TS(B).esc, TS(H).t]);
+    ok('early: the real (still early) result is not applied either -> the hold waits at the podium', TS(B).esc[0] && TS(B).esc[0].st === 'wait' && TS(H).t === 175, [TS(B).esc, TS(H).t]);
     B.T.expire();
-    ok('early: ... and is refunded when the wait runs out (68 -> 84)', TS(B).t === 84 && TS(B).esc.length === 0 && TS(B).g === 1, TS(B));
+    ok('early: ... and is refunded when the wait runs out (73 -> 89)', TS(B).t === 89 && TS(B).esc.length === 0 && TS(B).g === 1, TS(B));
     B.T.fast(true);
     // ---- 7. leavers: 나가기 (gg) vs a cut link
     if (!ok('room again (방으로)', await toRoom(F))) return;
@@ -222,7 +230,7 @@
     ok('leave: the leaver\'s friends panel says it counted as a loss', /이번 판은 진 걸로 쳤어요/.test(doc(B, 'pg-friends-err').textContent), doc(B, 'pg-friends-err').textContent);
     await finish([H, A], [[0, 300], [1, 200]]);
     await until(() => TS(A).esc.length === 0, 4000);
-    ok('leave: its stake is in the winner\'s pot: host +32 (12 + 30 - 10), A -7', TS(H).t === before3[0] + 16 + 32 && TS(A).t === before3[1] + 16 - 7, [before3, counts([H, A])]);
+    ok('leave: its stake is in the winner\'s pot: host +35 (15 + 30 - 10), A -5', TS(H).t === before3[0] + 16 + 35 && TS(A).t === before3[1] + 16 - 5, [before3, counts([H, A])]);
     await toRoom([H, A]);
     await join(B); await until(() => N(H).roster.length === 3, 4000);
     await readyAll(F);
@@ -236,7 +244,7 @@
     ok('cut: its friends panel says so', /걸었던 트로피를 돌려받았어요/.test(doc(A, 'pg-friends-err').textContent), doc(A, 'pg-friends-err').textContent);
     await finish([H, B], [[0, 300], [2, 100]]);
     await until(() => TS(B).esc.length === 0, 4000);
-    ok('cut: its stake is not in the pot: host +22 (12 + 20 - 10), B -7', TS(H).t === before4[0] + 22 && TS(B).t === before4[2] - 7, [before4, counts(F)]);
+    ok('cut: its stake is not in the pot: host +25 (15 + 20 - 10), B -5', TS(H).t === before4[0] + 25 && TS(B).t === before4[2] - 5, [before4, counts(F)]);
     // ---- 8. the host leaves mid-match
     await toRoom([H, B]); await join(A); await until(() => N(H).roster.length === 3, 4000);
     await readyAll(F); await start(F);
@@ -285,7 +293,7 @@
     await readyAll(D2); await start(D2);
     await finish(D2, [[0, 100], [1, 300]]);
     await until(() => TS(A).esc.length === 0 && TS(A).pod && TS(A).pod.promo === 1, 4000);
-    ok('승급: a 견습 guest (50) wins at stake 0 -> 60, 뽀득 새내기, first time', TS(A).t === 60 && TS(A).bl === 1 && TS(A).pod.promo === 1, TS(A));
+    ok('승급: a 견습 guest (50) wins at stake 0 -> 62, 뽀득 새내기, first time', TS(A).t === 62 && TS(A).bl === 1 && TS(A).pod.promo === 1, TS(A));
     await until(() => doc(A, 'pg-podium-tag').textContent.indexOf('승급!') === 0, 6000);
     ok('승급: the podium title tag turns into "승급! 뽀득 새내기"', doc(A, 'pg-podium-tag').textContent === '승급! 뽀득 새내기' && !doc(A, 'pg-podium-tag').hidden, doc(A, 'pg-podium-tag').textContent);
     await toRoom(D2); H.mp.setOpts({ bet: 10 }); A.T.set({ t: 100 }); await sleep(150);
@@ -293,7 +301,7 @@
     b10 = counts(D2).map((t) => t + 16);
     A.mp.leave();
     await until(() => S(H).phase === 'podium' && TS(H).esc.length === 0, 5000);
-    ok('1v1: the other left on purpose -> 기권승: host +20 (10 + 10)', TS(H).t === b10[0] + 20 && TS(H).pod && TS(H).pod.kind === 'walk' && doc(H, 'pg-podium-tag').textContent === '기권승', [TS(H).t, b10, TS(H).pod]);
+    ok('1v1: the other left on purpose -> 기권승: the pot only, host +10 (20 - its 10; no 1st-place base, no +5)', TS(H).t === b10[0] + 10 && TS(H).pod && TS(H).pod.bonus === 0 && TS(H).pod && TS(H).pod.kind === 'walk' && doc(H, 'pg-podium-tag').textContent === '기권승', [TS(H).t, b10, TS(H).pod]);
     ok('1v1: the leaver lost its hold', TS(A).t === b10[1] - 16);
     await toRoom([H]); await join(A); await until(() => N(H).roster.length === 2, 4000);
     await readyAll(D2); await start(D2);
@@ -348,7 +356,7 @@
     const bc = counts(F);
     ok('coop: everyone reaches 목욕 끝 (game over in the 4th 탕)', await coopOver());
     await sleep(300);
-    ok('coop: every frame gets the same +1 and loses nothing', same(counts(F), bc.map((t) => t + 1)) && F.every((f) => !doc(f, 'pg-over-trow').hidden && doc(f, 'pg-over-tro').querySelector('span').textContent === '+1'), [bc, counts(F)]);
+    ok('coop: every frame gets the same +2 and loses nothing', same(counts(F), bc.map((t) => t + 2)) && F.every((f) => !doc(f, 'pg-over-trow').hidden && doc(f, 'pg-over-tro').querySelector('span').textContent === '+2'), [bc, counts(F)]);
     await toRoom(F);
     H.T.allowBc(false); await until(() => N(B).tro.q === 1, 3000);
     const bc2 = counts(F);
