@@ -9030,13 +9030,14 @@ window.PG = window.PG || {};
     const cs = getComputedStyle(el), n = (v) => parseFloat(v) || 0;
     return { t: n(cs.paddingTop), r: n(cs.paddingRight), b: n(cs.paddingBottom), l: n(cs.paddingLeft) };
   }
+  let landForce = null; // (PG.debug.forceLand: a test that sizes the stage as an upright phone inside a wide window)
   function fit() {
     if (!dom.stage || !dom.screen) return;
     // touch + a viewport wider than tall: the landscape layout (page.html .pg-land) - the screen takes the whole height,
     // with an empty column on each side for the thumbs (never over the play field) and any fraction of a scale
     // (image-rendering: pixelated keeps the pixels crisp). Everything else (desktop, upright phones and tablets) as before
     const touch = touchMode || !!(dom.app && dom.app.classList.contains('pg-touch-on'));
-    const vw = window.innerWidth || 0, vh = window.innerHeight || 0, land = !!(touch && vw > vh);
+    const vw = window.innerWidth || 0, vh = window.innerHeight || 0, land = landForce !== null ? landForce : !!(touch && vw > vh);
     if (dom.app) dom.app.classList.toggle('pg-land', land);
     rotSync(touch, vw, vh);
     const open = !!(dom.app && dom.app.classList.contains('pg-panel-open')), cols = land && !open;
@@ -11465,6 +11466,7 @@ window.PG = window.PG || {};
         sr: st ? st.getPropertyValue('--pg-sr') : '', rotate: dom.rotate ? !dom.rotate.hidden : null, scale: +screenScale.toFixed(3), mode: G.mode };
     },
     stickReset() { stickReset(); },
+    forceLand(v) { landForce = v === null || v === undefined ? null : !!v; fit(); },
     pwa(set) {
       if (PWA.on && set && typeof set === 'object') { for (const k of ['ios', 'inApp', 'framed', 'installed']) if (k in set) PWA[k] = !!set[k]; pwaSync(); }
       const vis = (el) => !!(el && !el.hidden);
