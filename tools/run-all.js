@@ -268,6 +268,12 @@ const LIST = [
   V('cloud-login-1x', HTTP + 'test-cloud.html?shot=login-1x', 'rt60000', (out) => (/CLOUD SHOT error/.test(out) ? 'shot error' : /CLOUD SHOT READY/.test(out) ? true : 'no CLOUD SHOT READY'), { done: 'CLOUD SHOT READY', shot: 'cloud-login-1x.png' }),
   V('cloud-login-pv-390', HTTP + 'test-cloud.html?shot=login-pv', 'rt60000', (out) => (/CLOUD SHOT error/.test(out) ? 'shot error' : /CLOUD SHOT READY/.test(out) ? true : 'no CLOUD SHOT READY'), { done: 'CLOUD SHOT READY', shot: 'cloud-login-pv-390.png', w: 390, h: 844 }),
   V('cloud-title-in-1x', HTTP + 'test-cloud.html?shot=title-in-1x', 'rt60000', (out) => (/CLOUD SHOT READY/.test(out) && !/CLOUD SHOT error/.test(out) ? true : 'no shot'), { done: 'CLOUD SHOT READY', shot: 'cloud-title-in-1x.png' }),
+  // 친구 순위 (design/friends.md 6, group 19c): the panel signed in (12 friends, 2 requests) on phones on their side, a
+  // portrait tablet and the 1x screen; signed out; the PR preview's demo; 내 기록 with its button and dot
+  // (C:/Temp/bogeul/pal-*.png to LOOK at; each shot checks the fit and says "CLOUD SHOT error pal fit" when it fails)
+  ...[['in', 640, 360], ['in', 844, 390], ['in', 932, 430], ['in', 768, 1024], ['guest', 640, 360], ['demo', 844, 390], ['demo', 768, 1024], ['rec', 640, 360], ['rec', 932, 430]]
+    .map(([sc, w, h]) => V(`pal-${sc}-${w}`, HTTP + 'test-cloud.html?shot=pal-' + sc, 'rt60000', (out) => (/CLOUD SHOT error/.test(out) ? 'shot error' : /CLOUD SHOT READY/.test(out) ? true : 'no CLOUD SHOT READY'), { done: 'CLOUD SHOT READY', shot: `pal-${sc}-${w}.png`, w, h })),
+  V('pal-in-1x', HTTP + 'test-cloud.html?shot=pal-in-1x', 'rt60000', (out) => (/CLOUD SHOT error/.test(out) ? 'shot error' : /CLOUD SHOT READY/.test(out) ? true : 'no CLOUD SHOT READY'), { done: 'CLOUD SHOT READY', shot: 'pal-in-1x.png' }),
   // ---- v3 screenshots to LOOK at (C:/Temp/bogeul/v3-*.png): the title + picker on desktop and a real phone viewport,
   // and the online scenes of test-mp-net.html (?shot=..., the chosen player's frame fills the window)
   V('v3-title-1280', 'test-review.html#title', 8000, has(/\bDONE\b/), { shot: 'v3-title-1280.png', w: 1280, h: 800 }),
