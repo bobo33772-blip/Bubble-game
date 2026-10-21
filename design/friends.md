@@ -268,3 +268,36 @@ everything else -> `F.PR(op, path, auth, ctx)` with `ctx.get(path)` (before the 
   online share the same gate. check-cloud: no pal markup in any page, the rules block present. Injected failures of
   friend calls use 'p' keys (pget, plist, pbatch, pdelete, ptx, pupdate) so the players tests keep theirs.
 - Owner: deploy the rules before merging (step 7).
+
+## As built (invites) (2026-10-21, feat/invite)
+- **친구 초대**: each friend row in 친구 순위 has 초대 (before 끊기). Not in a room: a room is made the normal way
+  (netHost with the current 같이 하기 / 배틀 choice and options) and the room screen shows; then the invite is written.
+  Hosting in the room phase: the room's new 친구 초대 button (beside 코드 복사) opens 친구 순위 over the room (닫기 goes
+  back) and 초대 invites into it; off when the room is full, the game started or I am someone else's guest.
+- Firestore: `invites/{to}/in/{from} {code, mode, nick, at}` (one per sender -> receiver, a new one replaces it) written
+  in one batch with `ivbox/{from} {at}` (one invite write per 10 s). Rules: only while `friends/{to}/f/{from}` exists,
+  exactly those fields (code `[a-z0-9]{4}`, mode coop|battle, nick as the cards', at == request.time); read and listed
+  (<= 50) by the receiver only; deleted by the receiver or the sender. The existing rules are untouched. The JS copy and
+  its cases are in src/tests/cloud.js 19a; the two-account flow (with the gate, the preview and a reload) is 19d.
+- Receiving: one onSnapshot listener on my invites while signed in (stopped on sign-out / another account; a failure is
+  retried a minute on). The newest invite younger than 10 minutes (by its server `at`) is a banner at the top of the
+  stage over the menus (title, 내 기록, 친구 순위, 상점, 친구와 하기, the result cards) - never in a game, a room or the
+  login screen: "{nick}이/가 같이 하자고 해요 · 같이 하기|배틀" with the friend's bust when it is in my list (its nick as
+  my list has it). 참여 opens 친구와 하기 and joins with the code (netJoin); 나중에 lets it go. Both delete the invite, as
+  does seeing an expired one; closing my room deletes the invites I sent into it. A page opened later shows a pending
+  one while it is valid (a linked browser now looks again every second until its user and database are up, so this
+  and the 친구 순위 boot no longer wait for the next title).
+- **손님은 온라인 불가**: on the deploy with the cloud, online play needs a signed-in Google account. A guest (or signed
+  out) opening 친구와 하기 gets a card instead of 방 만들기 / 코드로 참여 / the open rooms: "온라인 같이 하기·배틀은
+  Google 로그인하고 할 수 있어요", Google로 계속하기 (the usual sign-in, its states as the login screen's) and "혼자 하기는
+  로그인 없이도 바로 할 수 있어요". netHost / netJoin refuse too (the test API included). An invite link (?join=CODE)
+  opened as a guest shows the card with the code kept and joins that room by itself once signed in. Why: trophy stakes
+  must belong to real accounts, so one person cannot farm trophies with throwaway guest identities. 혼자 하기 stays open
+  to guests (the game has no one-screen multiplayer menu - local multiplayer exists only in the test API - so the hint
+  names 혼자 하기 only). The artifact (no cloud) and PR previews are unchanged online.
+- PR previews: 초대 makes a real room (online works there) and says "미리보기라 초대는 보내지 않아요"; the first time 친구
+  순위 opens, a staged invite from a demo friend shows (marked 예시, 참여 only opens 친구와 하기).
+- Fit: the banner stacks its buttons under the line on a small stage (the 1x screen); the card compacts in a short
+  panel. Shots `pal-iv-844`, `pal-iv-1x`, `pal-gate-844`, `pal-gate-1x` check it. peer-deploy's page is now built
+  without the cloud config (it plays online as a guest).
+- Owner: deploy the rules before merging (they only add collections; older pages are unaffected).

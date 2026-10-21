@@ -274,6 +274,8 @@ const LIST = [
   ...[['in', 640, 360], ['in', 844, 390], ['in', 932, 430], ['in', 768, 1024], ['guest', 640, 360], ['demo', 844, 390], ['demo', 768, 1024], ['rec', 640, 360], ['rec', 932, 430]]
     .map(([sc, w, h]) => V(`pal-${sc}-${w}`, HTTP + 'test-cloud.html?shot=pal-' + sc, 'rt60000', (out) => (/CLOUD SHOT error/.test(out) ? 'shot error' : /CLOUD SHOT READY/.test(out) ? true : 'no CLOUD SHOT READY'), { done: 'CLOUD SHOT READY', shot: `pal-${sc}-${w}.png`, w, h })),
   V('pal-in-1x', HTTP + 'test-cloud.html?shot=pal-in-1x', 'rt60000', (out) => (/CLOUD SHOT error/.test(out) ? 'shot error' : /CLOUD SHOT READY/.test(out) ? true : 'no CLOUD SHOT READY'), { done: 'CLOUD SHOT READY', shot: 'pal-in-1x.png' }),
+  // 친구 초대 (design/friends.md "As built (invites)"): the invite banner over the title, 친구와 하기's sign-in card for a guest
+  ...[['iv', 844, 390], ['gate', 844, 390], ['iv-1x', 900, 760], ['gate-1x', 900, 760]].map(([sc, w, h]) => V(`pal-${sc}${/1x/.test(sc) ? '' : '-' + w}`, HTTP + 'test-cloud.html?shot=pal-' + sc, 'rt60000', (out) => (/CLOUD SHOT error/.test(out) ? 'shot error' : /CLOUD SHOT READY/.test(out) ? true : 'no CLOUD SHOT READY'), { done: 'CLOUD SHOT READY', shot: `pal-${sc}${/1x/.test(sc) ? '' : '-' + w}.png`, w, h })),
   // ---- v3 screenshots to LOOK at (C:/Temp/bogeul/v3-*.png): the title + picker on desktop and a real phone viewport,
   // and the online scenes of test-mp-net.html (?shot=..., the chosen player's frame fills the window)
   V('v3-title-1280', 'test-review.html#title', 8000, has(/\bDONE\b/), { shot: 'v3-title-1280.png', w: 1280, h: 800 }),
@@ -303,7 +305,9 @@ function genPlatformPages() {
   fs.writeFileSync(`${T}/rrp-frame.html`, `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>${RESET}</style>${SC}>${boot}${SE}</head><body>\n${art}\n</body></html>`);
   const drv = fs.readFileSync(path.join(ROOT, 'src', 'tests', 'review-room-platform.js'), 'utf8');
   fs.writeFileSync(`${T}/rrp-main.html`, `<!doctype html><html><head><meta charset="utf-8"><title>rrp</title><style>body{margin:0;background:#061518}</style></head><body>${SC}>\n${drv}\n${SE}</body></html>`);
-  const dep = fs.readFileSync(path.join(ROOT, 'deploy', 'index.html'), 'utf8');
+  // (without the cloud config: this page plays online as a guest, which the deploy with the cloud does not allow -
+  // design/friends.md "As built (invites)"; the cloud's own online gate is tested in src/tests/cloud.js)
+  const dep = fs.readFileSync(path.join(ROOT, 'deploy', 'index.html'), 'utf8').replace(/<script>window\.PG_CLOUD=[\s\S]*?<\/script>\n?/, '');
   const tag = dep.match(/<script defer src="(https:\/\/[^"]*peerjs[^"]*)"[^>]*><\/script>/);
   if (!tag) throw new Error('no PeerJS tag in deploy/index.html');
   // (the deploy's login screen stays away: this browser chose to play as a guest - design/cloud-trophies.md "As built (login screen)")

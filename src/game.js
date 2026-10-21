@@ -6941,6 +6941,7 @@ window.PG = window.PG || {};
   }
   function clUI() {
     if (shownOverlay === 'login') lgUI();      // (the login screen follows the same state)
+    if (shownOverlay === 'friends') ngUI();    // (... and 친구와 하기's sign-in card, design/friends.md "As built (invites)")
     if (dom.recCard) dom.recCard.classList.toggle('has-cloud', CLOUD.on);
     const btn = dom.cloudBtn, line = dom.cloud, tx = dom.cloudTx;
     if (!CLOUD.on || !btn || !line || !tx) return;
@@ -7008,6 +7009,12 @@ window.PG = window.PG || {};
   const LG_TX = { why: '어서 오세요, 손님!', go: 'Google로 계속하기', guest: '손님으로 입장하기', note: '', pv: '미리보기에서는 로그인을 할 수 없어요' };
   const LOGIN_TEXT = Object.keys(LG_TX).map((k) => LG_TX[k]).join(' ') + ' ' + CL_TX.authing + ' ' + CL_TX.linking;
   const LOGIN = { el: null, go: null, goTx: null, guest: null, st: null, rec: false, inUI: false };
+  // (Google's four-colour "G", unaltered, on its own white disc - Google's sign-in branding; static markup only; also on
+  // 친구와 하기's sign-in card)
+  const GOOGLE_G = '<svg viewBox="0 0 48 48" width="18" height="18"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>'
+    + '<path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>'
+    + '<path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>'
+    + '<path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
   const lgOn = () => CLOUD.on || !!PREVIEW;
   // the guest choice ('1'), per test namespace like the store's keys (a preview's Storage adds its own suffix)
   const lgKey = () => 'ppogeul-login' + clSfx();
@@ -7035,10 +7042,7 @@ window.PG = window.PG || {};
     const go = h('button', 'pg-btn pg-login-go'); go.type = 'button'; go.id = 'pg-login-go';
     // (Google's four-colour "G", unaltered, on its own white disc - Google's sign-in branding; static markup only)
     const gl = h('span', 'pg-login-g'); gl.setAttribute('aria-hidden', 'true');
-    gl.innerHTML = '<svg viewBox="0 0 48 48" width="18" height="18"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>'
-      + '<path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>'
-      + '<path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>'
-      + '<path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
+    gl.innerHTML = GOOGLE_G;
     go.appendChild(gl);
     const goTx = h('span', 'pg-login-gotx', LG_TX.go); go.appendChild(goTx);
     go.setAttribute('aria-describedby', 'pg-login-why pg-login-st');
@@ -7206,8 +7210,11 @@ window.PG = window.PG || {};
     added: '{0}님과 친구가 됐어요', declined: '요청을 거절했어요', cutDone: '{0}님과 친구를 끊었어요',
     offline: '인터넷이 연결되면 다시 볼 수 있어요', rules: '친구 기능을 준비 중이에요', busy: '지금은 사람이 많아요 · 잠시 후 다시', fail: '잠시 후 다시',
     demo: '미리보기 · 예시 친구들이에요 (저장되지 않아요)', none0: '기록 없음',
+    // (친구 초대: a friend row's 초대 and what it says - here or, once the room shows, on the room's line)
+    iv: '초대', ivSent: '{0}님을 초대했어요', ivWait: '10초 뒤에 다시 초대할 수 있어요', ivFull: '방이 가득 찼어요', ivStarted: '게임 중에는 초대할 수 없어요',
+    ivFail: '초대를 보내지 못했어요 · 잠시 후 다시', ivDemo: '미리보기라 초대는 보내지 않아요', ivNet: '{0}',
   };
-  const PAL_OK = { copied: 1, sent: 1, added: 1, both: 1, declined: 1, cutDone: 1 };
+  const PAL_OK = { copied: 1, sent: 1, added: 1, both: 1, declined: 1, cutDone: 1, ivSent: 1, ivDemo: 1 };
   const PAL_TEXT = Object.keys(PAL_TX).map((k) => PAL_TX[k].replace(/\{0\}/g, '')).join(' ') + ' 위 회차 탕 점 개 받은 요청 · ( ) - 0123456789,';
   // (per page load. gen: bumped by a sign-out / an account switch - a late answer for the old account is dropped; uid /
   // code / prof: the account, its code and the card the server has (sent: its JSON); run: this solo game counts (newGame);
@@ -7266,11 +7273,14 @@ window.PG = window.PG || {};
   function palCloud() {
     if (!CLOUD.on) return;
     const st = CLOUD.st, uid = CLOUD.user ? CLOUD.user.uid : '';
-    if (st === 'out' || st === 'off' || st === 'frame' || st === 'inapp' || st === 'nostore') { if (PAL.uid || PAL.code || PAL.booting) palReset(); else if (PAL.open) palRender(); return; }
+    if (st === 'out' || st === 'off' || st === 'frame' || st === 'inapp' || st === 'nostore') { if (PAL.uid || PAL.code || PAL.booting) palReset(); else if (PAL.open) palRender(); ivSync(); return; }
     if (st === 'in' && uid && uid !== PAL.uid) { if (PAL.uid) palReset(); PAL.uid = uid; }
-    if (st === 'in' && uid && !palOn()) palWait();
+    // (a linked browser at load is 'in' before its user and database are: looked at again until both are - 친구 초대's
+    // listener starts then, not at the next title)
+    if (st === 'in' && !palOn()) palWait();
     else if (palOn() && !PAL.code && !PAL.booting && !PAL.bootErr) palBoot();
     if (PAL.open) palRender();
+    ivSync();                                    // (친구 초대: the listener on my invites follows the account)
   }
   function palWait() {
     if (PAL.waitT || PAL.waits >= 120) return;
@@ -7593,7 +7603,15 @@ window.PG = window.PG || {};
     listen(b, 'click', (e) => { e.preventDefault(); palOpen(); });
     const mr = $('pg-my-rec');
     if (mr) { const d2 = h('i', 'pg-tro-new'); d2.id = 'pg-pal-new2'; d2.hidden = true; d2.setAttribute('aria-hidden', 'true'); mr.appendChild(d2); mr.classList.add('has-pal'); }
-    try { for (const q of ['.pg-fw-body', '.pg-fw-sign']) { const fw = document.querySelector('#pg-fontwarm ' + q); if (fw && fw.textContent.indexOf(PAL_TX.rank) < 0) fw.textContent += ' ' + PAL_TEXT; } } catch (e) { /* ignore */ }
+    try { for (const q of ['.pg-fw-body', '.pg-fw-sign']) { const fw = document.querySelector('#pg-fontwarm ' + q); if (fw && fw.textContent.indexOf(PAL_TX.rank) < 0) fw.textContent += ' ' + PAL_TEXT + ' ' + IV_TEXT; } } catch (e) { /* ignore */ }
+    // (친구 초대: the room's 친구 초대 beside 코드 복사 - a host in its room phase, signed in or on a preview)
+    const side = $('pg-room') && $('pg-room').querySelector('.pg-room-side'), cp = $('pg-copy');
+    if (side && !$('pg-room-iv')) {
+      const ib = h('button', 'pg-btn pg-ghost pg-small pg-room-iv', IV_TX.room); ib.type = 'button'; ib.id = 'pg-room-iv'; ib.hidden = true;
+      side.insertBefore(ib, cp ? cp.nextSibling : side.firstChild);
+      listen(ib, 'click', (e) => { e.preventDefault(); palOpen('room'); });
+      dom.roomIv = ib;
+    }
     if (palDemoOn()) palDemoStart();
     palDots();
   }
@@ -7666,15 +7684,18 @@ window.PG = window.PG || {};
       else if (a === 'cut') { PAL.ask = x; PAL.focus = 'cutno'; palRender(); }
       else if (a === 'cutno') { PAL.ask = ''; PAL.focus = 'cut:' + x; palRender(); }
       else if (a === 'cutok') palCut(x);
+      else if (a === 'iv') ivInvite(x);
     });
     return PAL.dom;
   }
-  function palOpen() {
+  // (from 'room': the room's 친구 초대 - 닫기 goes back to the room)
+  function palOpen(from) {
     firstGesture();
     if (!palBuild()) return;
     PAL.open = true; PAL.ask = ''; PAL.msg = ''; clearTimeout(PAL.msgT); PAL.dom.inp.value = ''; PAL.dom.cin.hidden = true;
+    PAL.from = from === 'room' && NET.sess && NET.screen === 'room' ? 'room' : '';
     showOverlay('pal');
-    if (palDemoOn()) palDemoStart();
+    if (palDemoOn()) { palDemoStart(); ivDemoStage(); }
     else {
       PAL.waits = 0; palCloud();
       if (palOn()) { if (PAL.code) palLoadIf(); else { PAL.bootErr = ''; palBoot(); } }
@@ -7692,6 +7713,12 @@ window.PG = window.PG || {};
   function palClose() {
     if (shownOverlay !== 'pal') return;
     PAL.open = false; PAL.ask = '';
+    if (PAL.from === 'room' && NET.sess && NET.screen === 'room') {
+      PAL.from = ''; showOverlay('room'); renderRoom();
+      setTimeout(() => { if (shownOverlay === 'room' && !touchMode) try { const b = $('pg-room-iv'); if (b && !b.hidden) b.focus({ preventScroll: true }); } catch (e) { /* ignore */ } }, 60);
+      return;
+    }
+    PAL.from = '';
     showOverlay('rec');
     setTimeout(() => { if (shownOverlay === 'rec' && !touchMode) try { const b = $('pg-pal-btn'); if (b) b.focus({ preventScroll: true }); } catch (e) { /* ignore */ } }, 60);
   }
@@ -7706,7 +7733,13 @@ window.PG = window.PG || {};
     if (!r.me) {
       const cut = h('button', 'pg-pal-cut', PAL_TX.cut); cut.type = 'button'; cut.dataset.act = 'cut'; cut.setAttribute('aria-label', r.nick + '님과 친구 끊기');
       if (PAL.busy) cut.setAttribute('aria-disabled', 'true');
-      li.appendChild(cut);
+      // (친구 초대: off while a call is in flight, my room is full or playing, or I am in someone else's room)
+      const why = ivWhy(), iv = h('button', 'pg-pal-iv', PAL_TX.iv); iv.type = 'button'; iv.dataset.act = 'iv';
+      iv.setAttribute('aria-label', r.nick + '님을 ' + (NET.mode === 'battle' ? IV_TX.battle : IV_TX.coop) + '에 초대');
+      if (PAL.busy || IV.busy || why) iv.setAttribute('aria-disabled', 'true');
+      if (why === 'full' || why === 'started') iv.title = PAL_TX[why === 'full' ? 'ivFull' : 'ivStarted'];
+      const acts = h('span', 'pg-pal-racts'); acts.append(iv, cut);
+      li.appendChild(acts);
     }
     if (PAL.ask === r.uid) {
       const ask = h('div', 'pg-pal-ask'), yes = palBtn('pg-small pg-pal-cutok', PAL_TX.cut), no = palBtn('pg-ghost pg-small', PAL_TX.cancel);
@@ -7755,7 +7788,7 @@ window.PG = window.PG || {};
     else if (PAL.err) { line = PAL_TX[PAL.err]; again = !PAL.loading; }
     else if (!PAL.rows) line = PAL_TX.loading;
     else { rows = palRank(); if (!PAL.rows.length) line = PAL_TX.empty; }
-    const key = rows ? JSON.stringify(rows.map((r) => [r.uid, r.nick, r.st, r.hi, r.tr, r.c, r.lk])) + PAL.ask + busy : '';
+    const key = rows ? JSON.stringify(rows.map((r) => [r.uid, r.nick, r.st, r.hi, r.tr, r.c, r.lk])) + PAL.ask + busy + ivWhy() + (IV.busy ? '+' : '') + NET.mode : '';
     D.list.hidden = !rows;
     if (PAL.key !== key) { PAL.key = key; D.list.textContent = ''; if (rows) rows.forEach((r, i) => D.list.appendChild(palRowEl(r, i))); }
     setTxt(D.line, line); D.line.hidden = !line; D.line.className = 'pg-pal-line' + (again ? ' is-err' : '');
@@ -7767,6 +7800,177 @@ window.PG = window.PG || {};
       const el = f.indexOf('cut:') === 0 ? D.list.querySelector('[data-uid="' + f.slice(4) + '"] button[data-act="cut"]') : D.list.querySelector('button[data-act="' + f + '"]');
       try { if (el) el.focus({ preventScroll: true }); } catch (e) { /* ignore */ }
     }
+  }
+  // ---- 친구 초대 (design/friends.md "As built (invites)"): 친구 순위's 초대 on a friend's row - my room (made now the
+  // normal way when I have none: netHost with my mode and options, then the room screen) and an invite into it,
+  // invites/{friend}/in/{me} {code, mode, nick, at}, with my ivbox bumped in the same batch (one write per 10 s); the
+  // room's 친구 초대 opens 친구 순위 over it. Signed in: one listener on my own invites (stopped on sign-out / another
+  // account); the newest younger than 10 minutes is a banner over the menus (never in a game, a room or the login
+  // screen) - 참여 joins with its code (netJoin, as typed), 나중에 lets it go; both, and an expired one seen, delete it.
+  // Closing my room deletes the invites I sent into it. A PR preview: 초대 makes the room and says nothing was sent, and
+  // one staged invite shows when 친구 순위 first opens. The artifact has none of it
+  const IV_MS = 600000, IV_GAP_MS = 10000, IV_LIST = 50, IV_RETRY_MS = 60000, IV_DEMO_MS = 1500;
+  const IV_TX = { ask: '같이 하자고 해요', join: '참여', later: '나중에', coop: '같이 하기', battle: '배틀', room: '친구 초대', demo: '미리보기 · 예시 초대예요',
+    demoJoin: '미리보기라 예시 초대로는 참여할 수 없어요' };
+  const IV_TEXT = Object.keys(IV_TX).map((k) => IV_TX[k]).join(' ') + ' 이가 님의 방에 참여 초대';
+  const IV_WHERE = { title: 1, rec: 1, pal: 1, hub: 1, friends: 1, over: 1, ending: 1 };
+  const IV = { un: null, uid: '', gen: 0, errAt: 0, list: [], gone: new Set(), sentAt: 0, busy: false, out: [], dom: null, cur: null, t: 0, demo: null, staged: false, said: '' };
+  const ivKey = (v) => v.from + ':' + v.at;
+  const ivCol = (u) => CLOUD.db.collection('invites').doc(u).collection('in');
+  // 이 / 가 after a nick: 이 after a final consonant (받침), else 가
+  const ivJosa = (n) => { const c = String(n).charCodeAt(String(n).length - 1); return c >= 0xac00 && c <= 0xd7a3 && (c - 0xac00) % 28 ? '이' : '가'; };
+  // why 초대 is off now: '' | 'busy' (a room on its way) | 'guest' (in someone else's room) | 'started' | 'full'
+  function ivWhy() {
+    if (!NET.sess) return NET.busy ? 'busy' : '';
+    if (NET.role !== 'host') return 'guest';
+    if (NET.ph !== 'room' || NET.screen !== 'room') return 'started';
+    return NET.roster.length >= MAX_PLAYERS ? 'full' : '';
+  }
+  // the listener follows the account (palCloud); a failure (offline, the rules not published) is tried again a minute on
+  function ivSync() {
+    const uid = palOn() ? CLOUD.user.uid : '';
+    if (uid && uid === IV.uid && (IV.un || clNow() - IV.errAt < IV_RETRY_MS)) return;
+    if (!uid && !IV.uid && !IV.un) return;
+    ivStop();
+    if (!uid) return;
+    const gen = IV.gen; IV.uid = uid;
+    const fail = () => { if (gen !== IV.gen) return; IV.un = null; IV.errAt = clNow(); };
+    try { IV.un = ivCol(uid).limit(IV_LIST).onSnapshot((qs) => { if (gen === IV.gen) ivTake(qs); }, fail); } catch (e) { fail(); }
+  }
+  function ivStop() {
+    IV.gen++;
+    if (IV.un) { try { IV.un(); } catch (e) { /* ignore */ } }
+    Object.assign(IV, { un: null, uid: '', errAt: 0, list: [], out: [], sentAt: 0 });
+    ivShow();
+  }
+  // my invites as the server has them: well-formed ones younger than 10 minutes, newest first (older ones deleted)
+  function ivTake(qs) {
+    const now = clNow(), out = [];
+    for (const d of palDocs(qs)) {
+      let x = null; try { x = d.data(); } catch (e) { x = null; }
+      const from = d && typeof d.id === 'string' ? d.id : '', at = x ? palTs(x.at) : 0;
+      if (!from || !x || !at || typeof x.code !== 'string' || !/^[a-z0-9]{4}$/.test(x.code) || (x.mode !== 'coop' && x.mode !== 'battle')) continue;
+      const v = { from, code: x.code, mode: x.mode, nick: palNick(x.nick), at };
+      if (now - at >= IV_MS) { if (!IV.gone.has(ivKey(v))) { IV.gone.add(ivKey(v)); ivDel(from); } continue; }
+      out.push(v);
+    }
+    out.sort((a, b) => b.at - a.at);
+    IV.list = out; ivShow();
+  }
+  function ivDel(from) {
+    if (!palOn() || !IV.uid || IV.uid !== CLOUD.user.uid) return;
+    try { ivCol(IV.uid).doc(from).delete().catch(() => { /* (offline, gone already: it expires) */ }); } catch (e) { /* ignore */ }
+  }
+  // the banner: the newest live invite, over the menus only, never while I am in a room or on my way into one
+  function ivShow() {
+    clearTimeout(IV.t); IV.t = 0;
+    const now = clNow();
+    let cur = IV.demo && !IV.gone.has(ivKey(IV.demo)) ? IV.demo : null;
+    if (!cur) for (const v of IV.list) if (!IV.gone.has(ivKey(v)) && now - v.at < IV_MS) { cur = v; break; }
+    IV.cur = cur && !NET.sess && !NET.busy && IV_WHERE[shownOverlay] ? cur : null;
+    if (IV.cur) ivPaint(IV.cur);
+    else if (IV.dom && !IV.dom.el.hidden) IV.dom.el.hidden = true;
+    if (cur && !cur.demo) IV.t = setTimeout(() => { IV.t = 0; if (!stopped) ivShow(); }, clT(Math.max(50, IV_MS - (now - cur.at) + 20)));
+  }
+  function ivBuild() {
+    if (IV.dom) return IV.dom;
+    const stage = $('pg-stage'); if (!stage) return null;
+    const el = h('div', 'pg-iv'); el.id = 'pg-iv'; el.hidden = true; el.setAttribute('role', 'group'); el.setAttribute('aria-labelledby', 'pg-iv-tx');
+    const av = h('span', 'pg-iv-av'); av.setAttribute('aria-hidden', 'true');
+    const tx = h('p', 'pg-iv-tx'); tx.id = 'pg-iv-tx'; tx.setAttribute('aria-live', 'polite');
+    const join = palBtn('pg-small pg-iv-join', IV_TX.join, 'pg-iv-join'), later = palBtn('pg-ghost pg-small pg-iv-later', IV_TX.later, 'pg-iv-later');
+    const acts = h('span', 'pg-iv-acts'); acts.append(join, later);
+    el.append(av, tx, acts);
+    // (a zero-height strip across the stage's top: the banner's container - a small stage, such as the 1x screen,
+    // stacks its buttons under the line)
+    const wrap = h('div', 'pg-iv-wrap'); wrap.appendChild(el);
+    stage.appendChild(wrap);
+    listen(join, 'click', (e) => { e.preventDefault(); ivJoin(); });
+    listen(later, 'click', (e) => { e.preventDefault(); ivLater(); });
+    IV.dom = { el, av, tx, join, later, key: '' };
+    return IV.dom;
+  }
+  function ivPaint(v) {
+    const D = ivBuild(); if (!D) return;
+    // (a friend in my list: its bust, and its nick as my list has it)
+    const fr = (PAL.rows || []).find((q) => q.uid === v.from && !q.me), nick = fr ? fr.nick : v.nick, mode = v.mode === 'battle' ? IV_TX.battle : IV_TX.coop;
+    const key = [v.from, v.at, nick, mode, fr ? fr.c + fr.lk : '', v.demo ? 1 : 0].join('|');
+    if (D.key !== key) {
+      D.key = key; D.av.textContent = ''; D.tx.textContent = '';
+      if (fr) { const cv = portraitCanvas(CHAR_IDS[fr.c] || 'duck', 'portrait_', 32, fr.lk); cv.className = 'pg-iv-cv'; D.av.appendChild(cv); }
+      const md = h('span', 'pg-iv-mode' + (v.mode === 'battle' ? ' is-battle' : ''), mode);
+      D.tx.append(h('b', '', nick), document.createTextNode(ivJosa(nick) + ' ' + IV_TX.ask + ' '), h('span', 'pg-iv-dot', '·'), document.createTextNode(' '), md);
+      if (v.demo) D.tx.appendChild(h('small', '', IV_TX.demo));
+      D.join.setAttribute('aria-label', nick + '님의 ' + mode + ' 방에 참여');
+    }
+    if (D.el.hidden) D.el.hidden = false;
+  }
+  // 참여: 친구와 하기 with the code, joined at once (the normal netJoin: a full / gone room says so there)
+  function ivJoin() {
+    const v = IV.cur; if (!v) return;
+    firstGesture();
+    IV.gone.add(ivKey(v)); IV.said = 'join';
+    if (v.demo) { IV.demo = null; netOpenFriends(IV_TX.demoJoin); if (dom.code) dom.code.value = v.code.toUpperCase(); ivShow(); return; }
+    ivDel(v.from);
+    netOpenFriends('');
+    if (dom.code) dom.code.value = v.code.toUpperCase();
+    ivShow();
+    netJoin(v.code);
+  }
+  function ivLater() {
+    const v = IV.cur; if (!v) return;
+    IV.gone.add(ivKey(v)); IV.said = 'later';
+    if (v.demo) IV.demo = null; else ivDel(v.from);
+    ivShow();
+  }
+  // what 초대 says: in 친구 순위 while it shows, else on the room's line
+  function ivSay(key, a) {
+    IV.said = key;
+    if (shownOverlay === 'pal') palSay(key, a);
+    else if (NET.sess && NET.screen === 'room' && PAL_TX[key]) { troMsgSet(PAL_TX[key].replace('{0}', a === undefined ? '' : String(a))); renderRoom(); }
+  }
+  // 초대 on friend x's row: my room (none: one made now) and the invite into it
+  async function ivInvite(x) {
+    const r = (PAL.rows || []).find((q) => q.uid === x && !q.me), demo = palDemoOn();
+    if (!r || IV.busy || PAL.busy || (!demo && !palOn())) return;
+    const why = ivWhy();
+    if (why) { ivSay(why === 'full' ? 'ivFull' : why === 'started' ? 'ivStarted' : 'later'); return; }
+    if (!demo && IV.sentAt && clNow() - IV.sentAt < IV_GAP_MS) { ivSay('ivWait'); return; }
+    const gen = PAL.gen;
+    let code = NET.sess ? NET.code : '', key = '', arg;
+    IV.busy = true; palRender();
+    try {
+      if (!code) {
+        code = await netHost();                 // (the normal way: my mode and options; the room screen when it worked)
+        if (!code) { key = 'ivNet'; arg = NET.err || PAL_TX.ivFail; return; }
+      }
+      if (demo) { key = 'ivDemo'; return; }
+      if (gen !== PAL.gen || !palOn()) return;
+      const me = CLOUD.user.uid, ts = FV().serverTimestamp(), b = CLOUD.db.batch();
+      b.set(palDoc('ivbox', me), { at: ts });
+      b.set(ivCol(x).doc(me), { code, mode: NET.mode === 'battle' ? 'battle' : 'coop', nick: cleanNick(NET.nick) || '손님', at: ts });
+      await b.commit();
+      if (gen !== PAL.gen) return;
+      IV.sentAt = clNow(); IV.out = IV.out.filter((o) => o.to !== x).concat([{ to: x, code }]);
+      key = 'ivSent'; arg = r.nick;
+    } catch (e) { key = palErrKey(e) === 'offline' ? 'offline' : 'ivFail'; }
+    finally {
+      IV.busy = false;
+      if (key) ivSay(key, arg);
+      if (PAL.open) palRender();
+    }
+  }
+  // my room closed: the invites I sent into it are deleted (the sender may)
+  function ivClosed() {
+    const out = IV.out; IV.out = [];
+    if (!out.length || !palOn()) return;
+    try { const b = CLOUD.db.batch(), me = CLOUD.user.uid; for (const o of out) b.delete(ivCol(o.to).doc(me)); b.commit().catch(() => { /* (they expire) */ }); } catch (e) { /* ignore */ }
+  }
+  // (a PR preview: one staged invite from the first demo friend, the first time 친구 순위 opens)
+  function ivDemoStage() {
+    if (IV.staged || !palDemoOn()) return;
+    IV.staged = true;
+    setTimeout(() => { if (stopped) return; const f = PAL_DEMO.rows[0]; IV.demo = { from: f.uid, code: 'pv12', mode: 'coop', nick: f.nick, at: clNow(), demo: true }; ivShow(); }, clT(IV_DEMO_MS));
   }
   // ---- PG.debug.pal (tests)
   function palDebugApi() {
@@ -7792,6 +7996,13 @@ window.PG = window.PG || {};
       kick() { palKick(); return api.state(); }, write: () => palWrite().then(() => api.state()),
       // (tests) the cooldown's clock as if the last request were long ago
       unwait() { PAL.rqAt = 0; return api.state(); },
+      // 친구 초대: the listener, my live invites, the banner; 초대 / 참여 / 나중에 as the buttons do them
+      iv: () => ({ on: !!IV.un, uid: IV.uid, list: IV.list.map((v) => Object.assign({}, v)), shown: !!IV.dom && !IV.dom.el.hidden, text: IV.dom && !IV.dom.el.hidden ? IV.dom.tx.textContent : '',
+        cur: IV.cur ? IV.cur.from : '', demo: !!IV.demo, said: IV.said, busy: IV.busy, why: ivWhy(), out: IV.out.map((o) => Object.assign({}, o)), roomBtn: !!dom.roomIv && !dom.roomIv.hidden, from: PAL.from || '' }),
+      invite: (uid) => ivInvite(uid).then(() => api.iv()),
+      ivJoin() { ivJoin(); return api.iv(); }, ivLater() { ivLater(); return api.iv(); },
+      ivUnwait() { IV.sentAt = 0; return api.iv(); },
+      openFromRoom() { palOpen('room'); return api.state(); },
     };
     return api;
   }
@@ -9205,6 +9416,7 @@ window.PG = window.PG || {};
     if (prev === 'rec' && name !== 'rec') clRecShut();    // (cloud trophies: a message kept for 내 기록 is over)
     if (prev === 'hub' && name !== 'hub') hubShut();      // (v4 shop: nothing armed, no message left over)
     if (prev === 'pal' && name !== 'pal') PAL.open = false;   // (친구 순위: the panel is closed)
+    if (IV.cur || IV.list.length || IV.demo) ivShow();       // (친구 초대: the banner is for the menus only)
     if (name === 'title' && dom.titleHi) dom.titleHi.textContent = G.hiscore.toLocaleString('ko-KR');
     if (name === 'title') { syncPicker(); troStale(); syncTroBadge(); syncShopBtn(); }
     if (name === 'title' || name === 'over' || name === 'ending') palKick();   // (친구 순위: the card follows the nick, look, animal, league, bests)
@@ -10336,7 +10548,9 @@ window.PG = window.PG || {};
         }
       }, 400);
     }
-    netTransport().then(() => { renderFriends(); netLobbyOpen(); });
+    // (a guest on the deploy: the sign-in card, no open rooms; the SDK warmed so the tap opens Google's window at once)
+    if (netGated()) clWarm();
+    netTransport().then(() => { renderFriends(); if (!netGated()) netLobbyOpen(); });
     // the signed-in viewer's name as the default nickname (artifact 'user' capability), once
     if (NET.nickDefault && PG.Net && typeof PG.Net.profileName === 'function' && !NET.profAsked) {
       NET.profAsked = true;
@@ -10387,6 +10601,7 @@ window.PG = window.PG || {};
   }
   async function netHost(net) {
     if (NET.busy || NET.sess) return null;
+    if (netGated()) { renderFriends(); return null; }     // (a guest on the deploy: the sign-in card instead)
     NET.busy = true; NET.err = ''; setChip('wait'); renderFriends();
     let s = null, tr = null;
     try {
@@ -10410,6 +10625,7 @@ window.PG = window.PG || {};
     code = String(code || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
     if (!/^[a-z0-9]{4}$/.test(code)) { NET.err = NET_TEXT.badCode; renderFriends(); return { ok: false, code: 'bad_code' }; }
     if (NET.busy || NET.sess) return { ok: false, code: 'busy' };
+    if (netGated()) { renderFriends(); return { ok: false, code: 'login' }; }
     NET.busy = true; NET.err = ''; setChip('wait'); renderFriends();
     let s = null, err = null, tr = null;
     try {
@@ -10467,6 +10683,7 @@ window.PG = window.PG || {};
   // 'left' (나가기, 로비로, 처음으로: forfeit), 'lost' (refund unless I was away), 'host_left' / 'reload' (refund)
   function netClose(why = 'left') {
     const s = NET.sess;
+    if (s && NET.role === 'host') ivClosed();     // (친구 초대: the invites into this room go with it)
     troSessionEnd(why); // (first, while NET.sess is still set: a guest's 'gg' goes out before leave())
     // (a guest's NET.opts mirrored the host's room: its stake is never carried into a room this player hosts later)
     if (NET.role === 'guest') NET.opts.bet = 0;
@@ -11679,8 +11896,67 @@ window.PG = window.PG || {};
     const x = cv.getContext('2d'); x.imageSmoothingEnabled = false; x.clearRect(0, 0, cv.width, cv.height);
     const f = frameOf(prefix + c, 0); if (f) x.drawImage(f.c, 0, 0, f.w, f.h, 0, 0, cv.width, cv.height);
   }
+  // ---- 손님은 온라인 불가 (design/friends.md "As built (invites)"): on the deploy with the cloud, online play - 방 만들기,
+  // 코드로 참여, the open rooms, an invite link - is for a signed-in Google account only. A guest (or signed out) gets
+  // a card with Google로 계속하기 (the usual sign-in) instead: trophy stakes must belong to real accounts. 혼자 하기
+  // stays open; the artifact and a PR preview (no cloud) are as they were. An invite link opened as a guest goes on to
+  // its room once signed in
+  const NG_TX = { head: '온라인 같이 하기·배틀은 Google 로그인하고 할 수 있어요', solo: '혼자 하기는 로그인 없이도 바로 할 수 있어요' };
+  const netGated = () => CLOUD.on && CLOUD.st !== 'in';
+  function ngBuild() {
+    if (!CLOUD.on || dom.netGate || !dom.friends) return;
+    const card = dom.friends.querySelector('.pg-pcard'), hd = $('pg-friends-h'); if (!card) return;
+    const g = h('div', 'pg-note pg-net-gate'); g.id = 'pg-net-gate'; g.hidden = true; g.setAttribute('role', 'note');
+    const head = h('b', 'pg-note-h', NG_TX.head); head.id = 'pg-net-gate-h';
+    const btns = h('div', 'pg-login-btns'), go = h('button', 'pg-btn pg-login-go'); go.type = 'button'; go.id = 'pg-net-gate-go';
+    const gl = h('span', 'pg-login-g'); gl.setAttribute('aria-hidden', 'true'); gl.innerHTML = GOOGLE_G;
+    const goTx = h('span', 'pg-login-gotx', LG_TX.go); go.append(gl, goTx); go.setAttribute('aria-describedby', 'pg-net-gate-h pg-net-gate-st');
+    btns.appendChild(go);
+    const st = h('p', 'pg-login-st'); st.id = 'pg-net-gate-st'; st.setAttribute('aria-live', 'polite');
+    g.append(head, btns, st, h('p', 'pg-net-gate-solo', NG_TX.solo));
+    card.insertBefore(g, hd ? hd.nextSibling : card.firstChild);
+    listen(go, 'click', (e) => { e.preventDefault(); firstGesture(); if (go.getAttribute('aria-disabled') === 'true' || !netGated()) return; clClick(); ngPaint(); });
+    Object.assign(dom, { netGate: g, netGateGo: go, netGateTx: goTx, netGateSt: st });
+    try { for (const q of ['.pg-fw-body', '.pg-fw-sign']) { const fw = document.querySelector('#pg-fontwarm ' + q); if (fw && fw.textContent.indexOf(NG_TX.solo) < 0) fw.textContent += ' ' + NG_TX.head + ' ' + NG_TX.solo; } } catch (e) { /* ignore */ }
+  }
+  // the card's button and line follow the sign-in as the login screen's do
+  function ngPaint() {
+    if (!dom.netGate || dom.netGate.hidden) return;
+    const st = CLOUD.st, M = CLOUD.msg, go = dom.netGateGo;
+    let lbl = LG_TX.go, busy = false, hide = false, line = '';
+    if (st === 'frame' || st === 'inapp') { lbl = CL_BTN[st]; hide = !clOutsideUrl(); }
+    else if (st === 'auth' && CLOUD.pop) lbl = CL_BTN.again;
+    else if (st === 'load' || st === 'auth' || st === 'link') { lbl = CL_BTN[st]; busy = true; }
+    else if (st === 'relog') lbl = CL_BTN.relog;
+    else if (st === 'nostore') hide = true;
+    if (M) line = M.txt; else if (st !== 'out') line = CL_TX[clLine()[0]] || '';
+    setTxt(dom.netGateTx, lbl); setTxt(dom.netGateSt, line);
+    if (go.hidden !== hide) go.hidden = hide;
+    go.setAttribute('aria-disabled', busy ? 'true' : 'false');
+    if (busy) go.setAttribute('aria-busy', 'true'); else go.removeAttribute('aria-busy');
+  }
+  // clUI: 친구와 하기 follows the sign-in - signed in now: the panel itself, and an invite link goes on to its room
+  function ngUI() {
+    if (!dom.netGate || NET.screen !== 'friends' || shownOverlay !== 'friends') return;
+    const was = !dom.netGate.hidden;
+    renderFriends();
+    if (!was || netGated()) return;
+    netTransport().then(() => {
+      if (NET.screen !== 'friends' || shownOverlay !== 'friends' || netGated()) return;
+      renderFriends(); netLobbyOpen();
+      const c = dom.code ? dom.code.value : '';
+      if (NET.joinGated && /^[A-Za-z0-9]{4}$/.test(c) && !NET.sess && !NET.busy) { NET.joinGated = false; netJoin(c); }
+    });
+  }
   function renderFriends() {
     if (!dom.friends) return;
+    if (CLOUD.on) {
+      ngBuild();
+      const gated = netGated();
+      if (dom.friends.classList.contains('is-gated') !== gated) dom.friends.classList.toggle('is-gated', gated);
+      if (dom.netGate) { if (dom.netGate.hidden === gated) dom.netGate.hidden = !gated; if (gated) ngPaint(); }
+      if (gated && NET.joinLink && NET.screen === 'friends') NET.joinGated = true;
+    }
     const tr = NET.tr;
     if (dom.nick && document.activeElement !== dom.nick) dom.nick.value = NET.nick || netNick();
     drawArt(dom.myArt, G.sel, 'life_');
@@ -11882,6 +12158,9 @@ window.PG = window.PG || {};
       dom.readyBtn.classList.toggle('is-on', NET.ready);
     }
     if (dom.goBtn) { dom.goBtn.hidden = !host; dom.goBtn.disabled = !canStart(); }
+    // (친구 초대: the room's button - a host in its room phase, signed in or on a preview; 친구 순위 over the room follows)
+    if (dom.roomIv) { const on = host && NET.ph === 'room' && (palOn() || palDemoOn()); if (dom.roomIv.hidden === on) dom.roomIv.hidden = !on; }
+    if (PAL.open) palRender();
   }
   // 코드 복사: an invite (the code, plus this page's link with ?join= on the standalone deploy); phones get the share sheet
   function inviteText() {
@@ -11956,6 +12235,7 @@ window.PG = window.PG || {};
       screen: NET.screen, role: NET.role, code: NET.code, transport: NET.tr, forced: NET.trForced, gid: NET.gid, ph: NET.role === 'host' ? NET.ph : NET.hostPh,
       mode: NET.mode, opts: Object.assign({}, NET.opts), nick: NET.nick, ready: NET.ready, canStart: canStart(), error: NET.err, status: NET.status,
       chip: dom.netChip && !dom.netChip.hidden ? dom.netChip.textContent : '', overlay: shownOverlay,
+      gated: netGated(), gate: !!dom.netGate && !dom.netGate.hidden, // (손님은 온라인 불가: the deploy's sign-in card)
       roster: NET.roster.map((r) => ({ slot: r.slot, nick: r.nick, char: r.char, ready: !!r.ready || r.slot === 0, host: r.slot === 0, me: r.id === NET.selfId || (NET.role !== 'host' && r.slot === NET.slots.get(NET.selfId)),
         cup: r.id === NET.selfId ? (TRO.s ? TRO.s.t : -1) : r.cup, d: r.d || '', cupM: r.cupM || '', // (v4 trophies: counts as known here)
         z: !!r.z, free: troSeatFree(r), // (안 걸고 참여: a guest page with the rule, as the host knows it; the seat plays without the stake)

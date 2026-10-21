@@ -8,7 +8,7 @@ rules_version = '2';
 // And for document v 4 (the 뽑기, design/gacha.md 7): publish these rules first; they still accept v 1 - v 3 pages.
 //
 // One document per Google account: players/{uid}, readable and writable by that account only. Apart from the 친구 순위
-// collections below (a card readable by accepted friends only), nothing else in the database is readable or writable
+// and 친구 초대 collections below (a card readable by accepted friends only, an invite by its receiver), nothing else in the database is readable or writable
 // (no leaderboard, so nothing is public).
 //
 //   players/{uid} = {
@@ -72,6 +72,20 @@ rules_version = '2';
 // the trophies already have - and only friends see them. Nicks are not unique (requests and cards show the code).
 // Codes cannot be listed; guessing one needs a sign-in and a billed read per guess (31^8 codes). Many accounts or a
 // modified page can still spend the project's Spark read quota (true for players/{uid} too).
+//
+// 친구 초대 (design/friends.md "As built (invites)"): a signed-in player invites an accepted friend into its online room.
+// Publish these rules BEFORE deploying a page with 친구 초대 (older pages never touch these collections; a newer page
+// against older rules only says "초대를 보내지 못했어요" and never sees an invite).
+//   invites/{to}/in/{from}  { code, mode, nick, at }  one pending invite per sender -> receiver (a new one replaces it):
+//                           the room's code (4 of [a-z0-9], as the game makes it), 'coop' | 'battle', the sender's nick
+//                           (checked as the cards'), this write's time. Written only by the sender, only while the
+//                           receiver lets it read its card (friends/{to}/f/{from}), with its ivbox bumped in the same
+//                           batch; read and listed (<= 50) by the receiver only; deleted by either (joined, declined,
+//                           the room closed)
+//   ivbox/{uid}             { at }  the sender's last invite write (one per 10 s)
+// Honest limits: nothing runs on the server, so an invite is not deleted when it expires - the page shows it for 10
+// minutes from at and deletes an older one when it sees it. A room code is no secret anyway (it is said aloud or shared
+// as a link); an invite only saves the typing, and only a friend can send one.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -115,6 +129,21 @@ service cloud.firestore {
       allow list: if signedIn(uid) && request.query.limit <= 60;
       allow create: if request.auth != null && pairNewOk(uid, other);
       allow update: if false;
+    }
+
+    // ---- 친구 초대 (design/friends.md "As built (invites)"): an accepted friend's room code, read by the receiver only
+    match /invites/{to}/in/{from} {
+      allow get: if signedIn(to);
+      allow list: if signedIn(to) && request.query.limit <= 50;
+      allow create, update: if signedIn(from) && ivOk(to, from);
+      allow delete: if request.auth != null && (request.auth.uid == to || request.auth.uid == from);
+    }
+    match /ivbox/{uid} {
+      allow get: if signedIn(uid);
+      allow list: if false;
+      allow create: if signedIn(uid) && ivVal();
+      allow update: if signedIn(uid) && ivVal() && request.time > resource.data.at + duration.value(10, 's');
+      allow delete: if false;
     }
 
     // (everything else stays closed - the default, spelled out)
@@ -448,6 +477,17 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly(['at']) && request.resource.data.at == request.time
         && exists(reqP(me, them)) && !existsAfter(reqP(me, them))
         && existsAfter(frP(me, them)) && existsAfter(frP(them, me));
+    }
+    // ---- 친구 초대
+    function ivP(u) { return /databases/$(database)/documents/ivbox/$(u); }
+    function ivVal() { return request.resource.data.keys().hasOnly(['at']) && request.resource.data.at == request.time; }
+    // an invite: exactly its 4 fields (the game's room code, its mode, a nick as the cards', this write's time), to a
+    // friend who lets me read its card, with my ivbox bumped in the same batch (the 10 s cooldown)
+    function ivOk(to, from) {
+      let d = request.resource.data;
+      return to != from && d.keys().hasAll(['code', 'mode', 'nick', 'at']) && d.keys().hasOnly(['code', 'mode', 'nick', 'at'])
+        && d.code is string && d.code.matches('^[a-z0-9]{4}$') && d.mode in ['coop', 'battle'] && nickValue(d.nick)
+        && d.at == request.time && exists(frP(to, from)) && getAfter(ivP(from)).data.at == request.time;
     }
   }
 }
