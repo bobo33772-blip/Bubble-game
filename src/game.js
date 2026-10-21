@@ -1500,6 +1500,7 @@ window.PG = window.PG || {};
       // "준비!" (a boss round stays quiet until the boss lands and its own music starts with "… 등장!")
       if (G.music !== 'clear' && G.music !== 'victory') setMusic(G.boss ? null : 'main');
     }
+    palStageRun();                               // (친구 순위: the best 탕 of 혼자 하기)
   }
   // the shared part of every new game (solo / co-op / battle); `list` = [{char, nick, local, id}] in slot order
   function resetGame(gameMode, list) {
@@ -1514,6 +1515,7 @@ window.PG = window.PG || {};
     CO.run = null; CO.pod = null; // (the 비누 코인 run likewise; the podium's coin line belongs to one game)
   }
   function newGame(i, list) {
+    PAL.run = (i | 0) === 0;                     // (친구 순위: a solo game from 탕 1 records its best 탕)
     // (solo is always me: my worn set unless the list names one - shop.md 6.5)
     resetGame('solo', (list || [{ char: G.sel }]).map((e, k) => (k || (e && e.look !== undefined) ? e : Object.assign({}, e, { look: myLook(e && e.char) }))));   // (the list's animal in its own set)
     G.mode = 'playing';
@@ -4379,7 +4381,7 @@ window.PG = window.PG || {};
     if (b._lg !== lg) { b._lg = lg; b.style.setProperty('--lgc', L.col); troIcon(dom.troLg, LG_PRE + lg); }
     b._aria = '내 트로피 ' + S.t + '개 · ' + L.name + ' · 마이페이지 열기';   // (v4 shop: the badge opens 마이페이지)
     clBadge();                                   // (the aria-label, + the cloud's word and mark when it is on)
-    if (dom.troNew) dom.troNew.hidden = !!S.seen;
+    if (dom.troNew) dom.troNew.hidden = !!S.seen && !PAL.reqs.length;   // (친구 순위: requests waiting)
   }
   // the friends panel's chip (8.3): my count before I host or join
   function syncMyTro() {
@@ -6881,6 +6883,7 @@ window.PG = window.PG || {};
     if (st === 'in' && CLOUD.st !== 'in') { CLOUD.inAt = clNow(); clUILater(CL_SLOW_MS); }
     CLOUD.st = st;
     clUI(); clBadge();
+    palCloud();                                  // (친구 순위, design/friends.md: this account's card follows)
   }
   // a message: replaces the line for 8 s from when 내 기록 shows it (one pending while it is closed; CL_KEEP ones until
   // 내 기록 closes - clRecShut)
@@ -7178,6 +7181,617 @@ window.PG = window.PG || {};
       looksParse, looksMerge, looksOwned,
       slot: clSlot, doc: clDoc, agg: clAgg, mine: clMine, adopt: clAdopt, step: clStep, dirty: clDirty, parseCs: clParseCs, zero: clZero, items: clItems, upload: clUpload,
       pool: clPool, cnt: clCnt, eqOut: (S, slot) => clEqOut(S, slot || null),   // (v 4, gacha.md 7.2)
+    };
+    return api;
+  }
+
+  // ------------------------------------------------------------------ v4 friends (친구 순위, design/friends.md)
+  // On the deploy with the cloud, a signed-in player trades an 8-character friend code (ABCD-2345); a request the other
+  // accepts makes a pair, and each then reads the other's card - profiles/{uid}: the nick, the best 탕 of 혼자 하기, the
+  // best score, trophies, the animal and its worn set - ranked in 친구 순위 (opened from 내 기록). The security rules
+  // (design/friends.md 3) keep a card to its owner and accepted friends. players/{uid} and its sync are untouched: only
+  // CLOUD.db and CLOUD.user.uid are used here. A PR preview (PG_PREVIEW) stages a demo (no SDK call); the artifact has
+  // none of it (no button, panel or markup). The hooks: clSet -> palCloud; newGame / startRound -> PAL.run / palStageRun;
+  // showOverlay (title / over / ending) -> palKick; 내 기록's 친구 순위 button -> palOpen
+  const PAL_TANG = 24, PAL_MAX = 50, PAL_LIST = 60, PAL_REQ = 20, PAL_DEB_MS = 15000, PAL_RQ_MS = 20000, PAL_CACHE_MS = 60000;
+  const PAL_OLD_MS = 14 * 864e5, PAL_MUTE_MS = 30 * 864e5, PAL_MUTE_MAX = 50, PAL_REFRESH_MS = 10000, PAL_RETRY_MS = 60000, PAL_DENY_MS = 6000, PAL_MSG_MS = 6000;
+  const PAL_ABC = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789', PAL_CODE_RE = /^[A-HJKMNP-Z2-9]{8}$/, PAL_LK_RE = /^[0-9a-z]{5}$/;
+  const PAL_TX = {
+    title: '친구 순위', code: '내 코드', copy: '복사', copied: '복사했어요', ph: '친구 코드 8자리', send: '친구 요청', reqs: '받은 요청', rank: '혼자 하기 최고 기록',
+    me: '(나)', accept: '수락', decline: '거절', cut: '끊기', cancel: '취소', ask: '{0}님과 친구를 끊을까요?', refresh: '새로고침', close: '닫기',
+    loading: '불러오는 중…', empty: '아직 친구가 없어요 · 내 코드를 알려 주거나 친구 코드를 넣어 보세요',
+    guest: '로그인하면 친구 코드로 친구를 맺고 서로의 기록을 볼 수 있어요', login: '구글로 로그인', retry: '다시 시도',
+    bad: '코드 8자리를 확인해 주세요', own: '내 코드예요', full: '친구는 50명까지예요', wait: '20초 뒤에 다시 보낼 수 있어요', none: '그런 코드가 없어요',
+    already: '이미 친구예요', both: '서로 요청해서 바로 친구가 됐어요', sent0: '이미 요청했어요', sent: '친구 요청을 보냈어요', later: '잠시 후 다시 해 주세요',
+    added: '{0}님과 친구가 됐어요', declined: '요청을 거절했어요', cutDone: '{0}님과 친구를 끊었어요',
+    offline: '인터넷이 연결되면 다시 볼 수 있어요', rules: '친구 기능을 준비 중이에요', busy: '지금은 사람이 많아요 · 잠시 후 다시', fail: '잠시 후 다시',
+    demo: '미리보기 · 예시 친구들이에요 (저장되지 않아요)', none0: '기록 없음',
+  };
+  const PAL_OK = { copied: 1, sent: 1, added: 1, both: 1, declined: 1, cutDone: 1 };
+  const PAL_TEXT = Object.keys(PAL_TX).map((k) => PAL_TX[k].replace(/\{0\}/g, '')).join(' ') + ' 위 회차 탕 점 개 받은 요청 · ( ) - 0123456789,';
+  // (per page load. gen: bumped by a sign-out / an account switch - a late answer for the old account is dropped; uid /
+  // code / prof: the account, its code and the card the server has (sent: its JSON); run: this solo game counts (newGame);
+  // t / wr / deny: the card's debounce, the write in flight, one refused write retried; rows / reqs / at: the friends'
+  // cards, the incoming requests and when they came (cached 60 s); loadAt: the last load (새로고침 rests 10 s); rqAt: my
+  // last request; busy: a call in flight (its buttons aria-disabled); ask: the friend whose 끊기 waits for a yes; said:
+  // the last message's key (tests); demo: a PR preview's staged friends)
+  const PAL = { gen: 0, uid: '', code: '', prof: null, sent: '', run: false, t: 0, wr: null, deny: 0, busy: false, rows: null, reqs: [], at: 0, loadAt: 0,
+    loading: null, rqAt: 0, err: '', booting: null, bootErr: '', msg: '', msgErr: false, msgT: 0, said: '', open: false, ask: '', dom: null, waitT: 0, waits: 0,
+    refT: 0, focus: '', demo: false, key: '', rqKey: '' };
+  const palDemoOn = () => !!PREVIEW && !CLOUD.on;
+  const palOn = () => CLOUD.on && CLOUD.st === 'in' && !!CLOUD.user && !!CLOUD.db;
+  // (this browser's best 탕 and its mutes, per test namespace like the cloud's own keys - '' on a real page)
+  const palKey = () => 'ppogeul-stage' + clSfx(), palMuteKey = () => 'ppogeul-pal-mute' + clSfx();
+  const palLocal = () => clamp(parseInt(sget(palKey()) || '0', 10) || 0, 0, PAL_TANG * 100);
+  const palFmt = (c) => (typeof c === 'string' && c.length === 8 ? c.slice(0, 4) + '-' + c.slice(4) : '');
+  const palLk = (lk) => (typeof lk === 'string' && PAL_LK_RE.test(lk) ? lk : LOOK0);
+  const palNick = (n) => (typeof n === 'string' && n ? Array.from(n).slice(0, 12).join('') : '?');
+  const palJson = (c) => JSON.stringify([c.nick, c.st, c.hi, c.tr, c.c, c.lk]);
+  const palTs = (v) => { try { return v && typeof v.toMillis === 'function' ? +v.toMillis() || 0 : 0; } catch (e) { return 0; } };
+  const palDocs = (qs) => { try { return qs && Array.isArray(qs.docs) ? qs.docs : []; } catch (e) { return []; } };
+  // the 탕 reached, as the game-over card says it: 5탕 / 2회차 5탕 (0: none yet)
+  function palStTx(st) {
+    st = clamp(st | 0, 0, PAL_TANG * 100); if (!st) return PAL_TX.none0;
+    const lp = Math.floor((st - 1) / PAL_TANG), r = (st - 1) % PAL_TANG + 1;
+    return (lp ? (lp + 1) + '회차 ' : '') + r + '탕';
+  }
+  // startRound: this browser's best 탕 of 혼자 하기 (st = G.loop * 24 + G.round + 1), raise-only; only a solo game begun
+  // at 탕 1 (newGame sets PAL.run) - never co-op, battle, online, the attract demo or a debug start further in
+  function palStageRun() {
+    if (!PAL.run || G.attract || G.online || G.gameMode !== 'solo') return;
+    const st = clamp(G.loop * PAL_TANG + G.round + 1, 0, PAL_TANG * 100);
+    if (st > palLocal()) sset(palKey(), st);
+  }
+  // my card as it would be written now (the server's bests never drop: the larger of this browser's and the card's)
+  function palCard() {
+    const p = PAL.prof || {};
+    return { nick: cleanNick(NET.nick) || '손님', st: Math.max(palLocal(), p.st | 0), hi: clamp(Math.max(Math.floor(+G.hiscore) || 0, p.hi | 0), 0, 999999999),
+      tr: clamp((TRO.s && TRO.s.t) | 0, 0, 99999), c: Math.max(0, CHAR_IDS.indexOf(G.sel)), lk: palLk(myLook(G.sel)) };
+  }
+  const palDoc = (c, id) => CLOUD.db.collection(c).doc(id);
+  const palFr = (a, b) => CLOUD.db.collection('friends').doc(a).collection('f').doc(b);
+  const palReq = (to, from) => CLOUD.db.collection('reqs').doc(to).collection('in').doc(from);
+  const palInCol = (me) => CLOUD.db.collection('reqs').doc(me).collection('in'), palFrCol = (me) => CLOUD.db.collection('friends').doc(me).collection('f');
+  // an error's message key: offline / the rules not published yet (a load) / the quota / anything else
+  function palErrKey(e, load) {
+    const c = e && typeof e.code === 'string' ? e.code : '';
+    if (c === 'unavailable' || c === 'deadline-exceeded' || navigator.onLine === false) return 'offline';
+    if (c === 'permission-denied' && load) return 'rules';
+    if (c === 'resource-exhausted') return 'busy';
+    return load ? 'fail' : 'later';
+  }
+  // ---- the account (clSet calls this on every cloud state): signed in -> its card (another account: start over);
+  // signed out -> nothing kept; on the way (load / auth / link / relog): paused, the cache kept. Signed in before the
+  // database is up (a linked browser at load): looked at again every second for a while
+  function palCloud() {
+    if (!CLOUD.on) return;
+    const st = CLOUD.st, uid = CLOUD.user ? CLOUD.user.uid : '';
+    if (st === 'out' || st === 'off' || st === 'frame' || st === 'inapp' || st === 'nostore') { if (PAL.uid || PAL.code || PAL.booting) palReset(); else if (PAL.open) palRender(); return; }
+    if (st === 'in' && uid && uid !== PAL.uid) { if (PAL.uid) palReset(); PAL.uid = uid; }
+    if (st === 'in' && uid && !palOn()) palWait();
+    else if (palOn() && !PAL.code && !PAL.booting && !PAL.bootErr) palBoot();
+    if (PAL.open) palRender();
+  }
+  function palWait() {
+    if (PAL.waitT || PAL.waits >= 120) return;
+    PAL.waitT = setTimeout(() => { PAL.waitT = 0; PAL.waits++; if (!stopped) palCloud(); }, clT(1000));
+  }
+  function palReset() {
+    PAL.gen++;
+    clearTimeout(PAL.t); clearTimeout(PAL.waitT); clearTimeout(PAL.msgT); clearTimeout(PAL.refT);
+    Object.assign(PAL, { uid: '', code: '', prof: null, sent: '', t: 0, wr: null, deny: 0, busy: false, rows: null, reqs: [], at: 0, loadAt: 0, loading: null, rqAt: 0, err: '',
+      booting: null, bootErr: '', msg: '', msgT: 0, ask: '', waitT: 0, waits: 0, refT: 0, key: '', rqKey: '' });
+    palDots();
+    if (PAL.open) palRender();
+  }
+  // signed in: my card (none yet: made now), my card brought up to date, my inbox (the red dot). A failure (offline, the
+  // rules not published, the quota) waits for the panel's next opening
+  function palBoot() {
+    if (PAL.booting) return PAL.booting;
+    if (!palOn() || PAL.code) return Promise.resolve();
+    const gen = PAL.gen, uid = CLOUD.user.uid;
+    PAL.uid = uid; PAL.bootErr = '';
+    const p = palDoc('profiles', uid).get().then((snap) => {
+      if (gen !== PAL.gen) return null;
+      return snap.exists ? palTake(snap.data()) : palCreate(gen, uid, 0);
+    }).then(() => {
+      if (gen !== PAL.gen || !PAL.code) return null;
+      palKick();
+      return palInbox(gen).catch(() => { /* (the dot waits for the panel) */ });
+    }).catch((e) => { if (gen === PAL.gen) PAL.bootErr = palErrKey(e, true); })
+      .then(() => {
+        if (gen !== PAL.gen) return;
+        PAL.booting = null; palDots();
+        if (PAL.open) { if (PAL.code) palLoadIf(); else palRender(); }
+      });
+    PAL.booting = p;
+    if (PAL.open) palRender();
+    return p;
+  }
+  // the server's card: its code, what it holds (my local best rises to its st)
+  function palTake(d) {
+    if (!d || typeof d.code !== 'string' || !PAL_CODE_RE.test(d.code)) throw Object.assign(new Error('card'), { code: 'invalid-argument' });
+    PAL.code = d.code;
+    PAL.prof = { nick: typeof d.nick === 'string' ? d.nick : '', st: nNum(d.st, 0, 2400, 0) | 0, hi: nNum(d.hi, 0, 999999999, 0) | 0, tr: nNum(d.tr, 0, 99999, 0) | 0,
+      c: nNum(d.c, 0, 5, 0) | 0, lk: palLk(d.lk) };
+    PAL.sent = palJson(PAL.prof);
+    if (PAL.prof.st > palLocal()) sset(palKey(), PAL.prof.st);
+    return null;
+  }
+  // a code: 8 characters of PAL_ABC from crypto (bytes >= 248 thrown away: no bias)
+  function palNewCode() {
+    let s = '';
+    const b = new Uint8Array(16);
+    while (s.length < 8) { crypto.getRandomValues(b); for (const x of b) if (x < 248 && s.length < 8) s += PAL_ABC[x % 31]; }
+    return s;
+  }
+  // the first card and its code in one transaction (a taken code: another, up to 5 tries; refused because another tab
+  // of this account made the card meanwhile: that card is taken)
+  function palCreate(gen, uid, n) {
+    const C = palNewCode(), cref = palDoc('codes', C), pref = palDoc('profiles', uid), card = palCard();
+    return CLOUD.db.runTransaction((tx) => tx.get(cref).then((s) => {
+      if (s.exists) throw Object.assign(new Error('taken'), { code: 'taken' });
+      tx.set(cref, { u: uid });
+      tx.set(pref, Object.assign({ v: 1, code: C }, card, { at: FV().serverTimestamp() }));
+      return null;
+    })).then(() => {
+      if (gen !== PAL.gen) return null;
+      PAL.code = C; PAL.prof = card; PAL.sent = palJson(card);
+      return null;
+    }, (e) => {
+      if (gen !== PAL.gen) return null;
+      if (e && e.code === 'taken' && n < 4) return palCreate(gen, uid, n + 1);
+      if (e && e.code === 'permission-denied') return pref.get().then((s) => { if (gen !== PAL.gen) return null; if (s.exists) return palTake(s.data()); throw e; });
+      throw e;
+    });
+  }
+  // the title / a result card / 친구 순위 (and every request): my card is (re)sent 15 s after the last change - the nick,
+  // the look, the animal, the league, the bests; an unchanged card is never written
+  function palKick() {
+    if (!CLOUD.on) return;
+    PAL.waits = 0; palCloud();
+    if (!palOn() || !PAL.code || palJson(palCard()) === PAL.sent) return;
+    clearTimeout(PAL.t); PAL.t = setTimeout(palWrite, clT(PAL_DEB_MS));
+  }
+  // the card write (refused: once more after 6 s - the rules' 5 s - then not before the next change; other failures: 60 s)
+  function palWrite() {
+    clearTimeout(PAL.t); PAL.t = 0;
+    if (!palOn() || !PAL.code) return Promise.resolve();
+    if (PAL.wr) { PAL.t = setTimeout(palWrite, clT(PAL_DEB_MS)); return PAL.wr; }
+    const card = palCard(), j = palJson(card), gen = PAL.gen;
+    if (j === PAL.sent) return Promise.resolve();
+    let w;
+    try { w = palDoc('profiles', PAL.uid).update(Object.assign({}, card, { at: FV().serverTimestamp() })); } catch (e) { w = Promise.reject(e); }
+    PAL.wr = Promise.resolve(w).then(() => {
+      if (gen !== PAL.gen) return;
+      PAL.prof = card; PAL.sent = j; PAL.deny = 0;
+    }, (e) => {
+      if (gen !== PAL.gen) return;
+      clearTimeout(PAL.t); PAL.t = 0;
+      if (e && e.code === 'permission-denied') { if (!PAL.deny) { PAL.deny = 1; PAL.t = setTimeout(palWrite, clT(PAL_DENY_MS)); } else PAL.deny = 0; }
+      else PAL.t = setTimeout(palWrite, clT(PAL_RETRY_MS));
+    }).then(() => { if (gen === PAL.gen) PAL.wr = null; });
+    return PAL.wr;
+  }
+  // ---- mutes (a declined player: 30 days, <= 50 kept; their later requests are deleted unseen)
+  function palMutes() {
+    let m = null; try { m = JSON.parse(sget(palMuteKey()) || 'null'); } catch (e) { m = null; }
+    const now = clNow(), out = {};
+    if (m && typeof m === 'object' && !Array.isArray(m)) for (const k of Object.keys(m)) if (CL_UID_RE.test(k) && +m[k] > now) out[k] = +m[k];
+    return out;
+  }
+  function palMute(x) {
+    const m = palMutes(), o = {}; m[x] = clNow() + PAL_MUTE_MS;
+    for (const k of Object.keys(m).sort((a, b) => m[b] - m[a]).slice(0, PAL_MUTE_MAX)) o[k] = m[k];
+    sset(palMuteKey(), JSON.stringify(o));
+  }
+  // ---- loads
+  // my inbox (<= 20): requests older than 14 days, from a muted player or from a friend are deleted quietly
+  function palInbox(gen) {
+    const me = PAL.uid;
+    return palInCol(me).limit(PAL_REQ).get().then((qs) => {
+      if (gen !== PAL.gen) return;
+      const now = clNow(), mute = palMutes(), out = [];
+      for (const d of palDocs(qs)) {
+        const x = d.id, r = (d.data && d.data()) || {}, at = palTs(r.at);
+        if (!CL_UID_RE.test(x) || x === me) continue;
+        if ((at && now - at > PAL_OLD_MS) || mute[x] || (PAL.rows && PAL.rows.some((q) => q.uid === x))) { palReq(me, x).delete().catch(() => { /* the next listing */ }); continue; }
+        out.push({ uid: x, n: palNick(r.n), cd: typeof r.cd === 'string' && PAL_CODE_RE.test(r.cd) ? r.cd : '', c: nNum(r.c, 0, 5, 0) | 0, lk: palLk(r.lk), at });
+      }
+      PAL.reqs = out.sort((a, b) => b.at - a.at); palDots();
+    });
+  }
+  function palRowOf(x, d) {
+    d = d || {};
+    return { uid: x, nick: palNick(d.nick), code: typeof d.code === 'string' && PAL_CODE_RE.test(d.code) ? d.code : '', st: nNum(d.st, 0, 2400, 0) | 0,
+      hi: nNum(d.hi, 0, 999999999, 0) | 0, tr: nNum(d.tr, 0, 99999, 0) | 0, c: nNum(d.c, 0, 5, 0) | 0, lk: palLk(d.lk), me: false };
+  }
+  function palLoadIf(force) {
+    if (!force && PAL.rows && !PAL.err && clNow() - PAL.at < PAL_CACHE_MS) { palRender(); return Promise.resolve(); }
+    return palLoad();
+  }
+  // a load: my friend list (<= 60), each friend's card (in parallel; refused: that friend let go of me - my half goes
+  // too once theirs is gone) and my inbox: 1 + N + 1 reads (+ the rules' N exists); kept 60 s
+  function palLoad() {
+    if (PAL.loading) return PAL.loading;
+    if (!palOn() || !PAL.code) return Promise.resolve();
+    const gen = PAL.gen, me = PAL.uid;
+    PAL.err = ''; PAL.loadAt = clNow();
+    const fl = palFrCol(me).limit(PAL_LIST).get().then((qs) => Promise.all(palDocs(qs).map((d) => d.id).filter((x) => CL_UID_RE.test(x) && x !== me).map((x) =>
+      palDoc('profiles', x).get().then((s) => (s.exists ? palRowOf(x, s.data()) : null), (e) => {
+        if (e && e.code === 'permission-denied') palFr(x, me).get().then((s) => (!s.exists && gen === PAL.gen ? palFr(me, x).delete() : null)).catch(() => { /* the next load */ });
+        return null;
+      }))));
+    PAL.loading = Promise.all([fl, palInbox(gen)]).then(([rows]) => {
+      if (gen !== PAL.gen) return;
+      PAL.rows = rows.filter(Boolean); PAL.at = clNow();
+      PAL.reqs = PAL.reqs.filter((r) => !PAL.rows.some((q) => q.uid === r.uid));
+    }, (e) => { if (gen === PAL.gen) PAL.err = palErrKey(e, true); }).then(() => {
+      if (gen !== PAL.gen) return;
+      PAL.loading = null; palDots(); palRender();
+      clearTimeout(PAL.refT); PAL.refT = setTimeout(() => { if (PAL.open) palRender(); }, clT(PAL_REFRESH_MS) + 20);
+    });
+    palRender();
+    return PAL.loading;
+  }
+  // the ranking: my friends and me - the best 탕 first, then the best score, trophies, the name
+  function palRank() {
+    const me = Object.assign(palCard(), { uid: PAL.uid || 'me', code: PAL.code, me: true });
+    return (PAL.rows || []).concat([me]).sort((a, b) => b.st - a.st || b.hi - a.hi || b.tr - a.tr || (a.nick < b.nick ? -1 : a.nick > b.nick ? 1 : 0) || (a.me ? -1 : 1));
+  }
+  // ---- actions
+  function palSay(key, a) {
+    const t = PAL_TX[key]; if (!t) return;
+    clearTimeout(PAL.msgT);
+    PAL.msg = t.replace('{0}', a === undefined ? '' : String(a)); PAL.msgErr = !PAL_OK[key]; PAL.said = key;
+    PAL.msgT = setTimeout(() => { PAL.msg = ''; if (PAL.open) palRender(); }, clT(PAL_MSG_MS));
+    if (PAL.open) palRender();
+  }
+  // 친구 요청: the code checked here first (its form, mine, 50 friends, the 20 s), then its owner, then a request that
+  // crossed mine (accepted at once) or one I sent already; then my card's write in flight lands and the request goes
+  // with the outbox in one batch (refused: my card read again once - another tab may have changed it)
+  async function palAdd(text) {
+    if (PAL.busy) return;
+    const C = String(text || '').toUpperCase().replace(/[-\s]/g, '');
+    if (!PAL_CODE_RE.test(C)) { palSay('bad'); return; }
+    const demo = palDemoOn();
+    if (!demo && (!palOn() || !PAL.code)) { palSay('later'); return; }
+    if (C === PAL.code) { palSay('own'); return; }
+    if (PAL.rows && PAL.rows.length >= PAL_MAX) { palSay('full'); return; }
+    if (PAL.rqAt && clNow() - PAL.rqAt < PAL_RQ_MS) { palSay('wait'); return; }
+    if (demo) {
+      const r = PAL.reqs.find((q) => q.cd === C);
+      if (r) { palAccept(r, 'both'); return; }
+      if ((PAL.rows || []).some((q) => q.code === C)) { palSay('already'); return; }
+      PAL.rqAt = clNow(); palSay('sent'); if (PAL.dom) PAL.dom.inp.value = ''; return;
+    }
+    const gen = PAL.gen, me = PAL.uid;
+    PAL.busy = true; palRender();
+    try {
+      const cs = await palDoc('codes', C).get();
+      if (gen !== PAL.gen) return;
+      const cd = cs.exists ? cs.data() : null, x = cd && typeof cd.u === 'string' && CL_UID_RE.test(cd.u) ? cd.u : '';
+      if (!x) { palSay('none'); return; }
+      if (x === me) { palSay('own'); return; }
+      if (PAL.rows && PAL.rows.some((q) => q.uid === x)) { palSay('already'); return; }
+      const r = PAL.reqs.find((q) => q.uid === x);
+      if (r) { PAL.busy = false; await palAccept(r, 'both'); return; }
+      const rs = await palReq(x, me).get();
+      if (gen !== PAL.gen) return;
+      if (rs.exists) { palSay('sent0'); return; }
+      clearTimeout(PAL.t); PAL.t = 0;
+      if (PAL.wr) await PAL.wr;
+      for (let i = 0; ; i++) {
+        const p = PAL.prof, b = CLOUD.db.batch(), ts = FV().serverTimestamp();
+        b.set(palDoc('outbox', me), { rq: ts });
+        b.set(palReq(x, me), { n: p.nick, cd: PAL.code, c: p.c, lk: p.lk, at: ts });
+        try {
+          await b.commit();
+          if (gen !== PAL.gen) return;
+          PAL.rqAt = clNow(); palSay('sent'); if (PAL.dom) PAL.dom.inp.value = '';
+          break;
+        } catch (e) {
+          if (gen !== PAL.gen) return;
+          if (!(e && e.code === 'permission-denied' && i === 0)) throw e;
+          const s = await palDoc('profiles', me).get();
+          if (gen !== PAL.gen) return;
+          if (!s.exists) throw e;
+          palTake(s.data());
+        }
+      }
+    } catch (e) { if (gen === PAL.gen) palSay(palErrKey(e)); }
+    finally { if (gen === PAL.gen) { PAL.busy = false; palRender(); palKick(); } }
+  }
+  // 수락: both halves of the pair and the request(s) in one batch, then the new friend's card
+  async function palAccept(r, how) {
+    if (PAL.busy || !r) return;
+    if (PAL.rows && PAL.rows.length >= PAL_MAX) { palSay('full'); return; }
+    if (palDemoOn()) {
+      PAL.reqs = PAL.reqs.filter((q) => q.uid !== r.uid);
+      const row = palRowOf(r.uid, { nick: r.n, code: r.cd, st: r.st, hi: r.hi, tr: r.tr, c: r.c, lk: r.lk });
+      PAL.rows = (PAL.rows || []).concat([row]); palDots(); palSay(how === 'both' ? 'both' : 'added', row.nick); return;
+    }
+    if (!palOn()) return;
+    const gen = PAL.gen, me = PAL.uid, x = r.uid;
+    PAL.busy = true; palRender();
+    try {
+      const b = CLOUD.db.batch(), ts = FV().serverTimestamp();
+      b.set(palFr(me, x), { at: ts }); b.set(palFr(x, me), { at: ts });
+      b.delete(palReq(me, x)); b.delete(palReq(x, me));
+      await b.commit();
+      if (gen !== PAL.gen) return;
+      PAL.reqs = PAL.reqs.filter((q) => q.uid !== x);
+      let row = null;
+      try { const s = await palDoc('profiles', x).get(); if (s.exists) row = palRowOf(x, s.data()); } catch (e) { /* (the request's own values until the next load) */ }
+      if (gen !== PAL.gen) return;
+      if (!row) row = palRowOf(x, { nick: r.n, code: r.cd, c: r.c, lk: r.lk });
+      PAL.rows = (PAL.rows || []).filter((q) => q.uid !== x).concat([row]);
+      palSay(how === 'both' ? 'both' : 'added', row.nick);
+    } catch (e) { if (gen === PAL.gen) palSay(palErrKey(e)); }
+    finally { if (gen === PAL.gen) { PAL.busy = false; palDots(); palRender(); } }
+  }
+  // 거절: the request deleted and its sender muted here for 30 days
+  function palDecline(r) {
+    if (PAL.busy || !r) return;
+    PAL.reqs = PAL.reqs.filter((q) => q.uid !== r.uid);
+    if (!palDemoOn()) { palMute(r.uid); if (palOn()) palReq(PAL.uid, r.uid).delete().catch(() => { /* muted: the next listing deletes it */ }); }
+    palDots(); palSay('declined');
+  }
+  // 끊기 (after its inline yes): both halves in one batch
+  async function palCut(x) {
+    if (PAL.busy) return;
+    const r = (PAL.rows || []).find((q) => q.uid === x); PAL.ask = '';
+    if (!r) { palRender(); return; }
+    if (palDemoOn()) { PAL.rows = PAL.rows.filter((q) => q.uid !== x); palSay('cutDone', r.nick); return; }
+    if (!palOn()) return;
+    const gen = PAL.gen, me = PAL.uid;
+    PAL.busy = true; palRender();
+    try {
+      const b = CLOUD.db.batch(); b.delete(palFr(me, x)); b.delete(palFr(x, me));
+      await b.commit();
+      if (gen !== PAL.gen) return;
+      PAL.rows = PAL.rows.filter((q) => q.uid !== x); palSay('cutDone', r.nick);
+    } catch (e) { if (gen === PAL.gen) palSay(palErrKey(e)); }
+    finally { if (gen === PAL.gen) { PAL.busy = false; palRender(); } }
+  }
+  // 복사: the clipboard, else the code selected in a read-only field (copied by hand)
+  function palCopy() {
+    const t = palFmt(PAL.code), D = PAL.dom; if (!t || !D) return;
+    const hand = () => {
+      D.cin.hidden = false; D.cin.value = t;
+      let ok = false; try { D.cin.focus({ preventScroll: true }); D.cin.select(); ok = document.execCommand('copy'); } catch (e) { ok = false; }
+      if (ok) { D.cin.hidden = true; palSay('copied'); }
+    };
+    try { if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') { navigator.clipboard.writeText(t).then(() => palSay('copied'), hand); return; } } catch (e) { /* the field */ }
+    hand();
+  }
+  // ---- the PR preview's demo: four friends, one request; everything works here only, nothing is stored
+  const PAL_DEMO = { code: 'PVWX2345', rows: [
+    { uid: 'demo1', nick: '거품왕', code: 'K7MQ2RTA', st: 41, hi: 58200, tr: 640, c: 1, lk: '50000' },
+    { uid: 'demo2', nick: '뽀득이', code: 'D3FGH9JK', st: 22, hi: 31950, tr: 210, c: 3, lk: '10100' },
+    { uid: 'demo3', nick: '때밀이', code: 'S2TUV6WY', st: 9, hi: 12400, tr: 75, c: 4, lk: '00100' },
+    { uid: 'demo4', nick: '수건양', code: 'B8CE4NPZ', st: 3, hi: 2600, tr: 0, c: 5, lk: '30000' }],
+  req: { uid: 'demo5', n: '온탕지기', cd: 'HN4WX8PB', c: 2, lk: '90000', at: 0, st: 17, hi: 24800, tr: 150 } };
+  function palDemoStart() {
+    if (PAL.demo) return;
+    PAL.demo = true; PAL.code = PAL_DEMO.code; PAL.rows = PAL_DEMO.rows.map((r) => Object.assign({ me: false }, r)); PAL.reqs = [Object.assign({}, PAL_DEMO.req)]; PAL.at = clNow();
+    palDots();
+  }
+  // ---- UI (design/friends.md 5): 내 기록's 친구 순위 button and #pg-pal, a full-stage .pg-panel like #pg-hub. Made here,
+  // with the cloud or on a preview only. (The button sits at the top right of 내 기록's card: its button row has no room
+  // for a third button at 1x - see the "As built" note.) The red dot (requests waiting) is mirrored on the title's
+  // trophy badge and on 마이페이지's 내 기록 button
+  function palSetupDOM() {
+    if (!(CLOUD.on || PREVIEW) || $('pg-pal-btn') || !dom.recCard) return;
+    const b = h('button', 'pg-btn pg-ghost pg-small pg-pal-btn'); b.type = 'button'; b.id = 'pg-pal-btn';
+    const cup = mk(8, 8); cup.className = 'pg-ic'; cup.setAttribute('aria-hidden', 'true'); troIcon(cup, SPR_CUP);
+    const dot = h('i', 'pg-tro-new'); dot.id = 'pg-pal-new'; dot.hidden = true; dot.setAttribute('aria-hidden', 'true');
+    b.append(cup, h('span', '', PAL_TX.title), dot);
+    const hd = $('pg-rec-h');
+    dom.recCard.insertBefore(b, hd ? hd.nextSibling : dom.recCard.firstChild);
+    dom.recCard.classList.add('has-pal');
+    listen(b, 'click', (e) => { e.preventDefault(); palOpen(); });
+    const mr = $('pg-my-rec');
+    if (mr) { const d2 = h('i', 'pg-tro-new'); d2.id = 'pg-pal-new2'; d2.hidden = true; d2.setAttribute('aria-hidden', 'true'); mr.appendChild(d2); mr.classList.add('has-pal'); }
+    try { for (const q of ['.pg-fw-body', '.pg-fw-sign']) { const fw = document.querySelector('#pg-fontwarm ' + q); if (fw && fw.textContent.indexOf(PAL_TX.rank) < 0) fw.textContent += ' ' + PAL_TEXT; } } catch (e) { /* ignore */ }
+    if (palDemoOn()) palDemoStart();
+    palDots();
+  }
+  // the dots: requests are waiting (here and on the title's badge)
+  function palDots() {
+    const on = PAL.reqs.length > 0;
+    for (const id of ['pg-pal-new', 'pg-pal-new2']) { const d = $(id); if (d && d.hidden === on) d.hidden = !on; }
+    const b = $('pg-pal-btn'), aria = PAL_TX.title + (on ? ' · 받은 요청 ' + PAL.reqs.length + '개' : '');
+    if (b && b.getAttribute('aria-label') !== aria) b.setAttribute('aria-label', aria);
+    if (dom.troNew && TRO.s) dom.troNew.hidden = !!TRO.s.seen && !on;
+  }
+  function palBtn(cls, txt, id) { const b = h('button', 'pg-btn ' + cls, txt); b.type = 'button'; if (id) b.id = id; return b; }
+  function palBuild() {
+    if (PAL.dom) return PAL.dom;
+    const stage = $('pg-stage'); if (!stage) return null;
+    const sec = h('section', 'pg-panel pg-pal'); sec.id = 'pg-pal'; sec.hidden = true; sec.setAttribute('aria-labelledby', 'pg-pal-h');
+    const card = h('div', 'pg-card pg-pcard pg-pal-card');
+    const head = h('div', 'pg-pal-head'), hd = h('h2', 'pg-h2', PAL_TX.title); hd.id = 'pg-pal-h';
+    const chip = h('p', 'pg-pal-code'); chip.id = 'pg-pal-code';
+    const mine = h('b'); mine.id = 'pg-pal-mine';
+    const cin = h('input', 'pg-input pg-pal-copyin'); cin.id = 'pg-pal-copyin'; cin.readOnly = true; cin.hidden = true; cin.setAttribute('aria-label', PAL_TX.code);
+    const copy = palBtn('pg-ghost pg-small pg-pal-copy', PAL_TX.copy, 'pg-pal-copy');
+    chip.append(h('span', 'pg-pal-codel', PAL_TX.code), mine, cin, copy);
+    head.append(hd, chip);
+    const form = h('form', 'pg-pal-add'); form.id = 'pg-pal-add'; form.noValidate = true; form.setAttribute('autocomplete', 'off');
+    const inp = h('input', 'pg-input pg-pal-in'); inp.id = 'pg-pal-in'; inp.type = 'text'; inp.maxLength = 9; inp.placeholder = PAL_TX.ph;
+    for (const [k, v] of [['autocapitalize', 'characters'], ['autocomplete', 'off'], ['autocorrect', 'off'], ['spellcheck', 'false'], ['enterkeyhint', 'send'], ['aria-label', PAL_TX.ph]]) inp.setAttribute(k, v);
+    const send = h('button', 'pg-btn pg-pal-send', PAL_TX.send); send.type = 'submit'; send.id = 'pg-pal-send';
+    form.append(inp, send);
+    const msg = h('p', 'pg-pal-msg'); msg.id = 'pg-pal-msg'; msg.setAttribute('aria-live', 'polite');
+    const note = h('p', 'pg-pal-note'); note.id = 'pg-pal-note';
+    const body = h('div', 'pg-pal-body'); body.id = 'pg-pal-body';
+    const rqBox = h('section', 'pg-pal-sec pg-pal-rqs'); rqBox.id = 'pg-pal-rqs'; rqBox.setAttribute('aria-labelledby', 'pg-pal-rqh');
+    const rqH = h('h3', '', PAL_TX.reqs); rqH.id = 'pg-pal-rqh';
+    const rq = h('ul', 'pg-pal-list'); rq.id = 'pg-pal-rq';
+    rqBox.append(rqH, rq);
+    const rkBox = h('section', 'pg-pal-sec pg-pal-rank'); rkBox.id = 'pg-pal-rank'; rkBox.setAttribute('aria-labelledby', 'pg-pal-rkh');
+    const rkH = h('h3', '', PAL_TX.rank); rkH.id = 'pg-pal-rkh';
+    const list = h('ol', 'pg-pal-list'); list.id = 'pg-pal-list';
+    const line = h('p', 'pg-pal-line'); line.id = 'pg-pal-line';
+    const retry = palBtn('pg-ghost pg-small pg-pal-retry', PAL_TX.retry, 'pg-pal-retry');
+    rkBox.append(rkH, list, line, retry);
+    body.append(rqBox, rkBox);
+    const guest = h('div', 'pg-pal-guest'); guest.id = 'pg-pal-guest';
+    const gl = h('p', 'pg-pal-gline'); gl.id = 'pg-pal-gline';
+    const login = palBtn('pg-pal-login', PAL_TX.login, 'pg-pal-login');
+    guest.append(gl, login);
+    const foot = h('div', 'pg-pal-foot');
+    const ref = palBtn('pg-ghost', PAL_TX.refresh, 'pg-pal-refresh'), close = palBtn('', PAL_TX.close, 'pg-pal-close');
+    foot.append(ref, close);
+    card.append(head, form, msg, note, body, guest, foot);
+    sec.appendChild(card);
+    stage.insertBefore(sec, dom.hub && dom.hub.parentNode === stage ? dom.hub : null);
+    dom.pal = sec;
+    PAL.dom = { sec, card, chip, mine, cin, copy, form, inp, send, msg, note, body, rqBox, rqH, rq, list, line, retry, guest, gl, login, ref, close };
+    const on = (el, fn) => listen(el, 'click', (e) => { e.preventDefault(); if (el.getAttribute('aria-disabled') === 'true') return; fn(e); });
+    listen(form, 'submit', (e) => { e.preventDefault(); if (send.getAttribute('aria-disabled') !== 'true') palAdd(inp.value); });
+    listen(inp, 'input', () => { const v = inp.value.toUpperCase(); if (v !== inp.value) inp.value = v; });
+    on(copy, palCopy); on(close, palClose); on(login, () => clClick());
+    on(ref, () => palLoadIf(true));
+    on(retry, () => { if (PAL.code) palLoadIf(true); else { PAL.bootErr = ''; palCloud(); palBoot(); } });
+    // (the rows' buttons: data-act on the button, data-uid on its row)
+    listen(body, 'click', (e) => {
+      const b = e.target && e.target.closest ? e.target.closest('button[data-act]') : null; if (!b) return;
+      e.preventDefault();
+      if (b.getAttribute('aria-disabled') === 'true') return;
+      const li = b.closest('[data-uid]'), x = li ? li.dataset.uid : '', a = b.dataset.act, r = PAL.reqs.find((q) => q.uid === x);
+      if (a === 'acc') palAccept(r);
+      else if (a === 'dec') palDecline(r);
+      else if (a === 'cut') { PAL.ask = x; PAL.focus = 'cutno'; palRender(); }
+      else if (a === 'cutno') { PAL.ask = ''; PAL.focus = 'cut:' + x; palRender(); }
+      else if (a === 'cutok') palCut(x);
+    });
+    return PAL.dom;
+  }
+  function palOpen() {
+    firstGesture();
+    if (!palBuild()) return;
+    PAL.open = true; PAL.ask = ''; PAL.msg = ''; clearTimeout(PAL.msgT); PAL.dom.inp.value = ''; PAL.dom.cin.hidden = true;
+    showOverlay('pal');
+    if (palDemoOn()) palDemoStart();
+    else {
+      PAL.waits = 0; palCloud();
+      if (palOn()) { if (PAL.code) palLoadIf(); else { PAL.bootErr = ''; palBoot(); } }
+      palKick();
+    }
+    palRender();
+    // (the code field first - not on touch, where the keyboard would cover the list)
+    setTimeout(() => {
+      if (shownOverlay !== 'pal' || touchMode || G.manual) return;
+      const D = PAL.dom, t = !D.form.hidden ? D.inp : !D.guest.hidden && !D.login.hidden ? D.login : D.close;
+      try { t.focus({ preventScroll: true }); } catch (e) { /* ignore */ }
+    }, 40);
+  }
+  // 닫기 / Escape: back to 내 기록 (which goes back where it came from)
+  function palClose() {
+    if (shownOverlay !== 'pal') return;
+    PAL.open = false; PAL.ask = '';
+    showOverlay('rec');
+    setTimeout(() => { if (shownOverlay === 'rec' && !touchMode) try { const b = $('pg-pal-btn'); if (b) b.focus({ preventScroll: true }); } catch (e) { /* ignore */ } }, 60);
+  }
+  function palRowEl(r, i) {
+    const li = h('li', 'pg-pal-row' + (r.me ? ' is-me' : '')); li.dataset.uid = r.uid;
+    const rk = h('b', 'pg-pal-rk', String(i + 1)); rk.appendChild(h('span', 'pg-sr', '위'));
+    const av = portraitCanvas(CHAR_IDS[r.c] || 'duck', 'portrait_', 32, r.lk); av.className = 'pg-pal-av'; av.setAttribute('aria-hidden', 'true');
+    const nm = h('span', 'pg-pal-nm'); nm.appendChild(h('span', 'pg-pal-nick', r.nick)); if (r.me) nm.appendChild(h('small', 'pg-pal-me', PAL_TX.me));
+    const st = h('span', 'pg-pal-st');
+    st.append(h('span', 'pg-pal-tang', palStTx(r.st)), h('span', 'pg-pal-dot', '·'), h('span', 'pg-pal-hi', r.hi.toLocaleString('ko-KR') + '점'), h('span', 'pg-pal-dot', '·'), troChip(r.tr));
+    li.append(rk, av, nm, st);
+    if (!r.me) {
+      const cut = h('button', 'pg-pal-cut', PAL_TX.cut); cut.type = 'button'; cut.dataset.act = 'cut'; cut.setAttribute('aria-label', r.nick + '님과 친구 끊기');
+      if (PAL.busy) cut.setAttribute('aria-disabled', 'true');
+      li.appendChild(cut);
+    }
+    if (PAL.ask === r.uid) {
+      const ask = h('div', 'pg-pal-ask'), yes = palBtn('pg-small pg-pal-cutok', PAL_TX.cut), no = palBtn('pg-ghost pg-small', PAL_TX.cancel);
+      yes.dataset.act = 'cutok'; no.dataset.act = 'cutno';
+      ask.append(h('span', '', PAL_TX.ask.replace('{0}', r.nick)), yes, no); li.appendChild(ask);
+    }
+    return li;
+  }
+  function palReqEl(r) {
+    const li = h('li', 'pg-pal-row pg-pal-rqrow'); li.dataset.uid = r.uid;
+    const av = portraitCanvas(CHAR_IDS[r.c] || 'duck', 'portrait_', 32, r.lk); av.className = 'pg-pal-av'; av.setAttribute('aria-hidden', 'true');
+    const nm = h('span', 'pg-pal-nm'); nm.append(h('span', 'pg-pal-nick', r.n), h('small', 'pg-pal-cd', palFmt(r.cd)));
+    const acc = palBtn('pg-small', PAL_TX.accept), dec = palBtn('pg-ghost pg-small', PAL_TX.decline);
+    acc.dataset.act = 'acc'; dec.dataset.act = 'dec'; acc.setAttribute('aria-label', r.n + '님의 친구 요청 수락'); dec.setAttribute('aria-label', r.n + '님의 친구 요청 거절');
+    if (PAL.busy) { acc.setAttribute('aria-disabled', 'true'); dec.setAttribute('aria-disabled', 'true'); }
+    const bs = h('span', 'pg-pal-acts'); bs.append(acc, dec);
+    li.append(av, nm, bs);
+    return li;
+  }
+  // the panel follows the state: guest (an invitation to sign in) / signed in without a card yet (loading, an error) /
+  // the panel itself (my code, the add row, 받은 요청, the ranking)
+  function palRender() {
+    const D = PAL.dom; if (!D || !PAL.open) return;
+    const demo = palDemoOn(), inn = demo || (CLOUD.on && CLOUD.st === 'in' && !!CLOUD.user), main = inn && !!PAL.code, busy = PAL.busy ? 'true' : 'false';
+    D.chip.hidden = !main; D.form.hidden = !main; D.body.hidden = !inn; D.guest.hidden = inn; D.ref.hidden = !main || demo;
+    setTxt(D.mine, palFmt(PAL.code));
+    if (!inn) {
+      const st = CLOUD.st, can = st === 'out' || st === 'relog' || st === 'load' || st === 'auth' || st === 'link';
+      setTxt(D.gl, st === 'out' ? PAL_TX.guest : CL_TX[clLine()[0]] || PAL_TX.guest);
+      D.login.hidden = !can;
+      setTxt(D.login, st === 'out' ? PAL_TX.login : st === 'auth' && CLOUD.pop ? CL_BTN.again : CL_BTN[st] || PAL_TX.login);
+      D.login.setAttribute('aria-disabled', st === 'load' || st === 'link' || (st === 'auth' && !CLOUD.pop) ? 'true' : 'false');
+    }
+    setTxt(D.msg, PAL.msg); D.msg.className = 'pg-pal-msg' + (PAL.msg ? (PAL.msgErr ? ' is-err' : ' is-ok') : '');
+    setTxt(D.note, demo ? PAL_TX.demo : ''); D.note.hidden = !demo;
+    D.send.setAttribute('aria-disabled', busy);
+    // 받은 요청 (hidden while there is none)
+    const rqKey = main ? JSON.stringify(PAL.reqs.map((r) => [r.uid, r.n, r.cd, r.c, r.lk])) + busy : '';
+    D.rqBox.hidden = !main || !PAL.reqs.length;
+    setTxt(D.rqH, PAL_TX.reqs + ' (' + PAL.reqs.length + ')');
+    if (PAL.rqKey !== rqKey) { PAL.rqKey = rqKey; D.rq.textContent = ''; if (main) for (const r of PAL.reqs) D.rq.appendChild(palReqEl(r)); }
+    // the ranking (or its line: loading / no friends yet / an error with 다시 시도)
+    let line = '', again = false, rows = null;
+    if (!inn) line = '';
+    else if (!main) { line = PAL.bootErr ? PAL_TX[PAL.bootErr] : PAL_TX.loading; again = !!PAL.bootErr && !PAL.booting; }
+    else if (PAL.err) { line = PAL_TX[PAL.err]; again = !PAL.loading; }
+    else if (!PAL.rows) line = PAL_TX.loading;
+    else { rows = palRank(); if (!PAL.rows.length) line = PAL_TX.empty; }
+    const key = rows ? JSON.stringify(rows.map((r) => [r.uid, r.nick, r.st, r.hi, r.tr, r.c, r.lk])) + PAL.ask + busy : '';
+    D.list.hidden = !rows;
+    if (PAL.key !== key) { PAL.key = key; D.list.textContent = ''; if (rows) rows.forEach((r, i) => D.list.appendChild(palRowEl(r, i))); }
+    setTxt(D.line, line); D.line.hidden = !line; D.line.className = 'pg-pal-line' + (again ? ' is-err' : '');
+    D.retry.hidden = !again;
+    D.ref.setAttribute('aria-disabled', PAL.loading || clNow() - PAL.loadAt < PAL_REFRESH_MS ? 'true' : 'false');
+    // (a row's buttons came back: the focus goes where the inline 끊기 question asked)
+    if (PAL.focus) {
+      const f = PAL.focus; PAL.focus = '';
+      const el = f.indexOf('cut:') === 0 ? D.list.querySelector('[data-uid="' + f.slice(4) + '"] button[data-act="cut"]') : D.list.querySelector('button[data-act="' + f + '"]');
+      try { if (el) el.focus({ preventScroll: true }); } catch (e) { /* ignore */ }
+    }
+  }
+  // ---- PG.debug.pal (tests)
+  function palDebugApi() {
+    const D = () => PAL.dom;
+    const api = {
+      state: () => ({ on: CLOUD.on || !!PREVIEW, demo: palDemoOn(), palOn: palOn(), key: palKey(), uid: PAL.uid, code: PAL.code, prof: PAL.prof ? Object.assign({}, PAL.prof) : null, run: PAL.run,
+        local: palLocal(), busy: PAL.busy, rows: PAL.rows ? PAL.rows.map((r) => ({ uid: r.uid, nick: r.nick, st: r.st, hi: r.hi, tr: r.tr, c: r.c, lk: r.lk })) : null,
+        reqs: PAL.reqs.map((r) => ({ uid: r.uid, n: r.n, cd: r.cd })), at: PAL.at, err: PAL.err, bootErr: PAL.bootErr, booting: !!PAL.booting, loading: !!PAL.loading,
+        msg: PAL.msg, said: PAL.said, open: PAL.open, shown: shownOverlay === 'pal', made: !!PAL.dom, btn: !!$('pg-pal-btn'), dot: !!$('pg-pal-new') && !$('pg-pal-new').hidden,
+        badgeDot: !!dom.troNew && !dom.troNew.hidden, debounce: !!PAL.t, writing: !!PAL.wr, gen: PAL.gen, ask: PAL.ask, mute: sget(palMuteKey()) || '',
+        view: !D() ? '' : !D().guest.hidden ? 'guest' : !D().form.hidden ? 'main' : 'wait',
+        line: D() && !D().line.hidden ? D().line.textContent : '', gline: D() && !D().guest.hidden ? D().gl.textContent : '', note: D() && !D().note.hidden ? D().note.textContent : '',
+        list: D() && !D().list.hidden ? Array.from(D().list.children).map((li) => li.textContent) : [], reqRows: D() && !D().rqBox.hidden ? Array.from(D().rq.children).map((li) => li.textContent) : [] }),
+      card: () => palCard(), text: () => PAL_TEXT, texts: () => Object.assign({}, PAL_TX), stageTx: palStTx, rank: () => palRank(),
+      open() { palOpen(); return api.state(); }, close() { palClose(); return api.state(); },
+      add: (c) => palAdd(c).then(() => api.state()),
+      accept: (uid) => palAccept(PAL.reqs.find((q) => q.uid === uid)).then(() => api.state()),
+      decline(uid) { palDecline(PAL.reqs.find((q) => q.uid === uid)); return api.state(); },
+      cut: (uid) => palCut(uid).then(() => api.state()),
+      ask(uid) { PAL.ask = uid; palRender(); return api.state(); },
+      load: (force) => palLoadIf(!!force).then(() => api.state()),
+      boot: () => palBoot().then(() => api.state()),
+      kick() { palKick(); return api.state(); }, write: () => palWrite().then(() => api.state()),
+      // (tests) the cooldown's clock as if the last request were long ago
+      unwait() { PAL.rqAt = 0; return api.state(); },
     };
     return api;
   }
@@ -8590,8 +9204,10 @@ window.PG = window.PG || {};
     if (prev !== name && (name === 'friends' || name === 'room' || name === 'hub') && dom[name]) dom[name].scrollTop = 0;
     if (prev === 'rec' && name !== 'rec') clRecShut();    // (cloud trophies: a message kept for 내 기록 is over)
     if (prev === 'hub' && name !== 'hub') hubShut();      // (v4 shop: nothing armed, no message left over)
+    if (prev === 'pal' && name !== 'pal') PAL.open = false;   // (친구 순위: the panel is closed)
     if (name === 'title' && dom.titleHi) dom.titleHi.textContent = G.hiscore.toLocaleString('ko-KR');
     if (name === 'title') { syncPicker(); troStale(); syncTroBadge(); syncShopBtn(); }
+    if (name === 'title' || name === 'over' || name === 'ending') palKick();   // (친구 순위: the card follows the nick, look, animal, league, bests)
     if (name === 'rec') fillRec();
     if (name === 'login') lgUI();
     if (name === 'pause' || name === 'over') updateStampCards();
@@ -8616,7 +9232,7 @@ window.PG = window.PG || {};
     }
     if (dom.pauseBtn) dom.pauseBtn.disabled = !(name === null || name === 'pause');
     // the online panels cover the whole stage (touch pads hidden); result cards / menu get the online buttons
-    if (dom.app) dom.app.classList.toggle('pg-panel-open', name === 'friends' || name === 'room' || name === 'hub');
+    if (dom.app) dom.app.classList.toggle('pg-panel-open', name === 'friends' || name === 'room' || name === 'hub' || name === 'pal');
     netCardLabels(name);
     if (name && dom[name]) {
       const b = dom[name].querySelector('[data-primary]');
@@ -8646,7 +9262,7 @@ window.PG = window.PG || {};
     syncWords();
   }
   // ---- v3 DOM: the animal picker (title), co-op results, the podium card, name tags and word pops
-  const OVERLAYS = ['title', 'pause', 'over', 'ending', 'podium', 'friends', 'room', 'rec', 'hub', 'login'];
+  const OVERLAYS = ['title', 'pause', 'over', 'ending', 'podium', 'friends', 'room', 'rec', 'hub', 'login', 'pal'];
   // (lk: a worn set - a portrait_ bust wears its 머리 / 얼굴 / 목 (lookPortrait, shop.md 6.8); tw: the seat whose twin
   // colour the bust takes, distinction §2.10 - recoloured first, then the items are drawn on it)
   function portraitCanvas(c, name, size, lk, tw) {
@@ -8975,7 +9591,7 @@ window.PG = window.PG || {};
   function toggleMute() { firstGesture(); Snd.setMuted(!Snd.muted()); updateMuteUI(); }
   function clearKeys() { for (const k in keys) keys[k] = false; for (const k in touchIn) touchIn[k] = false; STICK.dir = 0; if (dom.stick) dom.stick.classList.remove('is-l', 'is-r'); }
   function primaryAction() {
-    if (shownOverlay === 'hub' || shownOverlay === 'login') return;   // (the 상점 / 마이페이지 / the login screen: nothing starts a game behind it)
+    if (shownOverlay === 'hub' || shownOverlay === 'login' || shownOverlay === 'pal') return;   // (the 상점 / 마이페이지 / the login screen / 친구 순위: nothing starts a game behind it)
     if (shownOverlay === 'rec') { closeRec(); return; } // (내 기록 over the title: never a solo start)
     if (G.menuOpen) { resumeGame(); return; }
     // online: only the host picks what comes next (guests wait on the result screens)
@@ -9001,10 +9617,16 @@ window.PG = window.PG || {};
     const onButton = e.target && e.target.tagName === 'BUTTON';
     firstGesture();
     // typing a nickname / room code: no game keys at all (M would mute, P would pause...)
-    if (onPickerInput(e)) { if (code === 'Escape' && shownOverlay === 'friends') { e.preventDefault(); netFriendsBack(); } else if (code === 'Escape' && shownOverlay === 'hub') { e.preventDefault(); closeHub(); } return; }
+    if (onPickerInput(e)) { if (code === 'Escape' && shownOverlay === 'friends') { e.preventDefault(); netFriendsBack(); } else if (code === 'Escape' && shownOverlay === 'hub') { e.preventDefault(); closeHub(); } else if (code === 'Escape' && shownOverlay === 'pal') { e.preventDefault(); palClose(); } return; }
     // the online panels are plain forms: buttons and inputs work as usual; Escape goes back
     if (shownOverlay === 'friends' || shownOverlay === 'room') {
       if (code === 'Escape' && shownOverlay === 'friends') { e.preventDefault(); netFriendsBack(); }
+      else if (code === 'KeyM' && !e.repeat) toggleMute();
+      return;
+    }
+    // 친구 순위: a plain form too - Escape goes back to 내 기록, M mutes; no game key does anything behind it
+    if (shownOverlay === 'pal') {
+      if (code === 'Escape') { e.preventDefault(); if (!e.repeat) palClose(); }
       else if (code === 'KeyM' && !e.repeat) toggleMute();
       return;
     }
@@ -9235,6 +9857,7 @@ window.PG = window.PG || {};
     pwaSetupDOM(click); // (the standalone deploy's install pill / iOS hint / fullscreen toggle; nothing in the artifact)
     clSetupDOM();       // (cloud trophies: the warm-up text; nothing without the cloud)
     lgSetupDOM(click);  // (the login screen: the deploy with the cloud / a PR preview only)
+    palSetupDOM();      // (친구 순위: 내 기록's button - the deploy with the cloud / a PR preview only)
     click('pg-sound', toggleMute);
     click('pg-pausebtn', togglePause);
     listen(window, 'keydown', onKeyDown);
@@ -11521,7 +12144,7 @@ window.PG = window.PG || {};
     popAll() { const chain = { n: 0, kills: 0 }; for (const b of G.bubbles.slice()) popBubble(b, chain, 'player'); if (G.boss && G.boss.state === 'stun') burstBoss(G.boss); },
     killAll() { for (const e of G.enemies) if (e.state !== 'dead') killEnemy(e, 1); if (G.boss) defeatBoss(G.boss); },
     setInvincible(v) { G.invincible = !!v; },
-    gotoRound(i) { if (G.mode === 'title' || G.mode === 'gameover' || G.mode === 'ending' || G.mode === 'paused') { G.attract = false; showOverlay(null); } G.mode = 'playing'; startRound(i | 0); },
+    gotoRound(i) { if (G.mode === 'title' || G.mode === 'gameover' || G.mode === 'ending' || G.mode === 'paused') { G.attract = false; showOverlay(null); } G.mode = 'playing'; PAL.run = false; startRound(i | 0); },
     seed(n) { rng = mulberry32((n | 0) >>> 0); fxr = mulberry32(((n | 0) ^ 0x9e3779b9) >>> 0); },
     // boss helpers (no-ops returning null outside boss rounds). A boss still in its intro enters the fight
     // first; one that is knocked down gets up first.
@@ -11583,6 +12206,7 @@ window.PG = window.PG || {};
     cloud: clDebugApi(),
     // the login screen (design/cloud-trophies.md "As built (login screen)")
     login: lgDebugApi(),
+    pal: palDebugApi(),
     // v4 뽑기 (design/gacha.md 12): the pure draw, the odds, a test generator, the pace simulation
     draw: drawDebugApi(),
     // the standalone deploy's install UI: its state; set = { ios, inApp, framed, installed } to stage a platform

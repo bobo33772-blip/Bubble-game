@@ -20,6 +20,12 @@
 // result / the best score, 7 two devices, 8 offline, 9 a tab dying mid-write, 10 two tabs, 11 folding / full, 11b v4
 // shop through the frames (the upload, a second device, a purchase, the worn set alone, sign-out, v 1 -> v 2, a newer
 // document), 12 failures, 13 relog, 14 UI fit, 15 fonts, 16 the deploy without a config, 17 start() on this page.
+// 친구 순위 (design/friends.md 6): the fake also has document get / delete, sub-collections, limited lists and batches,
+// and F.PR, a JS port of the rules of profiles / codes / outbox / reqs / friends (F.pEval: a batch against a map of
+// documents, one request.time, getAfter = the state after it); 19a the rules case by case, 19b through the frames (the
+// card and code at sign-in, request / accept / decline + mute / unfriend, the best 탕, the card's debounce, the
+// messages, the reads, errors, sign-out, another account, the preview's demo), 19c the fit (?shot=pal-in|pal-guest|
+// pal-demo|pal-rec at phones on their side, a portrait tablet, the 1x screen; "CLOUD SHOT error pal fit" when it fails).
 // Prints "CLOUD PASS|FAIL <name>", "CLOUD INFO ..." and "CLOUD DONE pass=N fail=M".
 (function () {
   'use strict';
@@ -178,6 +184,82 @@
       return 'op';
     };
     F.R = { slotShape, slotShape2, slotShape3, coinStepOk3, coinNewOk3, drawSumOk, createOk, metaOk, slotOk, stepOk, coinStepOk, coinNewOk, foldOk, sumOk, nickOk, eqOk };
+    // ---- 친구 순위 (design/friends.md 3): profiles / codes / outbox / reqs / friends, function by function (any rules change
+    // updates this too). ctx: now (request.time), d (request.resource.data), o (resource.data), get(p) / getAfter(p) (a
+    // document or null - before / after the whole write or batch), limit (a list's); ctx.n counts the get / exists calls
+    const PAL_RE = /^[A-HJKMNP-Z2-9]{8}$/, CARDK = ['v', 'code', 'nick', 'st', 'hi', 'tr', 'c', 'lk', 'at'];
+    F.PR = (op, path, auth, ctx) => {
+      const sg = path.split('/'), me = auth || null, d = ctx.d, o = ctx.o, now = ctx.now;
+      ctx.n = 0;
+      const get = (q) => { ctx.n++; return ctx.get(q); }, exists = (q) => { ctx.n++; return !!ctx.get(q); };
+      const getAfter = (q) => { ctx.n++; return ctx.getAfter(q); }, existsAfter = (q) => { ctx.n++; return !!ctx.getAfter(q); };
+      const signedIn = (u) => !!me && me === u;
+      const profP = (u) => 'profiles/' + u, codeP = (c) => 'codes/' + c, outP = (u) => 'outbox/' + u, reqP = (to, from) => 'reqs/' + to + '/in/' + from, frP = (a, b) => 'friends/' + a + '/f/' + b;
+      const isCode = (c) => typeof c === 'string' && PAL_RE.test(c);
+      const cardVals = (x) => nickValue(x.nick) && isInt(x.st, 0, 2400) && isInt(x.hi, 0, 999999999) && isInt(x.tr, 0, 99999) && isInt(x.c, 0, 5)
+        && typeof x.lk === 'string' && /^[0-9a-z]{5}$/.test(x.lk) && tsIs(x.at, now);
+      const profNewOk = (uid) => hasAll(d, CARDK) && hasOnly(d, CARDK) && d.v === 1 && isCode(d.code) && cardVals(d) && (getAfter(codeP(d.code)) || {}).u === uid;
+      const cardOk = () => only(affected(d, o), ['nick', 'st', 'hi', 'tr', 'c', 'lk', 'at']) && cardVals(d) && d.st >= o.st && d.hi >= o.hi && o.at instanceof TS && now > o.at.ms + 5000;
+      const codeNewOk = (code) => isCode(code) && hasOnly(d, ['u']) && d.u === me && !exists(profP(me)) && (getAfter(profP(me)) || {}).code === code;
+      const rqVal = () => hasOnly(d, ['rq']) && tsIs(d.rq, now);
+      const reqNewOk = (to, from) => {
+        if (to === from) return false;
+        const pf = get(profP(from)); if (!pf) return false;          // (get() of a missing document: an error - refused)
+        return hasAll(d, ['n', 'cd', 'c', 'lk', 'at']) && hasOnly(d, ['n', 'cd', 'c', 'lk', 'at'])
+          && d.n === pf.nick && d.cd === pf.code && d.c === pf.c && d.lk === pf.lk && tsIs(d.at, now)
+          && tsIs((getAfter(outP(from)) || {}).rq, now) && exists(profP(to)) && !exists(frP(from, to)) && !exists(reqP(from, to));
+      };
+      const pairNewOk = (uid, other) => {
+        const them = me === uid ? other : uid;
+        return (me === uid || me === other) && uid !== other && hasOnly(d, ['at']) && tsIs(d.at, now)
+          && exists(reqP(me, them)) && !existsAfter(reqP(me, them)) && existsAfter(frP(me, them)) && existsAfter(frP(them, me));
+      };
+      const lim = (n) => typeof ctx.limit === 'number' && ctx.limit <= n;
+      let ok = false;
+      if (sg[0] === 'profiles' && sg.length === 2) {
+        const uid = sg[1];
+        ok = op === 'get' ? signedIn(uid) || (!!me && exists(frP(uid, me))) : op === 'create' ? signedIn(uid) && profNewOk(uid) : op === 'update' ? signedIn(uid) && cardOk() : false;
+      } else if (sg[0] === 'codes' && sg.length === 2) {
+        ok = op === 'get' ? !!me : op === 'create' ? !!me && codeNewOk(sg[1]) : false;
+      } else if (sg[0] === 'outbox' && sg.length === 2) {
+        const uid = sg[1];
+        ok = op === 'get' ? signedIn(uid) : op === 'create' ? signedIn(uid) && rqVal() : op === 'update' ? signedIn(uid) && rqVal() && o.rq instanceof TS && now > o.rq.ms + 20000 : false;
+      } else if (sg[0] === 'reqs' && sg[2] === 'in' && sg.length === 4) {
+        const to = sg[1], from = sg[3];
+        ok = op === 'get' || op === 'delete' ? !!me && (me === from || me === to) : op === 'create' ? signedIn(from) && reqNewOk(to, from) : false;
+      } else if (sg[0] === 'reqs' && sg[2] === 'in' && sg.length === 3) {
+        ok = op === 'list' && !!me && me === sg[1] && lim(20);
+      } else if (sg[0] === 'friends' && sg[2] === 'f' && sg.length === 4) {
+        const uid = sg[1], other = sg[3];
+        ok = op === 'get' || op === 'delete' ? !!me && (me === uid || me === other) : op === 'create' ? !!me && pairNewOk(uid, other) : false;
+      } else if (sg[0] === 'friends' && sg[2] === 'f' && sg.length === 3) {
+        ok = op === 'list' && signedIn(sg[1]) && lim(60);
+      }
+      if (ctx.n > 10) return 'calls ' + ctx.n;
+      return ok ? '' : op;
+    };
+    // one batch / transaction / write of these paths against the documents in map W: one request.time, every write's
+    // rule against the state before (get / exists) and after (getAfter) the whole batch, <= 20 rule calls in all.
+    // -> { why, after (path -> document or null), calls }
+    F.pEval = (W, auth, ws, now) => {
+      const before = (q) => W.get(q) || null, after = new Map();
+      for (const w of ws) { const old = after.has(w.path) ? after.get(w.path) : before(w.path); after.set(w.path, w.kind === 'delete' ? null : w.kind === 'update' ? (old ? applyUpdate(old, w.data, now) : null) : resolve(w.data, now)); }
+      const ga = (q) => (after.has(q) ? after.get(q) : before(q));
+      let why = '', calls = 0;
+      for (const w of ws) {
+        const old = before(w.path), neu = after.get(w.path);
+        if (/^players\//.test(w.path)) { why = 'players in a batch'; break; }
+        if (w.kind === 'update' && !old) { why = 'not-found'; break; }
+        const op = w.kind === 'delete' ? 'delete' : old ? 'update' : 'create', ctx = { now, d: neu, o: old, get: before, getAfter: ga };
+        const r = F.PR(op, w.path, auth, ctx); calls += ctx.n || 0;
+        if (r) { why = op + ' ' + w.path + ': ' + r; break; }
+      }
+      if (!why && calls > 20) why = 'calls ' + calls;
+      return { why, after, calls };
+    };
+    // a read of one of these paths (get or list) against map W
+    F.pRead = (W, auth, op, path, limit) => F.PR(op, path, auth, { now: F.now(), d: null, o: W.get(path) || null, get: (q) => W.get(q) || null, getAfter: (q) => W.get(q) || null, limit });
+    F.SV = { ts: SV_TS, del: SV_DEL };
 
     // ---- profiles (a browser profile: its sign-in session, its network) and the SDK namespaces
     F.prof = (name) => { let P = F.profiles.get(name); if (!P) { P = { name, user: null, next: null, online: true, redirect: null, ls: new Set() }; F.profiles.set(name, P); } return P; };
@@ -243,8 +325,18 @@
     const dbs = [];
     function mkDb(ns) {
       const db = { ns, pending: [], ls: new Set(), seen: new Map() };
-      db.collection = (c) => ({ doc: (id) => mkRef(db, c + '/' + id, id) });
+      db.collection = (c) => mkColl(db, c);
       db.runTransaction = (fn) => F.tx(db, fn);
+      // (친구 순위: a batch of set / update / delete, committed at once)
+      db.batch = () => {
+        const ws = [], b = {
+          set: (ref, data) => { ws.push({ path: ref.path, kind: 'set', data }); return b; },
+          update: (ref, data) => { ws.push({ path: ref.path, kind: 'update', data }); return b; },
+          delete: (ref) => { ws.push({ path: ref.path, kind: 'delete' }); return b; },
+          commit: () => F.pbatch(db, ws.slice(), 'batch'),
+        };
+        return b;
+      };
       dbs.push(db);
       return db;
     }
@@ -254,7 +346,13 @@
         update: (upd) => F.write(db, path, id, 'update', upd),
         set: (data) => F.write(db, path, id, 'set', data),
         onSnapshot: (opts, next, err) => F.listen(db, path, next, err),
+        get: () => F.pread(db, path),
+        delete: () => F.pbatch(db, [{ path, kind: 'delete' }], 'delete'),
+        collection: (c) => mkColl(db, path + '/' + c),
       };
+    }
+    function mkColl(db, path) {
+      return { path, id: path.split('/').pop(), doc: (id) => mkRef(db, path + '/' + id, id), limit: (n) => ({ get: () => F.plist(db, path, n) }), get: () => F.plist(db, path, undefined) };
     }
     const snapOf = (doc, pending, fromCache) => ({ exists: !!doc, data: () => (doc ? clone(doc) : undefined), metadata: { hasPendingWrites: pending, fromCache } });
     F.deliver = (l) => {
@@ -276,7 +374,7 @@
     F.broadcast = (path) => { for (const db of dbs) if (!db.ns.dead && db.ns.prof.online) for (const l of db.ls) if (l.path === path) later(() => F.deliver(l)); };
     F.local = (db, path) => { for (const l of db.ls) if (l.path === path) later(() => F.deliver(l)); };
     F.write = (db, path, id, kind, data) => {
-      const w = { db, path, id, kind, data, code: F.take(kind) };
+      const w = { db, path, id, kind, data, code: F.take(/^players\//.test(path) ? kind : 'p' + kind) };
       F.calls.push({ op: kind, prof: db.ns.prof.name, frame: db.ns.frame, path });
       db.pending.push(w);
       F.local(db, path);
@@ -293,10 +391,12 @@
         else if (w.kind === 'update' && !old) { code = 'not-found'; why = 'not-found'; }
         else {
           neu = w.kind === 'update' ? applyUpdate(old, w.data, now) : resolve(w.data, now);
-          why = F.rules(old ? 'update' : 'create', w.id, P.user, old, neu, now);
+          why = /^players\//.test(w.path) ? F.rules(old ? 'update' : 'create', w.id, P.user, old, neu, now)
+            : F.PR(old ? 'update' : 'create', w.path, P.user, { now, d: neu, o: old, get: (q) => F.docs.get(q) || null, getAfter: (q) => (q === w.path ? neu : F.docs.get(q) || null) });
           if (why) code = 'permission-denied';
         }
-        F.log.push({ uid: w.id, op: w.kind, ok: !code, code, why, prof: P.name, frame: db.ns.frame, t: now, upd: w.data, data: neu ? clone(neu) : null });
+        if (/^players\//.test(w.path)) F.log.push({ uid: w.id, op: w.kind, ok: !code, code, why, prof: P.name, frame: db.ns.frame, t: now, upd: w.data, data: neu ? clone(neu) : null });
+        else F.plog.push({ tag: w.kind, frame: db.ns.frame, prof: P.name, t: now, ok: !code, why, w: [w.kind + ' ' + w.path], data: neu ? [clone(neu)] : [null] });
         if (!code) F.docs.set(w.path, neu);
         if (code) w.rej(F.err(code)); else w.res();
         F.broadcast(w.path); F.local(db, w.path);
@@ -313,18 +413,27 @@
       F.calls.push({ op: 'tx', prof: P.name, frame: db.ns.frame });
       return new Promise((res, rej) => setTimeout(() => {
         if (db.ns.dead) return;
-        const code = F.take('tx');
-        if (code) { rej(F.err(code)); return; }
-        if (!P.online) { rej(F.err('unavailable')); return; }
+        let first = true, code = '';
+        const gate = (path) => { if (first) { first = false; code = F.take(/^players\//.test(path) ? 'tx' : 'ptx'); if (!code && !P.online) code = 'unavailable'; } return code; };
         const writes = [];
         const tx = {
-          get: (ref) => { const d = F.docs.get(ref.path) || null; return Promise.resolve(snapOf(d, false, false)); },
+          get: (ref) => {
+            const c = gate(ref.path); if (c) return Promise.reject(F.err(c));
+            const d = F.docs.get(ref.path) || null;
+            if (!/^players\//.test(ref.path) && F.pRead(F.docs, P.user, 'get', ref.path)) return Promise.reject(F.err('permission-denied'));
+            return Promise.resolve(snapOf(d, false, false));
+          },
           set: (ref, data) => { writes.push({ ref, kind: 'set', data }); return tx; },
           update: (ref, data) => { writes.push({ ref, kind: 'update', data }); return tx; },
         };
         let out; try { out = fn(tx); } catch (e) { rej(e); return; }
         Promise.resolve(out).then((v) => setTimeout(() => {
           if (db.ns.dead) return;
+          if (writes.length && writes.every((w) => !/^players\//.test(w.ref.path))) {
+            const c = F.pcommit(P, db.ns.frame, writes.map((w) => ({ path: w.ref.path, kind: w.kind, data: w.data })), 'tx');
+            if (c) rej(F.err(c)); else res(v);
+            return;
+          }
           const now = F.now(), staged = [];
           for (const w of writes) {
             const old = F.docs.get(w.ref.path) || null;
@@ -335,11 +444,50 @@
             if (why) { rej(F.err('permission-denied')); return; }
             staged.push([w.ref.path, neu]);
           }
-          for (const [p, d] of staged) { F.docs.set(p, d); F.broadcast(p); }
+          for (const [q, d] of staged) { F.docs.set(q, d); F.broadcast(q); }
           res(v);
         }, F.lat), rej);
       }, F.lat));
     };
+    // ---- 친구 순위's reads and batches (design/friends.md 6): a get / a list (limit n) / a batch or a delete, each a
+    // round trip; offline: 'unavailable' (no cache here); injected failures 'pget' / 'plist' / 'pbatch' / 'pdelete';
+    // F.plog logs each with its verdict, F.calls each call (op get / list / batch / delete, with its path)
+    F.plog = [];
+    F.pcommit = (P, frame, ws, tag) => {
+      const now = F.now(), r = F.pEval(F.docs, P.user, ws, now);
+      F.plog.push({ tag, frame, prof: P.name, t: now, ok: !r.why, why: r.why, w: ws.map((w) => w.kind + ' ' + w.path), calls: r.calls, data: ws.map((w) => (r.after.get(w.path) ? clone(r.after.get(w.path)) : null)) });
+      if (r.why) return /^not-found/.test(r.why) ? 'not-found' : 'permission-denied';
+      for (const [q, d] of r.after) { if (d) F.docs.set(q, d); else F.docs.delete(q); }
+      return '';
+    };
+    const pTrip = (db, call, take, fn) => {
+      const P = db.ns.prof;
+      F.calls.push(Object.assign({ prof: P.name, frame: db.ns.frame }, call));
+      return new Promise((res, rej) => setTimeout(() => {
+        if (db.ns.dead) return;
+        const code = F.take(take);
+        if (code) { rej(F.err(code)); return; }
+        if (!P.online) { rej(F.err('unavailable')); return; }
+        try { fn(P, res, rej); } catch (e) { F.errors.push(String(e && e.stack || e)); rej(e); }
+      }, F.lat));
+    };
+    F.pread = (db, path) => pTrip(db, { op: 'get', path }, 'pget', (P, res, rej) => {
+      const doc = F.docs.get(path) || null, why = /^players\//.test(path) ? F.rules('get', path.split('/')[1], P.user, doc, null, F.now()) : F.pRead(F.docs, P.user, 'get', path);
+      F.plog.push({ tag: 'get', frame: db.ns.frame, prof: P.name, t: F.now(), ok: !why, why, w: ['get ' + path] });
+      if (why) rej(F.err('permission-denied')); else res(Object.assign(snapOf(doc, false, false), { id: path.split('/').pop() }));
+    });
+    F.plist = (db, path, limit) => pTrip(db, { op: 'list', path, limit }, 'plist', (P, res, rej) => {
+      const why = F.pRead(F.docs, P.user, 'list', path, limit);
+      F.plog.push({ tag: 'list', frame: db.ns.frame, prof: P.name, t: F.now(), ok: !why, why, w: ['list ' + path + ' ' + limit] });
+      if (why) { rej(F.err('permission-denied')); return; }
+      const docs = Array.from(F.docs.keys()).filter((k) => k.startsWith(path + '/') && k.indexOf('/', path.length + 1) < 0).sort().slice(0, limit === undefined ? 1e9 : limit)
+        .map((k) => ({ id: k.split('/').pop(), exists: true, data: () => clone(F.docs.get(k)) }));
+      res({ docs, size: docs.length, empty: !docs.length });
+    });
+    F.pbatch = (db, ws, tag) => pTrip(db, { op: tag, n: ws.length, path: ws.map((w) => w.kind + ' ' + w.path).join(', ') }, tag === 'delete' ? 'pdelete' : 'pbatch', (P, res, rej) => {
+      const c = F.pcommit(P, db.ns.frame, ws, tag);
+      if (c) rej(F.err(c)); else res();
+    });
 
     // ---- the fixture's script hook (build.js FAKE_HOOK): the SDK files of a frame, "loaded" here
     F.claims = (src) => /\/firebase-(app|auth|firestore)-compat\.js$/.test(src);
@@ -421,6 +569,11 @@
     ok('inert: #pg-cloud, #pg-cloud-btn and #pg-tro-cloud are hidden', $('pg-cloud').hidden && $('pg-cloud-btn').hidden && $('pg-tro-cloud').hidden);
     ok('inert: the card has no has-cloud, the badge its plain aria-label', !document.querySelector('.pg-rec-card').classList.contains('has-cloud') && /^내 트로피 [\d,]+개 · [^·]+ · 마이페이지 열기$/.test($('pg-tro').getAttribute('aria-label')), $('pg-tro').getAttribute('aria-label'));
     ok('inert: #pg-fontwarm lacks 구글로 로그인', $('pg-fontwarm').textContent.indexOf('구글로 로그인') < 0);
+    // (친구 순위, design/friends.md 6: nothing of it on the artifact)
+    const ps0 = PG.debug.pal.state();
+    ok('inert: no 친구 순위 here - no #pg-pal-btn, no #pg-pal, no panel made, no dot', !$('pg-pal-btn') && !$('pg-pal') && !ps0.made && !ps0.btn && !ps0.demo && !ps0.code, ps0);
+    ok('inert: no ppogeul-stage / ppogeul-pal key from the boot, no 친구 순위 text warmed', !Object.keys(localStorage).some((k) => /^ppogeul-(stage|pal)/.test(k)) && $('pg-fontwarm').textContent.indexOf('혼자 하기 최고 기록') < 0);
+    ok('inert: no profiles / codes / reqs / friends call', !F.calls.some((c) => /(profiles|codes|reqs|friends|outbox)\//.test(c.path || '')));
     T.openRec();
     const s2 = C.state();
     ok('inert: 내 기록 loads nothing (no script element, no loader call)', s2.loads === 0 && s2.parts.every((p) => !p) && ![...document.scripts].some((s) => s.src) && !performance.getEntriesByType('resource').some((r) => /compat\.js|firebase/i.test(r.name)) && $('pg-cloud').hidden && $('pg-cloud-btn').hidden, s2);
@@ -1889,6 +2042,274 @@
     T.closeRec();
   }
 
+
+  // ================================================================ 19a. 친구 순위: the rules, case by case (design/friends.md 3, 6)
+  function palRulesTests() {
+    const TS = F.TS, now = F.now(), T0 = new TS(now - 60000), SV = F.SV.ts;
+    const prof = (code, o) => Object.assign({ v: 1, code, nick: '뽀숑', st: 5, hi: 100, tr: 30, c: 0, lk: '00000', at: T0 }, o);
+    const world = () => new Map([['profiles/A', prof('AAAA2222')], ['codes/AAAA2222', { u: 'A' }], ['profiles/B', prof('BBBB3333', { nick: '비비', c: 2, lk: '10100' })],
+      ['codes/BBBB3333', { u: 'B' }], ['profiles/C', prof('CCCC4444', { nick: '씨씨' })], ['codes/CCCC4444', { u: 'C' }]]);
+    const W0 = world(), ev = (W, auth, ws) => F.pEval(W, auth, ws, now), rd = (W, auth, op, q, limit) => F.pRead(W, auth, op, q, limit);
+    const yes = (name, W, auth, ws) => { const r = ev(W, auth, ws); ok('friends rules: ' + name + ' (allowed)', !r.why, r.why); return r; };
+    const no = (name, W, auth, ws) => { const r = ev(W, auth, ws); ok('friends rules: ' + name + ' (refused)', !!r.why, r.calls); return r; };
+    const with2 = (pairs) => { const W = world(); for (const [k, v] of pairs) W.set(k, v); return W; };
+    // reads
+    const Wf = with2([['friends/A/f/C', { at: T0 }], ['friends/C/f/A', { at: T0 }]]);
+    ok('friends rules: the owner gets its card', rd(W0, 'A', 'get', 'profiles/A') === '');
+    ok('friends rules: a stranger (or nobody) cannot get a card', rd(W0, 'C', 'get', 'profiles/A') !== '' && rd(W0, null, 'get', 'profiles/A') !== '');
+    ok('friends rules: an accepted friend gets the card, others still not', rd(Wf, 'C', 'get', 'profiles/A') === '' && rd(Wf, 'B', 'get', 'profiles/A') !== '');
+    ok('friends rules: profiles / codes / outbox are never listed', ['profiles', 'codes', 'outbox'].every((c) => rd(W0, 'A', 'list', c, 1) !== ''));
+    ok('friends rules: a code is read signed in only', rd(W0, 'B', 'get', 'codes/AAAA2222') === '' && rd(W0, null, 'get', 'codes/AAAA2222') !== '');
+    ok('friends rules: another\'s inbox / friend list is never listed', rd(W0, 'B', 'list', 'reqs/A/in', 20) !== '' && rd(W0, 'B', 'list', 'friends/A/f', 60) !== '');
+    ok('friends rules: my own lists - without a limit or over it refused, at the limit allowed', rd(W0, 'A', 'list', 'reqs/A/in') !== '' && rd(W0, 'A', 'list', 'reqs/A/in', 21) !== ''
+      && rd(W0, 'A', 'list', 'reqs/A/in', 20) === '' && rd(W0, 'A', 'list', 'friends/A/f') !== '' && rd(W0, 'A', 'list', 'friends/A/f', 61) !== '' && rd(W0, 'A', 'list', 'friends/A/f', 60) === '');
+    ok('friends rules: a pair half is read by its two members only', rd(Wf, 'A', 'get', 'friends/C/f/A') === '' && rd(Wf, 'C', 'get', 'friends/C/f/A') === '' && rd(Wf, 'B', 'get', 'friends/C/f/A') !== '');
+    ok('friends rules: an outbox is its owner\'s alone', rd(W0, 'A', 'get', 'outbox/A') === '' && rd(W0, 'B', 'get', 'outbox/A') !== '');
+    // the first card (and its code)
+    const card = (code, o) => Object.assign({ v: 1, code, nick: '디디', st: 0, hi: 0, tr: 100, c: 1, lk: '00000', at: SV }, o);
+    const mk = (code, o, u) => [{ path: 'codes/' + code, kind: 'set', data: { u: u || 'D' } }, { path: 'profiles/D', kind: 'set', data: card(code, o) }];
+    no('a first card without its code document', W0, 'D', [{ path: 'profiles/D', kind: 'set', data: card('DDDD5555') }]);
+    no('a first card with another account\'s code document', with2([['codes/DDDD5555', { u: 'B' }]]), 'D', [{ path: 'profiles/D', kind: 'set', data: card('DDDD5555') }]);
+    const r1 = yes('a first card with its own new code document', W0, 'D', mk('DDDD5555'));
+    ok('friends rules: ... within the rule-call limits (<= 10 a write, <= 20 a batch)', r1.calls > 0 && r1.calls <= 20, r1.calls);
+    no('a first card with an extra key (email)', W0, 'D', mk('DDDD5555', { email: 'x' }));
+    no('a first card missing a key (lk)', W0, 'D', mk('DDDD5555', { lk: undefined }));
+    no('a code document for somebody else', W0, 'D', mk('DDDD5555', {}, 'B'));
+    no('a second code for an account that has its card', W0, 'A', [{ path: 'codes/ZZZZ9999', kind: 'set', data: { u: 'A' } }]);
+    no('a taken code (its document exists: an update)', W0, 'D', mk('AAAA2222'));
+    no('a code outside the alphabet (O)', W0, 'D', mk('DDDD555O'));
+    // card writes
+    const upd = (o, at) => [{ path: 'profiles/A', kind: 'update', data: Object.assign({ at: at || SV }, o) }];
+    for (const k of ['email', 'name', 'photo']) no('a card write with ' + k, W0, 'A', upd({ [k]: 'x' }));
+    no('a card write: a nick of 25', W0, 'A', upd({ nick: 'ㄱ'.repeat(25) }));
+    no('a card write: lk of 6', W0, 'A', upd({ lk: '000000' }));
+    no('a card write: st 2401', W0, 'A', upd({ st: 2401 }));
+    no('a card write: st lower', W0, 'A', upd({ st: 4 }));
+    no('a card write: hi lower', W0, 'A', upd({ hi: 99 }));
+    no('a card write: code changed', W0, 'A', upd({ code: 'ZZZZ9999' }));
+    no('a card write: v changed', W0, 'A', upd({ v: 2 }));
+    no('a card write: at not the server time', W0, 'A', upd({}, new TS(now - 1)));
+    no('a card write by another account', W0, 'B', upd({ st: 9 }));
+    no('a card write within 5 s of the last', with2([['profiles/A', prof('AAAA2222', { at: new TS(now - 3000) })]]), 'A', upd({ st: 9 }));
+    yes('a card write (st / hi up, nick, look, animal, trophies)', W0, 'A', upd({ st: 29, hi: 12340, nick: '뽀숑2', lk: '10100', c: 3, tr: 320 }));
+    ok('friends rules: a card is never deleted', !!ev(W0, 'A', [{ path: 'profiles/A', kind: 'delete' }]).why && !!ev(W0, 'A', [{ path: 'codes/AAAA2222', kind: 'delete' }]).why);
+    // requests
+    const rq = (to, from, o) => ({ path: 'reqs/' + to + '/in/' + from, kind: 'set', data: Object.assign({ n: '뽀숑', cd: 'AAAA2222', c: 0, lk: '00000', at: SV }, o) });
+    const out = (u) => ({ path: 'outbox/' + u, kind: 'set', data: { rq: SV } });
+    no('a request without the outbox bump', W0, 'A', [rq('B', 'A')]);
+    no('a request whose nick is not the sender\'s card\'s', W0, 'A', [out('A'), rq('B', 'A', { n: '가짜' })]);
+    no('a request whose look is not the card\'s', W0, 'A', [out('A'), rq('B', 'A', { lk: '10100' })]);
+    no('a request to myself', W0, 'A', [out('A'), rq('A', 'A')]);
+    no('a request to somebody who is not a player', W0, 'A', [out('A'), rq('Q', 'A')]);
+    no('a request written as somebody else', W0, 'B', [out('B'), rq('C', 'A')]);
+    no('a request while already friends', with2([['friends/A/f/B', { at: T0 }], ['friends/B/f/A', { at: T0 }]]), 'A', [out('A'), rq('B', 'A')]);
+    no('a request while the other\'s request to me waits', with2([['reqs/A/in/B', { n: '비비', cd: 'BBBB3333', c: 2, lk: '10100', at: T0 }]]), 'A', [out('A'), rq('B', 'A')]);
+    no('a request with an extra key', W0, 'A', [out('A'), rq('B', 'A', { msg: 'hi' })]);
+    const Wq = with2([['reqs/B/in/A', { n: '뽀숑', cd: 'AAAA2222', c: 0, lk: '00000', at: T0 }], ['outbox/A', { rq: new TS(now - 60000) }]]);
+    no('a request sent again (its document exists)', Wq, 'A', [out('A'), rq('B', 'A')]);
+    no('a request within 20 s of the last (the outbox)', with2([['outbox/A', { rq: new TS(now - 10000) }]]), 'A', [out('A'), rq('B', 'A')]);
+    const r2 = yes('a request (outbox + request, the sender\'s own card values)', W0, 'A', [out('A'), rq('B', 'A')]);
+    ok('friends rules: ... within the rule-call limits', r2.calls > 0 && r2.calls <= 20, r2.calls);
+    yes('a request 21 s after the last', with2([['outbox/A', { rq: new TS(now - 21000) }]]), 'A', [out('A'), rq('B', 'A')]);
+    ok('friends rules: the sender withdraws, the receiver declines; nobody else deletes it', !ev(Wq, 'A', [{ path: 'reqs/B/in/A', kind: 'delete' }]).why
+      && !ev(Wq, 'B', [{ path: 'reqs/B/in/A', kind: 'delete' }]).why && !!ev(Wq, 'C', [{ path: 'reqs/B/in/A', kind: 'delete' }]).why);
+    ok('friends rules: a request is never updated', !!ev(Wq, 'A', [{ path: 'reqs/B/in/A', kind: 'update', data: { n: '뽀숑' } }]).why);
+    // accept (B accepts A's request in Wq) / unfriend
+    const pair = (a, b, o) => ({ path: 'friends/' + a + '/f/' + b, kind: 'set', data: Object.assign({ at: SV }, o) }), del = (q) => ({ path: q, kind: 'delete' });
+    const r3 = yes('accept by the receiver: both halves, the request consumed', Wq, 'B', [pair('B', 'A'), pair('A', 'B'), del('reqs/B/in/A'), del('reqs/A/in/B')]);
+    ok('friends rules: ... the accept batch\'s rule calls (8 of 20)', r3.calls === 8, r3.calls);
+    no('accept with one half missing', Wq, 'B', [pair('B', 'A'), del('reqs/B/in/A')]);
+    no('accept without consuming the request', Wq, 'B', [pair('B', 'A'), pair('A', 'B')]);
+    no('"accept" by the sender', Wq, 'A', [pair('A', 'B'), pair('B', 'A'), del('reqs/B/in/A')]);
+    no('"accept" by a third party', Wq, 'C', [pair('A', 'B'), pair('B', 'A'), del('reqs/B/in/A')]);
+    no('accept with no request', W0, 'B', [pair('B', 'A'), pair('A', 'B')]);
+    no('accept with an extra key in a pair document', Wq, 'B', [pair('B', 'A', { x: 1 }), pair('A', 'B'), del('reqs/B/in/A')]);
+    ok('friends rules: unfriend by either member (both halves at once)', !ev(Wf, 'A', [del('friends/A/f/C'), del('friends/C/f/A')]).why && !ev(Wf, 'C', [del('friends/A/f/C'), del('friends/C/f/A')]).why);
+    no('unfriend by a third party', Wf, 'B', [del('friends/A/f/C'), del('friends/C/f/A')]);
+    no('a pair document updated', Wf, 'A', [{ path: 'friends/A/f/C', kind: 'update', data: { at: SV } }]);
+    ok('friends rules: a players document never goes through these rules', !!ev(W0, 'A', [{ path: 'players/A', kind: 'set', data: {} }]).why);
+  }
+
+  // ================================================================ 19b. 친구 순위 through the frames (design/friends.md 6)
+  const PALP = (fr) => fr.D().pal, PS = (fr) => fr.D().pal.state();
+  const isPal = (c) => /(^|[ ,])(profiles|codes|reqs|friends|outbox)\//.test(c.path || '');
+  const palN = (frame, since, ops) => F.calls.slice(since).filter((c) => c.frame === frame && isPal(c) && (!ops || ops.includes(c.op))).length;
+  const pwrites = (q, since) => F.plog.slice(since).filter((e) => e.ok && e.tag === 'update' && e.w.includes('update ' + q));
+  const fmt = (c) => c.slice(0, 4) + '-' + c.slice(4);
+  async function palFrameTests() {
+    const TX = PG.debug.pal.texts(), say = async (fr, code) => (await PALP(fr).add(code)).said;
+    const A = await frame('PA', 'ppa', { ns: 'p19a' });
+    await A.rec(true);
+    {
+      const b = A.$('pg-pal-btn'), card = A.$('pg-rec').querySelector('.pg-rec-card'), h2 = A.$('pg-rec-h');
+      const rg = A.win().document.createRange(); rg.selectNodeContents(h2);
+      const r = b ? b.getBoundingClientRect() : null, c = card.getBoundingClientRect(), t = rg.getBoundingClientRect();
+      ok('friends: 내 기록 has the 친구 순위 button (in the card, clear of its title)', !!r && r.right <= c.right + 0.5 && r.top >= c.top - 0.5 && (r.left >= t.right || r.bottom <= t.top), r && [r.left, r.right, t.left, t.right]);
+    }
+    let c0 = F.calls.length;
+    PALP(A).open(); await sleep(80);
+    let st = PS(A);
+    ok('friends: signed out - the invite line and 구글로 로그인 only', st.shown && st.view === 'guest' && st.gline === TX.guest && !A.$('pg-pal-login').hidden && A.$('pg-pal-login').textContent === TX.login && A.$('pg-pal-add').hidden, st);
+    ok('friends: ... and no friend call', palN('PA', c0) === 0, F.calls.slice(c0));
+    key(A, 'Escape'); await sleep(80);
+    ok('friends: Escape goes back to 내 기록', !PS(A).shown && A.recShown(), PS(A));
+    // A signs in: its card and code
+    await signIn(A, 'palA'); await settle(A);
+    await until(() => PS(A).code && !PS(A).booting, 4000);
+    const codeA = PS(A).code, pa = F.docs.get('profiles/palA') || {}, cardA = PALP(A).card();
+    ok('friends: A signed in -> a card with exactly the card keys (no name / mail / photo), v 1, its code', Object.keys(pa).sort().join() === 'at,c,code,hi,lk,nick,st,tr,v' && pa.v === 1 && pa.code === codeA, pa);
+    ok('friends: ... its code document points at it (8 of the 31 characters)', (F.docs.get('codes/' + codeA) || {}).u === 'palA' && /^[A-HJKMNP-Z2-9]{8}$/.test(codeA), codeA);
+    ok('friends: ... the card: the nick, trophies, animal and look of this page', pa.nick === cardA.nick && pa.tr === A.tro().t && pa.c === cardA.c && pa.lk === cardA.lk, [pa, cardA]);
+    // B signs in and asks A
+    const B = await frame('PB', 'ppb', { ns: 'p19b' });
+    await signIn(B, 'palB'); await settle(B);
+    await until(() => PS(B).code && !PS(B).booting, 4000);
+    const codeB = PS(B).code;
+    st = await PALP(B).add(fmt(codeA).toLowerCase());
+    const rqd = F.docs.get('reqs/palA/in/palB') || {};
+    ok('friends: B sends A a request (typed with a dash, lower case)', st.said === 'sent' && !!F.docs.get('reqs/palA/in/palB'), st);
+    ok('friends: ... it carries B\'s own nick / code / animal / look only', Object.keys(rqd).sort().join() === 'at,c,cd,lk,n' && rqd.cd === codeB && rqd.n === F.docs.get('profiles/palB').nick, rqd);
+    st = await PALP(A).load(true);
+    ok('friends: A\'s inbox has it; the red dot on 친구 순위 and on the title badge', st.reqs.length === 1 && st.reqs[0].uid === 'palB' && st.dot && st.badgeDot, st);
+    PALP(A).open(); await until(() => PS(A).reqRows.length === 1, 2000);
+    ok('friends: 받은 요청 (1): B with its code', A.$('pg-pal-rqh').textContent === TX.reqs + ' (1)' && PS(A).reqRows[0].indexOf(rqd.n) >= 0 && PS(A).reqRows[0].indexOf(fmt(codeB)) >= 0, PS(A).reqRows);
+    A.$('pg-pal-rq').querySelector('button[data-act="acc"]').click();
+    await until(() => !PS(A).busy && PS(A).rows && PS(A).rows.some((r) => r.uid === 'palB'), 3000);
+    st = PS(A);
+    ok('friends: 수락 -> friends both ways, the request gone, the dot off', st.rows.some((r) => r.uid === 'palB') && !st.reqs.length && !st.dot && !st.badgeDot && !F.docs.get('reqs/palA/in/palB')
+      && !!F.docs.get('friends/palA/f/palB') && !!F.docs.get('friends/palB/f/palA') && st.said === 'added', st);
+    st = await PALP(B).load(true);
+    ok('friends: B sees A too', st.rows.some((r) => r.uid === 'palA'), st);
+    // the best 탕: a solo run to 탕 3, then the card follows after the debounce
+    PALP(A).close(); await A.rec(false);
+    const D = A.D();
+    D.start(0);
+    for (let r = 1; r < 3; r++) { D.killAll(); for (let i = 0; i < 60 && D.G.round < r; i++) D.step(60); }
+    ok('friends: a solo run to 탕 3 -> this browser\'s best 탕 is 3', PS(A).local === 3 && D.G.round === 2, [PS(A).local, D.G.round]);
+    let L0 = F.plog.length;
+    D.toTitle();
+    await until(() => (F.docs.get('profiles/palA') || {}).st === 3, 3000); await sleep(300);
+    ok('friends: the title -> the card says st 3 after the debounce, in one write', F.docs.get('profiles/palA').st === 3 && pwrites('profiles/palA', L0).length === 1, F.plog.slice(L0).map((e) => e.w.join()));
+    for (const [name, set] of [['co-op', (g) => { g.gameMode = 'coop'; }], ['the attract demo', null]]) {
+      if (set) { D.start(0); set(D.G); } else D.toTitle();
+      D.G.loop = 1; D.killAll(); D.step(1500);
+      ok('friends: ' + name + ' never records a 탕 (2회차 here)', PS(A).local === 3, [PS(A).local, D.G.round, D.G.loop, D.G.gameMode]);
+    }
+    D.start(4); D.step(5);
+    ok('friends: a debug start at 탕 5 never records', PS(A).local === 3 && !PS(A).run, PS(A).local);
+    D.toTitle(); await sleep(400);
+    A.win().localStorage.setItem(PS(A).key, '1');
+    L0 = F.plog.length; PALP(A).kick(); await sleep(500);
+    ok('friends: a lower best here never lowers the card (and writes nothing)', PALP(A).card().st === 3 && pwrites('profiles/palA', L0).length === 0 && F.docs.get('profiles/palA').st === 3, PALP(A).card());
+    L0 = F.plog.length;
+    A.C().nick('새이름'); D.setChar('otter'); PALP(A).kick(); D.toTitle(); PALP(A).kick();
+    await until(() => (F.docs.get('profiles/palA') || {}).nick === '새이름', 3000); await sleep(500);
+    ok('friends: a new nick + animal -> one coalesced card write', pwrites('profiles/palA', L0).length === 1 && F.docs.get('profiles/palA').c === 2, F.plog.slice(L0).map((e) => e.w.join()));
+    L0 = F.plog.length; PALP(A).kick(); D.toTitle(); await sleep(600);
+    ok('friends: an unchanged card is never written', pwrites('profiles/palA', L0).length === 0, F.plog.slice(L0).map((e) => e.w.join()));
+    // the messages
+    ok('friends: my own code -> 내 코드예요', await say(A, codeA) === 'own');
+    ok('friends: a malformed code -> 코드 8자리를 확인해 주세요', await say(A, 'ABC') === 'bad' && await say(A, 'ABCD-234O') === 'bad');
+    ok('friends: an unknown code -> 그런 코드가 없어요', await say(A, 'ZZZZ9999') === 'none');
+    ok('friends: a friend\'s code -> 이미 친구예요', await say(A, codeB) === 'already');
+    const C = await frame('PC', 'ppc', { ns: 'p19c' });
+    await signIn(C, 'palC'); await settle(C);
+    await until(() => PS(C).code && !PS(C).booting, 4000);
+    const codeC = PS(C).code;
+    ok('friends: C asks A', await say(C, codeA) === 'sent');
+    ok('friends: C asks B at once -> 20초 뒤에 다시 보낼 수 있어요', await say(C, codeB) === 'wait');
+    PALP(C).unwait();
+    ok('friends: C asks A again -> 이미 요청했어요', await say(C, codeA) === 'sent0');
+    // 50 friends: no 51st; the reads of a load; the cache
+    const T1 = new F.TS(F.now());
+    for (let i = 0; i < 49; i++) {
+      const u = 'fk' + i; F.docs.set('profiles/' + u, { v: 1, code: 'FKFK' + String(2000 + i).replace(/[01]/g, '2'), nick: '친구' + i, st: i, hi: i * 10, tr: i, c: i % 6, lk: '00000', at: T1 });
+      F.docs.set('friends/palA/f/' + u, { at: T1 }); F.docs.set('friends/' + u + '/f/palA', { at: T1 });
+    }
+    PALP(A).open(); await until(() => !PS(A).loading, 2000);
+    let c1 = F.calls.length;
+    st = await PALP(A).load(true);
+    ok('friends: a load with 50 friends = 1 + 50 + 1 reads', st.rows.length === 50 && palN('PA', c1, ['get', 'list']) === 52, [st.rows.length, palN('PA', c1, ['get', 'list'])]);
+    c1 = F.calls.length; PALP(A).close(); PALP(A).open(); await sleep(200);
+    ok('friends: opened again within 60 s -> no read', palN('PA', c1) === 0 && PS(A).list.length === 51, palN('PA', c1));
+    ok('friends: the 51st friend -> 친구는 50명까지예요 (asking and accepting)', await say(A, codeC) === 'full' && (await PALP(A).accept('palC')).said === 'full');
+    for (let i = 0; i < 49; i++) { const u = 'fk' + i; F.docs.delete('profiles/' + u); F.docs.delete('friends/palA/f/' + u); F.docs.delete('friends/' + u + '/f/palA'); }
+    // decline + mute; a muted sender's next request is dropped
+    st = await PALP(A).load(true);
+    ok('friends: C\'s request waits for A', st.reqs.some((r) => r.uid === 'palC'), st.reqs);
+    A.$('pg-pal-rq').querySelector('[data-uid="palC"] button[data-act="dec"]').click();
+    await until(() => !F.docs.get('reqs/palA/in/palC'), 2000);
+    st = PS(A);
+    ok('friends: 거절 -> the request deleted, C muted here', !F.docs.get('reqs/palA/in/palC') && /palC/.test(st.mute) && st.said === 'declined' && !st.reqs.length, st);
+    PALP(C).unwait(); await sleep(500);
+    ok('friends: C asks A again (after the 20 s)', await say(C, codeA) === 'sent' && !!F.docs.get('reqs/palA/in/palC'));
+    st = await PALP(A).load(true); await until(() => !F.docs.get('reqs/palA/in/palC'), 2000);
+    ok('friends: ... dropped unseen and deleted (muted)', !st.reqs.some((r) => r.uid === 'palC') && !F.docs.get('reqs/palA/in/palC'), st.reqs);
+    // crossing requests: C asks B, B types C's code -> friends at once
+    PALP(C).unwait(); await sleep(500);
+    ok('friends: C asks B', await say(C, codeB) === 'sent');
+    await PALP(B).load(true);
+    ok('friends: B types C\'s code while C\'s request waits -> 서로 요청해서 바로 친구가 됐어요', await say(B, codeC) === 'both' && !!F.docs.get('friends/palB/f/palC') && !F.docs.get('reqs/palB/in/palC'));
+    // the ranking
+    st = await PALP(A).load(true); await sleep(50);
+    st = PS(A);
+    ok('friends: the ranking - best 탕 first, my row (나) with its 3탕', st.list.length === 2 && /\(나\)/.test(st.list[0]) && /3탕/.test(st.list[0]) && st.list[1].indexOf(F.docs.get('profiles/palB').nick) >= 0
+      && A.$('pg-pal-list').children[0].classList.contains('is-me'), st.list);
+    ok('friends: the stage text: 5탕 / 2회차 5탕 / 기록 없음', PALP(A).stageTx(5) === '5탕' && PALP(A).stageTx(29) === '2회차 5탕' && PALP(A).stageTx(0) === TX.none0 && PALP(A).stageTx(2400) === '100회차 24탕');
+    // unfriend (asked inline first)
+    A.$('pg-pal-list').querySelector('[data-uid="palB"] button[data-act="cut"]').click(); await sleep(30);
+    const ask = A.$('pg-pal-list').querySelector('.pg-pal-ask');
+    ok('friends: 끊기 asks first, inline', !!ask && ask.textContent.indexOf(TX.ask.replace('{0}', F.docs.get('profiles/palB').nick)) >= 0 && !!F.docs.get('friends/palA/f/palB'), ask && ask.textContent);
+    ask.querySelector('button[data-act="cutok"]').click();
+    await until(() => !PS(A).busy && !PS(A).rows.some((r) => r.uid === 'palB'), 2000);
+    ok('friends: ... yes -> both halves gone', !F.docs.get('friends/palA/f/palB') && !F.docs.get('friends/palB/f/palA') && PS(A).said === 'cutDone');
+    ok('friends: ... and the cards closed both ways', F.pRead(F.docs, 'palA', 'get', 'profiles/palB') !== '' && F.pRead(F.docs, 'palB', 'get', 'profiles/palA') !== '');
+    // failures
+    F.setOnline('ppa', false); st = await PALP(A).load(true);
+    ok('friends: offline -> 인터넷이 연결되면 다시 볼 수 있어요, 다시 시도', st.line === TX.offline && !A.$('pg-pal-retry').hidden && !st.list.length, st);
+    await sleep(40);                             // (the load's second list - its inbox - lands too before the next failure is set)
+    F.setOnline('ppa', true);
+    F.failNext('plist', 'permission-denied'); st = await PALP(A).load(true);
+    ok('friends: refused (the rules not published yet) -> 친구 기능을 준비 중이에요', st.line === TX.rules, st);
+    await sleep(40); F.failNext('plist', 'resource-exhausted'); st = await PALP(A).load(true);
+    ok('friends: the quota -> 지금은 사람이 많아요 · 잠시 후 다시', st.line === TX.busy, st);
+    await sleep(40); A.$('pg-pal-retry').click(); await until(() => !PS(A).loading && PS(A).list.length, 2000);
+    ok('friends: 다시 시도 -> the ranking again (my row and the no-friends line)', PS(A).line === TX.empty && PS(A).list.length === 1, PS(A));
+    // sign-out: the guest view, nothing kept, no call; another account here sees none of it
+    A.C().signOut(true); await until(() => A.st().st === 'out', 3000); await sleep(50);
+    st = PS(A);
+    ok('friends: sign-out -> the guest view, nothing kept', st.view === 'guest' && !st.code && st.rows === null && !st.reqs.length && !st.uid, st);
+    const c2 = F.calls.length; await sleep(800);
+    ok('friends: ... and no friend call after it', palN('PA', c2) === 0, F.calls.slice(c2));
+    await signIn(A, 'palD'); await settle(A);
+    await until(() => PS(A).code && !PS(A).booting, 4000);
+    st = await PALP(A).load(true);
+    ok('friends: another account in the same browser -> its own code, none of A\'s friends', st.uid === 'palD' && st.code && st.code !== codeA && st.rows.length === 0 && !st.reqs.length, st);
+    // the web fonts know every 친구 순위 syllable
+    const strs = Object.values(TX).concat(['위', '회차', '탕', '점']), miss = new Set();
+    for (const q of ['.pg-fw-sign', '.pg-fw-body']) { const warm = A.win().document.querySelector('#pg-fontwarm ' + q).textContent; for (const x of strs) for (const ch of x) if (/[가-힣…·]/.test(ch) && warm.indexOf(ch) < 0) miss.add(q + ':' + ch); }
+    ok('friends: every syllable of 친구 순위 is warmed in both faces', miss.size === 0, [...miss].join(''));
+    A.remove(); B.remove(); C.remove();
+    // the PR preview: a staged demo, no SDK at all
+    localStorage.removeItem('ppogeul-login@pr999');
+    const V = await frame('PV', 'ppv', { ns: 'p19v', src: '/deploy-preview/index.html' });
+    if (V.D().login.state().shown) V.D().login.guest();
+    await sleep(50);
+    st = PS(V);
+    ok('friends: the preview stages its demo from the start (the dot of its request)', st.demo && st.code === 'PVWX2345' && st.reqs.length === 1 && st.dot, st);
+    V.T().openRec(); await sleep(50);
+    PALP(V).open(); await sleep(80);
+    st = PS(V);
+    ok('friends: preview: the demo - my code, 4 friends and me, 1 request, the note', st.view === 'main' && V.$('pg-pal-mine').textContent === 'PVWX-2345' && st.list.length === 5 && st.reqRows.length === 1 && st.note === TX.demo, st);
+    await PALP(V).accept(st.reqs[0].uid); st = PS(V);
+    ok('friends: preview: 수락 works here (6 rows)', st.list.length === 6 && !st.reqs.length && st.said === 'added', st);
+    st = await PALP(V).cut('demo4');
+    ok('friends: preview: 끊기 works here', st.list.length === 5, st);
+    ok('friends: preview: 친구 요청 -> sent (nothing goes anywhere)', await say(V, 'KMNP-2345') === 'sent');
+    ok('friends: preview: no SDK script, no call, nothing stored', !F.calls.some((c) => c.frame === 'PV') && !F.scripts.some((x) => x.frame === 'PV') && !PS(V).mute, F.calls.filter((c) => c.frame === 'PV'));
+    V.remove();
+  }
+
   // ================================================================ screenshot scenes (?shot=...)
   async function shot(scene) {
     const w = innerWidth, h = innerHeight, phone = w < 600 || h < 500;     // (844x390: a phone on its side)
@@ -1896,9 +2317,11 @@
     // (the login screen: this browser has not chosen yet; login-pv: a PR preview's page)
     const lg = /^login/.test(scene);
     if (lg) localStorage.removeItem('ppogeul-login');
-    const fr = await frame('S1', 'ps', { ns: 'shot', w, h, fast: true, src: /^login-pv/.test(scene) ? '/deploy-preview/index.html' : undefined });
+    if (scene === 'pal-demo') localStorage.removeItem('ppogeul-login@pr999');
+    const fr = await frame('S1', 'ps', { ns: 'shot', w, h, fast: true, src: /^login-pv|^pal-demo/.test(scene) ? '/deploy-preview/index.html' : undefined });
     const sc = /-(\d)x$/.exec(scene); if (sc) { setScale(fr, +sc[1]); scene = scene.replace(/-\dx$/, ''); await sleep(100); }
-    if (phone) { const W = fr.win(); W.dispatchEvent(new W.Event('touchstart')); await sleep(80); }
+    // (친구 순위's shots: a portrait tablet is a touch screen too)
+    if (phone || (/^pal-/.test(scene) && h > w)) { const W = fr.win(); W.dispatchEvent(new W.Event('touchstart')); await sleep(80); }
     fr.D().pwa({ ios: phone, framed: false });
     fr.D().G.hiscore = 123456; fr.$('pg-title-hi').textContent = (123456).toLocaleString('ko-KR');
     fr.T().set({ t: 268, w: 7, g: 15, ko: 23, best: 312, bl: 2, seen: 1 });
@@ -1918,6 +2341,7 @@
     // (v4 shop 9.4: 마이페이지 signed out - its note gets the sign-in pitch as a second line; 내 기록 is one tap away)
     else if (scene === 'my-out') { fr.D().shop.set({ ce: 420, sh: 1, own: ['h5'], eq: '50000', bd: 0, bs: 0 }); fr.D().shop.open('my'); fr.D().shop.tick(40); }
     else if (lg) fr.D().login.show(true);
+    else if (/^pal-/.test(scene)) await palShot(fr, scene);
     // (looks L0: the two new 2-part lines staged in 내 기록 for one look - by hand: ?shot=rec-say&say=outkeep)
     else if (scene === 'rec-say') { await signIn(fr, 'uidS'); await settle(fr); await fr.rec(true); await until(() => !fr.st().msg, 2000); C.fast(false); C.say((/[?&]say=([a-z]+)/.exec(location.search) || [])[1] || 'dirty'); }
     await sleep(500);
@@ -1946,7 +2370,72 @@
       log('CLOUD INFO login fit ' + scene + ' ' + w + 'x' + h + ': fs ' + fs + 'px, card ' + Math.round(r.width) + 'x' + Math.round(r.height) + ' in ' + Math.round(sc.width) + 'x' + Math.round(sc.height) + ', line "' + st.textContent + '"');
       if (bad.length) log('CLOUD SHOT error login fit: ' + bad.join('; '));
     }
+    if (/^pal-/.test(scene)) palFit(fr, scene, w, h, phone || h > w);
     log('CLOUD SHOT READY ' + scene);
+  }
+
+  // 19c. 친구 순위's scenes: pal-in (signed in: 12 friends - one with a 12-character nick - and 2 requests), pal-guest
+  // (signed out), pal-demo (the PR preview), pal-rec (내 기록 with the button and its dot)
+  async function palShot(fr, scene) {
+    const P = fr.D().pal, T1 = new F.TS(F.now() - 60000), now = new F.TS(F.now());
+    if (scene === 'pal-demo') { if (fr.D().login.state().shown) fr.D().login.guest(); await sleep(60); fr.T().openRec(); await sleep(60); P.open(); return; }
+    if (scene === 'pal-guest') { await fr.rec(true); P.open(); return; }
+    F.docs.set('profiles/uidS', { v: 1, code: 'QWER2345', nick: '뽀숑', st: 29, hi: 98000, tr: 268, c: 0, lk: '10100', at: T1 }); F.docs.set('codes/QWER2345', { u: 'uidS' });
+    const nk = ['거품왕', '뽀득이', '거품거품거품거품거품거품', '때밀이', '수건양', '온탕지기', 'Bubble', '냉탕러버', '사우나', '바가지', '귤껍질', '오리'];
+    nk.forEach((n, i) => {
+      const u = 'sf' + i;
+      F.docs.set('profiles/' + u, { v: 1, code: 'ABCD' + (2345 + i * 111).toString().replace(/[01]/g, '9'), nick: n, st: [61, 41, 33, 29, 22, 17, 12, 9, 6, 3, 1, 0][i], hi: [215400, 58200, 41000, 99000, 31950, 24800, 15000, 12400, 8000, 2600, 900, 0][i],
+        tr: [1350, 640, 480, 268, 210, 150, 90, 75, 40, 0, 0, 0][i], c: i % 6, lk: ['50000', '10100', '00100', '30000', '90000', '00000'][i % 6], at: T1 });
+      F.docs.set('friends/uidS/f/' + u, { at: T1 }); F.docs.set('friends/' + u + '/f/uidS', { at: T1 });
+    });
+    F.docs.set('reqs/uidS/in/sr0', { n: '반신욕', cd: 'HN4WX8PB', c: 2, lk: '30000', at: now }); F.docs.set('reqs/uidS/in/sr1', { n: '이태리타올장인', cd: 'K7MQ2RTA', c: 4, lk: '00100', at: now });
+    await signIn(fr, 'uidS'); await settle(fr);
+    await until(() => P.state().code && !P.state().booting, 4000);
+    if (scene === 'pal-rec') { await P.load(true); await fr.rec(true); return; }
+    P.open(); await until(() => P.state().list.length > 5 && !P.state().loading, 4000);
+  }
+  // the fit: the card inside the panel, nothing clipped or wider than its box, the body the scroller (pal-in: it does
+  // scroll), button labels whole, touch targets >= 32 px; pal-rec: 내 기록 still fits, the button clear of its title
+  function palFit(fr, scene, w, h, touch) {
+    const W = fr.win(), bad = [], nm = (el) => el.id || (typeof el.className === 'string' && el.className.split(' ')[0]) || el.tagName;
+    if (scene === 'pal-rec') {
+      const card = fr.$('pg-rec').querySelector('.pg-rec-card'), b = fr.$('pg-pal-btn'), rg = W.document.createRange(); rg.selectNodeContents(fr.$('pg-rec-h'));
+      const r = b.getBoundingClientRect(), c = card.getBoundingClientRect(), t = rg.getBoundingClientRect(), sc = fr.$('pg-screen').getBoundingClientRect();
+      if (card.scrollHeight > card.clientHeight + 1) bad.push('내 기록 scrolls');
+      if (c.bottom > sc.bottom + 0.5 || c.top < sc.top - 0.5) bad.push('내 기록 outside the screen');
+      if (r.right > c.right + 0.5 || r.top < c.top - 0.5 || !(r.left >= t.right || r.bottom <= t.top)) bad.push('the button over the title or outside the card');
+      if (touch && r.height < 31.5) bad.push('the button under 32 px');
+      if (fr.$('pg-pal-new').hidden) bad.push('no dot');
+      info('pal fit ' + scene + ' ' + w + 'x' + h + ': button ' + Math.round(r.width) + 'x' + Math.round(r.height) + ' card ' + Math.round(c.width) + 'x' + Math.round(c.height));
+    } else {
+      const sec = fr.$('pg-pal'), card = sec && sec.querySelector('.pg-pal-card');
+      if (!sec || sec.hidden) { log('CLOUD SHOT error pal fit: not shown'); return; }
+      const pr = sec.getBoundingClientRect(), cr = card.getBoundingClientRect();
+      if (cr.top < pr.top - 0.5 || cr.bottom > pr.bottom + 0.5 || cr.left < pr.left - 0.5 || cr.right > pr.right + 0.5) bad.push('card outside the panel');
+      if (card.scrollWidth > card.clientWidth + 1 || card.scrollHeight > card.clientHeight + 1) bad.push('card overflows ' + [card.scrollWidth, card.clientWidth, card.scrollHeight, card.clientHeight]);
+      if (W.document.documentElement.scrollWidth > W.innerWidth + 1) bad.push('the page scrolls sideways');
+      const scrollers = [...card.querySelectorAll('.pg-pal-body, .pg-pal-sec, .pg-pal-guest')].filter((e) => e.getClientRects().length && /auto|scroll/.test(W.getComputedStyle(e).overflowY));
+      for (const s of scrollers) if (s.scrollWidth > s.clientWidth + 1) bad.push(nm(s) + ' scrolls sideways');
+      for (const el of card.querySelectorAll('*')) {
+        if (!el.getClientRects().length) continue;
+        const r = el.getBoundingClientRect(); if (!r.width && !r.height) continue;
+        const sc = scrollers.find((x) => x !== el && x.contains(el)), box = sc ? sc.getBoundingClientRect() : cr;
+        if (r.left < box.left - 0.5 || r.right > box.right + 0.5) bad.push(nm(el) + ' clipped sideways');
+        if (!sc && (r.top < cr.top - 0.5 || r.bottom > cr.bottom + 0.5)) bad.push(nm(el) + ' clipped');
+      }
+      for (const b of card.querySelectorAll('button')) {
+        if (!b.getClientRects().length) continue;
+        if (b.scrollWidth > b.clientWidth + 1) bad.push(nm(b) + ' label clipped');
+        if (touch && b.getBoundingClientRect().height < 31.5) bad.push(nm(b) + ' under 32 px');
+      }
+      const list = fr.$('pg-pal-list'), sl = scrollers.find((x) => x.contains(list));
+      if (scene === 'pal-in') {
+        if (!sl) bad.push('the ranking is in no scroller');
+        else { if (sl.scrollHeight <= sl.clientHeight) bad.push('the ranking does not scroll (13 rows)'); if (sl.clientHeight < 36) bad.push('the ranking under one row (' + sl.clientHeight + ')'); }
+      }
+      info('pal fit ' + scene + ' ' + w + 'x' + h + ': panel ' + Math.round(pr.width) + 'x' + Math.round(pr.height) + ', card ' + Math.round(cr.width) + 'x' + Math.round(cr.height) + (sl ? ', list ' + sl.clientHeight + '/' + sl.scrollHeight : '') + ', state ' + J(fr.D().pal.state().view));
+    }
+    if (bad.length) log('CLOUD SHOT error pal fit ' + scene + ' ' + w + 'x' + h + ': ' + [...new Set(bad)].slice(0, 10).join('; '));
   }
 
   async function run() {
@@ -1955,11 +2444,11 @@
     localStorage.setItem('ppogeul-login', '1');
     if (SHOT) { F.setSpeed(50); try { await shot(SHOT); } catch (e) { log('CLOUD SHOT error ' + (e && e.stack || e)); log('CLOUD SHOT READY ' + SHOT); } return; }
     if (!/^http/.test(location.protocol)) { fail++; log('CLOUD FAIL this page needs http (tools/serve.js): frames share storage and the fake'); log('CLOUD DONE pass=' + pass + ' fail=' + fail); return; }
-    const steps = [inertTests, pureTests, coinPureTests, drawPureTests];
+    const steps = [inertTests, pureTests, coinPureTests, drawPureTests, palRulesTests];
     for (const f of steps) { try { f(); } catch (e) { fail++; log('CLOUD FAIL ' + f.name + ' threw: ' + (e && e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : e)); } }
     F.setSpeed(50);
     const asyncSteps = [fixtureTests, uploadTests, cloudWinsTests, pushTests, twoDeviceTests, offlineTests, tabDeathTests, twoTabTests, foldTests, coinSyncTests, failureTests, relogTests,
-      popupTests, lostAnswerTests, holdRaceTests, drawSyncTests, l0Tests, loginTests, uiTests, fontTests, noConfigTests, startTests];
+      popupTests, lostAnswerTests, holdRaceTests, drawSyncTests, l0Tests, loginTests, uiTests, fontTests, noConfigTests, startTests, palFrameTests];
     for (const f of asyncSteps) {
       const t0 = performance.now();
       try { await f(); } catch (e) { fail++; log('CLOUD FAIL ' + f.name + ' threw: ' + (e && e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : e)); }

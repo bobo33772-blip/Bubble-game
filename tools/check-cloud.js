@@ -70,6 +70,12 @@ const hasCfg = fs.existsSync(path.join(ROOT, 'firebase.config.json'));
   ok('artifact: nothing of Firebase in dist/ppogeul-bath.html - not the word, no PG_CLOUD=, no /__/auth, no SDK file', !m, m && art.slice(Math.max(0, m.index - 60), m.index + 40));
   ok('artifact: the cloud\'s markup is there but hidden (#pg-cloud, #pg-cloud-btn, #pg-tro-cloud carry hidden)', /<p id="pg-cloud" class="pg-cloud" hidden/.test(art) && /<button id="pg-cloud-btn"[^>]* hidden>/.test(art) && /<i id="pg-tro-cloud" class="pg-tro-cloud" hidden>/.test(art));
   ok('artifact: still no external script', staticScripts(art) === 0);
+  // (친구 순위, design/friends.md: game.js makes its button and panel only with the cloud or on a preview - never markup)
+  ok('artifact / deploy: no 친구 순위 markup (#pg-pal-btn / #pg-pal come from game.js only)', !/id="pg-pal/.test(art) && !/id="pg-pal/.test(dep));
+  {
+    const R = read(path.join(ROOT, 'firebase', 'firestore.rules'));
+    ok('rules: the 친구 순위 collections (profiles, codes, outbox, reqs/{to}/in, friends/{uid}/f), above the closed catch-all', ['match /profiles/{uid}', 'match /codes/{code}', 'match /outbox/{uid}', 'match /reqs/{to}/in/{from}', 'match /friends/{uid}/f/{other}'].every((m) => R.includes(m) && R.indexOf(m) < R.indexOf('match /{document=**}')) && !R.includes('{path=**}'));
+  }
   if (hasCfg) {
     let p = null; try { p = require('./fb-config').readFirebaseConfig(path.join(ROOT, 'firebase.config.json')); } catch (e) { p = null; }
     ok('deploy: firebase.config.json exists and reads', !!p);

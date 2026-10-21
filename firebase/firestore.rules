@@ -7,8 +7,9 @@ rules_version = '2';
 // set per animal, design/looks-per-animal.md 6): publish these rules before the page; they still accept v 1 / v 2 pages.
 // And for document v 4 (the 뽑기, design/gacha.md 7): publish these rules first; they still accept v 1 - v 3 pages.
 //
-// One document per Google account: players/{uid}, readable and writable by that account only. Nothing else in the
-// database is readable or writable (no leaderboard, so nothing is public).
+// One document per Google account: players/{uid}, readable and writable by that account only. Apart from the 친구 순위
+// collections below (a card readable by accepted friends only), nothing else in the database is readable or writable
+// (no leaderboard, so nothing is public).
 //
 //   players/{uid} = {
 //     v: 4,                         schema version (1: trophies only; a page with the shop makes it 2 at its first slot
@@ -54,6 +55,23 @@ rules_version = '2';
 // gd with one draw (e6, b7 and every draw-only 전설 included), and start a new browser slot with 10 drawn items (2,000
 // coins, in debt) - its own account only, cosmetics only. A document is never deleted by a player (the owner can, in the
 // console): an account cannot start over at a new count. The free Spark quotas are per project: they stop a flood.
+//
+// 친구 순위 (design/friends.md 2-3): a signed-in player has a card that only accepted friends can read, and trades an
+// 8-character friend code for a request the other accepts. Publish these rules BEFORE deploying a page with 친구 순위
+// (older pages never touch these collections; a newer page against older rules only says "친구 기능을 준비 중이에요").
+//   profiles/{uid}          { v: 1, code, nick, st, hi, tr, c, lk, at }  the card: the best 탕 of 혼자 하기 (0..2400),
+//                           the best score, trophies, the animal (0..5) and its worn set (5 characters); read by the owner
+//                           and accepted friends only, written by the owner only (st / hi never drop, >= 5 s apart)
+//   codes/{code}            { u }  the account's friend code, created once together with its profile; never listed
+//   outbox/{uid}            { rq }  the owner's last request time (one request per 20 s)
+//   reqs/{to}/in/{from}     { n, cd, c, lk, at }  a pending request: the sender's own nick / code / animal / look; the
+//                           sender creates or withdraws it, the receiver reads (lists <= 20), declines or accepts it
+//   friends/{uid}/f/{other} { at }  "uid lets other read uid's card"; both halves are written by the receiver of a
+//                           request in the batch that consumes it; either member deletes them
+// Honest limits: st / hi / tr are what the page reports (an edited localStorage can claim any best), the same freedom
+// the trophies already have - and only friends see them. Nicks are not unique (requests and cards show the code).
+// Codes cannot be listed; guessing one needs a sign-in and a billed read per guess (31^8 codes). Many accounts or a
+// modified page can still spend the project's Spark read quota (true for players/{uid} too).
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -63,6 +81,40 @@ service cloud.firestore {
       allow create: if signedIn(uid) && createOk();
       allow update: if signedIn(uid) && metaOk() && (slotOk() || foldOk() || nickOk() || eqOk());
       allow delete: if false;
+    }
+
+    // ---- 친구 순위 (design/friends.md 3): friend code, request / accept, a card only friends can read
+    match /profiles/{uid} {
+      allow get: if signedIn(uid) || (request.auth != null && exists(frP(uid, request.auth.uid)));
+      allow list: if false;
+      allow create: if signedIn(uid) && profNewOk(uid);
+      allow update: if signedIn(uid) && cardOk();
+      allow delete: if false;
+    }
+    match /codes/{code} {
+      allow get: if request.auth != null;
+      allow list: if false;
+      allow create: if request.auth != null && codeNewOk(code);
+      allow update, delete: if false;
+    }
+    match /outbox/{uid} {
+      allow get: if signedIn(uid);
+      allow list: if false;
+      allow create: if signedIn(uid) && rqVal();
+      allow update: if signedIn(uid) && rqVal() && request.time > resource.data.rq + duration.value(20, 's');
+      allow delete: if false;
+    }
+    match /reqs/{to}/in/{from} {
+      allow get, delete: if request.auth != null && (request.auth.uid == from || request.auth.uid == to);
+      allow list: if request.auth != null && request.auth.uid == to && request.query.limit <= 20;
+      allow create: if signedIn(from) && reqNewOk(to, from);
+      allow update: if false;
+    }
+    match /friends/{uid}/f/{other} {
+      allow get, delete: if request.auth != null && (request.auth.uid == uid || request.auth.uid == other);
+      allow list: if signedIn(uid) && request.query.limit <= 60;
+      allow create: if request.auth != null && pairNewOk(uid, other);
+      allow update: if false;
     }
 
     // (everything else stays closed - the default, spelled out)
@@ -342,6 +394,60 @@ service cloud.firestore {
       let d = request.resource.data;
       let o = resource.data;
       return d.diff(o).affectedKeys().hasOnly(['eq', 'v', 'updatedAt']) && ('eq' in d);
+    }
+
+    // ---- 친구 순위 (design/friends.md 3)
+    function profP(u) { return /databases/$(database)/documents/profiles/$(u); }
+    function codeP(c) { return /databases/$(database)/documents/codes/$(c); }
+    function outP(u) { return /databases/$(database)/documents/outbox/$(u); }
+    function reqP(to, from) { return /databases/$(database)/documents/reqs/$(to)/in/$(from); }
+    function frP(a, b) { return /databases/$(database)/documents/friends/$(a)/f/$(b); }
+    function isCode(c) { return c is string && c.matches('^[A-HJKMNP-Z2-9]{8}$'); }
+    function cardKeys() { return ['v', 'code', 'nick', 'st', 'hi', 'tr', 'c', 'lk', 'at']; }
+    function cardVals(d) {
+      return nickValue(d.nick) && isInt(d.st, 0, 2400) && isInt(d.hi, 0, 999999999) && isInt(d.tr, 0, 99999)
+        && isInt(d.c, 0, 5) && d.lk is string && d.lk.matches('^[0-9a-z]{5}$') && d.at == request.time;
+    }
+    // first card: exactly the card keys, with this account's own new code doc in the same transaction
+    function profNewOk(uid) {
+      let d = request.resource.data;
+      return d.keys().hasAll(cardKeys()) && d.keys().hasOnly(cardKeys()) && d.v == 1 && isCode(d.code)
+        && cardVals(d) && getAfter(codeP(d.code)).data.u == uid;
+    }
+    // a card write: card fields only (never v / code), bests never drop, >= 5 s apart
+    function cardOk() {
+      let d = request.resource.data;
+      let o = resource.data;
+      return d.diff(o).affectedKeys().hasOnly(['nick', 'st', 'hi', 'tr', 'c', 'lk', 'at'])
+        && cardVals(d) && d.st >= o.st && d.hi >= o.hi && request.time > o.at + duration.value(5, 's');
+    }
+    // one code per account, ever: only while its profile is created, pointing at the creator (a taken code = update)
+    function codeNewOk(code) {
+      let d = request.resource.data;
+      return isCode(code) && d.keys().hasOnly(['u']) && d.u == request.auth.uid
+        && !exists(profP(request.auth.uid)) && getAfter(profP(request.auth.uid)).data.code == code;
+    }
+    function rqVal() { return request.resource.data.keys().hasOnly(['rq']) && request.resource.data.rq == request.time; }
+    // a request: the sender's own card values, with the outbox bumped in the same batch (the 20 s cooldown), to a real
+    // player, not already friends, not while the other has a request pending to me (the client accepts that instead)
+    function reqNewOk(to, from) {
+      let d = request.resource.data;
+      let p = get(profP(from)).data;
+      return to != from
+        && d.keys().hasAll(['n', 'cd', 'c', 'lk', 'at']) && d.keys().hasOnly(['n', 'cd', 'c', 'lk', 'at'])
+        && d.n == p.nick && d.cd == p.code && d.c == p.c && d.lk == p.lk && d.at == request.time
+        && getAfter(outP(from)).data.rq == request.time
+        && exists(profP(to)) && !exists(frP(from, to)) && !exists(reqP(from, to));
+    }
+    // accept: only the receiver of an existing request ("them" asked "me"); both halves written and the request
+    // consumed in the same batch
+    function pairNewOk(uid, other) {
+      let me = request.auth.uid;
+      let them = me == uid ? other : uid;
+      return (me == uid || me == other) && uid != other
+        && request.resource.data.keys().hasOnly(['at']) && request.resource.data.at == request.time
+        && exists(reqP(me, them)) && !existsAfter(reqP(me, them))
+        && existsAfter(frP(me, them)) && existsAfter(frP(them, me));
     }
   }
 }
