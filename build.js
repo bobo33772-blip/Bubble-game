@@ -138,9 +138,42 @@ const fbConf = PREVIEW ? null : readFirebaseConfig(process.env.PG_FIREBASE_CONFI
 // ([{urls, username, credential}, ...] or {iceServers: [...]}); every entry is checked. The deploy page (previews and the
 // itch zip too) then sets window.PG_PEER_OPTIONS, which game.js hands to PeerJS; the artifact never has it
 const ICE_RE = /^(stun|turn|turns):[^\s"'<>\\]{1,200}$/;
+// the provider's snippet as pasted (Metered's "Show ICE Servers Array" is JavaScript, not JSON: `iceServers: [ { urls:
+// "stun:...", }, ... ]` - bare keys, trailing commas, maybe single quotes): from its first '[' (or '{') to the matching
+// last bracket, rewritten token by token into JSON - strings copied (single quotes turned double), bare identifiers before
+// ':' quoted, commas before '}' / ']' dropped - then JSON.parse. Nothing is ever evaluated
+function iceParse(txt) {
+  txt = String(txt).replace(/^\uFEFF/, '');
+  const a = txt.indexOf('['), b = txt.indexOf('{'), st = a >= 0 && (b < 0 || a < b) ? a : b;
+  const en = Math.max(txt.lastIndexOf(']'), txt.lastIndexOf('}'));
+  if (st < 0 || en <= st) throw new Error('no list');
+  const src = txt.slice(st, en + 1);
+  let out = '', i = 0;
+  while (i < src.length) {
+    const c = src[i];
+    if (c === '"' || c === "'") {                                  // a string: copied, as a JSON string
+      let j = i + 1, v = '';
+      while (j < src.length && src[j] !== c) { if (src[j] === '\\') { v += src[j] + src[j + 1]; j += 2; continue; } v += src[j++]; }
+      if (j >= src.length) throw new Error('open string');
+      out += JSON.stringify(c === '"' ? JSON.parse('"' + v + '"') : v.replace(/\\'/g, "'"));
+      i = j + 1;
+    } else if (/[A-Za-z_$]/.test(c)) {                               // a bare word: a key (quoted) or true / false / null
+      let j = i; while (j < src.length && /[\w$]/.test(src[j])) j++;
+      const w = src.slice(i, j); let k = j; while (k < src.length && /\s/.test(src[k])) k++;
+      out += src[k] === ':' ? JSON.stringify(w) : w;
+      i = j;
+    } else if (c === ',') {                                          // a comma before a closing bracket: dropped
+      let k = i + 1; while (k < src.length && /\s/.test(src[k])) k++;
+      if (src[k] !== '}' && src[k] !== ']') out += c;
+      i++;
+    } else if (c === '/' && src[i + 1] === '/') { while (i < src.length && src[i] !== '\n') i++; }   // a // comment
+    else { out += c; i++; }
+  }
+  return JSON.parse(out);
+}
 function readTurnConfig(file) {
   if (!fs.existsSync(file)) return null;
-  let o; try { o = JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '')); } catch (e) { throw new Error('turn.config.json: JSON을 읽을 수 없어요 / cannot be parsed'); }
+  let o; try { o = iceParse(fs.readFileSync(file, 'utf8')); } catch (e) { throw new Error('turn.config.json: 목록을 읽을 수 없어요 / cannot be parsed'); }
   const list = Array.isArray(o) ? o : o && Array.isArray(o.iceServers) ? o.iceServers : null;
   if (!list || !list.length || list.length > 12) throw new Error('turn.config.json: ICE 서버 목록(1~12개)이 필요해요 / needs 1-12 ICE servers');
   const out = list.map((x, i) => {
