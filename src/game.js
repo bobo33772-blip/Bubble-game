@@ -243,6 +243,7 @@ window.PG = window.PG || {};
     ' ' + STAT_NAMES.join(' ') + ' 특기: 거품: ' + OFF_LINE + ' 내 특기: 5점 중 3점' +
     ' 혼자 하기 친구와 하기 같이 하기 배틀 보스 난입! 뽀득 KO! 냥! 시작! 결과 발표 한 판 더 로비로 MVP 점 때 구조 위 KO 살아났다! 다 함께 덕분에 목욕탕이 뽀득뽀득해졌어요 1234' +
     // (online panels / messages)
+    ' 친구 기기와 연결하지 못했어요 같은 와이파이에서 해 보거나 잠시 뒤 다시 해 주세요' +
     ' 내 이름 방 만들기 코드로 참여 열린 방 뒤로 방 코드 복사했어요 내 캐릭터 게임 설정 준비 취소 나가기 방장 빈 자리 경기장 랜덤 시간 분 능력 끄기 켜기' +
     ' 방장이 나갔어요 연결이 끊겼어요 방을 찾을 수 없어요 꽉 찼어요 연결 중… 불안정해요 이미 시작됐어요 방으로 다음 판을 고르고 있어요 손님 님의' +
     ' 메뉴 게임은 계속 진행돼요! 내 동물도 그대로 있어요 준비 완료 기다리는 중 있음 없음 첫 번째 탕부터 끝까지 청소 연타! 친구가 닿으면 살아나요 구해 줘! 어질!' +
@@ -9492,7 +9493,9 @@ window.PG = window.PG || {};
   const B_ACTS = ['idle', 'rest', 'crouch', 'air', 'float', 'charge', 'walk', 'wind', 'dizzy', 'squat', 'hop', 'hover', 'swoopWind', 'swoop', 'recover', 'rain', 'cast'];
   const NET_TEXT = {
     connecting: '연결 중…', unstable: '연결이 불안정해요', not_found: '방을 찾을 수 없어요', full: '방이 꽉 찼어요',
-    playing: '이미 게임이 시작됐어요', lost: '연결이 끊겼어요', timeout: '연결이 끊겼어요', host_left: '방장이 나갔어요',
+    playing: '이미 게임이 시작됐어요', lost: '연결이 끊겼어요', timeout: '연결이 끊겼어요',
+    // (a join that never opened its connection: the two devices could not reach each other - no relay server worked)
+    joinFail: '친구 기기와 연결하지 못했어요 · 같은 와이파이에서 해 보거나 잠시 뒤 다시 해 주세요', host_left: '방장이 나갔어요',
     unavailable: '온라인에 연결할 수 없어요', roomOff: '온라인은 Claude에 로그인하고 이 게임에 초대받은 친구끼리만 할 수 있어요',
     local: '지금은 이 브라우저의 다른 탭끼리만 함께 할 수 있어요', loadingPeer: '연결 도구를 불러오는 중…', peer: '방 코드를 친구에게 알려 주면 인터넷으로 함께 해요',
     room: '방을 만들거나, 열린 방을 눌러 바로 참여해요', badCode: '방 코드 4자리를 확인해 주세요', noNet: '이 브라우저에서는 온라인을 쓸 수 없어요',
@@ -9524,6 +9527,7 @@ window.PG = window.PG || {};
   function errText(e) {
     const c = e && e.code;
     if (c === 'full' && e.reason === 'playing') return netText('playing');
+    if (c === 'timeout') return netText('joinFail');   // ("연결이 끊겼어요" read as a dropped game; it never connected)
     return netText(c === 'not_found' || c === 'full' || c === 'timeout' || c === 'unavailable' ? c : 'unavailable');
   }
   const nowTicks = () => { const p = window.performance; return (p && p.now ? p.now() : Date.now()) * 0.06; };

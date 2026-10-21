@@ -15,3 +15,6 @@ Thumbs.db
 .firebase/
 firebase-debug.log*
 firebase-debug.*.log*
+
+# relay servers for online play (CI writes it from the TURN_CONFIG secret)
+turn.config.json

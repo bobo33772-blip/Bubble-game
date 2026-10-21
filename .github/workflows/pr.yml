@@ -75,6 +75,11 @@ jobs:
         if: env.HAS_FB == 'true'
         with:
           node-version: 22
+      - name: 중계 서버 설정 (비밀값 TURN_CONFIG가 있으면 turn.config.json으로)
+        if: env.HAS_FB == 'true'
+        env:
+          TURN_CONFIG: ${{ secrets.TURN_CONFIG }}
+        run: if [ -n "$TURN_CONFIG" ]; then printf '%s' "$TURN_CONFIG" > turn.config.json; fi
       - name: 미리보기 판 만들기 (PG_PREVIEW)
         if: env.HAS_FB == 'true'
         run: node build.js

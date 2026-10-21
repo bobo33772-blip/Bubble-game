@@ -132,6 +132,30 @@ const fbAlt = (f) => `https://cdn.jsdelivr.net/npm/firebase@${FIREBASE_V}/${f}`;
 // stops the build with a message in Korean and English). PG_FIREBASE_CONFIG=<file> reads another file (tools only)
 const { fbCheck, readFirebaseConfig } = require('./tools/fb-config');
 const fbConf = PREVIEW ? null : readFirebaseConfig(process.env.PG_FIREBASE_CONFIG || path.join(root, 'firebase.config.json'));
+// relay servers for online play (optional bogeul/turn.config.json, never committed: CI writes it from the repo secret
+// TURN_CONFIG). Two devices that cannot reach each other directly (phone data, different home networks) connect through a
+// TURN server; PeerJS's own free relays did not answer (2026-10-21). The file is the provider's ICE server list as given
+// ([{urls, username, credential}, ...] or {iceServers: [...]}); every entry is checked. The deploy page (previews and the
+// itch zip too) then sets window.PG_PEER_OPTIONS, which game.js hands to PeerJS; the artifact never has it
+const ICE_RE = /^(stun|turn|turns):[^\s"'<>\\]{1,200}$/;
+function readTurnConfig(file) {
+  if (!fs.existsSync(file)) return null;
+  let o; try { o = JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '')); } catch (e) { throw new Error('turn.config.json: JSON을 읽을 수 없어요 / cannot be parsed'); }
+  const list = Array.isArray(o) ? o : o && Array.isArray(o.iceServers) ? o.iceServers : null;
+  if (!list || !list.length || list.length > 12) throw new Error('turn.config.json: ICE 서버 목록(1~12개)이 필요해요 / needs 1-12 ICE servers');
+  const out = list.map((x, i) => {
+    const urls = x && typeof x.urls === 'string' ? [x.urls] : x && Array.isArray(x.urls) ? x.urls : null;
+    if (!urls || !urls.length || urls.length > 8 || !urls.every((u) => typeof u === 'string' && ICE_RE.test(u))) throw new Error('turn.config.json: ' + (i + 1) + '번째 urls가 이상해요 / entry ' + (i + 1) + ': bad urls');
+    const e = { urls: urls.length === 1 ? urls[0] : urls };
+    for (const k of ['username', 'credential']) if (x[k] !== undefined) { if (typeof x[k] !== 'string' || x[k].length > 256) throw new Error('turn.config.json: ' + (i + 1) + '번째 ' + k + '가 이상해요 / entry ' + (i + 1) + ': bad ' + k); e[k] = x[k]; }
+    return e;
+  });
+  if (!out.some((e) => [].concat(e.urls).some((u) => /^turns?:/.test(u)))) throw new Error('turn.config.json: turn: 주소가 하나도 없어요 / no turn: server in it');
+  if (!out.some((e) => [].concat(e.urls).some((u) => /^stun:/.test(u)))) out.unshift({ urls: 'stun:stun.l.google.com:19302' });
+  return out;
+}
+const turnConf = readTurnConfig(process.env.PG_TURN_CONFIG || path.join(root, 'turn.config.json'));
+const peerTag = turnConf ? `<script>window.PG_PEER_OPTIONS={config:{iceServers:${JSON.stringify(turnConf).replace(/</g, '\\u003c')}}};</script>\n` : '';
 // hosts that serve many people's pages from one origin (itch.io's games, its old CDN, Newgrounds' uploads): a page there
 // - or in any frame - never signs in, since every page of that origin could read the stored session (game.js clHere;
 // the itch zip is also marked `away` by tools/pack-itch.js). Never add these to Firebase's authorized domains
@@ -187,7 +211,7 @@ ${fbTag(fbData(fb))}${extra || ''}<link rel="manifest" href="manifest.webmanifes
 <meta name="twitter:card" content="summary">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,${encodeURIComponent(FAVICON_SVG)}">
 <link rel="apple-touch-icon" sizes="${appleIcon.size}x${appleIcon.size}" href="${appleIcon.src}">
-<script defer src="${PEERJS}" integrity="${PEERJS_SRI}" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+${peerTag}<script defer src="${PEERJS}" integrity="${PEERJS_SRI}" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script>${SW_REG}</script>
 <style>${RESET}</style>
 ${headRest}
