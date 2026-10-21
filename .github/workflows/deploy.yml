@@ -28,6 +28,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: 중계 서버 설정 (비밀값 TURN_CONFIG가 있으면 turn.config.json으로)
+        env:
+          TURN_CONFIG: ${{ secrets.TURN_CONFIG }}
+        run: if [ -n "$TURN_CONFIG" ]; then printf '%s' "$TURN_CONFIG" > turn.config.json; fi
       - name: 게임 만들기 (node build.js)
         run: node build.js
         env:
@@ -62,6 +66,10 @@ jobs:
         if: env.HAS_FB == 'true'
         with:
           node-version: 22
+      - name: 중계 서버 설정 (비밀값 TURN_CONFIG가 있으면 turn.config.json으로)
+        env:
+          TURN_CONFIG: ${{ secrets.TURN_CONFIG }}
+        run: if [ -n "$TURN_CONFIG" ]; then printf '%s' "$TURN_CONFIG" > turn.config.json; fi
       - name: 게임 만들기 (node build.js)
         if: env.HAS_FB == 'true'
         run: node build.js
