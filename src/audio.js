@@ -9,6 +9,7 @@
                      boss_hit(o.n?) boss_stun boss_damage boss_roar shockwave spore
                      scald_warn scald_splash splash freeze melt stamp ticket powerup door(o.open?)
                      join leave ready countdown go trap_player revive ghost ko win      (v3 online)
+                     dry                                                         (battle shot cap)
                      flap slam quake dash slide(o.n) djump hop(o.n)              (v4 kit moves)
                      b_echo(o.n) b_onsen b_splash b_icicle b_yarn(o.n) b_egg(o.n) (v4 kit bubbles)
                      stake tro_fly(o.n) tro_up tro_down promote                  (v4 trophies)
@@ -1224,6 +1225,11 @@ window.PG = window.PG || {};
         const f = 1100 + i * 300;
         voice(sfxBus, { w: 'sine', f, f2: f * 1.7, sl: 0.03, t: t + 0.38 + i * 0.07, d: 0.035, v: 0.07, a: 0.001, dc: 0.03, s: 0.3, r: 0.02 });
       }
+    },
+    // battle: a press with every bubble already out (the shot cap) - a quiet dry "칙", a short hiss and a tiny tick
+    dry(t) {
+      noise(sfxBus, { t, d: 0.07, v: 0.05, ft: 'highpass', f: 3800, a: 0.002, s: 0, dc: 0.06, r: 0.02 });
+      voice(sfxBus, { w: 'square', f: 2200, t, d: 0.012, v: 0.025, a: 0.001, s: 0, dc: 0.01, r: 0.005 });
     },
     // a partner frees a ghost: the ghost bubble pops, a harp-like run climbs, a warm G-major bell blooms
     revive(t) {

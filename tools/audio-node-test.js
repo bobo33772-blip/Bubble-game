@@ -21,7 +21,8 @@ const SFX_V5 = ['stake', 'tro_fly', 'tro_up', 'tro_down', 'promote'];
 const SFX_V6 = ['coin', 'arm', 'buy', 'equip'];
 // v4 뽑기 (design/gacha.md §9): the crank, a capsule landing, a capsule opening, the fanfare (local, never echoed)
 const SFX_V7 = ['gacha_roll', 'gacha_drop', 'gacha_pop', 'gacha_win'];
-const SFX_NAMES = SFX_V1.concat(SFX_V2, SFX_V3, SFX_V4, SFX_V5, SFX_V6, SFX_V7);
+const SFX_V8 = ['dry']; // (battle: a press over the shot cap)
+const SFX_NAMES = SFX_V1.concat(SFX_V2, SFX_V3, SFX_V4, SFX_V5, SFX_V6, SFX_V7, SFX_V8);
 const V5_SOUNDS = [['stake', null], ['tro_fly', 0], ['tro_fly', 1], ['tro_fly', 2], ['tro_fly', 3], ['tro_fly', 4], ['tro_fly', 5], ['tro_up', null], ['tro_down', null], ['promote', null]];
 // every distinct v4 sound as [name, n]: n-variants per the spec, pop n 1..6 per animal (null = no opts)
 const V4_SOUNDS = [['pop', 1], ['pop', 2], ['pop', 3], ['pop', 4], ['pop', 5], ['pop', 6],

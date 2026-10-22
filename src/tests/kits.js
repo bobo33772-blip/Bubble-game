@@ -380,12 +380,12 @@
       if (mvAfter !== '' || P(0).mv === 'rec' || soaked > 0) return 'stun';
     });
     // ---- capy: 왕방울 거품
-    t('capy bubble: 2.8 x 22 = 61.6 px; catches an enemy 10.5 px from its centre (not 11.1: r 11), a rival within 10 (9.9 yes, 10.1 no); shampoo 15/14; b_onsen', () => {
+    t('capy bubble: 2.8 x 22 = 61.6 px; catches an enemy 10.5 px from its centre (not 11.1: r 11), a rival within its drawn ring 12.25 (14.0 yes, 14.8 no); shampoo 15/14; b_onsen', () => {
       const p = solo('capy', ROOM_F); put(p, 60, FLOOR, 1);
       const b = blow(0)[0], x0 = b.x - 2.8, r = b.r + '/' + b.rP, s0 = sfx.slice(), tr = track(b), end = tr[tr.length - 1];
-      const e105 = radiusTrial('capy', 10.5), e111 = radiusTrial('capy', 11.1), r99 = radiusTrial('capy', 9.9, true), r101 = radiusTrial('capy', 10.1, true);
+      const e105 = radiusTrial('capy', 10.5), e111 = radiusTrial('capy', 11.1), r99 = radiusTrial('capy', 14.0, true), r101 = radiusTrial('capy', 14.8, true);
       const p2 = solo('capy', ROOM_F); put(p2, 60, FLOOR, 1); D.givePower('shampoo'); const bs = blow(0)[0], sh = bs.r + '/' + bs.rP + ' ' + bs.shotT;
-      info('capy: range ' + f2(end[1] - x0) + ' in ' + end[0] + ' f, r ' + r + ' | enemy 10.5 ' + e105 + ' 11.1 ' + e111 + ' | rival 9.9 ' + r99 + ' 10.1 ' + r101 + ' | shampoo ' + sh + ' | sfx ' + s0.join(','));
+      info('capy: range ' + f2(end[1] - x0) + ' in ' + end[0] + ' f, r ' + r + ' | enemy 10.5 ' + e105 + ' 11.1 ' + e111 + ' | rival 14.0 ' + r99 + ' 14.8 ' + r101 + ' | shampoo ' + sh + ' | sfx ' + s0.join(','));
       if (Math.abs(end[1] - x0 - 61.6) > 0.05 || end[0] !== 22 || r !== '11/10') return 'range / radii';
       if (!e105 || e111 || !r99 || r101) return 'catch radii';
       if (sh !== '15/14 33' && sh !== '15/14 32') return 'shampoo ' + sh;
@@ -440,14 +440,15 @@
       info('fan centre: ' + f2(ce[1] - cx0) + ' px in ' + ce[0] + ' f');
       if (Math.abs(ce[1] - cx0 - 57.6) > 0.05 || ce[0] !== 16) return 'centre ' + (ce[1] - cx0);
     });
-    t('otter droplets catch a rival at age 6 but not at age 10 (rP 6); the centre misses both', () => {
-      // the rival stands on a ledge whose top is 9 px above the centre's path; the upper droplet climbs 0.75 px / f
+    t('otter droplets catch a rival at age 6 but not at age 10 (rivalAge 8; the drawn droplet ring 6.85); the centre misses both', () => {
+      // the rival stands on a ledge whose top is 11 px above the centre's path (its drawn ring reaches 10); the upper
+      // droplet climbs 0.75 px / f; dxBox: the rival's drawn left edge past the bubble's starting centre
       const trial = (dxBox) => {
         const room = mk((r) => (r === 0 || r === 25 ? SOLID : r === 20 ? '##' + '.'.repeat(7) + '#####' + '.'.repeat(16) + '##' : WALLS));
         const [p, v] = battle(['otter', 'duck'], room);
-        const feetR = PF_TOP + 20 * TS, cy = feetR + 9;
+        const feetR = PF_TOP + 20 * TS, cy = feetR + 11;
         hang(p, 40, cy, 1);
-        const cx0 = 40 + 11 + 8; put(v, cx0 + dxBox - 2, feetR, -1);
+        const cx0 = 40 + 11 + 8; put(v, cx0 + dxBox, feetR, -1);
         const bs = blow(0), ids = bs.map((b) => b.id);
         let got = null;
         for (let i = 0; i < 20 && !got; i++) { v.invuln = 0; if (v.trap) got = v.trap.b; else step(1); }
@@ -545,16 +546,48 @@
       if (dx < 150 || f > 90) return 'ice ' + dx + ' ' + f;
     });
     // ---- penguin: 고드름 거품
-    t('penguin icicle: 116-118 px in 26 f; enemy at 7.9 caught (8.1 not: r 8); rival at 5.5 caught (6.5 not: rP 6); shampoo 12/10 39 f; b_icicle', () => {
+    t('penguin icicle: 116-118 px in 26 f; enemy at 7.9 caught (8.1 not: r 8); rival at 10.5 caught (11.4 not: its drawn ring, 9 x 0.87 + 1 tall, on the 16 px body); shampoo 12/10 39 f; b_icicle', () => {
       const p = solo('penguin', ROOM_F); put(p, 30, FLOOR, 1);
       const b = blow(0)[0], x0 = b.x - 4.5, s0 = sfx.slice(), tr = track(b), end = tr[tr.length - 1];
-      const e79 = radiusTrial('penguin', 7.9), e81 = radiusTrial('penguin', 8.1), r55 = radiusTrial('penguin', 5.5, true), r65 = radiusTrial('penguin', 6.5, true);
+      const e79 = radiusTrial('penguin', 7.9), e81 = radiusTrial('penguin', 8.1), r55 = radiusTrial('penguin', 10.5, true), r65 = radiusTrial('penguin', 11.4, true);
       const p2 = solo('penguin', ROOM_F); put(p2, 20, FLOOR, 1); D.givePower('shampoo'); const bs = blow(0)[0], sh = bs.r + '/' + bs.rP + ' ' + bs.shotT;
-      info('icicle: range ' + f2(end[1] - x0) + ' in ' + end[0] + ' f r ' + b.r + '/' + b.rP + ' y const ' + tr.every((e) => e[2] === tr[0][2]) + ' | enemy 7.9 ' + e79 + ' 8.1 ' + e81 + ' | rival 5.5 ' + r55 + ' 6.5 ' + r65 + ' | shampoo ' + sh + ' | sfx ' + s0.join(','));
+      info('icicle: range ' + f2(end[1] - x0) + ' in ' + end[0] + ' f r ' + b.r + '/' + b.rP + ' y const ' + tr.every((e) => e[2] === tr[0][2]) + ' | enemy 7.9 ' + e79 + ' 8.1 ' + e81 + ' | rival 10.5 ' + r55 + ' 11.4 ' + r65 + ' | shampoo ' + sh + ' | sfx ' + s0.join(','));
       if (end[1] - x0 < 116 || end[1] - x0 > 118 || end[0] !== 26 || !tr.every((e) => e[2] === tr[0][2])) return 'range';
       if (!e79 || e81 || !r55 || r65) return 'radii';
       if (sh !== '12/10 39' && sh !== '12/10 38') return 'shampoo ' + sh;
       if (!s0.includes('b_icicle')) return 'sfx';
+    });
+
+    // ==================================================================== battle: a catch is the touch as drawn; the shot cap
+    t('battle catch = the drawn touch: a duck ring (r 10) at 11.7 caught / 12.5 not; the capy ring (12.25) at 14.0 / 14.8', () => {
+      const r = [radiusTrial('duck', 11.7, true), radiusTrial('duck', 12.5, true), radiusTrial('capy', 14.0, true), radiusTrial('capy', 14.8, true)];
+      info('drawn-touch radii: duck 11.7 ' + r[0] + ' 12.5 ' + r[1] + ' | capy 14.0 ' + r[2] + ' 14.8 ' + r[3]);
+      if (!r[0] || r[1] || !r[2] || r[3]) return 'radii ' + r.join(',');
+    });
+    // tap BUBBLE every other frame for 4 s: the most capture-phase shots in flight (an otter volley = 1), how many 'dry'
+    const capRun = (char, mode) => {
+      if (mode === 'battle') { const [p, v] = battle([char, 'duck']); put(p, 30, FLOOR, 1); put(v, 200, FLOOR, -1); }
+      else { solo(char, ROOM_F); if (mode === 'coop') { D.local.coop([char, 'duck'], 0); D.setInvincible(true); D.setPerks(true); park(); step(5); park(); clean(); release(); } put(P(0), 30, FLOOR, 1); if (P(1)) put(P(1), 200, FLOOR, -1); }
+      sfx.length = 0; let max = 0;
+      for (let f = 0; f < 240; f++) {
+        D.press('shoot', f % 2 === 0, 0); step(1);
+        if (P(1)) P(1).invuln = 60; // (nobody gets caught: every bubble flies its whole way)
+        let n = 0; for (const b of G.bubbles) if (!b.dead && b.owner === 0 && b.kind === 'empty' && b.state === 'shot' && !b.drop) n++;
+        max = Math.max(max, n);
+      }
+      release();
+      return { max, dry: sfx.filter((s) => s === 'dry').length };
+    };
+    t('battle shot cap 3: a tapping duck / cat never has more than 3 in flight (a quiet dry instead); capy / penguin / otter / frog never meet it', () => {
+      const r = {}; for (const c of CH) r[c] = capRun(c, 'battle');
+      info('battle cap: ' + CH.map((c) => c + ' max ' + r[c].max + ' dry ' + r[c].dry).join(' | '));
+      if (r.duck.max !== 3 || r.cat.max !== 3 || r.duck.dry < 3 || r.cat.dry < 3) return 'duck/cat ' + JSON.stringify([r.duck, r.cat]);
+      for (const c of ['capy', 'penguin', 'otter', 'frog']) if (r[c].dry || r[c].max > 2) return c + ' ' + JSON.stringify(r[c]);
+    });
+    t('no shot cap outside battle: a tapping duck has 5+ echoes out solo and in co-op, never a dry', () => {
+      const s = capRun('duck', 'solo'), c = capRun('duck', 'coop');
+      info('solo ' + JSON.stringify(s) + ' coop ' + JSON.stringify(c));
+      if (s.max < 5 || c.max < 5 || s.dry || c.dry) return JSON.stringify({ s, c });
     });
 
     // ==================================================================== cat: 냥냥 2단 점프

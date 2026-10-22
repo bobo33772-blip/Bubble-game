@@ -1809,7 +1809,9 @@ window.PG = window.PG || {};
     if (p.autoCd > 0) p.autoCd--;
     if (inp.shootP) p.shootBuf = 6; else if (p.shootBuf > 0) p.shootBuf--;
     if (p.shootCd === 0 && (p.shootBuf > 0 || (inp.shoot && p.autoCd === 0))) {
-      fire(p, !p.onGround); p.shootBuf = 0; // (the cat's yarn rolls only when blown on the ground)
+      if (shotCapped(p)) Snd.sfx('dry'); // (battle: SHOT_CAP in flight - nothing more until one ends)
+      else fire(p, !p.onGround); // (the cat's yarn rolls only when blown on the ground)
+      p.shootBuf = 0;
       p.shootCd = k.cd[0]; p.autoCd = k.cd[1];
     }
     if (p.shootAnim > 0) p.shootAnim--;
@@ -1978,10 +1980,10 @@ window.PG = window.PG || {};
     if (battle) p.invuln = 0;
     const specs = newShot(p, air);
     if (specs[0].ty === 'egg') eggCap(G.bubbles, p.slot, specs[0].cap);
-    let c = null; // (the first bubble: the one hostShot gives the guest's sid; an otter volley shares its id as `vol`)
+    let c = null, vi = 0; // (the first bubble: the one hostShot gives the guest's sid; an otter volley shares its id as `vol`)
     for (const s of specs) {
       const b = shotFrom(makeBubble('empty', s.x, s.y, p.slot), s);
-      b.born = G.frame; b.vol = c ? c.id : b.id;
+      b.born = G.frame; b.vol = c ? c.id : b.id; b.vi = vi++;
       if (b.state === 'float') { b.grace = 24; if (battle) shotNote(b); shotHits(b); }
       else {
         if (battle) shotNote(b);
@@ -3276,11 +3278,12 @@ window.PG = window.PG || {};
     if (G.introT === INTRO_NAME && !G.attract && !G.boss && !battle) { showBanner('준비!', '', INTRO_READY, 'ready'); kitHint(); if (G.music === 'clear' || G.music === 'victory') setMusic('main'); }
     for (const pl of G.players) if (pl.power && --pl.power.t <= 0) pl.power = null;
     for (const pl of G.players) updateBody(pl, ins[pl.slot] || NO_INPUT);
+    if (battle && G.online) for (const pl of G.players) notePos(pl);
     for (const e of G.enemies) updateEnemy(e);
     G.enemies = G.enemies.filter((e) => !e.gone);
     if (G.boss) updateBoss();
     updateBubbles();
-    if (battle && G.online) lagTrapCheck();
+    if (battle && G.online) { lagTrapCheck(); lagClaims(); }
     for (const pl of G.players) if (canTouch(pl)) playerBubbles(pl, ins[pl.slot] || NO_INPUT);
     if (G.gameMode === 'coop') reviveCheck();
     if (G.boss) bossTouch();
@@ -3496,23 +3499,69 @@ window.PG = window.PG || {};
   // OWNER_LOCK frames (the victim gets its chance to mash out).
   const HIST_KEEP = 48, TRAP_GRACE = 15, OWNER_LOCK = 60;
   const trappable = (v, b) => v.slot !== b.owner && free(v) && !(v.invuln > 0);
+  // A touch you can SEE is a catch: the owner's ring (2 px at r 9 x the drawn scale sc: its outer edge 9 s + 1) on the
+  // drawn 16x16 animal, outline included (tol: the host's slack on a guest's claim). (Before: rP on the 12x14 body box -
+  // a fifth of the visible touches did not count.)
+  function rivalTouch(sc, x, y, px, py, tol) {
+    const rx = 9 * sc[0] + 1 + (tol || 0), ry = 9 * sc[1] + 1 + (tol || 0), k = rx / ry, cx = x + 8, cy = (y + 8) * k;
+    const dx = cx - clamp(cx, px, px + 16), dy = cy - clamp(cy, py * k, (py + 16) * k);
+    return dx * dx + dy * dy < rx * rx;
+  }
+  // Online the SHOOTER's screen judges its own bubble (shooterOf): 'here' - a host-local (or offline) shooter: the rival
+  // where this screen draws it (a remote one: shownAt, its interpolated body stream); 'claims' - a guest that reports
+  // its own touches (guestClaim -> lagClaims checks them against the host's records); 'legacy' - an older guest page:
+  // host-local rivals now, remote ones against their own view (lagTrapCheck), as before
+  function shooterOf(b) {
+    const o = G.players.find((q) => q.slot === b.owner);
+    if (!o || o.local !== false) return 'here';
+    const rem = NET.remote.get(o.id);
+    return rem && rem.st && rem.st.lc ? 'claims' : 'legacy';
+  }
+  function shownAt(pl) {
+    const rem = NET.remote.get(pl.id); if (!rem) return null;
+    const s = bufSample(rem.buf, bufTick(rem.buf, PEER_DELAY)); if (!s) return null;
+    const a = s.a.d, b = s.b && s.b.d.ep === a.ep ? s.b.d : null;
+    return a.ep === pl.ep ? { x: lx(a.x, b && b.x, s.t), y: ly(a.y, b && b.y, s.t) } : null;
+  }
   function playerTrapCheck(b) {
     if (G.gameMode !== 'battle' || b.owner < 0) return false;
     if (b.drop && b.age > KIT.otter.shot.drop.rivalAge) return false; // (an otter's droplet catches rivals point-blank only)
-    const r = b.rP;
+    const who = G.online ? shooterOf(b) : 'here';
+    if (who === 'claims') return false;
+    const sc = bubbleScale(b, bubbleChar(b));
     for (const v of G.players) {
-      if (!trappable(v, b) || (G.online && !v.local)) continue;
-      if (circBox(b.x + 8, b.y + 8, r, v.x + 2, v.y + 2, 12, 14)) { catchPlayer(v, b); return true; }
+      if (!trappable(v, b)) continue;
+      let at = v;
+      if (G.online && !v.local) { if (who === 'legacy') continue; at = shownAt(v) || v; }
+      if (rivalTouch(sc, b.x, b.y, at.x, at.y, 0)) { catchPlayer(v, b); return true; }
     }
     return false;
   }
+  // battle: at most SHOT_CAP of a player's bubbles in their capture phase at once (an otter's volley counts once; the
+  // frog's eggs keep their own cap, eggCap). One press more is a quiet 칙 ('dry') and nothing else - the same count on a
+  // guest (its predictions + its rows in the view: never later than the host's), the host allows a guest one more
+  // (two presses that cross a shot's end on a jittery link); an older host sends no g.sc: no cap there
+  const SHOT_CAP = 3;
+  function inFlight(slot) {
+    let n = 0;
+    for (const b of G.bubbles) if (!b.dead && b.owner === slot && b.state === 'shot' && b.kind === 'empty' && !b.drop && b.ty !== 'egg') n++;
+    return n;
+  }
+  function shotCapped(p) {
+    if (G.gameMode !== 'battle' || kitOf(p).shot.ty === 'egg') return false;
+    const cap = G.online && G.role === 'guest' ? NET.shotCap | 0 : SHOT_CAP;
+    return cap > 0 && inFlight(p.slot) >= cap;
+  }
+  // the host's world, frame by frame: where each player was (a guest's claim names the snapshot tick it drew from)
+  const REWIND = 30, CLAIM_TOL = 2, CLAIM_WAIT = 12;
+  function notePos(pl) { const h = pl.ph || (pl.ph = []); h.push([G.frame, pl.x, pl.y]); if (h.length > REWIND + 8) h.shift(); }
   // battle: where each capture-phase bubble was, tick by tick (for lagTrapCheck). The path outlives the bubble for a
   // moment (G.shotLog): a victim's screen runs behind the host, so it may still show a shot that, in host time, has
   // since been popped, has caught an enemy or has left the screen; `spentAt` is when it stopped being a free shot
   function shotNote(b) {
     if (b.owner < 0 || b.kind !== 'empty') return;
     // (the path keeps the radius / droplet rule it was blown with: a catch later resets the bubble's own traits)
-    if (!b.hist) { b.hist = []; b.hist.rP = b.rP; b.hist.drop = b.drop; G.shotLog.push(b); }
+    if (!b.hist) { b.hist = []; b.hist.rP = b.rP; b.hist.drop = b.drop; b.hist.sc = bubbleScale(b, bubbleChar(b)); G.shotLog.push(b); }
     b.hist.push([G.frame, b.x, b.y, b.age]); // (age: an otter droplet catches rivals only up to its rivalAge)
     if (b.hist.length > HIST_KEEP) b.hist.shift();
   }
@@ -3525,25 +3574,96 @@ window.PG = window.PG || {};
       if (!st || st.ep !== v.ep || !(st.rt > 0)) continue;
       const rt = Math.round(clamp(st.rt, G.frame - HIST_KEEP, G.frame));
       for (const b of G.shotLog) {
-        if (!b.hist || !trappable(v, b)) continue;
-        const r = b.hist.rP, dropAge = b.hist.drop ? KIT.otter.shot.drop.rivalAge : 1e9;
+        if (!b.hist || !trappable(v, b) || shooterOf(b) !== 'legacy') continue;
+        const dropAge = b.hist.drop ? KIT.otter.shot.drop.rivalAge : 1e9;
         let hit = false;
         for (const e of b.hist) {
           if (e[0] < rt - 2 || e[0] > rt || (b.spentAt !== undefined && e[0] >= b.spentAt) || e[3] > dropAge) continue;
-          if (circBox(e[1] + 8, e[2] + 8, r, st.x + 2, st.y + 2, 12, 14)) { hit = true; break; }
+          if (rivalTouch(b.hist.sc, e[1], e[2], st.x, st.y, 0)) { hit = true; break; }
         }
         if (!hit) continue;
-        if (!b.dead && b.state !== 'pop' && b.kind === 'empty') catchPlayer(v, b);
-        else {
-          // (that bubble is already used up here: the catch gets a bubble of its own, the shooter's)
-          spend(b); b.hist = null;
-          const nb = makeBubble('empty', clamp(v.x, WALL_L, WALL_R - 16), clamp(v.y, CEIL_Y, PF_BOT - 16), b.owner);
-          nb.big = b.big; nb.r = b.r; nb.rP = b.rP; nb.k = b.k; G.bubbles.push(nb);
-          catchPlayer(v, nb);
-        }
+        lateCatch(v, b);
         break;
       }
     }
+  }
+  function lateCatch(v, b, here) {
+    if (!b.dead && b.state !== 'pop' && b.kind === 'empty') {
+      // (a claim: the bubble may have flown on since that touch - the prison closes where the rival is now)
+      if (here) { b.x = clamp(v.x, WALL_L, WALL_R - 16); b.y = clamp(v.y, CEIL_Y, PF_BOT - 16); }
+      catchPlayer(v, b); return;
+    }
+    // (that bubble is already used up here: the catch gets a bubble of its own, the shooter's)
+    spend(b); b.hist = null;
+    const nb = makeBubble('empty', clamp(v.x, WALL_L, WALL_R - 16), clamp(v.y, CEIL_Y, PF_BOT - 16), b.owner);
+    nb.big = b.big; nb.r = b.r; nb.rP = b.rP; nb.k = b.k; G.bubbles.push(nb);
+    catchPlayer(v, nb);
+  }
+  // a guest's own bubble touched a rival on ITS screen (guestClaim: the shot n, volley index i, at age a; the rival as
+  // drawn at x, y from tick k - w 0: the host world's snapshot tick, w 1: that rival's own body stream). The host checks
+  // it against its own records a frame or so later: that bubble's path at age a (not used up before then), the rival's
+  // recorded body at that tick (within 6 px of the claim, no more than REWIND = 0.5 s of that body's own time back:
+  // 2 x a 120 ms link + the view's playout delay) - they touch (CLAIM_TOL px of slack) -> the catch, else nothing (the
+  // guest's predicted catch lets go: the host's bubble flies on)
+  function hostClaim(pl, m) {
+    if (G.gameMode !== 'battle' || G.mode !== 'playing') return;
+    const c = { pl, gid: NET.gid, n: nInt(m.n, 0, 1e9, 0), i: nInt(m.i, 0, 2, 0), a: nInt(m.a, -1, SHOT_MAX, -1), s: nInt(m.s, -1, 3, -1), e: nInt(m.e, -1, 1e9, -1),
+      x: nNum(m.x, WALL_L - 4, WALL_R - 12, NaN), y: nNum(m.y, PF_TOP - 24, PF_BOT, NaN), k: nNum(m.k, 0, 1e12, -1), w: m.w === 1 ? 1 : 0, until: G.frame + CLAIM_WAIT };
+    if (!c.n || c.a < 0 || c.s < 0 || c.s === pl.slot || c.e < 0 || c.k < 0 || Number.isNaN(c.x) || Number.isNaN(c.y)) return;
+    NET.claims = (NET.claims || []).filter((q) => q.gid === NET.gid);
+    if (NET.claims.filter((q) => q.pl === pl).length < 8) NET.claims.push(c);
+  }
+  function lagClaims() {
+    if (!NET.claims || !NET.claims.length) return;
+    const keep = [];
+    for (const c of NET.claims) {
+      const r = c.gid === NET.gid ? claimCheck(c) : 'no';
+      if (r === 'wait' && G.frame <= c.until) keep.push(c);
+      else if (r !== 'ok') { NET.claimNo = (NET.claimNo | 0) + 1; const w = NET.claimWhy || (NET.claimWhy = {}), k = r === 'wait' ? 'wait:' + c.wr : r === 'age' ? 'age:' + c.wr : r; w[k] = (w[k] | 0) + 1; }
+    }
+    NET.claims = keep;
+  }
+  function claimCheck(c) {
+    const pl = c.pl, v = G.players.find((q) => q.slot === c.s);
+    if (!G.players.includes(pl) || !v || v.ep !== c.e) return 'ep';
+    let b = null;
+    for (const q of G.shotLog) if (q.owner === pl.slot && q.sid === c.n) b = q;
+    if (!b) { c.wr = 'sid'; return 'wait'; } // (its shot message may still be on the way)
+    if (c.i) { const b0 = b; b = G.shotLog.find((q) => q.owner === pl.slot && q.vol === b0.id && q.vi === c.i) || null; }
+    if (!b || !b.hist) return 'gone';
+    if (!trappable(v, b)) return 'free';
+    // (its age a in the host's path - or its last capture frame, when that ended one frame short of a)
+    const h = b.hist, last = h[h.length - 1], e = h.find((q) => q[3] === c.a) || (last && b.state !== 'shot' && c.a - last[3] === 1 ? last : null);
+    if (!e) { c.wr = 'young' + (h.length ? h[h.length - 1][3] - c.a : ''); return h.length && h[h.length - 1][3] < c.a && b.state === 'shot' && !b.dead ? 'wait' : 'age'; }
+    if ((b.spentAt !== undefined && e[0] >= b.spentAt) || (h.drop && c.a > KIT.otter.shot.drop.rivalAge)) return 'spent';
+    const at = c.w ? streamAt(v, c.k) : worldAt(v, c.k);
+    if (!at) return 'rewind';
+    if (Math.abs(at.x - c.x) > 6 || Math.abs(at.y - c.y) > 6) return 'where';
+    if (!rivalTouch(h.sc, e[1], e[2], at.x, at.y, CLAIM_TOL)) return 'miss';
+    const who = NET.who; NET.who = pl.slot; // (its own engine played the gulp when it claimed)
+    lateCatch(v, b, true);
+    NET.who = who;
+    return 'ok';
+  }
+  // a body at host tick k (its per-frame record) / at its own stream tick k (a guest's states as they came in)
+  function interpAt(list, k, kOf, xy) {
+    for (let i = list.length - 1; i >= 0; i--) {
+      const ka = kOf(list[i]); if (ka > k) continue;
+      const a = xy(list[i]), nb = list[i + 1], b = nb ? xy(nb) : null;
+      if (!b) return k - ka <= 2 ? a : null;
+      const t = clamp((k - ka) / Math.max(1e-6, kOf(nb) - ka), 0, 1);
+      return Math.abs(b.x - a.x) > 40 ? a : { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }; // (no tween across a wrap)
+    }
+    return null;
+  }
+  function worldAt(v, k) {
+    if (!(G.frame - k <= REWIND) || !v.ph) return null;
+    return interpAt(v.ph, k, (e) => e[0], (e) => ({ x: e[1], y: e[2] }));
+  }
+  function streamAt(v, k) {
+    const rem = !v.local && NET.remote.get(v.id); if (!rem || !rem.st || !(rem.st.k - k <= REWIND)) return null;
+    const L = rem.buf.list.filter((q) => q.d.ep === v.ep);
+    return interpAt(L, k, (q) => q.k, (q) => q.d);
   }
   // the capybara's onsen shield takes a capture too: the bubble bursts on it
   function catchPlayer(v, b) {
@@ -8091,7 +8211,10 @@ window.PG = window.PG || {};
   }
 
   // ------------------------------------------------------------------ fixed update
+  // (tests: PG.debug.mp.tap(fn) - fn() before each world frame, with the players where this screen draws them)
+  let netTap = null;
   function update() {
+    if (netTap) { const sw = G.online && G.role === 'host' ? hostDisplayIn() : null; try { netTap(); } catch (e) { /* the driver's */ } finally { if (sw) hostDisplayOut(sw); } }
     const ins = readInputs();
     // online guest: no world simulation here, only our own animal + the host's world drawn from its snapshots
     if (G.online && G.role === 'guest') { guestUpdate(ins); updateWords(); updateWisps(); return; }
@@ -8723,6 +8846,15 @@ window.PG = window.PG || {};
   // capy's big bubble steaming, the otter's drips and small teardrop droplets, the penguin's stretched icicle and its
   // contrail, the cat's yarn thread (a rolling yarn only), the frog's jelly egg and its halo while it waits. The motion
   // side comes from the spots it is drawn at (a guest's view rows too); the glyph keeps the side it flew while it floats
+  // a bubble's drawn scale [x, y]: the kit look (drawKitBubble) or the plain one (1, big 1.25) - the battle's rival test
+  // (rivalTouch) reads the same numbers, so what touches on screen is what catches
+  function bubbleScale(b, ch) {
+    if (!ch) return b.big ? [1.25, 1.25] : [1, 1];
+    let s = b.big ? 1.25 : 1;
+    if (ch === 'capy') s = b.big ? 1.5 : 1.25; else if (ch === 'frog') s *= 0.9;
+    if (b.drop) s = b.big ? 0.9 : 0.65;
+    return ch === 'penguin' && b.state === 'shot' ? [s * 1.15, s * 0.87] : [s, s];
+  }
   function drawKitBubble(b, ch) {
     const L = KIT_LOOK[ch], F = G.frame, calm = reducedMotion();
     const shot = b.state === 'shot', pop = b.state === 'pop', drop = !!b.drop, yarn = b.ty ? b.ty === 'yarn' : !!b.yarn;
@@ -8737,11 +8869,7 @@ window.PG = window.PG || {};
       b._lx = b.x; b._lf = F;
     }
     const md = b._md || 1, gd = b._gd || md;
-    let s = b.big ? 1.25 : 1;
-    if (ch === 'capy') s = b.big ? 1.5 : 1.25; else if (ch === 'frog') s *= 0.9;
-    if (drop) s = b.big ? 0.9 : 0.65;
-    let sx = s, sy = s;
-    if (ch === 'penguin' && shot) { sx = s * 1.15; sy = s * 0.87; }
+    let [sx, sy] = bubbleScale(b, ch);
     if (b.squish > 0) { const q = 0.18 * (b.squish / 8); sx *= 1 + q; sy *= 1 - q; }
     let name, fi, alpha;
     if (pop) { name = 'bubble_pop'; fi = b.popT < 5 ? 0 : 1; }
@@ -10316,7 +10444,7 @@ window.PG = window.PG || {};
   // a player's own movement sounds are played by that player's engine only (v4: the moves and the kit shoot sounds;
   // 'quake' and 'pop' are echoed)
   const NO_ECHO = { jump: 1, shoot: 1, bounce: 1, splash: 1, pause: 1, start: 1,
-    flap: 1, slam: 1, dash: 1, slide: 1, djump: 1, hop: 1, b_echo: 1, b_onsen: 1, b_splash: 1, b_icicle: 1, b_yarn: 1, b_egg: 1 };
+    flap: 1, slam: 1, dash: 1, slide: 1, djump: 1, hop: 1, b_echo: 1, b_onsen: 1, b_splash: 1, b_icicle: 1, b_yarn: 1, b_egg: 1, dry: 1 };
   const PH_CODE = { playing: 'p', countdown: 'c', transition: 't', gameover: 'o', ending: 'e', podium: 'd', dying: 'p', paused: 'p', title: 'p' };
   const PH_NAME = { p: 'playing', c: 'countdown', t: 'transition', o: 'gameover', e: 'ending', d: 'podium' };
   const MUSICS = [null, 'main', 'hurry', 'boss', 'final', 'clear', 'victory', 'battle', 'podium', 'gameover', 'ending', 'title', 'lobby'];
@@ -10887,7 +11015,7 @@ window.PG = window.PG || {};
     return { k, gid: nInt(st.gid, 0, 1e9, 0), ep: nInt(st.ep, -1, 1e9, -1),
       x: nNum(st.x, WALL_L - 4, WALL_R - 12, 120), y: nNum(st.y, PF_TOP - 24, PF_BOT, 100),
       vx: nNum(st.vx, -6, 6, 0), vy: nNum(st.vy, -8, 8, 0), f: st.f < 0 ? -1 : 1, fl: nInt(st.fl, 0, 1023, 0), sh: nInt(st.sh, 0, 600, 0), bb,
-      ny: nInt(st.ny, 0, 1e9, 0), rt: nInt(st.rt, 0, 1e12, 0) };
+      ny: nInt(st.ny, 0, 1e9, 0), rt: nInt(st.rt, 0, 1e12, 0), lc: st.lc === 1 ? 1 : 0 }; // (lc: it claims its own catches)
   }
   function hostBodyIn(from, st) {
     const r = NET.roster.find((q) => q.id === from); if (!r || from === NET.selfId) return;
@@ -11049,6 +11177,7 @@ window.PG = window.PG || {};
       // goes into the pot. Its own stake only, either way (its row then tells it whether to pay)
       case 'st': { const M = TRO.match; if (M && m.m === M.mid && M.slots.includes(r.slot)) M.st[r.slot] = M.s > 0 && m.s === M.s ? 1 : 0; return; }
       case 'shot': if (pl) hostShot(pl, m); return;
+      case 'tp': if (pl) hostClaim(pl, m); return; // (v4 battle: a guest's own catch to check; an older host ignores it)
       case 'die': if (pl) hostDie(pl, m); return;
       case 'hit': if (pl) hostHit(pl, m); return;
       case 'mash': if (pl) hostMash(pl); return;
@@ -11099,6 +11228,7 @@ window.PG = window.PG || {};
     const t = G.frame;
     rem.shots = rem.shots.filter((f) => t - f < 24);
     if (rem.shots.length >= 3) return; // (a frog fires every 10 frames: 3 in 24 is plenty)
+    if (G.gameMode === 'battle' && kitOf(pl).shot.ty !== 'egg' && inFlight(pl.slot) > SHOT_CAP) { NET.capNo = (NET.capNo | 0) + 1; return; }
     rem.shots.push(t);
     let x = nNum(m.x, WALL_L - 4, WALL_R - 12, pl.x), y = nNum(m.y, PF_TOP - 16, PF_BOT, pl.y);
     if (Math.abs(x - pl.x) > 32 || Math.abs(y - pl.y) > 32) { x = pl.x; y = pl.y; }
@@ -11259,6 +11389,7 @@ window.PG = window.PG || {};
     // the floating-empty life this world runs (EMPTY_RULE): a guest blinks the bubbles at it, not at its own rule (an
     // older host sends none - it runs EMPTY_LIFE, which is what a guest then takes)
     const el = emptyRule()[0]; if (el !== EMPTY_LIFE) g.el = el;
+    if (G.gameMode === 'battle') { g.lc = 1; g.sc = SHOT_CAP; } // (battle: send me your catches / the shot cap - see hostClaim)
     if (G.stampFlash > 0) g.sf = G.stampFlash;
     if (G.ticketFlash > 0) g.tf = G.ticketFlash;
     const mu = MUSICS.indexOf(G.music); if (mu > 0) g.mu = mu;
@@ -11365,6 +11496,7 @@ window.PG = window.PG || {};
       if (G.frame % 30 === 0 || !NET.predLife) {
         let rtt = null; try { rtt = NET.sess.stats().rttMs; } catch (e) { rtt = null; }
         NET.predLife = 50 + Math.round((rtt || 0) * 0.06) + Math.round(bufDelay(NET.buf, SNAP_DELAY)) + 10;
+        NET.claimWait = NET.predLife - 50 + 6; // (a claimed catch: the round trip + my view's delay, then the host said no)
       }
       const rt = bufTick(NET.buf, SNAP_DELAY);
       const s = bufSample(NET.buf, rt);
@@ -11416,6 +11548,7 @@ window.PG = window.PG || {};
     G.loop = nInt(g.lp, 0, 99, 0); G.lives = nInt(g.L, 0, 99, 0); G.score = nInt(g.S, 0, 1e10, 0); G.stamps = nInt(g.st, 0, 99, 0);
     G.hurry = !!g.hu; G.stampFlash = nInt(g.sf, 0, 300, 0); G.ticketFlash = nInt(g.tf, 0, 300, 0);
     NET.el = nInt(g.el, 60, 2000, EMPTY_LIFE); // (the host's floating-empty life: emptyLife, the blink)
+    NET.hostLc = g.lc === 1; NET.shotCap = nInt(g.sc, 0, 9, 0); // (an older host: neither - no claims, no cap)
     G.battle = arena ? { left: Math.max(0, nInt(g.tl, 0, 1e7, 0) - (ph === 'playing' ? el : 0)), total: 0, intruded: true, enemyT: 1e9, powerT: 1e9 } : null;
     const mu = MUSICS[nInt(g.mu, 0, MUSICS.length - 1, 0)];
     if (mu !== G.music && !(mu === null && G.music === undefined)) setMusic(mu);
@@ -11482,6 +11615,7 @@ window.PG = window.PG || {};
       p.onGround = !!(fl & 1); p.water = fl & 2 ? 1 : fl & 4 ? 2 : 0; p.shootAnim = fl & 32 ? 2 : 0;
       p.facing = r[6] < 0 ? -1 : 1;
       const st = !mine && (fl & 64) ? peerStream(p) : null;
+      p.shownW = st ? 1 : 0; p.shownK = st ? st.a.k + (st.b ? (st.b.k - st.a.k) * st.t : 0) : NET.rt; // (guestClaim names it)
       if (st) {
         const a = st.a, b = st.b;
         p.x = lx(a.x, b && b.x, st.t); p.y = ly(a.y, b && b.y, st.t); p.vx = a.vx; p.vy = a.vy; p.facing = a.f;
@@ -11726,10 +11860,11 @@ window.PG = window.PG || {};
     NET.sess.send(NET.hostId, m);
     if (specs[0].ty === 'egg') eggCap(NET.pred, p.slot, specs[0].cap);
     specs.forEach((s, i) => {
-      const pb = shotFrom({ id: 'p' + n + (i ? '.' + i : ''), pred: true, sid: i ? 0 : n, kind: 'empty', age: 0, life: 0, popT: 0, owner: p.slot,
+      const pb = shotFrom({ id: 'p' + n + (i ? '.' + i : ''), pred: true, sid: i ? 0 : n, vn: n, vi: i, kind: 'empty', age: 0, life: 0, popT: 0, owner: p.slot,
         squish: 0, soaked: false, match: !i, seen: false }, s);
       pb.path = [pb.x, pb.y]; // (where my copy was at each age: the reconcile looks up the age the host row shows)
       NET.pred.push(pb);
+      if (pb.state === 'float') guestClaim(pb); // (blown into a wall: the host checks it at once too)
     });
     p.shootAnim = 10;
     shootSfx(p);
@@ -11742,6 +11877,14 @@ window.PG = window.PG || {};
     for (const pb of NET.pred) {
       pb.age++; pb.life++;
       if (pb.state === 'pop') { if (++pb.popT < 10) keep.push(pb); continue; } // (my burst droplet)
+      if (pb.claim) {
+        // my catch as my screen saw it: the bubble rides on that rival until the host's prison shows up there - or, the
+        // host refused it, its own bubble takes over (the host row of this shot is drawn again)
+        const q = G.players.find((o) => o.slot === pb.claim.s);
+        if (!q || q.trap || G.frame > pb.claim.until) continue;
+        pb.x = clamp(q.x, WALL_L, WALL_R - 16); pb.y = clamp(q.y - 1, CEIL_Y, PF_BOT - 16); pb.squish = 4;
+        keep.push(pb); continue;
+      }
       const v = pb.sid ? NET.sidSeen.get(pb.sid) : null;
       if (v && NET.view && NET.view.U.get(v.id) === v) {
         pb.seen = true;
@@ -11756,6 +11899,7 @@ window.PG = window.PG || {};
       if (pb.state === 'shot') {
         const ev = stepShot(pb);
         if (ev && ev !== 'wall') shotSfx(ev);
+        guestClaim(pb);
         if (pb.state === 'shot' && --pb.shotT <= 0) {
           if (pb.drop) { // my droplet bursts at the end, as the host's does (whose rows I do not show)
             pb.state = 'pop'; pb.popT = 0; pb.vx = 0; pb.vy = 0;
@@ -11770,6 +11914,24 @@ window.PG = window.PG || {};
     }
     NET.pred = keep;
     if (NET.sidSeen.size > 64) { const ks = Array.from(NET.sidSeen.keys()); for (const k of ks.slice(0, ks.length - 32)) NET.sidSeen.delete(k); }
+  }
+  // battle: my own capture-phase bubble touches a rival where MY screen draws it (rivalTouch, as the host's own test)
+  // -> I tell the host (t 'tp', checked in hostClaim) and show the catch at once (the gulp; the bubble rides on the
+  // rival, updatePredicted). Only with a host that checks claims (g.lc); one claim per bubble
+  function guestClaim(pb) {
+    if (!NET.hostLc || !NET.sess || pb.claim || G.gameMode !== 'battle' || (pb.drop && pb.age > KIT.otter.shot.drop.rivalAge)) return;
+    const sc = bubbleScale(pb, bubbleChar(pb));
+    for (const q of G.players) {
+      if (q.slot === G.localSlot || !free(q) || q.invuln > 0 || !(q.shownK >= 0)) continue;
+      if (!rivalTouch(sc, pb.x, pb.y, q.x, q.y, 0)) continue;
+      NET.sess.send(NET.hostId, { t: 'tp', n: pb.vn, i: pb.vi, a: pb.age, s: q.slot, e: q.ep, x: r1(q.x), y: r1(q.y), k: r1(q.shownK), w: q.shownW });
+      pb.claim = { s: q.slot, until: G.frame + (NET.claimWait || 40) };
+      NET.claimsSent = (NET.claimsSent | 0) + 1;
+      if (q.shield > 0) { pb.claim.until = G.frame; return; } // (an onsen shield bursts it on the host: no catch to show)
+      burst(pb.x + 8, pb.y + 8, 10, [SLOT_COLS[pb.owner] || '#ffffff', '#ffffff', '#c8f4ff'], 1.3, 14);
+      Snd.sfx('trap_player');
+      return;
+    }
   }
   function guestSend() {
     if (!NET.sess || G.frame % BODY_EVERY) return;
@@ -11787,7 +11949,7 @@ window.PG = window.PG || {};
     NET.bounces = NET.bounces.filter((b) => b.until > G.frame);
     // rt: the host tick my view of the world shows right now (battle traps are judged against what I saw)
     NET.sess.setState({ v: NET_V, k: G.frame, gid: NET.gid, ep: me.ep, x: r1(me.x), y: r1(me.y), vx: r2(me.vx), vy: r2(me.vy), f: me.facing < 0 ? -1 : 1,
-      fl, sh: me.shield | 0, bb: NET.bounces.map((b) => b.id).slice(-6), ny: NET.nyang, rt: Math.max(0, Math.round(NET.rt || 0)) });
+      fl, sh: me.shield | 0, bb: NET.bounces.map((b) => b.id).slice(-6), ny: NET.nyang, rt: Math.max(0, Math.round(NET.rt || 0)), lc: 1 });
   }
 
   // ================================================================== DOM: the friends panel and the room
@@ -12243,6 +12405,7 @@ window.PG = window.PG || {};
       tro: { q: NET.role === 'host' && NET.screen !== 'game' ? troPractice() : NET.q, ms: NET.ms, bet: NET.opts.bet | 0, stake: stakeNow(), R: NET.role === 'host' && NET.R ? JSON.parse(JSON.stringify(NET.R)) : null },
       selfId: NET.selfId, mySlot: NET.role === 'host' ? 0 : NET.slots.get(NET.selfId), ctl: NET.ctl,
       stats, snap: { count: NET.snapN, bytes: NET.snapBytes, max: NET.snapMax, trims: NET.snapTrim, refused: NET.snapFail },
+      claims: { sent: NET.claimsSent | 0, refused: NET.claimNo | 0, why: Object.assign({}, NET.claimWhy || {}), capNo: NET.capNo | 0 },
       renderTick: NET.rt, newestTick: NET.buf ? NET.buf.last : -1, viewFrames: NET.viewFrames, starvedFrames: NET.starveFrames, evQ: NET.evQ.length, pred: NET.pred.length, games: NET.games.slice(),
       predSplit: NET.predSplit | 0, predGiveUp: NET.predGiveUp | 0, // (v4: predictions handed to the host row by the 6 px rule / given up)
     };
@@ -12282,6 +12445,9 @@ window.PG = window.PG || {};
         return o;
       },
       session: () => NET.sess,
+      tap: (fn) => { netTap = typeof fn === 'function' ? fn : null; },
+      // (tests) the engine's battle catch test: bubble b (as drawn) on a rival drawn at px, py
+      touches: (b, px, py) => rivalTouch(bubbleScale(b, bubbleChar(b)), b.x, b.y, px, py, 0),
       state: netState,
       seat: () => seatChar(),                 // (looks-per-animal.md 10: the animal my room seat plays)
       leave: () => netLeave(''),
