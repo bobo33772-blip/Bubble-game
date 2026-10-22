@@ -632,6 +632,13 @@
       // B watches A's bubble in ITS OWN view and jumps when it is 40 px away (a clean dodge locally)
       let jumped = false, minD = 1e9, jumpAtD = null, firstSeen = null, jumpT = null, hostTrapT = null, viewTrapT = null;
       const tShot = clock();
+      // (battle accuracy, 2026-10: the SHOOTER's screen decides - did A's own bubble touch B as A draws it? A guest's
+      // claimed catch rides on B: that counts as the touch it was)
+      let shooterSaw = false;
+      A.mp.tap(() => {
+        const v = A.G.players.find((p) => p.slot === sb); if (!v || v.trap) return;
+        for (const b of A.G.bubbles) if (b.owner === sa && b.pred && b.kind === 'empty' && (b.claim ? b.claim.s === sb : b.state === 'shot' && A.mp.touches(b, v.x, v.y))) shooterSaw = true;
+      });
       const watch = setInterval(() => {
         const mb = me(B); if (!mb) return;
         if (hostTrapT === null && hp(host, sb).trap) hostTrapT = clock() - tShot;
@@ -650,15 +657,16 @@
       const trapped = await until(() => hp(host, sb).trap, 1800);
       await until(() => viewTrapT !== null, 1500);
       await sleep(400);
-      clearInterval(watch);
+      clearInterval(watch); A.mp.tap(null);
       const R = (v) => (v === null ? null : Math.round(v));
-      res.push({ trapped: !!trapped, bubbleFirstInVictimViewMs: R(firstSeen), victimJumpedAtMs: R(jumpT), jumpAtD, hostTrapMs: R(hostTrapT), victimSeesTrapMs: R(viewTrapT), minViewDistBeforeTrap: minD > 1e8 ? null : r1(minD) });
+      res.push({ trapped: !!trapped, shooterSaw, bubbleFirstInVictimViewMs: R(firstSeen), victimJumpedAtMs: R(jumpT), jumpAtD, hostTrapMs: R(hostTrapT), victimSeesTrapMs: R(viewTrapT), minViewDistBeforeTrap: minD > 1e8 ? null : r1(minD) });
       if (trapped) { await until(() => !hp(host, sb).trap, 6000); }
       await sleep(1200);
     }
     metric('trapfair.' + link.replace(/&/g, '_'), res);
-    const unfair = res.filter((r) => r.trapped && (r.minViewDistBeforeTrap === null || r.minViewDistBeforeTrap > 16 || (r.bubbleFirstInVictimViewMs !== null && r.hostTrapMs !== null && r.bubbleFirstInVictimViewMs >= r.hostTrapMs)));
-    ok('trapfair: the victim could see the bubble coming before the host trapped it, and it touched the victim in its own view', unfair.length === 0, res);
+    // (before 2026-10 the victim's own view judged a catch; now the shooter's does - the victim's view distance stays in
+    // the metric: how far the bubble was on ITS screen when the shooter's touch caught it)
+    ok('trapfair: caught exactly when the shooter\'s own bubble touched the victim on the shooter\'s screen', res.length >= 4 && res.every((r) => r.trapped === r.shooterSaw), res);
     ok('trapfair: no page errors', F.every((f) => !f.errors.length), F.map((f) => f.errors.slice(0, 3)));
     dropAll();
   }

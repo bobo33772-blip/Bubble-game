@@ -2,8 +2,9 @@
 // network, driven through PG.debug.mp / PG.debug (built to test-mp-fixes.html; serve C:/Temp/bogeul with tools/serve.js):
 //   node bogeul/tools/run-chrome.js http://localhost:8765/test-mp-fixes.html - 1200 900 rt600000 "MPFIX DONE"
 // Phases (?only=a,b):
-//   trapfair  battle 1v1: a guest standing still is caught by the host's shot; a guest that jumps as soon as the shot
-//             comes within ~44 px ON ITS OWN SCREEN is not (the host judges the catch against what the guest saw)
+//   trapfair  battle 1v1: a guest standing still is caught by the host's shot; a guest that jumps as the shot comes
+//             within 56 px on its own screen: the SHOOTER's screen decides (battle accuracy, 2026-10): caught when the
+//             bubble touched the guest as the host draws it, never when it did not
 //   stall     co-op: the host's loop stalls ~0.4 s (it loses those ticks); the guest's view is interpolating again
 //             within a second, not stepping snapshot to snapshot for half a minute
 //   harsh     co-op on a 250 +- 120 ms link with ~20 % state loss: the guest's view still interpolates most of the time
@@ -122,32 +123,39 @@
       await until(() => { const hb = H.G.players.find((p) => p.slot === 1); return hb && !hb.trap && !hb.koT; }, 6000);
     }
     ok('trapfair: a guest that stays put is caught by the shot (2/2)', caughtStill === 2, caughtStill);
-    // dodge as soon as the shot comes within 56 px on the guest's own screen; record whether, on that screen, the
-    // capture-phase bubble ever touched the guest's body (circle vs box, the engine's own test)
-    const touches = (b, p) => { const cx = b.x + 8, cy = b.y + 8, nx = Math.max(p.x + 2, Math.min(cx, p.x + 14)), ny = Math.max(p.y + 2, Math.min(cy, p.y + 16)); return Math.hypot(cx - nx, cy - ny) < 8; };
+    // dodge as soon as the shot comes within 56 px on the guest's own screen; record whether, on the HOST's screen (the
+    // shooter's: the guest where it draws it), the capture-phase bubble touched the guest - now, or by the next frame
+    // (the world update catches before that frame is drawn); and on the guest's own screen, for the record
     const res = [];
     for (let k = 0; k < 5; k++) {
       if (!(await setup())) { log('MPFIX INFO setup failed (dodge ' + k + ')'); continue; }
-      let jumped = false, touched = false, info = null, jumpAt = null;
+      let jumped = false, touched = false, info = null, jumpAt = null, hostNow = false, hostNext = false;
+      H.mp.tap(() => {
+        const v = H.G.players.find((p) => p.slot === 1); if (!v || v.trap) return;
+        for (const b of H.G.bubbles) {
+          if (b.owner !== 0 || b.kind !== 'empty' || b.state !== 'shot') continue;
+          if (H.mp.touches(b, v.x, v.y)) hostNow = true;
+          if (H.mp.touches(Object.assign({}, b, { x: b.x + b.vx }), v.x + v.vx, v.y + v.vy)) hostNext = true;
+        }
+      });
       const watch = setInterval(() => {
         const bp = me(B); if (!bp) return;
         for (const b of V(B).bubbles) {
           if (b.owner !== 0 || b.kind !== 'empty' || b.pred) continue;
-          if (b.state === 'shot' && touches(b, bp) && !touched) { touched = true; info = { f: B.G.frame, bx: Math.round(b.x), by: Math.round(b.y), px: Math.round(bp.x), py: Math.round(bp.y), vy: +bp.vy.toFixed(2), og: bp.onGround, jumpAt }; }
+          if (b.state === 'shot' && B.mp.touches(b, bp.x, bp.y) && !touched) { touched = true; info = { f: B.G.frame, bx: Math.round(b.x), by: Math.round(b.y), px: Math.round(bp.x), py: Math.round(bp.y), vy: +bp.vy.toFixed(2), og: bp.onGround, jumpAt }; }
           if (!jumped && Math.abs(b.x + 8 - (bp.x + 8)) < 56) { jumpAt = { f: B.G.frame, bx: Math.round(b.x), px: Math.round(bp.x), py: Math.round(bp.y), og: bp.onGround }; jumped = true; press(B, 'jump', true); setTimeout(() => press(B, 'jump', false), 300); }
         }
       }, 5);
       press(H, 'shoot', true); await sleep(60); press(H, 'shoot', false);
       await sleep(1600);
-      clearInterval(watch);
+      clearInterval(watch); H.mp.tap(null);
       const hb = H.G.players.find((p) => p.slot === 1);
-      res.push({ jumped, touched, caught: !!(hb && (hb.trap || hb.koT)), info });
+      res.push({ jumped, touched, hostNow, hostNext, caught: !!(hb && (hb.trap || hb.koT)), info });
       await until(() => { const q = H.G.players.find((p) => p.slot === 1); return q && !q.trap && !q.koT; }, 6000);
     }
     metric('trapfair.dodge', res);
-    const clean = res.filter((r) => r.jumped && !r.touched);
-    ok('trapfair: a dodge that worked on the guest\'s own screen counts (clean dodges never caught, 3+ of 5 clean)', clean.length >= 3 && clean.every((r) => !r.caught), res);
-    ok('trapfair: nobody is caught by a bubble that never touched it on its own screen', res.every((r) => !r.caught || r.touched), res);
+    ok('trapfair: a bubble that touched the guest on the shooter\'s (host\'s) screen caught it', res.length >= 4 && res.every((r) => !r.hostNow || r.caught), res);
+    ok('trapfair: nobody is caught by a bubble that never touched it on the shooter\'s screen', res.every((r) => !r.caught || r.hostNow || r.hostNext), res);
     ok('trapfair: no page errors', R.F.every((f) => !f.errors.length), R.F.map((f) => f.errors));
     dropAll();
   }
