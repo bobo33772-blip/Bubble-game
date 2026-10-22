@@ -72,8 +72,13 @@ const hasCfg = fs.existsSync(path.join(ROOT, 'firebase.config.json'));
   ok('artifact: still no external script', staticScripts(art) === 0);
   // (친구 순위, design/friends.md: game.js makes its button and panel only with the cloud or on a preview - never markup)
   ok('artifact / deploy: no 친구 순위 markup (#pg-pal-btn / #pg-pal come from game.js only)', !/id="pg-pal/.test(art) && !/id="pg-pal/.test(dep));
+  // (친구 초대 / 손님은 온라인 불가, design/friends.md "As built (invites)": the banner, the room's button, the sign-in card - game.js only)
+  ok('artifact / deploy: no 친구 초대 markup (#pg-iv / #pg-room-iv / #pg-net-gate come from game.js only)', !/id="pg-(iv|room-iv|net-gate)\b/.test(art) && !/id="pg-(iv|room-iv|net-gate)\b/.test(dep));
   {
     const R = read(path.join(ROOT, 'firebase', 'firestore.rules'));
+    ok('rules: the 친구 초대 collections (invites/{to}/in, ivbox), above the closed catch-all; the invite needs the friend pair and the ivbox',
+      ['match /invites/{to}/in/{from}', 'match /ivbox/{uid}'].every((m) => R.includes(m) && R.indexOf(m) < R.indexOf('match /{document=**}')) && /exists\(frP\(to, from\)\) && getAfter\(ivP\(from\)\)/.test(R)
+      && /request\.query\.limit <= 50/.test(R) && /duration\.value\(10, 's'\)/.test(R));
     ok('rules: the 친구 순위 collections (profiles, codes, outbox, reqs/{to}/in, friends/{uid}/f), above the closed catch-all', ['match /profiles/{uid}', 'match /codes/{code}', 'match /outbox/{uid}', 'match /reqs/{to}/in/{from}', 'match /friends/{uid}/f/{other}'].every((m) => R.includes(m) && R.indexOf(m) < R.indexOf('match /{document=**}')) && !R.includes('{path=**}'));
   }
   if (hasCfg) {

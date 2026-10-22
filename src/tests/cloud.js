@@ -214,6 +214,11 @@
         return (me === uid || me === other) && uid !== other && hasOnly(d, ['at']) && tsIs(d.at, now)
           && exists(reqP(me, them)) && !existsAfter(reqP(me, them)) && existsAfter(frP(me, them)) && existsAfter(frP(them, me));
       };
+      // (친구 초대: invites/{to}/in/{from} and ivbox/{uid})
+      const ivP = (u) => 'ivbox/' + u, IVK = ['code', 'mode', 'nick', 'at'];
+      const ivVal = () => hasOnly(d, ['at']) && tsIs(d.at, now);
+      const ivOk = (to, from) => to !== from && hasAll(d, IVK) && hasOnly(d, IVK) && typeof d.code === 'string' && /^[a-z0-9]{4}$/.test(d.code)
+        && (d.mode === 'coop' || d.mode === 'battle') && nickValue(d.nick) && tsIs(d.at, now) && exists(frP(to, from)) && tsIs((getAfter(ivP(from)) || {}).at, now);
       const lim = (n) => typeof ctx.limit === 'number' && ctx.limit <= n;
       let ok = false;
       if (sg[0] === 'profiles' && sg.length === 2) {
@@ -234,6 +239,14 @@
         ok = op === 'get' || op === 'delete' ? !!me && (me === uid || me === other) : op === 'create' ? !!me && pairNewOk(uid, other) : false;
       } else if (sg[0] === 'friends' && sg[2] === 'f' && sg.length === 3) {
         ok = op === 'list' && signedIn(sg[1]) && lim(60);
+      } else if (sg[0] === 'invites' && sg[2] === 'in' && sg.length === 4) {
+        const to = sg[1], from = sg[3];
+        ok = op === 'get' ? signedIn(to) : op === 'delete' ? !!me && (me === to || me === from) : op === 'create' || op === 'update' ? signedIn(from) && ivOk(to, from) : false;
+      } else if (sg[0] === 'invites' && sg[2] === 'in' && sg.length === 3) {
+        ok = op === 'list' && signedIn(sg[1]) && lim(50);
+      } else if (sg[0] === 'ivbox' && sg.length === 2) {
+        const uid = sg[1];
+        ok = op === 'get' ? signedIn(uid) : op === 'create' ? signedIn(uid) && ivVal() : op === 'update' ? signedIn(uid) && ivVal() && o.at instanceof TS && now > o.at.ms + 10000 : false;
       }
       if (ctx.n > 10) return 'calls ' + ctx.n;
       return ok ? '' : op;
@@ -352,11 +365,35 @@
       };
     }
     function mkColl(db, path) {
-      return { path, id: path.split('/').pop(), doc: (id) => mkRef(db, path + '/' + id, id), limit: (n) => ({ get: () => F.plist(db, path, n) }), get: () => F.plist(db, path, undefined) };
+      return { path, id: path.split('/').pop(), doc: (id) => mkRef(db, path + '/' + id, id), get: () => F.plist(db, path, undefined),
+        limit: (n) => ({ get: () => F.plist(db, path, n), onSnapshot: (a, b, c) => (typeof a === 'function' ? F.qlisten(db, path, n, a, b) : F.qlisten(db, path, n, b, c)) }) };
     }
+    // (친구 초대: a listener on a limited collection - the rule checked when it starts and at every delivery (another
+    // account: permission-denied, the listener ends); a write under it delivers the whole set; offline: nothing new)
+    const qdocs = (path, n) => Array.from(F.docs.keys()).filter((k) => k.startsWith(path + '/') && k.indexOf('/', path.length + 1) < 0).sort().slice(0, n)
+      .map((k) => ({ id: k.split('/').pop(), exists: true, data: () => clone(F.docs.get(k)) }));
+    F.qlisten = (db, path, n, next, err) => {
+      const code = F.take('psnap');
+      F.calls.push({ op: 'listen', prof: db.ns.prof.name, frame: db.ns.frame, path, limit: n });
+      if (code) { later(() => call(err, F.err(code))); return () => { /* never started */ }; }
+      const l = { db, path, q: n, next, err, alive: true };
+      db.ls.add(l); later(() => F.deliver(l));
+      return () => { l.alive = false; db.ls.delete(l); };
+    };
+    F.qdeliver = (l) => {
+      const P = l.db.ns.prof;
+      if (!P.online) return;
+      const why = F.pRead(F.docs, P.user, 'list', l.path, l.q);
+      if (why) { l.alive = false; l.db.ls.delete(l); call(l.err, F.err('permission-denied')); return; }
+      const docs = qdocs(l.path, l.q);
+      call(l.next, { docs, size: docs.length, empty: !docs.length, metadata: { hasPendingWrites: false, fromCache: false } });
+    };
+    // the live query listeners of a frame (or of all) on a path
+    F.qls = (frame, path) => { let n = 0; for (const db of dbs) if (!db.ns.dead && (!frame || db.ns.frame === frame)) for (const l of db.ls) if (l.q && (!path || l.path === path)) n++; return n; };
     const snapOf = (doc, pending, fromCache) => ({ exists: !!doc, data: () => (doc ? clone(doc) : undefined), metadata: { hasPendingWrites: pending, fromCache } });
     F.deliver = (l) => {
       if (!l.alive || l.db.ns.dead) return;
+      if (l.q) { F.qdeliver(l); return; }
       const db = l.db, P = db.ns.prof;
       let doc;
       if (P.online) { doc = F.docs.get(l.path) || null; db.seen.set(l.path, doc ? clone(doc) : null); } else doc = db.seen.has(l.path) ? db.seen.get(l.path) : null;
@@ -371,8 +408,9 @@
       db.ls.add(l); later(() => F.deliver(l));
       return () => { l.alive = false; db.ls.delete(l); };
     };
-    F.broadcast = (path) => { for (const db of dbs) if (!db.ns.dead && db.ns.prof.online) for (const l of db.ls) if (l.path === path) later(() => F.deliver(l)); };
-    F.local = (db, path) => { for (const l of db.ls) if (l.path === path) later(() => F.deliver(l)); };
+    const under = (l, path) => !!l.q && path.startsWith(l.path + '/') && path.indexOf('/', l.path.length + 1) < 0;
+    F.broadcast = (path) => { for (const db of dbs) if (!db.ns.dead && db.ns.prof.online) for (const l of db.ls) if ((!l.q && l.path === path) || under(l, path)) later(() => F.deliver(l)); };
+    F.local = (db, path) => { for (const l of db.ls) if (!l.q && l.path === path) later(() => F.deliver(l)); };
     F.write = (db, path, id, kind, data) => {
       const w = { db, path, id, kind, data, code: F.take(/^players\//.test(path) ? kind : 'p' + kind) };
       F.calls.push({ op: kind, prof: db.ns.prof.name, frame: db.ns.frame, path });
@@ -458,6 +496,7 @@
       F.plog.push({ tag, frame, prof: P.name, t: now, ok: !r.why, why: r.why, w: ws.map((w) => w.kind + ' ' + w.path), calls: r.calls, data: ws.map((w) => (r.after.get(w.path) ? clone(r.after.get(w.path)) : null)) });
       if (r.why) return /^not-found/.test(r.why) ? 'not-found' : 'permission-denied';
       for (const [q, d] of r.after) { if (d) F.docs.set(q, d); else F.docs.delete(q); }
+      for (const q of r.after.keys()) F.broadcast(q);
       return '';
     };
     const pTrip = (db, call, take, fn) => {
@@ -528,7 +567,7 @@
     opts = opts || {};
     const el = document.createElement('iframe');
     el.style.cssText = `width:${opts.w || 440}px;height:${opts.h || 372}px;border:0;flex:none;background:#000`;
-    el.src = (opts.src || '/deploy-cloud/index.html') + '?p=' + encodeURIComponent(prof) + '&f=' + encodeURIComponent(id);
+    el.src = (opts.src || '/deploy-cloud/index.html') + '?p=' + encodeURIComponent(prof) + '&f=' + encodeURIComponent(id) + (opts.q || '');
     frameBox().appendChild(el);
     const fr = { el, id, prof };
     fr.win = () => el.contentWindow;
@@ -538,8 +577,9 @@
     fr.T = () => el.contentWindow.PG.debug.tro;
     fr.st = () => fr.C().state();
     fr.tro = () => fr.T().state();
-    // (booted: the title shows - or the login screen before it, design/cloud-trophies.md "As built (login screen)")
-    fr.ready = () => until(() => { const w = el.contentWindow; if (!w || w.__pgOld || !w.PG || !w.PG.debug || !w.PG.debug.cloud || w.document.readyState === 'loading') return false; const t = w.document.getElementById('pg-title'), l = w.document.getElementById('pg-login'); return !!t && (!t.hidden || (!!l && !l.hidden)); }, 15000, 20);
+    // (booted: the title shows - or the login screen before it, design/cloud-trophies.md "As built (login screen)"; or
+    // 친구와 하기, opened by an invite link)
+    fr.ready = () => until(() => { const w = el.contentWindow; if (!w || w.__pgOld || !w.PG || !w.PG.debug || !w.PG.debug.cloud || w.document.readyState === 'loading') return false; const t = w.document.getElementById('pg-title'), l = w.document.getElementById('pg-login'), fd = w.document.getElementById('pg-friends'); return !!t && (!t.hidden || (!!l && !l.hidden) || (!!fd && !fd.hidden)); }, 15000, 20);
     // fast timers and the test server's clock, the environment of a browser tab (these frames play top-level tabs: a
     // real frame never signs in - opts.env null keeps the real one), then this test's namespace (the cloud boots again in it)
     fr.boot = (ns, fast) => { const C = fr.C(); if (fast !== false) { C.fast(true); C.clock(F.now); } C.env(opts.env === undefined ? {} : opts.env); fr.T().away(false); if (ns) fr.T().ns(ns); return fr.st(); };
@@ -573,6 +613,7 @@
     const ps0 = PG.debug.pal.state();
     ok('inert: no 친구 순위 here - no #pg-pal-btn, no #pg-pal, no panel made, no dot', !$('pg-pal-btn') && !$('pg-pal') && !ps0.made && !ps0.btn && !ps0.demo && !ps0.code, ps0);
     ok('inert: no ppogeul-stage / ppogeul-pal key from the boot, no 친구 순위 text warmed', !Object.keys(localStorage).some((k) => /^ppogeul-(stage|pal)/.test(k)) && $('pg-fontwarm').textContent.indexOf('혼자 하기 최고 기록') < 0);
+    ok('inert: no 친구 초대 banner, room button or sign-in card; no invites listener; online not gated', !$('pg-iv') && !$('pg-room-iv') && !$('pg-net-gate') && !PG.debug.pal.iv().on && !PG.debug.mp.state().gated);
     ok('inert: no profiles / codes / reqs / friends call', !F.calls.some((c) => /(profiles|codes|reqs|friends|outbox)\//.test(c.path || '')));
     T.openRec();
     const s2 = C.state();
@@ -2128,6 +2169,40 @@
     no('unfriend by a third party', Wf, 'B', [del('friends/A/f/C'), del('friends/C/f/A')]);
     no('a pair document updated', Wf, 'A', [{ path: 'friends/A/f/C', kind: 'update', data: { at: SV } }]);
     ok('friends rules: a players document never goes through these rules', !!ev(W0, 'A', [{ path: 'players/A', kind: 'set', data: {} }]).why);
+    // ---- 친구 초대 (invites/{to}/in/{from}, ivbox/{uid}): A and C are friends (both halves), B is not
+    const iv = (to, from, o) => ({ path: 'invites/' + to + '/in/' + from, kind: 'set', data: Object.assign({ code: 'ab12', mode: 'coop', nick: '뽀숑', at: SV }, o) });
+    const ivb = (u, o) => ({ path: 'ivbox/' + u, kind: 'set', data: Object.assign({ at: SV }, o) });
+    const IV = (to, from, nick) => ['invites/' + to + '/in/' + from, { code: 'ab12', mode: 'coop', nick: nick || '뽀숑', at: T0 }];
+    const yi = (name, W, auth, ws) => { const r = ev(W, auth, ws); ok('invite rules: ' + name + ' (allowed)', !r.why, r.why); return r; };
+    const ni = (name, W, auth, ws) => { const r = ev(W, auth, ws); ok('invite rules: ' + name + ' (refused)', !!r.why, r.calls); return r; };
+    const i1 = yi('a friend invites with the ivbox bumped (first invite: the ivbox created)', Wf, 'A', [ivb('A'), iv('C', 'A')]);
+    ok('invite rules: ... the invite as written, the ivbox at the same time', J(Object.keys(i1.after.get('invites/C/in/A') || {}).sort()) === J(['at', 'code', 'mode', 'nick']) && !!i1.after.get('ivbox/A') && i1.calls <= 4, i1.calls);
+    yi('battle, a 12-character nick', Wf, 'A', [ivb('A'), iv('C', 'A', { mode: 'battle', nick: '거품거품거품거품거품거품' })]);
+    ni('an invite without the ivbox bump', Wf, 'A', [iv('C', 'A')]);
+    ni('an invite to somebody who is not my friend', Wf, 'A', [ivb('A'), iv('B', 'A')]);
+    ni('an invite when only my half of the pair is left (the receiver unfriended me)', with2([['friends/A/f/C', { at: T0 }]]), 'A', [ivb('A'), iv('C', 'A')]);
+    yi('... and when only the receiver\'s half is (it still lets me read its card)', with2([['friends/C/f/A', { at: T0 }]]), 'A', [ivb('A'), iv('C', 'A')]);
+    ni('an invite written as somebody else', Wf, 'B', [ivb('B'), iv('C', 'A')]);
+    ni('an invite signed out', Wf, null, [ivb('A'), iv('C', 'A')]);
+    ni('an invite to myself', with2([['friends/A/f/A', { at: T0 }]]), 'A', [ivb('A'), iv('A', 'A')]);
+    for (const [why, o] of [['an upper-case code', { code: 'AB12' }], ['a 5-character code', { code: 'ab123' }], ['a code with a dash', { code: 'ab-1' }], ['a numeric code', { code: 1234 }],
+      ['another mode', { mode: 'solo' }], ['an empty nick', { nick: '' }], ['a 25-unit nick', { nick: 'x'.repeat(25) }], ['a nick that is no string', { nick: 7 }],
+      ['a time of the page\'s clock', { at: new TS(now - 1000) }], ['an extra key', { x: 1 }]]) ni('an invite with ' + why, Wf, 'A', [ivb('A'), iv('C', 'A', o)]);
+    { const d = iv('C', 'A'); delete d.data.nick; ni('an invite without its nick', Wf, 'A', [ivb('A'), d]); }
+    const Wi = with2([['friends/A/f/C', { at: T0 }], ['friends/C/f/A', { at: T0 }], IV('C', 'A'), ['ivbox/A', { at: new TS(now - 5000) }]]);
+    ni('a second invite 5 s after the last (the ivbox\'s 10 s)', Wi, 'A', [ivb('A'), iv('C', 'A', { code: 'cd34' })]);
+    const Wj = with2([['friends/A/f/C', { at: T0 }], ['friends/C/f/A', { at: T0 }], IV('C', 'A'), ['ivbox/A', { at: new TS(now - 11000) }]]);
+    yi('a new invite replaces mine 11 s on (one per sender -> receiver)', Wj, 'A', [ivb('A'), iv('C', 'A', { code: 'cd34', mode: 'battle' })]);
+    ni('an ivbox with an extra key / another\'s ivbox', Wj, 'A', [ivb('A', { n: 1 }), iv('C', 'A')]);
+    ni('another\'s ivbox bumped', Wj, 'B', [ivb('A')]);
+    ni('an ivbox deleted (a fresh cooldown)', Wj, 'A', [{ path: 'ivbox/A', kind: 'delete' }]);
+    ok('invite rules: the receiver reads and lists its invites (<= 50); the sender and others cannot read; nobody lists another\'s',
+      rd(Wi, 'C', 'get', 'invites/C/in/A') === '' && rd(Wi, 'C', 'list', 'invites/C/in', 50) === '' && rd(Wi, 'C', 'list', 'invites/C/in', 51) !== '' && rd(Wi, 'C', 'list', 'invites/C/in') !== ''
+      && rd(Wi, 'A', 'get', 'invites/C/in/A') !== '' && rd(Wi, 'B', 'get', 'invites/C/in/A') !== '' && rd(Wi, 'A', 'list', 'invites/C/in', 50) !== '' && rd(Wi, null, 'list', 'invites/C/in', 50) !== '');
+    ok('invite rules: the receiver (joined / 나중에) and the sender (room closed) delete it; nobody else',
+      !ev(Wi, 'C', [del('invites/C/in/A')]).why && !ev(Wi, 'A', [del('invites/C/in/A')]).why && !!ev(Wi, 'B', [del('invites/C/in/A')]).why && !!ev(Wi, null, [del('invites/C/in/A')]).why);
+    ni('the receiver rewriting the invite', Wj, 'C', [ivb('C'), iv('C', 'A')]);
+    ok('invite rules: the ivbox is read by its owner only, never listed', rd(Wi, 'A', 'get', 'ivbox/A') === '' && rd(Wi, 'C', 'get', 'ivbox/A') !== '' && rd(Wi, 'A', 'list', 'ivbox', 1) !== '');
   }
 
   // ================================================================ 19b. 친구 순위 through the frames (design/friends.md 6)
@@ -2380,6 +2455,10 @@
     const P = fr.D().pal, T1 = new F.TS(F.now() - 60000), now = new F.TS(F.now());
     if (scene === 'pal-demo') { if (fr.D().login.state().shown) fr.D().login.guest(); await sleep(60); fr.T().openRec(); await sleep(60); P.open(); return; }
     if (scene === 'pal-guest') { await fr.rec(true); P.open(); return; }
+    // (친구 초대: pal-gate - 친구와 하기 as a guest on the deploy, the sign-in card; pal-iv - signed in, an invite from a
+    // friend in my list: the banner over the title)
+    if (scene === 'pal-gate') { fr.D().mp.openFriends(); await until(() => fr.D().mp.state().gate, 2000); return; }
+    if (scene === 'pal-iv') F.docs.set('invites/uidS/in/sf0', { code: 'ab12', mode: 'coop', nick: '거품왕', at: new F.TS(F.now() + 5 * 60000) });   // (the shot's clock runs 50x: a page clock behind the server's)
     F.docs.set('profiles/uidS', { v: 1, code: 'QWER2345', nick: '뽀숑', st: 29, hi: 98000, tr: 268, c: 0, lk: '10100', at: T1 }); F.docs.set('codes/QWER2345', { u: 'uidS' });
     const nk = ['거품왕', '뽀득이', '거품거품거품거품거품거품', '때밀이', '수건양', '온탕지기', 'Bubble', '냉탕러버', '사우나', '바가지', '귤껍질', '오리'];
     nk.forEach((n, i) => {
@@ -2392,13 +2471,44 @@
     await signIn(fr, 'uidS'); await settle(fr);
     await until(() => P.state().code && !P.state().booting, 4000);
     if (scene === 'pal-rec') { await P.load(true); await fr.rec(true); return; }
+    if (scene === 'pal-iv') { await P.load(true); await fr.rec(false); fr.D().toTitle(); await until(() => P.iv().shown, 3000); return; }
     P.open(); await until(() => P.state().list.length > 5 && !P.state().loading, 4000);
   }
   // the fit: the card inside the panel, nothing clipped or wider than its box, the body the scroller (pal-in: it does
   // scroll), button labels whole, touch targets >= 32 px; pal-rec: 내 기록 still fits, the button clear of its title
   function palFit(fr, scene, w, h, touch) {
     const W = fr.win(), bad = [], nm = (el) => el.id || (typeof el.className === 'string' && el.className.split(' ')[0]) || el.tagName;
-    if (scene === 'pal-rec') {
+    // (친구 초대: the banner inside the stage, its text whole, its buttons whole and tappable; the sign-in card inside
+    // 친구와 하기 with its 뒤로, no scrolling, the boxes gone)
+    const whole = (box, els) => {
+      const br = box.getBoundingClientRect();
+      for (const el of els) {
+        if (!el.getClientRects().length) continue;
+        const r = el.getBoundingClientRect();
+        if (r.left < br.left - 0.5 || r.right > br.right + 0.5 || r.top < br.top - 0.5 || r.bottom > br.bottom + 0.5) bad.push(nm(el) + ' outside ' + nm(box));
+        if (el.scrollWidth > el.clientWidth + 1) bad.push(nm(el) + ' clipped');
+        if (el.tagName === 'BUTTON' && r.height < (touch ? 43.5 : 31.5)) bad.push(nm(el) + ' under ' + (touch ? 44 : 32) + ' px');
+      }
+      return br;
+    };
+    if (scene === 'pal-iv') {
+      const el = fr.$('pg-iv'), st = fr.$('pg-stage'), tx = fr.$('pg-iv-tx');
+      if (!el || el.hidden) { log('CLOUD SHOT error pal fit: no banner'); return; }
+      const sr = whole(st, [el]); whole(el, [...el.querySelectorAll('button')].concat([tx]));
+      const r = el.getBoundingClientRect(), lh = parseFloat(W.getComputedStyle(tx).lineHeight);
+      if (tx.getBoundingClientRect().height > 2 * lh + 1) bad.push('the text over 2 lines');
+      if (!el.querySelector('canvas')) bad.push('no bust');
+      if (!/^거품왕이 같이 하자고 해요 · 같이 하기$/.test(tx.textContent)) bad.push('text ' + tx.textContent);
+      info('pal fit ' + scene + ' ' + w + 'x' + h + ': banner ' + Math.round(r.width) + 'x' + Math.round(r.height) + ' at ' + Math.round(r.top - sr.top) + ' in ' + Math.round(sr.width) + 'x' + Math.round(sr.height));
+    } else if (scene === 'pal-gate') {
+      const sec = fr.$('pg-friends'), g = fr.$('pg-net-gate'), back = fr.$('pg-friends-back');
+      if (!sec || sec.hidden || !g || g.hidden) { log('CLOUD SHOT error pal fit: no sign-in card'); return; }
+      whole(sec, [g, back]); whole(g, [...g.querySelectorAll('button, p, b')]);
+      if (sec.scrollHeight > sec.clientHeight + 1) bad.push('the panel scrolls ' + sec.scrollHeight + '/' + sec.clientHeight);
+      if ([...sec.querySelectorAll('.pg-box, .pg-field')].some((e) => e.getClientRects().length)) bad.push('a box shows');
+      const r = g.getBoundingClientRect();
+      info('pal fit ' + scene + ' ' + w + 'x' + h + ': card ' + Math.round(r.width) + 'x' + Math.round(r.height) + ' panel ' + sec.clientWidth + 'x' + sec.clientHeight + ', line "' + fr.$('pg-net-gate-st').textContent + '"');
+    } else if (scene === 'pal-rec') {
       const card = fr.$('pg-rec').querySelector('.pg-rec-card'), b = fr.$('pg-pal-btn'), rg = W.document.createRange(); rg.selectNodeContents(fr.$('pg-rec-h'));
       const r = b.getBoundingClientRect(), c = card.getBoundingClientRect(), t = rg.getBoundingClientRect(), sc = fr.$('pg-screen').getBoundingClientRect();
       if (card.scrollHeight > card.clientHeight + 1) bad.push('내 기록 scrolls');
@@ -2438,6 +2548,133 @@
     if (bad.length) log('CLOUD SHOT error pal fit ' + scene + ' ' + w + 'x' + h + ': ' + [...new Set(bad)].slice(0, 10).join('; '));
   }
 
+  // ================================================================ 19d. 친구 초대 + 손님은 온라인 불가 through the frames
+  // (design/friends.md "As built (invites)"): three accounts, A friends with B and C; online between the frames over
+  // BroadcastChannel (&net=bc). The gate as a guest, signing in from its card; A's 초대 makes a room and invites B, whose
+  // banner joins it; 초대 from inside the room, the 10 s, 닫기 back to the room, the room closing deletes its invites;
+  // B: an expired invite deleted unseen, a battle invite, again after a reload, 나중에, expiry while shown, sign-out;
+  // an invite link opened as a guest goes on to the room after signing in; the preview's demo; nothing on the artifact
+  async function ivFrameTests() {
+    const IVS = (fr) => PALP(fr).iv(), N = (fr) => fr.D().mp, T1 = new F.TS(F.now() - 60000), TX = PG.debug.pal.texts();
+    for (const [u, code, nick, c] of [['ivA', 'VAAA2345', '뽀숑', 0], ['ivB', 'VBBB2345', '거품왕', 1], ['ivC', 'VCCC2345', '때밀이', 2]]) {
+      F.docs.set('profiles/' + u, { v: 1, code, nick, st: 3, hi: 1000, tr: 100, c, lk: '00000', at: T1 }); F.docs.set('codes/' + code, { u });
+    }
+    for (const [a, b] of [['ivA', 'ivB'], ['ivB', 'ivA'], ['ivA', 'ivC'], ['ivC', 'ivA']]) F.docs.set('friends/' + a + '/f/' + b, { at: T1 });
+    // ---- a guest: 친구와 하기 is the sign-in card
+    const B = await frame('IB', 'pib', { ns: 'p19d-b', q: '&net=bc' });
+    N(B).openFriends(); await sleep(80);
+    let ns = N(B).state();
+    ok('online gate: a guest on the deploy - 친구와 하기 is the card (Google로 계속하기, the 혼자 하기 hint), no 방 만들기 / 코드로 참여 / 이름',
+      ns.gated && ns.gate && B.$('pg-net-gate-go').textContent === 'Google로 계속하기' && /온라인 같이 하기·배틀은 Google 로그인하고 할 수 있어요/.test(B.$('pg-net-gate').textContent)
+      && /혼자 하기/.test(B.$('pg-net-gate').textContent) && [...B.$('pg-friends').querySelectorAll('.pg-box, .pg-field')].every((e) => !e.getClientRects().length) && !!B.$('pg-friends-back').getClientRects().length, ns);
+    const hc = await N(B).host({ mode: 'coop' }), jr = await N(B).join('ab12');
+    ok('online gate: ... hosting and joining refused (the test API too), no room', hc === null && !jr.ok && jr.code === 'login' && !N(B).session() && N(B).state().gate, [hc, jr]);
+    F.prof('pib').next = 'ivB';
+    await until(() => B.st().parts[1], 3000);
+    B.$('pg-net-gate-go').click();
+    await until(() => B.st().st === 'in' && B.st().cs, 5000); await settle(B);
+    await until(() => !N(B).state().gate && IVS(B).on, 3000);
+    ns = N(B).state();
+    ok('online gate: signed in from the card -> the panel itself (방 만들기, 코드로 참여); the invites listener on', !ns.gated && !ns.gate && !!B.$('pg-host').getClientRects().length
+      && !!B.$('pg-join').getClientRects().length && IVS(B).on && F.qls('IB', 'invites/ivB/in') === 1, [ns.gate, IVS(B)]);
+    // ---- A invites B from 친구 순위 with no room: a room the normal way, the invite
+    const A = await frame('IA', 'pia', { ns: 'p19d-a', q: '&net=bc' });
+    await signIn(A, 'ivA'); await settle(A);
+    await until(() => PS(A).code && !PS(A).booting && IVS(A).on, 4000);
+    N(A).setNick('뽀숑');
+    PALP(A).open(); await until(() => PS(A).rows && PS(A).rows.length >= 2 && !PS(A).loading, 3000);
+    const ivBtn = (fr, u) => fr.$('pg-pal-list').querySelector('[data-uid="' + u + '"] button[data-act="iv"]');
+    ok('invite: each friend\'s row has 초대 (on) before 끊기, my own row none', !!ivBtn(A, 'ivB') && ivBtn(A, 'ivB').getAttribute('aria-disabled') !== 'true' && !!ivBtn(A, 'ivC')
+      && ivBtn(A, 'ivB').nextElementSibling === A.$('pg-pal-list').querySelector('[data-uid="ivB"] button[data-act="cut"]') && !A.$('pg-pal-list').querySelector('.is-me button[data-act="iv"]'), [PS(A).rows, PS(A).list, PS(A).view, PS(A).line]);
+    let c0 = F.plog.length;
+    ivBtn(A, 'ivB').click();
+    await until(() => N(A).state().screen === 'room' && !IVS(A).busy && !!F.docs.get('invites/ivB/in/ivA'), 6000);
+    let as = N(A).state(), ivd = F.docs.get('invites/ivB/in/ivA') || {};
+    const codeA = as.code;
+    ok('invite: 초대 with no room -> a 같이 하기 room the normal way (host, the room screen); the invite and the ivbox in one batch',
+      as.role === 'host' && as.overlay === 'room' && as.mode === 'coop' && ivd.code === codeA && ivd.mode === 'coop' && ivd.nick === '뽀숑' && ivd.at instanceof F.TS
+      && !!F.docs.get('ivbox/ivA') && F.plog.slice(c0).some((e) => e.ok && e.tag === 'batch' && e.w.length === 2 && e.w.includes('set invites/ivB/in/ivA')), [as.overlay, ivd]);
+    const nickB = (PS(A).rows.find((q) => q.uid === 'ivB') || {}).nick;
+    ok('invite: ... the room\'s line says "{B}님을 초대했어요"; its 친구 초대 button shows', A.$('pg-room-msg').textContent === nickB + '님을 초대했어요' && IVS(A).roomBtn, [A.$('pg-room-msg').textContent, IVS(A)]);
+    // ---- B (signed in, 친구와 하기 open) gets the banner; 참여 joins
+    await until(() => IVS(B).shown, 3000);
+    let bi = IVS(B);
+    ok('invite: B gets the banner "뽀숑이 같이 하자고 해요 · 같이 하기" with 참여 / 나중에', bi.shown && bi.cur === 'ivA' && bi.text === '뽀숑이 같이 하자고 해요 · 같이 하기'
+      && B.$('pg-iv-join').textContent === '참여' && B.$('pg-iv-later').textContent === '나중에', bi);
+    B.$('pg-iv-join').click();
+    await until(() => N(B).state().screen === 'room' && N(B).state().role === 'guest', 6000);
+    await until(() => N(A).state().roster.length === 2, 3000);
+    ok('invite: 참여 -> B in A\'s room with its code (no typing); the invite deleted; no banner in the room', N(B).state().code === codeA && N(A).state().roster.length === 2
+      && !F.docs.get('invites/ivB/in/ivA') && !IVS(B).shown, [N(B).state().code, codeA, IVS(B)]);
+    ok('invite: ... in someone else\'s room 초대 is off (guest)', IVS(B).why === 'guest' && !IVS(B).roomBtn, IVS(B));
+    // ---- from inside the room: 친구 초대 -> 친구 순위 over it; 초대 invites into this room; the 10 s; 닫기 back
+    A.$('pg-room-iv').click(); await until(() => PS(A).shown && !PS(A).loading, 2000);
+    ok('invite: the room\'s 친구 초대 opens 친구 순위 over the room', PS(A).shown && IVS(A).from === 'room' && N(A).state().screen === 'room', IVS(A));
+    await sleep(300);                            // (the server's 10 s since the first invite: 200 ms here)
+    ivBtn(A, 'ivC').click();
+    await until(() => !IVS(A).busy && !!F.docs.get('invites/ivC/in/ivA'), 3000);
+    ok('invite: hosting -> 초대 invites into my room (no second room), said in 친구 순위', (F.docs.get('invites/ivC/in/ivA') || {}).code === codeA && N(A).state().code === codeA
+      && PS(A).said === 'ivSent' && PS(A).msg === '때밀이님을 초대했어요', [PS(A).msg, F.docs.get('invites/ivC/in/ivA'), PS(A), A.$('pg-pal-list').innerHTML.slice(0, 600)]);
+    const c1 = F.plog.length, r2 = await PALP(A).invite('ivB');
+    ok('invite: another 초대 within 10 s -> "10초 뒤에 다시 초대할 수 있어요", nothing written', r2.said === 'ivWait' && PS(A).msg === TX.ivWait && !F.plog.slice(c1).some((e) => /invites\//.test(e.w.join())), r2);
+    A.$('pg-pal-close').click(); await sleep(60);
+    ok('invite: 닫기 -> back to the room (still hosting)', N(A).state().overlay === 'room' && !PS(A).shown && N(A).state().role === 'host', N(A).state().overlay);
+    // ---- the host leaves: the invites into its room go
+    N(A).leave();
+    await until(() => !F.docs.get('invites/ivC/in/ivA'), 3000);
+    ok('invite: the host closes its room -> the invites it sent into it deleted', !F.docs.get('invites/ivC/in/ivA') && !IVS(A).out.length, IVS(A));
+    await until(() => !N(B).session(), 4000);
+    // ---- B: an expired invite (deleted unseen), a battle invite (shown), shown again after a reload, 나중에
+    const put = (from, o) => { F.docs.set('invites/ivB/in/' + from, Object.assign({ code: 'zz99', mode: 'battle', nick: '때밀이' }, o)); F.broadcast('invites/ivB/in/' + from); };
+    N(B).openFriends(); await sleep(60);
+    put('ivC', { at: new F.TS(F.now() - 11 * 60000) });
+    await until(() => !F.docs.get('invites/ivB/in/ivC'), 2000);
+    ok('invite: an invite older than 10 minutes is not shown, and deleted', !F.docs.get('invites/ivB/in/ivC') && !IVS(B).shown, IVS(B));
+    put('ivC', { at: new F.TS(F.now() - 1000) });
+    await until(() => IVS(B).shown, 2000);
+    ok('invite: a battle invite -> "때밀이가 같이 하자고 해요 · 배틀"', IVS(B).text === '때밀이가 같이 하자고 해요 · 배틀', IVS(B));
+    await B.reload('p19d-b');
+    await until(() => B.st().st === 'in' && IVS(B).shown, 5000);
+    ok('invite: ... shown again when the page opens next while it is valid', IVS(B).shown && IVS(B).cur === 'ivC' && !B.$('pg-iv').hidden, [IVS(B), B.st().st, B.st().parts, PS(B).palOn, B.D().mp.state().overlay]);
+    B.$('pg-iv-later').click();
+    await until(() => !F.docs.get('invites/ivB/in/ivC'), 2000);
+    ok('invite: 나중에 -> the banner goes, the invite deleted', !IVS(B).shown && !F.docs.get('invites/ivB/in/ivC') && IVS(B).said === 'later', IVS(B));
+    put('ivA', { mode: 'coop', nick: '뽀숑', at: new F.TS(F.now() - (10 * 60000 - 15000)) });
+    await until(() => IVS(B).shown, 2000);
+    const shownAt = IVS(B).shown;
+    await until(() => !IVS(B).shown, 3000);
+    ok('invite: shown with 15 s left -> gone when it expires', shownAt && !IVS(B).shown, IVS(B));
+    // ---- sign-out: the listener stops, nothing shows
+    put('ivA', { mode: 'coop', nick: '뽀숑', at: new F.TS(F.now() - 1000) });
+    await until(() => IVS(B).shown, 2000);
+    B.C().signOut(true); await until(() => B.st().st === 'out', 3000); await sleep(60);
+    ok('invite: sign-out -> the listener stopped, no banner', !IVS(B).on && !IVS(B).shown && F.qls('IB') === 0, [IVS(B), F.qls('IB')]);
+    // ---- an invite link opened as a guest: the card, then signed in -> on to the room
+    const room = await N(A).host({ mode: 'battle' });
+    const C = await frame('IC', 'pic', { ns: 'p19d-c', q: '&net=bc&join=' + room });
+    await until(() => N(C).state().screen === 'friends' && N(C).state().gate, 3000);
+    ok('online gate: an invite link as a guest -> 친구와 하기 with the card (the code kept)', N(C).state().gate && C.$('pg-code').value === String(room).toUpperCase(), N(C).state());
+    F.prof('pic').next = 'ivC';
+    await until(() => C.st().parts[1], 3000);
+    C.$('pg-net-gate-go').click();
+    await until(() => N(C).state().screen === 'room' && N(C).state().role === 'guest' && N(C).state().roster.length === 2, 8000);
+    ok('online gate: ... signed in -> on to that room by itself', N(C).state().code === room && N(C).state().mode === 'battle', N(C).state());
+    N(C).leave(); N(A).leave(); await sleep(100);
+    // ---- the PR preview: online as before (not gated); 초대 makes the room and says nothing was sent; the staged banner
+    const V = await frame('IV', 'piv', { ns: null, src: '/deploy-preview/index.html', q: '&net=bc' });
+    if (V.D().login.state().shown) V.D().login.guest();
+    await sleep(60);
+    ok('preview: online is not gated', !N(V).state().gated, N(V).state());
+    PALP(V).open(); await until(() => IVS(V).shown, 4000);
+    ok('preview: 친구 순위 stages an invite banner from a demo friend (marked as an example)', IVS(V).demo && IVS(V).text.indexOf('거품왕이 같이 하자고 해요 · 같이 하기') === 0 && /예시 초대/.test(IVS(V).text), IVS(V));
+    const vr = await PALP(V).invite('demo2');
+    ok('preview: 초대 -> a room the normal way, "미리보기라 초대는 보내지 않아요"', vr.said === 'ivDemo' && N(V).state().screen === 'room' && N(V).state().role === 'host'
+      && V.$('pg-room-msg').textContent === TX.ivDemo && !F.calls.some((c) => c.frame === 'IV' && /invites|ivbox/.test(c.path || '')), [vr, V.$('pg-room-msg').textContent]);
+    N(V).leave(); await sleep(80);
+    ok('preview: ... the staged banner goes with 나중에', (V.$('pg-iv-later').click(), !IVS(V).shown && !IVS(V).demo), IVS(V));
+    for (const fr of [A, B, C, V]) fr.remove();
+  }
+
   async function run() {
     for (let i = 0; i < 300 && !(window.PG && PG.debug && PG.debug.cloud); i++) await sleep(20);
     // (this browser has chosen to play as a guest: the deploy frames boot to the title; loginTests / the login shots take it away)
@@ -2448,8 +2685,11 @@
     for (const f of steps) { try { f(); } catch (e) { fail++; log('CLOUD FAIL ' + f.name + ' threw: ' + (e && e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : e)); } }
     F.setSpeed(50);
     const asyncSteps = [fixtureTests, uploadTests, cloudWinsTests, pushTests, twoDeviceTests, offlineTests, tabDeathTests, twoTabTests, foldTests, coinSyncTests, failureTests, relogTests,
-      popupTests, lostAnswerTests, holdRaceTests, drawSyncTests, l0Tests, loginTests, uiTests, fontTests, noConfigTests, startTests, palFrameTests];
+      popupTests, lostAnswerTests, holdRaceTests, drawSyncTests, l0Tests, loginTests, uiTests, fontTests, noConfigTests, startTests, palFrameTests, ivFrameTests];
+    // (?only=<prefix>: just the async groups whose name starts so - while working on one)
+    const ONLY = (/[?&]only=([a-zA-Z]+)/.exec(location.search) || [])[1] || '';
     for (const f of asyncSteps) {
+      if (ONLY && f.name.indexOf(ONLY) !== 0) continue;
       const t0 = performance.now();
       try { await f(); } catch (e) { fail++; log('CLOUD FAIL ' + f.name + ' threw: ' + (e && e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : e)); }
       info(f.name + ' took ' + Math.round(performance.now() - t0) + ' ms');
