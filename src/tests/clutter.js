@@ -3,7 +3,7 @@
 // lab room laid over round 1 / arena 1 (restored at the end):
 //  - solo: life 720 + blink 120 exactly as before and no cap (ten of one player's bubbles all float);
 //  - co-op (2-4 players): life 330 + blink 90, at most 7 floating empties per player and 14 in all; battle: 210 + 90,
-//    6 each, 12 in all - one more that starts to float ends that player's oldest (all: the oldest of whoever has the
+//    3 each (a backstop: a battle player has 3 out in all - the 4th blow pops the oldest at once), 12 in all - one more that starts to float ends that player's oldest (all: the oldest of whoever has the
 //    most): it blinks CAP_BLINK (30) frames, then goes by the plain self-pop at the life's end (421 / 301) - no score,
 //    no chain (a bubble / a steam bubble right beside it stays), the other players' bubbles untouched;
 //  - a bubble someone bounced on in the last 90 frames (RIDE_HOLD) is never the one a cap ends (the next-oldest goes);
@@ -104,7 +104,7 @@
     }
 
     // ================================================================ the rule by mode
-    t('the rule: solo 720 + 120 no cap; co-op 330 + 90, 7 each, 14 in all; battle 210 + 90, 6 each, 12 in all; a capped bubble blinks 30', () => {
+    t('the rule: solo 720 + 120 no cap; co-op 330 + 90, 7 each, 14 in all; battle 210 + 90, 3 each, 12 in all; a capped bubble blinks 30', () => {
       solo('duck'); const s = rule();
       coop(['duck', 'capy']); const c2 = rule();
       coop(['duck', 'capy', 'otter', 'frog']); const c4 = rule();
@@ -113,7 +113,7 @@
       info('rules solo ' + J(s) + ' co-op ' + J(c2) + ' battle ' + J(b2));
       if (!same(s, { life: 720, flash: 120, cap: 0, all: 0, capBlink: 30 })) return 'solo ' + J(s);
       if (!same(c2, { life: 330, flash: 90, cap: 7, all: 14, capBlink: 30 }) || !same(c4, c2)) return 'co-op ' + J([c2, c4]);
-      if (!same(b2, { life: 210, flash: 90, cap: 6, all: 12, capBlink: 30 }) || !same(b4, b2)) return 'battle ' + J([b2, b4]);
+      if (!same(b2, { life: 210, flash: 90, cap: 3, all: 12, capBlink: 30 }) || !same(b4, b2)) return 'battle ' + J([b2, b4]);
     });
     t('the rule follows the player count: solo + a joiner = co-op rule, co-op down to one = solo rule, the title demo = solo', () => {
       solo('duck'); const a = rule();
@@ -305,10 +305,10 @@
       const r = popAge(b, 60);
       if (r.age !== 301 || r.chain || !r.scoreSame || blink[0] || !blink[1]) return J({ r, blink });
     });
-    t('battle: each player keeps at most 6 floating - the 7th and 8th end that player\'s oldest (blink 30, pop at 301); 4 players keep 12 in all', () => {
+    t('battle: a player has at most 3 out in all - the 4th..8th blow each pop the oldest at once (plain self-pop, no blink, no chain); 4 players keep 3 each / 12 in all', () => {
       const [p0, p1] = battle(['penguin', 'capy']); put(p0, 24, 1); put(p1, 216, -1);
-      const mine = [], w = watcher(210); let most = 0;
-      const look = () => { w(mine); most = Math.max(most, counted(0).length); };
+      const mine = [], w = watcher(210), s0 = scores(); let most = 0, out = 0;
+      const look = () => { w(mine); most = Math.max(most, counted(0).length); out = Math.max(out, G.bubbles.filter((b) => !b.dead && b.owner === 0 && b.kind === 'empty' && (b.state === 'shot' || b.state === 'float')).length); };
       for (let i = 0; i < 8; i++) {
         mine.push(...blow(0)); look();
         for (let k = 0; k < 21; k++) { step(1); look(); }
@@ -316,9 +316,9 @@
       }
       for (let k = 0; k < 40; k++) { step(1); look(); }
       const gone = mine.filter((b) => b.dead || b.state === 'pop').map((b) => mine.indexOf(b)), ends = gone.map((i) => w.of(mine[i]));
-      info('battle cap: ended #' + gone.join(',') + ' at real ages ' + ends.map((r) => r.blinkReal).join(',') + ', blinked ' + ends.map((r) => r.popF - r.blinkF).join(',') + ' f, popped at ' + ends.map((r) => r.popAge).join(','));
-      if (mine.length !== 8 || most !== 6 || J(gone) !== '[0,1]') return J({ n: mine.length, most, gone });
-      if (!ends.every((r) => r.blinkReal > 0 && r.blinkReal < 200 && r.popF - r.blinkF >= 30 && r.popF - r.blinkF <= 31 && r.popAge === 301 && !r.chain)) return J(ends);
+      info('battle cap: ended #' + gone.join(',') + ' at ages ' + ends.map((r) => r.popAge).join(',') + ', blinked first ' + ends.map((r) => r.blinkF >= 0).join(',') + ', most out ' + out);
+      if (mine.length !== 8 || most !== 3 || out !== 3 || J(gone) !== '[0,1,2,3,4]' || scores() !== s0) return J({ n: mine.length, most, out, gone, s0, s1: scores() });
+      if (!ends.every((r) => r.blinkF < 0 && r.popAge >= 60 && r.popAge <= 70 && !r.chain)) return J(ends);
       battle(['duck', 'capy', 'otter', 'penguin']);
       const bs = [];
       for (let k = 0; k < 16; k++) { const b = D.spawnBubble('empty', 24 + (k % 8) * 26, 40 + Math.floor(k / 8) * 22); b.owner = k % 4; b.age = 115 - k; bs.push(b); }

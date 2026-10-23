@@ -22,11 +22,12 @@ window.PG = window.PG || {};
   // player keeps only a few: [life (frames from the blow; the blink starts here), blink frames, floating empties one
   // player may keep (0: no cap), all players' together (0: no cap)]. Solo stays EMPTY_LIFE + FLASH (14 s), no cap;
   // co-op ~7 s (still long enough to ride one and to chain a cluster), battle ~5 s (a short-lived obstacle / step).
-  // The caps only catch a held / mashed BUBBLE (7 / 6 each: two players never reach the 14 / 12 in all), and a capped
-  // bubble is not popped at once: it blinks CAP_BLINK frames first (capEmpties). Read only through emptyRule() /
-  // emptyLife() (the host's world, a guest's view of it and the drawing all agree). Measured with
-  // tests/review-mpbal.js exp=clutter (4 bots blowing ~1.7 a second)
-  const EMPTY_RULE = { solo: [EMPTY_LIFE, FLASH, 0, 0], coop: [330, 90, 7, 14], battle: [210, 90, 6, 12] };
+  // The caps only catch a held / mashed BUBBLE (co-op 7 each: two players never reach the 14 in all), and a capped
+  // bubble is not popped at once: it blinks CAP_BLINK frames first (capEmpties). Battle's 3 each (12 in all) is only a
+  // backstop: there a player has at most SHOT_CAP (3) of their own out in all, the 4th blow pops the oldest at once
+  // (capMine). Read only through emptyRule() / emptyLife() (the host's world, a guest's view of it and the drawing all
+  // agree). Measured with tests/review-mpbal.js exp=clutter (4 bots blowing ~1.7 a second)
+  const EMPTY_RULE = { solo: [EMPTY_LIFE, FLASH, 0, 0], coop: [330, 90, 7, 14], battle: [210, 90, 3, 12] };
   // a capped bubble's warning blink (then the plain self-pop); a bubble bounced on in the last RIDE_HOLD frames (one
   // bounce cycle is ~34 frames, a gliding duck's ~52) is never the one a cap takes - the next-oldest goes instead
   const CAP_BLINK = 30, RIDE_HOLD = 90;
@@ -1809,7 +1810,7 @@ window.PG = window.PG || {};
     if (p.autoCd > 0) p.autoCd--;
     if (inp.shootP) p.shootBuf = 6; else if (p.shootBuf > 0) p.shootBuf--;
     if (p.shootCd === 0 && (p.shootBuf > 0 || (inp.shoot && p.autoCd === 0))) {
-      if (shotCapped(p)) Snd.sfx('dry'); // (battle: SHOT_CAP in flight - nothing more until one ends)
+      if (shotCapped(p)) Snd.sfx('dry'); // (only a guest of an older host: its in-flight cap - see SHOT_CAP)
       else fire(p, !p.onGround); // (the cat's yarn rolls only when blown on the ground)
       p.shootBuf = 0;
       p.shootCd = k.cd[0]; p.autoCd = k.cd[1];
@@ -1979,6 +1980,7 @@ window.PG = window.PG || {};
     // battle: blowing a bubble ends your own blink (respawn / escape / stun) - nobody attacks from behind it
     if (battle) p.invuln = 0;
     const specs = newShot(p, air);
+    if (battle) capMine(p); // (SHOT_CAP of mine out in all: the oldest pops first)
     if (specs[0].ty === 'egg') eggCap(G.bubbles, p.slot, specs[0].cap);
     let c = null, vi = 0; // (the first bubble: the one hostShot gives the guest's sid; an otter volley shares its id as `vol`)
     for (const s of specs) {
@@ -3537,19 +3539,38 @@ window.PG = window.PG || {};
     }
     return false;
   }
-  // battle: at most SHOT_CAP of a player's bubbles in their capture phase at once (an otter's volley counts once; the
-  // frog's eggs keep their own cap, eggCap). One press more is a quiet 칙 ('dry') and nothing else - the same count on a
-  // guest (its predictions + its rows in the view: never later than the host's), the host allows a guest one more
-  // (two presses that cross a shot's end on a jittery link); an older host sends no g.sc: no cap there
+  // battle: at most SHOT_CAP of a player's OWN bubbles out at once in all - in flight + floating empties (the user,
+  // 2026-10-22: "합쳐서 3개"). An otter's volley counts once (its droplets never float); a frog's eggs count like any
+  // bubble, hanging or floating (its hang cap, eggCap, may still let an old egg float: it stays counted); a bubble that
+  // caught a rival / a monster is not the player's any more. A blow with SHOT_CAP out first pops the oldest (capMine:
+  // the plain self-pop - no score, no chain): the oldest floating one; one in flight next (a volley goes whole); one
+  // bounced on in the last RIDE_HOLD frames only when nothing else is left. No press is refused, no 칙. The host's world
+  // decides (fire): a guest shows its new shot at once and sees the pop with the snapshot. Co-op / solo: no such limit
+  // (capEmpties only). An older host sent g.sc and refused past SHOT_CAP in flight: its guest still stops there with
+  // the quiet 'dry' (shotCapped). This host sends no g.sc: an older guest page fires freely and this host pops its oldest
   const SHOT_CAP = 3;
+  const mineOut = (slot) => G.bubbles.filter((b) => !b.dead && b.owner === slot && b.kind === 'empty' && !b.drop && (b.state === 'shot' || b.state === 'float'));
+  function capMine(p) {
+    const mine = mineOut(p.slot);
+    // (0 floating, 1 in flight, 2 floating but ridden lately; the oldest first within one - the age counts from the blow)
+    const rank = (b) => (b.state !== 'float' ? 1 : b.rideF !== undefined && G.frame - b.rideF < RIDE_HOLD ? 2 : 0);
+    while (mine.length >= SHOT_CAP) {
+      let pick = null;
+      for (const b of mine) if (!pick || rank(b) < rank(pick) || (rank(b) === rank(pick) && (b.age > pick.age || (b.age === pick.age && b.id < pick.id)))) pick = b;
+      mine.splice(mine.indexOf(pick), 1);
+      if (pick.state === 'shot') for (const o of G.bubbles) if (o.drop && !o.dead && o.vol === pick.vol && o.owner === pick.owner && o.state === 'shot') popBubble(o, null, 'self');
+      popBubble(pick, null, 'self');
+      G.capPops = (G.capPops | 0) + 1; // (for the headless tests)
+    }
+  }
   function inFlight(slot) {
     let n = 0;
     for (const b of G.bubbles) if (!b.dead && b.owner === slot && b.state === 'shot' && b.kind === 'empty' && !b.drop && b.ty !== 'egg') n++;
     return n;
   }
   function shotCapped(p) {
-    if (G.gameMode !== 'battle' || kitOf(p).shot.ty === 'egg') return false;
-    const cap = G.online && G.role === 'guest' ? NET.shotCap | 0 : SHOT_CAP;
+    if (G.gameMode !== 'battle' || !G.online || G.role !== 'guest' || kitOf(p).shot.ty === 'egg') return false;
+    const cap = NET.shotCap | 0; // (only an older host sends one)
     return cap > 0 && inFlight(p.slot) >= cap;
   }
   // the host's world, frame by frame: where each player was (a guest's claim names the snapshot tick it drew from)
@@ -11228,7 +11249,6 @@ window.PG = window.PG || {};
     const t = G.frame;
     rem.shots = rem.shots.filter((f) => t - f < 24);
     if (rem.shots.length >= 3) return; // (a frog fires every 10 frames: 3 in 24 is plenty)
-    if (G.gameMode === 'battle' && kitOf(pl).shot.ty !== 'egg' && inFlight(pl.slot) > SHOT_CAP) { NET.capNo = (NET.capNo | 0) + 1; return; }
     rem.shots.push(t);
     let x = nNum(m.x, WALL_L - 4, WALL_R - 12, pl.x), y = nNum(m.y, PF_TOP - 16, PF_BOT, pl.y);
     if (Math.abs(x - pl.x) > 32 || Math.abs(y - pl.y) > 32) { x = pl.x; y = pl.y; }
@@ -11389,7 +11409,7 @@ window.PG = window.PG || {};
     // the floating-empty life this world runs (EMPTY_RULE): a guest blinks the bubbles at it, not at its own rule (an
     // older host sends none - it runs EMPTY_LIFE, which is what a guest then takes)
     const el = emptyRule()[0]; if (el !== EMPTY_LIFE) g.el = el;
-    if (G.gameMode === 'battle') { g.lc = 1; g.sc = SHOT_CAP; } // (battle: send me your catches / the shot cap - see hostClaim)
+    if (G.gameMode === 'battle') g.lc = 1; // (battle: send me your catches - see hostClaim; no g.sc any more: see SHOT_CAP)
     if (G.stampFlash > 0) g.sf = G.stampFlash;
     if (G.ticketFlash > 0) g.tf = G.ticketFlash;
     const mu = MUSICS.indexOf(G.music); if (mu > 0) g.mu = mu;
@@ -11548,7 +11568,7 @@ window.PG = window.PG || {};
     G.loop = nInt(g.lp, 0, 99, 0); G.lives = nInt(g.L, 0, 99, 0); G.score = nInt(g.S, 0, 1e10, 0); G.stamps = nInt(g.st, 0, 99, 0);
     G.hurry = !!g.hu; G.stampFlash = nInt(g.sf, 0, 300, 0); G.ticketFlash = nInt(g.tf, 0, 300, 0);
     NET.el = nInt(g.el, 60, 2000, EMPTY_LIFE); // (the host's floating-empty life: emptyLife, the blink)
-    NET.hostLc = g.lc === 1; NET.shotCap = nInt(g.sc, 0, 9, 0); // (an older host: neither - no claims, no cap)
+    NET.hostLc = g.lc === 1; NET.shotCap = nInt(g.sc, 0, 9, 0); // (no lc: an older host - no claims; g.sc: only an older host's in-flight cap)
     G.battle = arena ? { left: Math.max(0, nInt(g.tl, 0, 1e7, 0) - (ph === 'playing' ? el : 0)), total: 0, intruded: true, enemyT: 1e9, powerT: 1e9 } : null;
     const mu = MUSICS[nInt(g.mu, 0, MUSICS.length - 1, 0)];
     if (mu !== G.music && !(mu === null && G.music === undefined)) setMusic(mu);
@@ -12405,7 +12425,7 @@ window.PG = window.PG || {};
       tro: { q: NET.role === 'host' && NET.screen !== 'game' ? troPractice() : NET.q, ms: NET.ms, bet: NET.opts.bet | 0, stake: stakeNow(), R: NET.role === 'host' && NET.R ? JSON.parse(JSON.stringify(NET.R)) : null },
       selfId: NET.selfId, mySlot: NET.role === 'host' ? 0 : NET.slots.get(NET.selfId), ctl: NET.ctl,
       stats, snap: { count: NET.snapN, bytes: NET.snapBytes, max: NET.snapMax, trims: NET.snapTrim, refused: NET.snapFail },
-      claims: { sent: NET.claimsSent | 0, refused: NET.claimNo | 0, why: Object.assign({}, NET.claimWhy || {}), capNo: NET.capNo | 0 },
+      claims: { sent: NET.claimsSent | 0, refused: NET.claimNo | 0, why: Object.assign({}, NET.claimWhy || {}) },
       renderTick: NET.rt, newestTick: NET.buf ? NET.buf.last : -1, viewFrames: NET.viewFrames, starvedFrames: NET.starveFrames, evQ: NET.evQ.length, pred: NET.pred.length, games: NET.games.slice(),
       predSplit: NET.predSplit | 0, predGiveUp: NET.predGiveUp | 0, // (v4: predictions handed to the host row by the 6 px rule / given up)
     };
