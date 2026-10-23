@@ -218,7 +218,7 @@
       const ivP = (u) => 'ivbox/' + u, IVK = ['code', 'mode', 'nick', 'at'];
       const ivVal = () => hasOnly(d, ['at']) && tsIs(d.at, now);
       const ivOk = (to, from) => to !== from && hasAll(d, IVK) && hasOnly(d, IVK) && typeof d.code === 'string' && /^[a-z0-9]{4}$/.test(d.code)
-        && (d.mode === 'coop' || d.mode === 'battle') && nickValue(d.nick) && tsIs(d.at, now) && exists(frP(to, from)) && tsIs((getAfter(ivP(from)) || {}).at, now);
+        && (d.mode === 'coop' || d.mode === 'battle') && nickValue(d.nick) && tsIs(d.at, now) && exists(frP(to, from));
       const lim = (n) => typeof ctx.limit === 'number' && ctx.limit <= n;
       let ok = false;
       if (sg[0] === 'profiles' && sg.length === 2) {
@@ -241,7 +241,8 @@
         ok = op === 'list' && signedIn(sg[1]) && lim(60);
       } else if (sg[0] === 'invites' && sg[2] === 'in' && sg.length === 4) {
         const to = sg[1], from = sg[3];
-        ok = op === 'get' ? signedIn(to) : op === 'delete' ? !!me && (me === to || me === from) : op === 'create' || op === 'update' ? signedIn(from) && ivOk(to, from) : false;
+        ok = op === 'get' ? signedIn(to) : op === 'delete' ? !!me && (me === to || me === from) : op === 'create' ? signedIn(from) && ivOk(to, from)
+          : op === 'update' ? signedIn(from) && ivOk(to, from) && o.at instanceof TS && now > o.at.ms + 10000 : false;
       } else if (sg[0] === 'invites' && sg[2] === 'in' && sg.length === 3) {
         ok = op === 'list' && signedIn(sg[1]) && lim(50);
       } else if (sg[0] === 'ivbox' && sg.length === 2) {
@@ -2178,7 +2179,11 @@
     const i1 = yi('a friend invites with the ivbox bumped (first invite: the ivbox created)', Wf, 'A', [ivb('A'), iv('C', 'A')]);
     ok('invite rules: ... the invite as written, the ivbox at the same time', J(Object.keys(i1.after.get('invites/C/in/A') || {}).sort()) === J(['at', 'code', 'mode', 'nick']) && !!i1.after.get('ivbox/A') && i1.calls <= 4, i1.calls);
     yi('battle, a 12-character nick', Wf, 'A', [ivb('A'), iv('C', 'A', { mode: 'battle', nick: '거품거품거품거품거품거품' })]);
-    ni('an invite without the ivbox bump', Wf, 'A', [iv('C', 'A')]);
+    yi('an invite without an ivbox (the cooldown is per friend now)', Wf, 'A', [iv('C', 'A')]);
+    { const W2 = with2([['friends/A/f/C', { at: T0 }], ['friends/C/f/A', { at: T0 }], ['friends/A/f/D', { at: T0 }], ['friends/D/f/A', { at: T0 }],
+        ['invites/C/in/A', { code: 'ab12', mode: 'coop', nick: '뽀숑', at: new TS(now - 2000) }]]);
+      yi('another friend invited 2 s after the first (several friends in a row)', W2, 'A', [iv('D', 'A')]);
+      yi('two friends invited in one batch', with2([['friends/A/f/C', { at: T0 }], ['friends/C/f/A', { at: T0 }], ['friends/A/f/D', { at: T0 }], ['friends/D/f/A', { at: T0 }]]), 'A', [iv('C', 'A'), iv('D', 'A')]); }
     ni('an invite to somebody who is not my friend', Wf, 'A', [ivb('A'), iv('B', 'A')]);
     ni('an invite when only my half of the pair is left (the receiver unfriended me)', with2([['friends/A/f/C', { at: T0 }]]), 'A', [ivb('A'), iv('C', 'A')]);
     yi('... and when only the receiver\'s half is (it still lets me read its card)', with2([['friends/C/f/A', { at: T0 }]]), 'A', [ivb('A'), iv('C', 'A')]);
@@ -2189,10 +2194,11 @@
       ['another mode', { mode: 'solo' }], ['an empty nick', { nick: '' }], ['a 25-unit nick', { nick: 'x'.repeat(25) }], ['a nick that is no string', { nick: 7 }],
       ['a time of the page\'s clock', { at: new TS(now - 1000) }], ['an extra key', { x: 1 }]]) ni('an invite with ' + why, Wf, 'A', [ivb('A'), iv('C', 'A', o)]);
     { const d = iv('C', 'A'); delete d.data.nick; ni('an invite without its nick', Wf, 'A', [ivb('A'), d]); }
-    const Wi = with2([['friends/A/f/C', { at: T0 }], ['friends/C/f/A', { at: T0 }], IV('C', 'A'), ['ivbox/A', { at: new TS(now - 5000) }]]);
-    ni('a second invite 5 s after the last (the ivbox\'s 10 s)', Wi, 'A', [ivb('A'), iv('C', 'A', { code: 'cd34' })]);
-    const Wj = with2([['friends/A/f/C', { at: T0 }], ['friends/C/f/A', { at: T0 }], IV('C', 'A'), ['ivbox/A', { at: new TS(now - 11000) }]]);
-    yi('a new invite replaces mine 11 s on (one per sender -> receiver)', Wj, 'A', [ivb('A'), iv('C', 'A', { code: 'cd34', mode: 'battle' })]);
+    const Wi = with2([['friends/A/f/C', { at: T0 }], ['friends/C/f/A', { at: T0 }], ['invites/C/in/A', { code: 'ab12', mode: 'coop', nick: '뽀숑', at: new TS(now - 5000) }], ['ivbox/A', { at: new TS(now - 5000) }]]);
+    ni('the same friend invited again 5 s after (10 s per friend)', Wi, 'A', [iv('C', 'A', { code: 'cd34' })]);
+    const Wj = with2([['friends/A/f/C', { at: T0 }], ['friends/C/f/A', { at: T0 }], ['invites/C/in/A', { code: 'ab12', mode: 'coop', nick: '뽀숑', at: new TS(now - 11000) }], ['ivbox/A', { at: new TS(now - 11000) }]]);
+    yi('a new invite replaces mine 11 s on (one per sender -> receiver)', Wj, 'A', [iv('C', 'A', { code: 'cd34', mode: 'battle' })]);
+    yi('... and an older page that still bumps its ivbox with it', Wj, 'A', [ivb('A'), iv('C', 'A', { code: 'cd34' })]);
     ni('an ivbox with an extra key / another\'s ivbox', Wj, 'A', [ivb('A', { n: 1 }), iv('C', 'A')]);
     ni('another\'s ivbox bumped', Wj, 'B', [ivb('A')]);
     ni('an ivbox deleted (a fresh cooldown)', Wj, 'A', [{ path: 'ivbox/A', kind: 'delete' }]);
@@ -2627,9 +2633,9 @@
     await until(() => N(A).state().screen === 'room' && !IVS(A).busy && !!F.docs.get('invites/ivB/in/ivA'), 6000);
     let as = N(A).state(), ivd = F.docs.get('invites/ivB/in/ivA') || {};
     const codeA = as.code;
-    ok('invite: 초대 with no room -> a 같이 하기 room the normal way (host, the room screen); the invite and the ivbox in one batch',
+    ok('invite: 초대 with no room -> a 같이 하기 room the normal way (host, the room screen); the invite written alone (no ivbox: the 10 s is per friend)',
       as.role === 'host' && as.overlay === 'room' && as.mode === 'coop' && ivd.code === codeA && ivd.mode === 'coop' && ivd.nick === '뽀숑' && ivd.at instanceof F.TS
-      && !!F.docs.get('ivbox/ivA') && F.plog.slice(c0).some((e) => e.ok && e.tag === 'batch' && e.w.length === 2 && e.w.includes('set invites/ivB/in/ivA')), [as.overlay, ivd]);
+      && !F.docs.get('ivbox/ivA') && F.plog.slice(c0).some((e) => e.ok && e.w.join().includes('invites/ivB/in/ivA')), [as.overlay, ivd]);
     const nickB = (PS(A).rows.find((q) => q.uid === 'ivB') || {}).nick;
     ok('invite: ... the room\'s line says "{B}님을 초대했어요"; its 친구 초대 button shows', A.$('pg-room-msg').textContent === nickB + '님을 초대했어요' && IVS(A).roomBtn, [A.$('pg-room-msg').textContent, IVS(A)]);
     // ---- B (signed in, 친구와 하기 open) gets the banner; 참여 joins
@@ -2651,8 +2657,9 @@
     await until(() => !IVS(A).busy && !!F.docs.get('invites/ivC/in/ivA'), 3000);
     ok('invite: hosting -> 초대 invites into my room (no second room), said in 친구 순위', (F.docs.get('invites/ivC/in/ivA') || {}).code === codeA && N(A).state().code === codeA
       && PS(A).said === 'ivSent' && PS(A).msg === '때밀이님을 초대했어요', [PS(A).msg, F.docs.get('invites/ivC/in/ivA'), PS(A), A.$('pg-pal-list').innerHTML.slice(0, 600)]);
-    const c1 = F.plog.length, r2 = await PALP(A).invite('ivB');
-    ok('invite: another 초대 within 10 s -> "10초 뒤에 다시 초대할 수 있어요", nothing written', r2.said === 'ivWait' && PS(A).msg === TX.ivWait && !F.plog.slice(c1).some((e) => /invites\//.test(e.w.join())), r2);
+    // (another friend right after one is fine - C came 300 ms after B; the SAME friend again within 10 s waits)
+    const c1 = F.plog.length, r2 = await PALP(A).invite('ivC');
+    ok('invite: the same friend again within 10 s -> "10초 뒤에 다시 초대할 수 있어요", nothing written', r2.said === 'ivWait' && PS(A).msg === TX.ivWait && !F.plog.slice(c1).some((e) => /invites\//.test(e.w.join())), r2);
     A.$('pg-pal-close').click(); await sleep(60);
     ok('invite: 닫기 -> back to the room (still hosting)', N(A).state().overlay === 'room' && !PS(A).shown && N(A).state().role === 'host', N(A).state().overlay);
     // ---- the host leaves: the invites into its room go
