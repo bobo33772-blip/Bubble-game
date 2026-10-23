@@ -131,7 +131,6 @@
     if (!ok('co-op: up (host duck, guest penguin)', R.up, F.map((f) => S(f).phase))) return drop(F);
     parkAll(host); host.G.stampT = 1e9;
     stand(host, 216, -1);
-    host.D.ammo.off(true); g.D.ammo.off(true); // (the backstop alone: the battle magazine off on both pages - battle-net's ammo room has it)
     const hr = host.D.emptyRule(), gr = g.D.emptyRule();
     ok('co-op: the guest runs the host\'s rule (330 + 90, 7 each, 14 in all)', J(hr) === J(gr) && hr.life === 330 && hr.flash === 90 && hr.cap === 7 && hr.all === 14, { host: hr, guest: gr });
     await sleep(300);
@@ -211,6 +210,7 @@
     host.G.enemies.length = 0;
     if (host.G.battle) { host.G.battle.enemyT = 1e9; host.G.battle.powerT = 1e9; }
     stand(host, 216, -1);
+    host.D.ammo.off(true); g.D.ammo.off(true); // (the backstop alone: the battle magazine off on both pages - battle-net's ammo room has it)
     const hr = host.D.emptyRule(), gr = g.D.emptyRule();
     ok('battle: the guest runs the host\'s rule (210 + 90, 3 each, 12 in all)', J(hr) === J(gr) && hr.life === 210 && hr.flash === 90 && hr.cap === 3 && hr.all === 12, { host: hr, guest: gr });
     await sleep(300);
