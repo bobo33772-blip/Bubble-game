@@ -535,9 +535,13 @@
     const iv = setInterval(() => { for (const p of host.G.players) p.invuln = 600; }, 30);
     const t0 = N(host).snap.trims, m0 = N(host).snap.max;
     let rows = 0; const rw = setInterval(() => { rows = Math.max(rows, host.G.bubbles.length); }, 8);
+    // (the worst case: the battle magazine off on every page - with it on, fewer bubbles are ever out)
+    for (const f of F) f.D.ammo.off(true);
+    await sleep(200);
     for (const f of F) press(f, 'shoot', true);
     await sleep(5000);
     for (const f of F) press(f, 'shoot', false);
+    for (const f of F) f.D.ammo.off(false);
     clearInterval(rw); clearInterval(iv);
     const sn = N(host).snap;
     info('3: mixed 4P battle + boss (' + (host.G.boss && host.G.boss.type) + ', fight ' + !!boss + '): snapMax ' + sn.max + ' (before ' + m0 + ') trims ' + (sn.trims - t0) + ' max rows ' + rows + ' bytes now ' + sn.bytes);

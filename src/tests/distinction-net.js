@@ -1,5 +1,5 @@
 // Telling players apart ONLINE (design/distinction.md §2.14 test 8, passes D3 / D4): 3 same-origin iframes of
-// preview.html over PG.Net's forced 'bc' transport (a host and two guests: 꽥꽥이, 꽥꽥이, 개굴이), driven through
+// preview.html over PG.Net's forced 'bc' transport (a host and two guests: 꽥꽥이, 꽥꽥이, 깨굴이), driven through
 // PG.debug.mp. Built to test-distinction-net.html; needs a real http origin:
 //   node bogeul/build.js
 //   node bogeul/tools/serve.js                       (keep running: http://localhost:8765, root C:/Temp/bogeul)

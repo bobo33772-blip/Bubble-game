@@ -549,7 +549,7 @@
       let worst = 0;
       for (const [dx, dy] of [[0, 24], [12, 16], [-12, 16], [6, 20], [-4, 24], [16, 18], [-16, 18]]) for (const low of [0, 1]) for (const st of [-1, 0, 1]) {
         release(); D.seed(9);
-        L.battle([{ char: 'frog', nick: '개굴이' }, { char: 'penguin', nick: '말랑두부' }], { arena: 0, countdown: false, monsters: false, intrusion: false });
+        L.battle([{ char: 'frog', nick: '깨굴이' }, { char: 'penguin', nick: '말랑두부' }], { arena: 0, countdown: false, monsters: false, intrusion: false });
         if (st >= 0) stage(st);
         const a = P(low), b = P(1 - low);
         for (const p of G.players) { p.vx = 0; p.vy = 0; p.invuln = 0; }

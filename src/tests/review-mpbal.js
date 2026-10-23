@@ -13,6 +13,7 @@
 //   node tools/run-chrome.js "test-review-mpbal.html?exp=clutter&mode=coop&n=4&secs=150&seeds=1-4&spam=30" - 900 760 rt600000 "BAL DONE"
 //   node tools/run-chrome.js "test-review-mpbal.html?exp=clutter&mode=battle&n=4&seeds=1&arenas=1&spam=30&shot=45" C:/Temp/bogeul/clutter-battle-after.png 900 760 rt60000 "BAL SHOT READY"
 // common: perks=0 (능력 끄기), time=3, react=10 (frames before a bot sees a new opponent shot), mash=8 (presses/s)
+//         ammo=0 (no battle magazine: game.js AMMO off), mag=duck:3:120,capy:2:84 (try other magazines: blows, frames)
 // Prints "BAL MATCH {json}" per battle, "BAL COOP {json}" per campaign run, "BAL DONE".
 (function () {
   'use strict';
@@ -630,6 +631,11 @@
   async function main() {
     const D = PG.debug, G = D.G;
     stub();
+    if (D.ammo) {
+      if (Q.get('ammo') === '0') D.ammo.off(true);
+      for (const part of (Q.get('mag') || '').split(',').filter(Boolean)) { const [c, n, rl] = part.split(':'); D.ammo.set(c, +n, +rl); }
+      log('BAL MAGS ' + JSON.stringify(Object.fromEntries(CHARS.map((c) => [c, D.ammo.kit(c)]))) + (Q.get('ammo') === '0' ? ' (off)' : ''));
+    }
     const exp = Q.get('exp') || 'duel';
     const perks = Q.get('perks') !== '0', time = +(Q.get('time') || 3), intrusion = Q.get('intr') !== '0';
     const cfg = { react: +(Q.get('react') || 10), mash: +(Q.get('mash') === null ? 8 : Q.get('mash')), jit: +(Q.get('jit') || 0), ownlock: +(Q.get('ownlock') || 0),

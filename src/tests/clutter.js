@@ -305,7 +305,32 @@
       const r = popAge(b, 60);
       if (r.age !== 301 || r.chain || !r.scoreSame || blink[0] || !blink[1]) return J({ r, blink });
     });
-    t('battle: a player has at most 3 out in all - the 4th..8th blow each pop the oldest at once (plain self-pop, no blink, no chain); 4 players keep 3 each / 12 in all', () => {
+    // (the backstop alone, every blow allowed: the battle magazine off - game.js AMMO; with it on, just below)
+    t('battle: a player has at most 3 out in all - the 4th..8th blow each pop the oldest at once (plain self-pop, no blink, no chain); 4 players keep 3 each / 12 in all (magazine off)', () => { D.ammo.off(true); try { return capAlone(); } finally { D.ammo.off(false); } });
+    // the magazine on (AMMO): the cap is at least the magazine - a cat (4) keeps 4 out, the 5th blow (after its reload,
+    // the first four still floating) pops its oldest at once; a penguin (2) is under the 3 anyway: its 3rd blow, after
+    // a reload, pops nothing
+    t('battle with the magazine: a cat keeps 4 out (cap = its magazine of 4), its 5th blow after the reload pops the oldest; a penguin (2) never reaches the cap', () => {
+      const out = {};
+      for (const c of ['cat', 'penguin']) {
+        const [p0, p1] = battle([c, 'capy']); put(p0, 24, 1); put(p1, 216, -1);
+        const k = D.ammo.kit(c), mine = [];
+        let most = 0;
+        const look = () => { most = Math.max(most, G.bubbles.filter((b) => !b.dead && b.owner === 0 && b.kind === 'empty' && !b.drop && (b.state === 'shot' || b.state === 'float')).length); };
+        for (let i = 0; i < k[0] + 1; i++) {
+          if (i === k[0]) for (let f = 0; f < k[1]; f++) { step(1); look(); put(p1, 216, -1); }
+          mine.push(...blow(0)); look();
+          for (let f = 0; f < 15; f++) { step(1); look(); }
+          put(p0, 24, 1); put(p1, 216, -1);
+        }
+        const gone = mine.filter((b) => b.dead || b.state === 'pop').map((b) => mine.indexOf(b));
+        out[c] = { blows: mine.length, most, gone, cap: D.ammo.of(0).cap };
+      }
+      info('magazine + cap: ' + J(out));
+      if (out.cat.blows !== 5 || out.cat.cap !== 4 || out.cat.most !== 4 || J(out.cat.gone) !== '[0]') return J(out);
+      if (out.penguin.blows !== 3 || out.penguin.cap !== 3 || out.penguin.most !== 3 || out.penguin.gone.length) return J(out);
+    });
+    function capAlone() {
       const [p0, p1] = battle(['penguin', 'capy']); put(p0, 24, 1); put(p1, 216, -1);
       const mine = [], w = watcher(210), s0 = scores(); let most = 0, out = 0;
       const look = () => { w(mine); most = Math.max(most, counted(0).length); out = Math.max(out, G.bubbles.filter((b) => !b.dead && b.owner === 0 && b.kind === 'empty' && (b.state === 'shot' || b.state === 'float')).length); };
@@ -327,7 +352,7 @@
       for (let i = 0; i < 31; i++) step(1);
       const popped = bs.filter((b) => b.state === 'pop' || b.dead).map((b) => bs.indexOf(b));
       if (J(ended) !== '[0,1,2,3]' || J(popped) !== '[0,1,2,3]' || floating().length !== 12) return J({ ended, popped, floating: floating().length });
-    });
+    }
 
     Object.assign(L0, saved); Object.assign(A0, savedA);
     log('CLUTTER DONE pass=' + pass + ' fail=' + fail);

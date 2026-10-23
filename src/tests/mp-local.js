@@ -77,12 +77,12 @@
     t('six animals with names and kit cards (role, tag, 4 stat bars, move, bubble, hue); slot colours', () => {
       const cs = D.chars();
       if (cs.map((c) => c.id).join() !== 'duck,capy,otter,penguin,cat,frog') return cs.map((c) => c.id).join();
-      if (cs.map((c) => c.name).join() !== '꽥꽥이,까삐,해롱이,펭펭,냥냥,개굴이') return cs.map((c) => c.name).join();
+      if (cs.map((c) => c.name).join() !== '꽥꽥이,까삐,해롱이,펭펭,냥냥,깨굴이') return cs.map((c) => c.name).join();
       if (cs.map((c) => c.role).join() !== '만능,든든,돌격,저격,곡예,함정') return 'roles ' + cs.map((c) => c.role).join();
       if (cs.some((c) => !c.tag || c.tag.length > 26 || 'perk' in c)) return 'tag text ' + cs.map((c) => c.tag).join(' | ');
       if (cs.map((c) => c.stats.join('')).join() !== '3333,2323,4322,5351,3533,3414') return 'stats ' + cs.map((c) => c.stats.join('')).join();
       if (cs.some((c) => !c.move || !c.move.name || !c.move.how || c.move.how.length > 26 || !c.move.word || !c.move.touch || !c.bub || !c.bub.name || !c.bub.desc || c.bub.desc.length > 26)) return 'move / bubble text';
-      if (cs.map((c) => c.move.name).join() !== '둥실 활공,털썩 엉덩방아,휙 대시,쭉 배미끄럼,냥냥 2단 점프,개굴 3단 뛰기') return 'moves ' + cs.map((c) => c.move.name).join();
+      if (cs.map((c) => c.move.name).join() !== '둥실 활공,털썩 엉덩방아,휙 대시,쭉 배미끄럼,냥냥 2단 점프,깨굴 3단 뛰기') return 'moves ' + cs.map((c) => c.move.name).join();
       if (cs.map((c) => c.hue).join() !== '#ffe36b,#ffa98a,#5fe0c8,#9fdcff,#c9a8ff,#9be86a') return 'hues ' + cs.map((c) => c.hue).join();
       if (D.slotColors().join() !== '#ffd447,#f6a6bd,#7fdcc8,#8dc9ff') return D.slotColors().join();
     });

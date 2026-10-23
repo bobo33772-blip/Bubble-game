@@ -549,16 +549,19 @@ body {
 /* the room's kit card: name + role and the 특기 on the left, the 2x2 stats on the right (stacked on narrow phones) */
 .pg-kit.pg-kit-sm {
   width: auto; margin: 0.5em 0 0; padding: 0.4em 0.75em 0.45em;
-  display: grid; grid-template-columns: minmax(0, 1fr) max-content; grid-template-areas: "head stats" "perk stats"; align-items: center; gap: 0.15em 1em;
+  display: grid; grid-template-columns: minmax(0, 1fr) max-content; grid-template-areas: "head stats" "perk stats" "mag stats"; align-items: center; gap: 0.15em 1em;
 }
 .pg-kit-sm .pg-kit-head { grid-area: head; }
 .pg-kit-sm .pg-kit-stats { grid-area: stats; margin: 0; }
 .pg-kit-sm .pg-kit-line { grid-area: perk; margin: 0; white-space: normal; }
+/* a battle room: my pick's magazine (거품 n발 · 장전 s초) under the 특기 - with 능력 끄기 too (the base one) */
+.pg-kit-sm .pg-kit-line.pg-kit-mag { grid-area: mag; }
+.pg-kit-sm.off .pg-kit-line.pg-kit-mag b { display: inline; }
 .pg-kit-sm .pg-kit-line b + span { flex: 0 1 auto; min-width: 0; }
 /* 능력 끄기: the line reads "능력 꺼짐 · 모두 같은 기본 능력이에요" on its own */
 .pg-kit-sm.off .pg-kit-line b { display: none; }
 @media (max-width: 520px) {
-  .pg-kit.pg-kit-sm { grid-template-columns: minmax(0, 1fr); grid-template-areas: "head" "stats" "perk"; gap: 0.35em; }
+  .pg-kit.pg-kit-sm { grid-template-columns: minmax(0, 1fr); grid-template-areas: "head" "stats" "perk" "mag"; gap: 0.35em; }
 }
 /* the room's ready / start / leave row stays in view while the host scrolls the settings (short windows, phones) */
 .pg-panel .pg-pcard { overflow: visible; }
@@ -1551,6 +1554,7 @@ html.pg-sa, html.pg-sa body { overscroll-behavior: none; }
             <p class="pg-kit-head"><b id="pg-room-pname">꽥꽥이</b><i id="pg-room-role" class="pg-kit-role">만능</i></p>
             <div id="pg-room-stats" class="pg-kit-stats"></div>
             <p class="pg-kit-line"><b>특기</b><span id="pg-room-pperk">둥실 활공</span></p>
+            <p id="pg-room-mag" class="pg-kit-line pg-kit-mag" hidden><b>배틀</b><span id="pg-room-pmag">거품 3발 · 장전 2초</span></p>
             <p id="pg-room-twin" class="pg-kit-twin" hidden></p>
           </div>
         </div>

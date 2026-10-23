@@ -9,9 +9,14 @@
 //   gg   guest -> guest (the victim drawn from its own body stream): as gh
 //   hg   host -> guest (the guest drawn from its interpolated stream on the host): as gh
 //   old  an older guest page (no lc in its states, no 'tp'): its shot still catches a host player standing still
-//   cap  (perks on, a duck guest tapping for 3 s) at most 3 of its bubbles out in all (in flight + floating) on the
-//        host, every press past 3 popped its oldest there (no refusal, never a 'dry' on the guest), the guest's own
-//        screen back to <= 3 once the pops have arrived
+//   cap  (perks on, a duck guest tapping for 3 s, the magazine off on both pages: the backstop alone) at most 3 of its
+//        bubbles out in all (in flight + floating) on the host, every press past 3 popped its oldest there (no refusal,
+//        never a 'dry' on the guest), the guest's own screen back to <= 3 once the pops have arrived
+//   ammo (perks on, a duck guest: 3 blows, reload 2.2 s - game.js AMMO) 3 presses blow 3 on the guest and the host; a
+//        4th is a dry 칙 on the guest and never reaches the host; after the reload the next press blows on both (the
+//        host refuses nothing); the guest's count matches the host's; the guest's HUD has the host's magazine from the
+//        snapshot. An older guest page (no magazine: AMMO off there) fires freely - the host refuses its blows past the
+//        magazine, its copies just give up; an older host (AMMO off there: no g.am) - its guest fires freely, no 칙
 // Prints "BNET PASS|FAIL <name>", "BNET METRIC <name> <json>", "BNET DONE pass=N fail=M".
 (function () {
   'use strict';
@@ -167,6 +172,7 @@
     const R = await room(2, { perks: true }, ['capy', 'duck']);
     if (!ok('cap room: 2-player battle (perks on) playing', R.playing)) return;
     const [H, A] = R.F, sa = slotOf(A);
+    H.D.ammo.off(true); A.D.ammo.off(true); await sleep(300); // (the backstop alone - ammoRoom has the magazine)
     await place(R.F, H, [205, 40], [-1, 1]);
     const out = (fr, slot) => fr.G.bubbles.filter((b) => !b.dead && b.owner === slot && b.kind === 'empty' && !b.drop && (b.state === 'shot' || b.state === 'float')).length;
     let gMax = 0, hMax = 0;
@@ -184,10 +190,67 @@
     ok('cap room: no page errors', R.F.every((f) => !f.errors.length), R.F.map((f) => f.errors));
   }
 
+  async function ammoRoom() {
+    if (ONLY.length && !ONLY.includes('ammo')) return;
+    const R = await room(2, { perks: true }, ['capy', 'duck']);
+    if (!ok('ammo room: 2-player battle (perks on) playing', R.playing)) return;
+    const [H, A] = R.F, sa = slotOf(A), sh = slotOf(H), K = A.D.ammo.kit('duck');
+    await place(R.F, H, [205, 40], [-1, 1]);
+    // the guest's blows (its magazine going down), the host's bubbles of the guest (a volley's first only)
+    let gBlows = 0, gPrev = null;
+    const hSeen = new Set();
+    const calm = (fr) => { for (const e of fr.G.enemies) { e.state = 'descend'; e.delay = 1e9; e.y = -300; } };
+    A.mp.tap(() => { const m = A.D.ammo.of(sa); if (m && gPrev !== null && m.left < gPrev) gBlows += gPrev - m.left; gPrev = m ? m.left : null; });
+    H.mp.tap(() => { calm(H); for (const b of H.G.bubbles) if (b.owner === sa && b.kind === 'empty' && !b.drop && !b.vi) hSeen.add(b.id); for (const p of H.G.players) p.invuln = 60; });
+    const tapA = async () => { press(A, 'shoot', true); await sleep(50); press(A, 'shoot', false); };
+    const dryA = () => A.sfx.filter((n) => n === 'dry').length;
+    const st0 = N(A), ref0 = H.D.ammo.refused();
+    ok('ammo: the duck guest starts full on both screens (' + K.join(' / ') + '), the guest knows the host keeps magazines', !!(await until(() => { const a = A.D.ammo.of(sa), h = H.D.ammo.of(sa); return a && h && a.left === K[0] && h.left === K[0] && a.n === K[0]; }, 3000)), [A.D.ammo.of(sa), H.D.ammo.of(sa)]);
+    for (let k = 0; k < K[0]; k++) { await tapA(); await sleep(250); }
+    const d0 = dryA(), t3 = now();
+    await tapA(); await sleep(400);
+    const d1 = dryA() - d0;
+    await until(() => hSeen.size >= K[0], 1500);
+    metric('ammo-burst', { gBlows, host: hSeen.size, dry: d1, guest: A.D.ammo.of(sa), hostView: H.D.ammo.of(sa) });
+    ok('ammo: ' + K[0] + ' presses blow ' + K[0] + ' (guest and host); the next press is a dry 칙 and blows nothing anywhere', gBlows === K[0] && hSeen.size === K[0] && d1 >= 1 && A.D.ammo.of(sa).left === 0, { gBlows, host: hSeen.size, d1 });
+    const back = await until(() => A.D.ammo.of(sa).left === K[0], 6000), backMs = Math.round(now() - t3 + 300);
+    const full = A.D.ammo.of(sa).left;
+    await tapA();
+    await until(() => hSeen.size >= K[0] + 1, 2000); await sleep(600);
+    const st1 = N(A), a1 = A.D.ammo.of(sa), h1 = H.D.ammo.of(sa);
+    metric('ammo-reload', { backMs, full, gBlows, host: hSeen.size, refused: H.D.ammo.refused() - ref0, giveUp: (st1.predGiveUp | 0) - (st0.predGiveUp | 0), guest: a1, hostView: h1 });
+    ok('ammo: after the reload (' + (K[1] / 60).toFixed(1) + ' s) the magazine is full again and the next press blows on both screens', !!back && full === K[0] && gBlows === K[0] + 1 && hSeen.size === K[0] + 1, { full, gBlows, host: hSeen.size });
+    ok('ammo: the host refused none of the guest blows, none of its copies gave up; its count matches the host count', H.D.ammo.refused() === ref0 && (st1.predGiveUp | 0) === (st0.predGiveUp | 0) && a1.left === h1.left && a1.left === K[0] - 1, { refused: H.D.ammo.refused() - ref0, a1, h1 });
+    const hostOnA = A.G.players.find((p) => p.slot === sh), hostOnH = H.G.players.find((p) => p.slot === sh);
+    ok('ammo: the guest HUD has the host magazine from the snapshot', !!hostOnA && hostOnA.amN === hostOnH.amN && hostOnA.amN === H.D.ammo.kit('capy')[0], [hostOnA && hostOnA.amN, hostOnH && hostOnH.amN]);
+    // ---- an older guest page: no magazine there (AMMO off) - it fires freely, the host refuses past the magazine
+    await until(() => H.D.ammo.of(sa).left === K[0] && A.D.ammo.of(sa).left === K[0], 6000);
+    A.D.ammo.off(true); hSeen.clear();
+    const ref1 = H.D.ammo.refused(), dOld = dryA();
+    for (let k = 0; k < K[0] + 2; k++) { await tapA(); await sleep(250); }
+    await sleep(900);
+    metric('ammo-old-guest', { host: hSeen.size, refused: H.D.ammo.refused() - ref1, dry: dryA() - dOld });
+    ok('ammo: an older guest page fires freely (no 칙); the host takes its magazine (' + K[0] + ') and refuses the rest, nothing breaks', hSeen.size === K[0] && H.D.ammo.refused() - ref1 === 2 && dryA() === dOld, { host: hSeen.size, refused: H.D.ammo.refused() - ref1 });
+    A.D.ammo.off(false);
+    // ---- an older host: no magazine there (AMMO off: no g.am) - its guest fires freely, as before
+    H.D.ammo.off(true);
+    const noAm = await until(() => !A.D.ammo.of(sa), 2000);
+    hSeen.clear(); const dHost = dryA();
+    for (let k = 0; k < K[0] + 2; k++) { await tapA(); await sleep(250); }
+    await sleep(900);
+    metric('ammo-old-host', { noAm: !!noAm, host: hSeen.size, dry: dryA() - dHost });
+    ok('ammo: under an older host (no g.am) the guest keeps no magazine: ' + (K[0] + 2) + ' presses blow ' + (K[0] + 2) + ', no 칙', !!noAm && hSeen.size === K[0] + 2 && dryA() === dHost, { noAm: !!noAm, host: hSeen.size, dry: dryA() - dHost });
+    H.D.ammo.off(false);
+    A.mp.tap(null); H.mp.tap(null);
+    ok('ammo room: no page errors', R.F.every((f) => !f.errors.length), R.F.map((f) => f.errors));
+  }
+
   (async () => {
     try { await lagRoom(); } catch (e) { fail++; log('BNET error ' + (e && e.stack || e)); }
     dropAll();
     try { await capRoom(); } catch (e) { fail++; log('BNET error ' + (e && e.stack || e)); }
+    dropAll();
+    try { await ammoRoom(); } catch (e) { fail++; log('BNET error ' + (e && e.stack || e)); }
     dropAll();
     log('BNET DONE pass=' + pass + ' fail=' + fail);
   })();

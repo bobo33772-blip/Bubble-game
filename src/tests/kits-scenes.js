@@ -102,9 +102,9 @@
       ok('cat curls (A)', p.mv === 'curl' && p.mvA, p.mv); snap('cat 냥냥 (ring)', ...around(p, W0, H0, 0, 6)); step(4); snap('cat curl', ...around(p, W0, H0, 0, 6));
       // frog: hop, press right on landing: level 1 (lily pad), again: level 2 (bigger pad + drops)
       p = solo('frog'); tap('jump'); until(() => p.onGround, 60); tap('jump'); step(2);
-      ok('frog chained hop 1 (A)', p.hop === 1 && p.mvA, [p.hop, p.mvA]); snap('frog 개굴 hop 1', ...around(p, W0, H0, 0, 8));
+      ok('frog chained hop 1 (A)', p.hop === 1 && p.mvA, [p.hop, p.mvA]); snap('frog 깨굴 hop 1', ...around(p, W0, H0, 0, 8));
       until(() => p.onGround, 60); tap('jump'); step(2);
-      ok('frog chained hop 2 (A + B)', p.hop === 2 && p.mvA && p.mvB, [p.hop, p.mvB]); snap('frog 개굴 hop 2', ...around(p, W0, H0, 0, 10));
+      ok('frog chained hop 2 (A + B)', p.hop === 2 && p.mvA && p.mvB, [p.hop, p.mvB]); snap('frog 깨굴 hop 2', ...around(p, W0, H0, 0, 10));
     }
     // ---- each animal's bubble in flight
     function bubbles() {

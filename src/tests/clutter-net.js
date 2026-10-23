@@ -10,7 +10,8 @@
 //          host (the cap skips it)
 //   battle host capy + guest penguin (no monsters): the rule 210 + 90, 3 each, 12 in all on both screens; 8 blows -
 //          at most 3 of the guest's float at once (3 out in all), the 4th..8th each pop the oldest at once (no blink, no
-//          chain) on the host, and the guest's view sees those very pops, then its 3 floating
+//          chain) on the host, and the guest's view sees those very pops, then its 3 floating (the battle magazine off:
+//          the backstop alone)
 //   node tools/serve.js   (background)
 //   node tools/run-chrome.js http://localhost:8765/test-clutter-net.html - 1200 500 rt240000 "CLUTTERNET DONE"
 // Prints "CLUTTERNET PASS|FAIL <name>", "CLUTTERNET INFO ..." and "CLUTTERNET DONE pass=N fail=M".
@@ -209,6 +210,7 @@
     host.G.enemies.length = 0;
     if (host.G.battle) { host.G.battle.enemyT = 1e9; host.G.battle.powerT = 1e9; }
     stand(host, 216, -1);
+    host.D.ammo.off(true); g.D.ammo.off(true); // (the backstop alone: the battle magazine off on both pages - battle-net's ammo room has it)
     const hr = host.D.emptyRule(), gr = g.D.emptyRule();
     ok('battle: the guest runs the host\'s rule (210 + 90, 3 each, 12 in all)', J(hr) === J(gr) && hr.life === 210 && hr.flash === 90 && hr.cap === 3 && hr.all === 12, { host: hr, guest: gr });
     await sleep(300);
