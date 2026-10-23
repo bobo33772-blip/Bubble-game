@@ -186,6 +186,22 @@
     press(g, 'right', true); await sleep(700); press(g, 'right', false);
     await sleep(500);
     ok('coop2: guest walks: the host sees it move and stop where it stopped', hp(host, 1).x > x0 + 20 && Math.abs(hp(host, 1).x - me(g).x) < 0.6, [x0, hp(host, 1).x, me(g).x]);
+    // 내려가기: the guest drops through a platform of round 1 with ↓ on its own engine; the host has it below, where the
+    // guest is, and showed the dust (the guest's body state counts its drops: dp)
+    {
+      const map = g.D.levels()[0].map; let plat = null;
+      const under = (r, c) => { for (let k = r + 1; k < 26; k++) { const s = map[k].slice(c, c + 2); if (s !== '..' && s !== '##') return false; } return map[25].slice(c, c + 2) === '##'; };
+      for (let r = 4; r < 22 && !plat; r++) for (let c = 4; c < 26 && !plat; c++) if (map[r].slice(c, c + 2) === '##' && map[r - 1].slice(c, c + 2) === '..' && map[r - 2].slice(c, c + 2) === '..' && map[r + 1].slice(c, c + 2) === '..' && under(r, c)) plat = { r, c };
+      const top = 16 + (plat ? plat.r : 0) * 8;
+      if (plat) Object.assign(me(g), { x: plat.c * 8 - 2, y: top - 16, vx: 0, vy: 0, onGround: true, coyote: 0, jumpBuf: 0 });
+      await sleep(700);
+      const before = { g: me(g).y + 16, h: hp(host, 1).y + 16 }, seen0 = N(host).drops.seen, sent0 = N(g).drops.sent;
+      press(g, 'down', true); await sleep(70); press(g, 'down', false);
+      await sleep(1000);
+      const gf = me(g).y + 16, hf = hp(host, 1).y + 16, d = { plat, top, before, gf, hf, sent: N(g).drops.sent - sent0, seen: N(host).drops.seen - seen0 };
+      ok('coop2: the guest drops through a platform with ↓: below it on its own engine and on the host (same spot), the host shows the dust', !!plat && Math.abs(before.g - top) < 0.01 && Math.abs(before.h - top) < 0.6 &&
+        gf > top + 8 && me(g).onGround && Math.abs(hf - gf) < 0.6 && d.sent === 1 && d.seen === 1, d);
+    }
     // bubbles: a few floating ones (and a stamp bubble) up in the free air of round 1 must agree (ids, < 4 px)
     for (const [x, y] of [[150, 40], [180, 52], [210, 40], [196, 70]]) host.D.spawnBubble('empty', x, y);
     host.D.spawnBubble('stamp', 168, 90);
