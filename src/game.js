@@ -4941,7 +4941,7 @@ window.PG = window.PG || {};
     hubDisarm();
     showOverlay('hub');
     hubShow(tab === 'my' || tab === 'draw' ? tab : 'shop', !back);
-    if (back) try { $('pg-my-rec').focus({ preventScroll: true }); } catch (e) { /* ignore */ }
+    if (back) try { $(back === 'pal' ? 'pg-my-pal' : 'pg-my-rec').focus({ preventScroll: true }); } catch (e) { /* ignore */ }
   }
   // the hub's animal d steps on (1 the next, -1 the previous, wrapping): every tab shows and dresses it from now on
   function hubCycle(d) {
@@ -4981,6 +4981,7 @@ window.PG = window.PG || {};
     // (the footer pattern, looks-per-animal.md 4.0: [message][the tab's own ghost button][닫기] - 내 기록 on 마이페이지,
     // 확률 보기 on 뽑기)
     if (dom.myRec) dom.myRec.hidden = HUB.tab !== 'my';
+    if (dom.myPal) dom.myPal.hidden = HUB.tab !== 'my'; // (친구: with the cloud / on a preview only - palSetupDOM)
     if (dom.oddsBtn) dom.oddsBtn.hidden = HUB.tab !== 'draw';
     if (HUB.tab === 'draw') {
       if (S && !S.gs && !TRO.ro) troMut((q) => { q.gs = 1; });
@@ -7342,7 +7343,7 @@ window.PG = window.PG || {};
   const PAL_OLD_MS = 14 * 864e5, PAL_MUTE_MS = 30 * 864e5, PAL_MUTE_MAX = 50, PAL_REFRESH_MS = 10000, PAL_RETRY_MS = 60000, PAL_DENY_MS = 6000, PAL_MSG_MS = 6000;
   const PAL_ABC = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789', PAL_CODE_RE = /^[A-HJKMNP-Z2-9]{8}$/, PAL_LK_RE = /^[0-9a-z]{5}$/;
   const PAL_TX = {
-    title: '친구 순위', code: '내 코드', copy: '복사', copied: '복사했어요', ph: '친구 코드 8자리', send: '친구 요청', reqs: '받은 요청', rank: '혼자 하기 최고 기록',
+    title: '친구 순위', friend: '친구', ivWait: '초대 왔어요', code: '내 코드', copy: '복사', copied: '복사했어요', ph: '친구 코드 8자리', send: '친구 요청', reqs: '받은 요청', rank: '혼자 하기 최고 기록',
     me: '(나)', accept: '수락', decline: '거절', cut: '끊기', cancel: '취소', ask: '{0}님과 친구를 끊을까요?', refresh: '새로고침', close: '닫기',
     loading: '불러오는 중…', empty: '아직 친구가 없어요 · 내 코드를 알려 주거나 친구 코드를 넣어 보세요',
     guest: '로그인하면 친구 코드로 친구를 맺고 서로의 기록을 볼 수 있어요', login: '구글로 로그인', retry: '다시 시도',
@@ -7731,7 +7732,8 @@ window.PG = window.PG || {};
   // ---- UI (design/friends.md 5): 내 기록's 친구 순위 button and #pg-pal, a full-stage .pg-panel like #pg-hub. Made here,
   // with the cloud or on a preview only. (The button sits at the top right of 내 기록's card: its button row has no room
   // for a third button at 1x - see the "As built" note.) The red dot (requests waiting) is mirrored on the title's
-  // trophy badge and on 마이페이지's 내 기록 button
+  // trophy badge; 마이페이지 has its own 친구 button (the hub footer, beside 내 기록 - the easy way in, 2026-10-23) with
+  // the dot for requests or an invite waiting; its 친구 순위 closes back to 마이페이지
   function palSetupDOM() {
     if (!(CLOUD.on || PREVIEW) || $('pg-pal-btn') || !dom.recCard) return;
     const b = h('button', 'pg-btn pg-ghost pg-small pg-pal-btn'); b.type = 'button'; b.id = 'pg-pal-btn';
@@ -7743,7 +7745,14 @@ window.PG = window.PG || {};
     dom.recCard.classList.add('has-pal');
     listen(b, 'click', (e) => { e.preventDefault(); palOpen(); });
     const mr = $('pg-my-rec');
-    if (mr) { const d2 = h('i', 'pg-tro-new'); d2.id = 'pg-pal-new2'; d2.hidden = true; d2.setAttribute('aria-hidden', 'true'); mr.appendChild(d2); mr.classList.add('has-pal'); }
+    if (mr && !$('pg-my-pal')) {
+      const fb = h('button', 'pg-btn pg-ghost pg-small pg-my-pal'); fb.type = 'button'; fb.id = 'pg-my-pal'; fb.hidden = mr.hidden;
+      const d2 = h('i', 'pg-tro-new'); d2.id = 'pg-pal-new2'; d2.hidden = true; d2.setAttribute('aria-hidden', 'true');
+      fb.append(h('span', '', PAL_TX.friend), d2);
+      mr.parentNode.insertBefore(fb, mr);
+      listen(fb, 'click', (e) => { e.preventDefault(); palOpen('hub'); });
+      dom.myPal = fb;
+    }
     try { for (const q of ['.pg-fw-body', '.pg-fw-sign']) { const fw = document.querySelector('#pg-fontwarm ' + q); if (fw && fw.textContent.indexOf(PAL_TX.rank) < 0) fw.textContent += ' ' + PAL_TEXT + ' ' + IV_TEXT; } } catch (e) { /* ignore */ }
     // (친구 초대: the room's 친구 초대 beside 코드 복사 - a host in its room phase, signed in or on a preview)
     const side = $('pg-room') && $('pg-room').querySelector('.pg-room-side'), cp = $('pg-copy');
@@ -7758,10 +7767,12 @@ window.PG = window.PG || {};
   }
   // the dots: requests are waiting (here and on the title's badge)
   function palDots() {
-    const on = PAL.reqs.length > 0;
-    for (const id of ['pg-pal-new', 'pg-pal-new2']) { const d = $(id); if (d && d.hidden === on) d.hidden = !on; }
-    const b = $('pg-pal-btn'), aria = PAL_TX.title + (on ? ' · 받은 요청 ' + PAL.reqs.length + '개' : '');
+    const on = PAL.reqs.length > 0, iv = ivWaiting(), req = on ? ' · 받은 요청 ' + PAL.reqs.length + '개' : '';
+    for (const [id, v] of [['pg-pal-new', on], ['pg-pal-new2', on || iv]]) { const d = $(id); if (d && d.hidden === v) d.hidden = !v; }
+    const b = $('pg-pal-btn'), aria = PAL_TX.title + req;
     if (b && b.getAttribute('aria-label') !== aria) b.setAttribute('aria-label', aria);
+    const fa = PAL_TX.friend + req + (iv ? ' · ' + PAL_TX.ivWait : '');
+    if (dom.myPal && dom.myPal.getAttribute('aria-label') !== fa) dom.myPal.setAttribute('aria-label', fa);
     if (dom.troNew && TRO.s) dom.troNew.hidden = !!TRO.s.seen && !on;
   }
   function palBtn(cls, txt, id) { const b = h('button', 'pg-btn ' + cls, txt); b.type = 'button'; if (id) b.id = id; return b; }
@@ -7834,7 +7845,7 @@ window.PG = window.PG || {};
     firstGesture();
     if (!palBuild()) return;
     PAL.open = true; PAL.ask = ''; PAL.msg = ''; clearTimeout(PAL.msgT); PAL.dom.inp.value = ''; PAL.dom.cin.hidden = true;
-    PAL.from = from === 'room' && NET.sess && NET.screen === 'room' ? 'room' : '';
+    PAL.from = from === 'room' && NET.sess && NET.screen === 'room' ? 'room' : from === 'hub' && shownOverlay === 'hub' ? 'hub' : '';
     showOverlay('pal');
     if (palDemoOn()) { palDemoStart(); ivDemoStage(); }
     else {
@@ -7850,10 +7861,11 @@ window.PG = window.PG || {};
       try { t.focus({ preventScroll: true }); } catch (e) { /* ignore */ }
     }, 40);
   }
-  // 닫기 / Escape: back to 내 기록 (which goes back where it came from)
+  // 닫기 / Escape: back to 내 기록 (which goes back where it came from) - or to the room / 마이페이지 it was opened from
   function palClose() {
     if (shownOverlay !== 'pal') return;
     PAL.open = false; PAL.ask = '';
+    if (PAL.from === 'hub') { PAL.from = ''; openHub('my', HUB.from, 'pal'); return; }
     if (PAL.from === 'room' && NET.sess && NET.screen === 'room') {
       PAL.from = ''; showOverlay('room'); renderRoom();
       setTimeout(() => { if (shownOverlay === 'room' && !touchMode) try { const b = $('pg-room-iv'); if (b && !b.hidden) b.focus({ preventScroll: true }); } catch (e) { /* ignore */ } }, 60);
@@ -7998,6 +8010,12 @@ window.PG = window.PG || {};
     out.sort((a, b) => b.at - a.at);
     IV.list = out; ivShow();
   }
+  // an invite waiting for me (the staged one on a preview too): 마이페이지's 친구 dot
+  function ivWaiting() {
+    if (IV.demo && !IV.gone.has(ivKey(IV.demo))) return true;
+    const now = clNow();
+    return IV.list.some((v) => !IV.gone.has(ivKey(v)) && now - v.at < IV_MS);
+  }
   function ivDel(from) {
     if (!palOn() || !IV.uid || IV.uid !== CLOUD.user.uid) return;
     try { ivCol(IV.uid).doc(from).delete().catch(() => { /* (offline, gone already: it expires) */ }); } catch (e) { /* ignore */ }
@@ -8011,6 +8029,7 @@ window.PG = window.PG || {};
     IV.cur = cur && !NET.sess && !NET.busy && IV_WHERE[shownOverlay] ? cur : null;
     if (IV.cur) ivPaint(IV.cur);
     else if (IV.dom && !IV.dom.el.hidden) IV.dom.el.hidden = true;
+    palDots(); // (마이페이지's 친구 dot: an invite waiting)
     if (cur && !cur.demo) IV.t = setTimeout(() => { IV.t = 0; if (!stopped) ivShow(); }, clT(Math.max(50, IV_MS - (now - cur.at) + 20)));
   }
   function ivBuild() {
@@ -8121,6 +8140,7 @@ window.PG = window.PG || {};
         local: palLocal(), busy: PAL.busy, rows: PAL.rows ? PAL.rows.map((r) => ({ uid: r.uid, nick: r.nick, st: r.st, hi: r.hi, tr: r.tr, c: r.c, lk: r.lk })) : null,
         reqs: PAL.reqs.map((r) => ({ uid: r.uid, n: r.n, cd: r.cd })), at: PAL.at, err: PAL.err, bootErr: PAL.bootErr, booting: !!PAL.booting, loading: !!PAL.loading,
         msg: PAL.msg, said: PAL.said, open: PAL.open, shown: shownOverlay === 'pal', made: !!PAL.dom, btn: !!$('pg-pal-btn'), dot: !!$('pg-pal-new') && !$('pg-pal-new').hidden,
+        myBtn: !!dom.myPal, myShown: !!dom.myPal && !dom.myPal.hidden, myDot: !!$('pg-pal-new2') && !$('pg-pal-new2').hidden, palFrom: PAL.from || '',
         badgeDot: !!dom.troNew && !dom.troNew.hidden, debounce: !!PAL.t, writing: !!PAL.wr, gen: PAL.gen, ask: PAL.ask, mute: sget(palMuteKey()) || '',
         view: !D() ? '' : !D().guest.hidden ? 'guest' : !D().form.hidden ? 'main' : 'wait',
         line: D() && !D().line.hidden ? D().line.textContent : '', gline: D() && !D().guest.hidden ? D().gl.textContent : '', note: D() && !D().note.hidden ? D().note.textContent : '',

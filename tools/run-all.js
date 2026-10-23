@@ -275,8 +275,9 @@ const LIST = [
   // 친구 순위 (design/friends.md 6, group 19c): the panel signed in (12 friends, 2 requests) on phones on their side, a
   // portrait tablet and the 1x screen; signed out; the PR preview's demo; 내 기록 with its button and dot
   // (C:/Temp/bogeul/pal-*.png to LOOK at; each shot checks the fit and says "CLOUD SHOT error pal fit" when it fails)
-  ...[['in', 640, 360], ['in', 844, 390], ['in', 932, 430], ['in', 768, 1024], ['guest', 640, 360], ['demo', 844, 390], ['demo', 768, 1024], ['rec', 640, 360], ['rec', 932, 430]]
+  ...[['in', 640, 360], ['in', 844, 390], ['in', 932, 430], ['in', 768, 1024], ['guest', 640, 360], ['demo', 844, 390], ['demo', 768, 1024], ['rec', 640, 360], ['rec', 932, 430], ['my', 640, 360], ['my', 844, 390]]
     .map(([sc, w, h]) => V(`pal-${sc}-${w}`, HTTP + 'test-cloud.html?shot=pal-' + sc, 'rt60000', (out) => (/CLOUD SHOT error/.test(out) ? 'shot error' : /CLOUD SHOT READY/.test(out) ? true : 'no CLOUD SHOT READY'), { done: 'CLOUD SHOT READY', shot: `pal-${sc}-${w}.png`, w, h })),
+  V('pal-my-1x', HTTP + 'test-cloud.html?shot=pal-my-1x', 'rt60000', (out) => (/CLOUD SHOT error/.test(out) ? 'shot error' : /CLOUD SHOT READY/.test(out) ? true : 'no CLOUD SHOT READY'), { done: 'CLOUD SHOT READY', shot: 'pal-my-1x.png' }),
   V('pal-in-1x', HTTP + 'test-cloud.html?shot=pal-in-1x', 'rt60000', (out) => (/CLOUD SHOT error/.test(out) ? 'shot error' : /CLOUD SHOT READY/.test(out) ? true : 'no CLOUD SHOT READY'), { done: 'CLOUD SHOT READY', shot: 'pal-in-1x.png' }),
   // 친구 초대 (design/friends.md "As built (invites)"): the invite banner over the title, 친구와 하기's sign-in card for a guest
   ...[['iv', 844, 390], ['gate', 844, 390], ['iv-1x', 900, 760], ['gate-1x', 900, 760]].map(([sc, w, h]) => V(`pal-${sc}${/1x/.test(sc) ? '' : '-' + w}`, HTTP + 'test-cloud.html?shot=pal-' + sc, 'rt60000', (out) => (/CLOUD SHOT error/.test(out) ? 'shot error' : /CLOUD SHOT READY/.test(out) ? true : 'no CLOUD SHOT READY'), { done: 'CLOUD SHOT READY', shot: `pal-${sc}${/1x/.test(sc) ? '' : '-' + w}.png`, w, h })),

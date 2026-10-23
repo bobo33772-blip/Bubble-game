@@ -25,7 +25,7 @@
 // documents, one request.time, getAfter = the state after it); 19a the rules case by case, 19b through the frames (the
 // card and code at sign-in, request / accept / decline + mute / unfriend, the best 탕, the card's debounce, the
 // messages, the reads, errors, sign-out, another account, the preview's demo), 19c the fit (?shot=pal-in|pal-guest|
-// pal-demo|pal-rec at phones on their side, a portrait tablet, the 1x screen; "CLOUD SHOT error pal fit" when it fails).
+// pal-demo|pal-rec|pal-my (마이페이지's 친구 button) at phones on their side, a portrait tablet, the 1x screen; "CLOUD SHOT error pal fit" when it fails).
 // Prints "CLOUD PASS|FAIL <name>", "CLOUD INFO ..." and "CLOUD DONE pass=N fail=M".
 (function () {
   'use strict';
@@ -611,7 +611,7 @@
     ok('inert: #pg-fontwarm lacks 구글로 로그인', $('pg-fontwarm').textContent.indexOf('구글로 로그인') < 0);
     // (친구 순위, design/friends.md 6: nothing of it on the artifact)
     const ps0 = PG.debug.pal.state();
-    ok('inert: no 친구 순위 here - no #pg-pal-btn, no #pg-pal, no panel made, no dot', !$('pg-pal-btn') && !$('pg-pal') && !ps0.made && !ps0.btn && !ps0.demo && !ps0.code, ps0);
+    ok('inert: no 친구 순위 here - no #pg-pal-btn, no 마이페이지 친구 button, no #pg-pal, no panel made, no dot', !$('pg-pal-btn') && !$('pg-my-pal') && !ps0.myBtn && !$('pg-pal') && !ps0.made && !ps0.btn && !ps0.demo && !ps0.code, ps0);
     ok('inert: no ppogeul-stage / ppogeul-pal key from the boot, no 친구 순위 text warmed', !Object.keys(localStorage).some((k) => /^ppogeul-(stage|pal)/.test(k)) && $('pg-fontwarm').textContent.indexOf('혼자 하기 최고 기록') < 0);
     ok('inert: no 친구 초대 banner, room button or sign-in card; no invites listener; online not gated', !$('pg-iv') && !$('pg-room-iv') && !$('pg-net-gate') && !PG.debug.pal.iv().on && !PG.debug.mp.state().gated);
     ok('inert: no profiles / codes / reqs / friends call', !F.calls.some((c) => /(profiles|codes|reqs|friends|outbox)\//.test(c.path || '')));
@@ -2228,6 +2228,22 @@
     ok('friends: ... and no friend call', palN('PA', c0) === 0, F.calls.slice(c0));
     key(A, 'Escape'); await sleep(80);
     ok('friends: Escape goes back to 내 기록', !PS(A).shown && A.recShown(), PS(A));
+    // 마이페이지's 친구 button (2026-10-23): in the hub footer on the 마이페이지 tab only; signed out it opens the sign-in
+    // invitation; 닫기 goes back to 마이페이지 (the 친구 button focused)
+    {
+      await A.rec(false);
+      const H = A.D().shop; H.open('shop', 'title'); await sleep(40);
+      const onShop = PS(A).myShown; H.open('my', 'title'); await sleep(40);
+      const b = A.$('pg-my-pal'), r = b && b.getBoundingClientRect(), foot = A.$('pg-hub-close').parentNode.getBoundingClientRect(), mine = PS(A);
+      ok('friends: 마이페이지 has a 친구 button in its footer (not on the 상점 tab), its dot off', mine.myBtn && mine.myShown && !onShop && !mine.myDot && b.textContent === '친구' && r.width > 0 && r.top >= foot.top - 0.5 && r.bottom <= foot.bottom + 0.5, { mine, onShop, r: r && [r.left, r.top, r.width] });
+      b.click(); await sleep(80);
+      const st1 = PS(A);
+      ok('friends: ... it opens 친구 순위 (signed out: the sign-in invitation)', st1.shown && st1.view === 'guest' && st1.palFrom === 'hub' && !A.$('pg-pal-login').hidden, st1);
+      A.$('pg-pal-close').click(); await sleep(80);
+      const hb = H.hub();
+      ok('friends: ... 닫기 goes back to 마이페이지, the 친구 button focused', !PS(A).shown && hb.shown && hb.tab === 'my' && A.win().document.activeElement === b, { hb: [hb.shown, hb.tab], act: A.win().document.activeElement && A.win().document.activeElement.id });
+      H.close(); await sleep(40);
+    }
     // A signs in: its card and code
     await signIn(A, 'palA'); await settle(A);
     await until(() => PS(A).code && !PS(A).booting, 4000);
@@ -2245,13 +2261,13 @@
     ok('friends: B sends A a request (typed with a dash, lower case)', st.said === 'sent' && !!F.docs.get('reqs/palA/in/palB'), st);
     ok('friends: ... it carries B\'s own nick / code / animal / look only', Object.keys(rqd).sort().join() === 'at,c,cd,lk,n' && rqd.cd === codeB && rqd.n === F.docs.get('profiles/palB').nick, rqd);
     st = await PALP(A).load(true);
-    ok('friends: A\'s inbox has it; the red dot on 친구 순위 and on the title badge', st.reqs.length === 1 && st.reqs[0].uid === 'palB' && st.dot && st.badgeDot, st);
+    ok('friends: A\'s inbox has it; the red dot on 친구 순위, on the title badge and on 마이페이지\'s 친구', st.reqs.length === 1 && st.reqs[0].uid === 'palB' && st.dot && st.badgeDot && st.myDot, st);
     PALP(A).open(); await until(() => PS(A).reqRows.length === 1, 2000);
     ok('friends: 받은 요청 (1): B with its code', A.$('pg-pal-rqh').textContent === TX.reqs + ' (1)' && PS(A).reqRows[0].indexOf(rqd.n) >= 0 && PS(A).reqRows[0].indexOf(fmt(codeB)) >= 0, PS(A).reqRows);
     A.$('pg-pal-rq').querySelector('button[data-act="acc"]').click();
     await until(() => !PS(A).busy && PS(A).rows && PS(A).rows.some((r) => r.uid === 'palB'), 3000);
     st = PS(A);
-    ok('friends: 수락 -> friends both ways, the request gone, the dot off', st.rows.some((r) => r.uid === 'palB') && !st.reqs.length && !st.dot && !st.badgeDot && !F.docs.get('reqs/palA/in/palB')
+    ok('friends: 수락 -> friends both ways, the request gone, the dot off', st.rows.some((r) => r.uid === 'palB') && !st.reqs.length && !st.dot && !st.badgeDot && !st.myDot && !F.docs.get('reqs/palA/in/palB')
       && !!F.docs.get('friends/palA/f/palB') && !!F.docs.get('friends/palB/f/palA') && st.said === 'added', st);
     st = await PALP(B).load(true);
     ok('friends: B sees A too', st.rows.some((r) => r.uid === 'palA'), st);
@@ -2371,7 +2387,7 @@
     if (V.D().login.state().shown) V.D().login.guest();
     await sleep(50);
     st = PS(V);
-    ok('friends: the preview stages its demo from the start (the dot of its request)', st.demo && st.code === 'PVWX2345' && st.reqs.length === 1 && st.dot, st);
+    ok('friends: the preview stages its demo from the start (the dot of its request, on 마이페이지\'s 친구 too)', st.demo && st.code === 'PVWX2345' && st.reqs.length === 1 && st.dot && st.myBtn && st.myDot, st);
     V.T().openRec(); await sleep(50);
     PALP(V).open(); await sleep(80);
     st = PS(V);
@@ -2471,6 +2487,7 @@
     await signIn(fr, 'uidS'); await settle(fr);
     await until(() => P.state().code && !P.state().booting, 4000);
     if (scene === 'pal-rec') { await P.load(true); await fr.rec(true); return; }
+    if (/^pal-my/.test(scene)) { await P.load(true); await fr.rec(false); fr.D().shop.open('my', 'title'); fr.D().shop.tick(40); await sleep(60); fr.$('pg-hub-close').scrollIntoView({ block: 'end' }); return; }   // (마이페이지 with its 친구 button and dot)
     if (scene === 'pal-iv') { await P.load(true); await fr.rec(false); fr.D().toTitle(); await until(() => P.iv().shown, 3000); return; }
     P.open(); await until(() => P.state().list.length > 5 && !P.state().loading, 4000);
   }
@@ -2508,6 +2525,25 @@
       if ([...sec.querySelectorAll('.pg-box, .pg-field')].some((e) => e.getClientRects().length)) bad.push('a box shows');
       const r = g.getBoundingClientRect();
       info('pal fit ' + scene + ' ' + w + 'x' + h + ': card ' + Math.round(r.width) + 'x' + Math.round(r.height) + ' panel ' + sec.clientWidth + 'x' + sec.clientHeight + ', line "' + fr.$('pg-net-gate-st').textContent + '"');
+    } else if (/^pal-my/.test(scene)) {
+      // (마이페이지's 친구: whole in the footer beside 내 기록 / 닫기, the footer inside the panel and the screen, its dot on)
+      const b = fr.$('pg-my-pal'), foot = fr.$('pg-hub-close').parentNode;
+      if (!b || b.hidden) { log('CLOUD SHOT error pal fit: no 친구 button'); return; }
+      const r = b.getBoundingClientRect(), f = foot.getBoundingClientRect();
+      for (const el of foot.querySelectorAll('button')) {
+        if (!el.getClientRects().length) continue;
+        const q = el.getBoundingClientRect();
+        if (q.left < f.left - 0.5 || q.right > f.right + 0.5 || q.top < f.top - 0.5 || q.bottom > f.bottom + 0.5) bad.push(nm(el) + ' outside the footer');
+        const lb = el.firstElementChild && el.firstElementChild.tagName === 'SPAN' ? el.firstElementChild.getBoundingClientRect() : null;   // (친구's dot pokes out on purpose)
+        if (lb ? lb.left < q.left - 0.5 || lb.right > q.right + 0.5 : el.scrollWidth > el.clientWidth + 1) bad.push(nm(el) + ' clipped');
+        if (el !== b && q.left < r.right - 0.5 && q.right > r.left + 0.5) bad.push(nm(el) + ' over 친구');
+      }
+      // (a short screen scrolls the hub: the scene brings its footer into view)
+      if (f.bottom > W.innerHeight + 0.5 || f.top < -0.5 || f.left < -0.5 || f.right > W.innerWidth + 0.5) bad.push('the footer outside the view ' + J([f.top, f.bottom, W.innerHeight]));
+      if (touch && r.height < 31.5) bad.push('친구 under 32 px');
+      if (fr.$('pg-pal-new2').hidden) bad.push('no dot');
+      if (fr.$('pg-my-rec').hidden) bad.push('no 내 기록');
+      info('pal fit ' + scene + ' ' + w + 'x' + h + ': 친구 ' + Math.round(r.width) + 'x' + Math.round(r.height) + ' in a footer ' + Math.round(f.width) + ' wide');
     } else if (scene === 'pal-rec') {
       const card = fr.$('pg-rec').querySelector('.pg-rec-card'), b = fr.$('pg-pal-btn'), rg = W.document.createRange(); rg.selectNodeContents(fr.$('pg-rec-h'));
       const r = b.getBoundingClientRect(), c = card.getBoundingClientRect(), t = rg.getBoundingClientRect(), sc = fr.$('pg-screen').getBoundingClientRect();
