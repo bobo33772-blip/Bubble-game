@@ -605,7 +605,7 @@ ${code}
   const ALL = ${JSON.stringify(CHARS)};
   const q = /[?&]c=([a-z,]+)/.exec(location.search), ONLY = q ? q[1].split(',') : ALL;
   const Z = +((/[?&]z=([0-9]+)/.exec(location.search) || [0, 4])[1]); // big scale (chars.html?c=cat&z=8)
-  const NAMES = { duck: '꽥꽥이', capy: '까삐', otter: '해롱이', penguin: '펭펭', cat: '냥냥', frog: '개굴이' };
+  const NAMES = { duck: '꽥꽥이', capy: '까삐', otter: '해롱이', penguin: '펭펭', cat: '냥냥', frog: '깨굴이' };
   const SLOT = ['#ffd447', '#f6a6bd', '#7fdcc8', '#8dc9ff'];
   const el = (t, txt, cls) => { const e = document.createElement(t); if (txt) e.textContent = txt; if (cls) e.className = cls; return e; };
   function blit(x, fr, X, Y, flip) {

@@ -703,13 +703,13 @@ on the same animal each wear their own set; the second copy's body takes its twi
 (냥냥이가, 펭펭이가), which is how a kid says a pet's name; the others take 가:
 
 ```js
-  // "꽥꽥이가" / "까삐가" / "해롱이가" / "펭펭이가" / "냥냥이가" / "개굴이가"
+  // "꽥꽥이가" / "까삐가" / "해롱이가" / "펭펭이가" / "냥냥이가" / "깨굴이가"
   const aniSubj = (c) => { const n = (CHARS[c] || CHARS.duck).name, k = n.charCodeAt(n.length - 1) - 0xac00; return n + (k >= 0 && k < 11172 && k % 28 ? '이가' : '가'); };
 ```
 
 | Where | Text | Example |
 |---|---|---|
-| 쓰기 / 하기 / 두르기 … (상점 button, a 마이페이지 cell, 뽑기's 지금 쓰기) | `{주어} {done}` | 꽥꽥이가 썼어요 · 냥냥이가 했어요 · 까삐가 둘렀어요 · 해롱이가 꼈어요 · 펭펭이가 달았어요 · 개굴이가 켰어요 |
+| 쓰기 / 하기 / 두르기 … (상점 button, a 마이페이지 cell, 뽑기's 지금 쓰기) | `{주어} {done}` | 꽥꽥이가 썼어요 · 냥냥이가 했어요 · 까삐가 둘렀어요 · 해롱이가 꼈어요 · 펭펭이가 달았어요 · 깨굴이가 켰어요 |
 | 벗기 / 빼기 / 떼기 / 끄기, 마이페이지's 없음 | `{주어} {offDone}` (없음: the worn item's verb, else the slot's) | 꽥꽥이가 벗었어요 · 냥냥이가 뺐어요 · 펭펭이가 뗐어요 · 까삐가 껐어요 |
 | a purchase | `샀어요! {주어} 바로 {done}` | 샀어요! 꽥꽥이가 바로 썼어요 |
 | the first purchase ever (a new player) | + ` · 동물마다 따로 꾸며요` | 샀어요! 까삐가 바로 썼어요 · 동물마다 따로 꾸며요 |

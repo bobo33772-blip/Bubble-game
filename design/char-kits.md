@@ -18,7 +18,7 @@ The fix: every animal gets a different **bubble** (visible on the first shot, on
 | 해롱이 otter | 돌격 (brawler) | 휙 대시: press JUMP in the air | 물장구 거품: 3-way fan, short | swims x1.4 | 4 / 3 / 2 / 2 |
 | 펭펭 penguin | 저격 (sniper on a sled) | 쭉 배미끄럼: press JUMP in the air | 고드름 거품: fast, 117 px | fast on ice, cold water | 5 / 3 / 5 / 1 |
 | 냥냥 cat | 곡예 (acrobat) | 냥냥 2단 점프: press JUMP in the air | 털실 거품: rolls along the floor (air shots straight) | "냥!" water bounce | 3 / 5 / 3 / 3 |
-| 개굴이 frog | 함정 (trapper) | 개굴 3단 뛰기: press JUMP right on landing | 개구리알 거품: stops and hangs as a trap | 연못 점프 (new, tiny) | 3 / 4 / 1 / 4 |
+| 깨굴이 frog | 함정 (trapper) | 깨굴 3단 뛰기: press JUMP right on landing | 개구리알 거품: stops and hangs as a trap | 연못 점프 (new, tiny) | 3 / 4 / 1 / 4 |
 
 **No two animals share a movement verb:**
 - duck: float sideways
@@ -214,9 +214,45 @@ function airMoveOk(p, inp, clear) {
 - body bits A/B are never set;
 - the cat's `a` flag is ignored.
 
+- the battle magazine (2.9) is `KIT_BASE.mag`: 3 blows, refilled after 2.0 s, the same for everyone.
+
 **Look and sound return to exactly today's:** white bubbles with the slot tint, scale 1.0, no glyph, ring or trail, and the base `shoot` / `pop`. Nothing on screen then suggests a mechanic that is off, and the result can be pixel-tested (§13).
 
 ---
+
+### 2.9 배틀 장전 (the magazine, `KIT[c].mag`, battle only - the user, 2026-10-23)
+
+Each animal blows up to `mag[0]` bubbles (an otter's volley and a frog's egg are one blow each), then must wait. One
+timer from the last blow: the magazine refills **whole** once `mag[1]` frames pass with no blow, whether it ran empty
+or was only part spent (a burst then a pause refills it; firing on and on never trickles one back). A press with
+nothing left does nothing but a quiet `dry` 칙; a held button blows on the very frame it refills. Refilled from
+empty: a soft `reload` (local) and a white flash on the gauge. Co-op and solo: no magazine at all.
+
+| animal | role | blows | reload | why |
+|---|---|---|---|---|
+| 꽥꽥이 | 만능 | 3 | 132 f (2.2 s) | the all-rounder: the base magazine, a touch slower (its echo comes back) |
+| 까삐 | 든든 | 2 | 72 f (1.2 s) | two big slow bubbles, a quick reload |
+| 해롱이 | 돌격 | 2 | 96 f (1.6 s) | two 3-way volleys (each one blow) |
+| 펭펭 | 저격 | 2 | 78 f (1.3 s) | two fast long shots, a quick reload |
+| 냥냥 | 곡예 | 4 | 144 f (2.4 s) | the biggest magazine, the longest reload |
+| 깨굴이 | 함정 | 3 | 108 f (1.8 s) | three eggs to lay as traps |
+| (능력 끄기) | | 3 | 120 f (2.0 s) | `KIT_BASE.mag`, everyone |
+
+Measured with `tests/review-mpbal.js exp=duel` (bots, 15 pairs x both seats x 4 arenas x 24 seeds, 3-minute
+battles, 192 per pair): every pair within 40-60 % (the widest: 꽥꽥이 40 % against 냥냥, 까삐 60 % against
+펭펭); overall 꽥꽥이 46, 까삐 56, 해롱이 51, 펭펭 47, 냥냥 53, 깨굴이 48 %. Without the magazine the same bots had 펭펭
+at 40 % overall and 해롱이 beating 깨굴이 73 %. Shown on each HUD seat (a pip column at the panel's right edge, lit = a blow
+left; the spent ones fill as the refill runs) and, while short, as pips under my own animal. A battle room's kit card
+says my pick's `거품 n발 · 장전 s초`; the room rules say `AMMO_RULE`.
+
+Network: the host decides. `updateWorld` ticks every player's magazine, `hostShot` refuses a guest's blow with
+nothing left (its refill counted `AMMO_SLACK` = 20 frames early, for a late message); a guest ticks its own the same
+way (`guestSelf`) and asks before it blows, so it never shows a blow the host refuses (the host is the lenient
+side). `g.am = 1` in the snapshots: this host keeps magazines - under an older host (none) the guest fires freely as
+before. An older guest page fires freely: its blows past the magazine are refused on the host and its own copies give
+up (`predGiveUp`), nothing else. The `P` rows end with `[left, quiet frames]` (24, 25; `-1` = none) for the
+rivals' HUD seats; a guest's own count is its own. `SHOT_CAP` (3 out in all, the 4th blow pops my oldest) stays the
+clutter backstop, raised to the magazine where it is larger (the cat's 4: `capOf`, also in `capEmpties`).
 
 ## 3. 꽥꽥이 (고무 오리): duck
 
@@ -595,7 +631,7 @@ function airMoveOk(p, inp, clear) {
 
 ---
 
-## 8. 개굴이 (개구리): frog
+## 8. 깨굴이 (개구리): frog
 
 **Role:** 함정 (trapper).
 
@@ -603,7 +639,7 @@ function airMoveOk(p, inp, clear) {
 
 **Stats:** walk 1.25; jump chain −4.1 x 1.00/1.12/1.24 (**38/48/59 px**); CD 12/20. Bars: 속도 3, 점프 4, 사거리 1, 연사 4.
 
-### Move: 개굴 3단 뛰기 (hop chain; word "개굴!")
+### Move: 깨굴 3단 뛰기 (hop chain; word "깨굴!")
 
 - **Input:** press JUMP within **8 f after landing** (battle 6 f). The existing 5 f `JUMP_BUF` also counts presses just before the landing. Holding does nothing (edge only).
 - **Rule, in the normal jump block of `updatePlayer`:**
@@ -715,7 +751,7 @@ Recipes use the file's `voice()` and `noise()` parameter style.
 | `dash` | local | otter dash | bandpass noise 900→2600 Hz q 1.2 d 0.16 v 0.2 + sine 400→800 Hz d 0.06 v 0.08 |
 | `slide` | local | penguin: n=1 dive, n=2 slide, n=3 bonk | n1: highpass noise 3000 Hz d 0.08 v 0.12 + triangle 900→600 d 0.05 · n2: highpass noise 3200→1600 Hz d 0.35 v 0.14 s 0.5 · n3: triangle 300→150 Hz d 0.06 v 0.2 + lowpass noise 600 Hz d 0.04 |
 | `djump` | local | cat double jump | p25 880→1320 Hz sl 0.05 d 0.08 v 0.14 + triangle 1760 Hz d 0.05 v 0.06 |
-| `hop` | local | frog chained hop, n = 1..2 | k = [1.19, 1.41][n−1]: square 220k→330k Hz d 0.06 v 0.14, then square 260k→190k Hz d 0.05 v 0.12 ("개굴") |
+| `hop` | local | frog chained hop, n = 1..2 | k = [1.19, 1.41][n−1]: square 220k→330k Hz d 0.06 v 0.14, then square 260k→190k Hz d 0.05 v 0.12 ("깨굴") |
 | `b_echo` | local | duck: n=0 shoot, n=1 turn | n0: p25 1100→1500 Hz d 0.05 v 0.16 + sine 700 Hz d 0.04 v 0.08 · n1: p12 1500→1000 Hz d 0.06 v 0.08 |
 | `b_onsen` | local | capy shoot "뽀옹" | sine 220→150 Hz d 0.12 v 0.24 + lowpass noise 800 Hz d 0.1 v 0.1 |
 | `b_splash` | local | otter shoot "촵" | bandpass noise 2000→700 Hz q 1.3 d 0.09 v 0.22 + sine 500→300 Hz d 0.06 v 0.12 |
@@ -761,7 +797,7 @@ The `perk` string is replaced. The picker's `aria-label` becomes `name (animal):
 | otter | 돌격 | 휙 날아들어 세 갈래 물장구! (16) | 휙 대시 | 공중에서 점프 한 번 더! 옆으로 휙 (20) | 물장구 거품 | 세 갈래로 촤악 퍼져요 (12) | 휙! | 두 번: 대시 | [4,3,2,2] | #5fe0c8 |
 | penguin | 저격 | 배로 쭉 미끄러져 멀리 쏘는 저격수 (19) | 쭉 배미끄럼 | 공중에서 점프 한 번 더! 배로 쭉~ (20) | 고드름 거품 | 빠르게 아주 멀리 날아가요 (14) | 쭉~ | 두 번: 쭉 | [5,3,5,1] | #9fdcff |
 | cat | 곡예 | 2단 점프로 폴짝, 털실은 데굴데굴 (19) | 냥냥 2단 점프 | 공중에서 점프 한 번 더! 더 높이 (19) | 털실 거품 | 땅에서 쏘면 통통 굴러가요 (14) | 냥냥! | 두 번: 2단 | [3,5,3,3] | #c9a8ff |
-| frog | 함정 | 폴짝폴짝 뛰며 개구리알 함정 깔기 (18) | 개굴 3단 뛰기 | 착지하자마자 또 점프! 점점 높이 (18) | 개구리알 거품 | 앞에 멈춰 기다리는 함정 (13) | 개굴! | 착지 때 또 | [3,4,1,4] | #9be86a |
+| frog | 함정 | 폴짝폴짝 뛰며 개구리알 함정 깔기 (18) | 깨굴 3단 뛰기 | 착지하자마자 또 점프! 점점 높이 (18) | 개구리알 거품 | 앞에 멈춰 기다리는 함정 (13) | 개굴! | 착지 때 또 | [3,4,1,4] | #9be86a |
 
 The stat bars are display values tied to the numbers:
 - **속도** = top ground speed: capy 1.15 → 2; 1.25 → 3; otter 1.40 → 4; penguin slide 2.6 → 5.

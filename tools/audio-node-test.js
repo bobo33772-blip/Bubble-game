@@ -21,7 +21,7 @@ const SFX_V5 = ['stake', 'tro_fly', 'tro_up', 'tro_down', 'promote'];
 const SFX_V6 = ['coin', 'arm', 'buy', 'equip'];
 // v4 뽑기 (design/gacha.md §9): the crank, a capsule landing, a capsule opening, the fanfare (local, never echoed)
 const SFX_V7 = ['gacha_roll', 'gacha_drop', 'gacha_pop', 'gacha_win'];
-const SFX_V8 = ['dry']; // (battle: a press over the shot cap)
+const SFX_V8 = ['dry', 'reload']; // (battle: an empty press; the magazine refilled)
 const SFX_NAMES = SFX_V1.concat(SFX_V2, SFX_V3, SFX_V4, SFX_V5, SFX_V6, SFX_V7, SFX_V8);
 const V5_SOUNDS = [['stake', null], ['tro_fly', 0], ['tro_fly', 1], ['tro_fly', 2], ['tro_fly', 3], ['tro_fly', 4], ['tro_fly', 5], ['tro_up', null], ['tro_down', null], ['promote', null]];
 // every distinct v4 sound as [name, n]: n-variants per the spec, pop n 1..6 per animal (null = no opts)
@@ -782,7 +782,7 @@ const label = (name, n) => name + (n === null ? '' : '(n=' + n + ')');
   // shapes the spec asks for
   const sh = (id) => got.get(id).f0;
   ok(sh('hop(n=2)')[0][1] / sh('hop(n=1)')[0][1] > 1.15, 'hop level 2 croaks higher than level 1');
-  ok(sh('hop(n=1)')[0][2] > sh('hop(n=1)')[0][1] && sh('hop(n=1)')[1][2] < sh('hop(n=1)')[1][1], 'hop "개굴" rises, then falls');
+  ok(sh('hop(n=1)')[0][2] > sh('hop(n=1)')[0][1] && sh('hop(n=1)')[1][2] < sh('hop(n=1)')[1][1], 'hop "깨굴" rises, then falls');
   ok(got.get('hop(n=1)').srcs[1].startT > got.get('hop(n=1)').srcs[0].startT, 'hop: the fall comes after the rise');
   ok(sh('b_icicle')[0][2] > sh('b_icicle')[0][1] && sh('b_onsen')[0][2] < sh('b_onsen')[0][1], 'icicle zips up, onsen bubble sags down');
   ok(sh('b_echo(n=0)')[0][2] > sh('b_echo(n=0)')[0][1] && sh('b_echo(n=1)')[0][2] < sh('b_echo(n=1)')[0][1], 'echo shot rises, its turn falls back');

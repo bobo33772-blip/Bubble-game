@@ -2344,9 +2344,9 @@
     // the ranking
     st = await PALP(A).load(true); await sleep(50);
     st = PS(A);
-    ok('friends: the ranking - best 탕 first, my row (나) with its 3탕', st.list.length === 2 && /\(나\)/.test(st.list[0]) && /3탕/.test(st.list[0]) && st.list[1].indexOf(F.docs.get('profiles/palB').nick) >= 0
+    ok('friends: the ranking - best round count first, my row (나) with its 최고 3라운드, no 회차 / 탕', st.list.length === 2 && /\(나\)/.test(st.list[0]) && /최고 3라운드/.test(st.list[0]) && !/회차|탕/.test(st.list.join()) && st.list[1].indexOf(F.docs.get('profiles/palB').nick) >= 0
       && A.$('pg-pal-list').children[0].classList.contains('is-me'), st.list);
-    ok('friends: the stage text: 5탕 / 2회차 5탕 / 기록 없음', PALP(A).stageTx(5) === '5탕' && PALP(A).stageTx(29) === '2회차 5탕' && PALP(A).stageTx(0) === TX.none0 && PALP(A).stageTx(2400) === '100회차 24탕');
+    ok('friends: the stage text: one round count from the first 탕 - 최고 5라운드 / 최고 29라운드 (2회차 5탕) / 기록 없음', PALP(A).stageTx(5) === '최고 5라운드' && PALP(A).stageTx(29) === '최고 29라운드' && PALP(A).stageTx(0) === TX.none0 && PALP(A).stageTx(2400) === '최고 2400라운드');
     // unfriend (asked inline first)
     A.$('pg-pal-list').querySelector('[data-uid="palB"] button[data-act="cut"]').click(); await sleep(30);
     const ask = A.$('pg-pal-list').querySelector('.pg-pal-ask');
@@ -2377,7 +2377,7 @@
     st = await PALP(A).load(true);
     ok('friends: another account in the same browser -> its own code, none of A\'s friends', st.uid === 'palD' && st.code && st.code !== codeA && st.rows.length === 0 && !st.reqs.length, st);
     // the web fonts know every 친구 순위 syllable
-    const strs = Object.values(TX).concat(['위', '회차', '탕', '점']), miss = new Set();
+    const strs = Object.values(TX).concat(['위', '최고', '라운드', '점']), miss = new Set();
     for (const q of ['.pg-fw-sign', '.pg-fw-body']) { const warm = A.win().document.querySelector('#pg-fontwarm ' + q).textContent; for (const x of strs) for (const ch of x) if (/[가-힣…·]/.test(ch) && warm.indexOf(ch) < 0) miss.add(q + ':' + ch); }
     ok('friends: every syllable of 친구 순위 is warmed in both faces', miss.size === 0, [...miss].join(''));
     A.remove(); B.remove(); C.remove();

@@ -7,7 +7,8 @@ is `PAL` / `pal*` / `#pg-pal*`, labelled **친구 순위**.
 
 ## 1. Best stage (혼자 하기 최고 탕)
 - `st = G.loop * 24 + G.round + 1` (24 = LEVELS.length, constant `PAL_TANG`), range 0..2400 (G.loop is 0..99). 0 = none.
-  This is the 탕 *reached*, which matches the game-over line ("2회차 5번째 탕"). Shown as `5탕` (loop 0) or `2회차 5탕`.
+  This is the 탕 *reached*, counted round by round from the very first 탕 (2회차's 5번째 탕 = 29). Shown as one total
+  round count `최고 29라운드` (no 회차 / 탕 wording - the user, 2026-10-23); the ranking still orders by st.
 - Recorded in `startRound` (every 탕, including continueLoop's 탕 1), only when
   `G.gameMode === 'solo' && !G.online && !G.attract && PAL.run`. `newGame(i)` sets `PAL.run = (i | 0) === 0`, so a
   debug start (PG.debug.start at 탕 > 1) never counts, and neither do co-op, battle or the attract demo.
@@ -196,7 +197,7 @@ All timers go through clT() (tests run the clock fast). Every async step checks 
      input; "복사했어요").
   2. Add row: input (maxlength 9, autocapitalize=characters, placeholder "친구 코드 8자리") + [친구 요청]; aria-live line.
   3. 받은 요청 (n), hidden when 0: rows `[bust] 닉네임 · ABCD-2345  [수락] [거절]`.
-  4. Ranking `<ol>` "혼자 하기 최고 기록": `1  [bust in its look]  닉네임 (나)  2회차 5탕 · 12,340점 · [lg][cup]320`;
+  4. Ranking `<ol>` "혼자 하기 최고 기록": `1  [bust in its look]  닉네임 (나)  최고 29라운드 · 12,340점 · [lg][cup]320`;
      my row highlighted; friend rows end with a small [끊기] -> inline "○○님과 친구를 끊을까요? [끊기] [취소]".
      Busts: the 16 px life_ sprite drawn with the card's look (same drawer as 마이페이지's busts), league = 8x8 lg icon.
   5. Footer: [새로고침] (off 10 s after a load) + [닫기].

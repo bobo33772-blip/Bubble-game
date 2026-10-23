@@ -22,6 +22,8 @@
   function run() {
     const D = PG.debug, G = D.G, LV = D.levels(), AR = D.arenas();
     const TS = 8, PF_TOP = 16, FLOOR = PF_TOP + 25 * TS, LEDGE = PF_TOP + 12 * TS, WALL_L = 16, WALL_R = 240;
+    // (the shot-cap backstop alone: the battle magazine off for this test - game.js AMMO)
+    const tn = (name, fn) => t(name + ' (magazine off: the cap alone)', () => { D.ammo.off(true); try { return fn(); } finally { D.ammo.off(false); } });
     const CH = ['duck', 'capy', 'otter', 'penguin', 'cat', 'frog'];
     const sfx = [];
     const A = PG.Audio || {};
@@ -580,13 +582,13 @@
       release();
       return { out, max, dry: sfx.filter((s) => s === 'dry').length, capPops: (G.capPops | 0) - cp0 };
     };
-    t('battle: 3 of my bubbles out in all (in flight + floating) - every animal tapping 4 s reaches 3, never more; the extra blows pop my oldest, never a dry', () => {
+    tn('battle: 3 of my bubbles out in all (in flight + floating) - every animal tapping 4 s reaches 3, never more; the extra blows pop my oldest, never a dry', () => {
       const r = {}; for (const c of CH) r[c] = capRun(c, 'battle');
       info('battle cap: ' + CH.map((c) => c + ' out ' + r[c].out + ' flying ' + r[c].max + ' pops ' + r[c].capPops + ' dry ' + r[c].dry).join(' | '));
       for (const c of CH) if (r[c].out !== 3 || r[c].dry || r[c].capPops < 3) return c + ' ' + JSON.stringify(r[c]);
     });
     // 3 blown and floating, then the 4th: the oldest pops (plain self-pop: no score, no chain), the new one flies
-    t('battle: the 4th blow pops the oldest (no score, no chain); a just-ridden one is skipped; all in flight: the oldest volley goes whole', () => {
+    tn('battle: the 4th blow pops the oldest (no score, no chain); a just-ridden one is skipped; all in flight: the oldest volley goes whole', () => {
       const scores = () => [G.score].concat(G.players.map((q) => q.score)).join(',');
       let [p, v] = battle(['capy', 'duck']); put(v, 200, FLOOR, -1);
       const bs = [];
@@ -689,7 +691,7 @@
       if (cat.ty !== 'line' || cat.tr !== duck.tr || Math.abs(end - 77) > 0.01 || !cat.ycon) return 'air shot';
     });
 
-    // ==================================================================== frog: 개굴 3단 뛰기
+    // ==================================================================== frog: 깨굴 3단 뛰기
     const apexOf = (y0) => { y0 = y0 === undefined ? P(0).y : y0; let m = 0; for (let i = 0; i < 90 && !(i > 2 && P(0).onGround); i++) { step(1); m = Math.max(m, y0 - P(0).y); } return m; };
     t('frog hop chain: presses on landing 38 / 48 / 59 (+-1), bits; a press 9 f after landing resets; walk-off resets; water starts at 48', () => {
       solo('frog'); place(60, FLOOR); sfx.length = 0;
@@ -739,7 +741,7 @@
       info('egg trap: grime trapped at egg age ' + age);
       if (age < 40 || age > 80) return 'age ' + age;
     });
-    t('frog egg cap: the 4th egg sends the oldest to float (battle: the 3rd; the 4th pops the oldest - 3 out in all); every hold phase <= 110 f; laid at the wall', () => {
+    tn('frog egg cap: the 4th egg sends the oldest to float (battle: the 3rd; the 4th pops the oldest - 3 out in all); every hold phase <= 110 f; laid at the wall', () => {
       const capRun = (bt) => {
         const p = bt ? battle(['frog', 'duck'])[0] : solo('frog', ROOM_F);
         put(p, 30, FLOOR, 1);
@@ -754,6 +756,60 @@
       if (!/^float,shot,shot,shot/.test(solo4)) return 'solo cap ' + solo4;
       if (!/^pop,float,shot,shot/.test(bat)) return 'battle cap ' + bat; // (the 4th: 3 out in all - the oldest, floating, pops)
       if (!/^shot x 224\.0 ph 1$/.test(wall) || !/^shot x 224\.0 ph 1 stop \d+$/.test(wall2)) return 'wall';
+    });
+
+    // ==================================================================== battle: the magazine (장전, game.js AMMO)
+    // BUBBLE tapped every other frame (tap) or held (hold) for 330 frames from a full magazine: the frames it blew on
+    // (a volley = 1), the 'dry' / 'reload' sounds, the magazine left after each blow
+    const magRun = (char, hold, perksOff) => {
+      const [p, v] = battle([char, 'duck'], null, perksOff); put(p, 30, FLOOR, 1); put(v, 200, FLOOR, -1);
+      sfx.length = 0; const at = [], left = [];
+      for (let f = 0; f < 330; f++) {
+        D.press('shoot', hold ? true : f % 2 === 0, 0); step(1);
+        v.invuln = 60; if (p.x !== 30) put(p, 30, FLOOR, 1);
+        if (G.bubbles.some((b) => b.owner === 0 && b.kind === 'empty' && b.born === G.frame && !b.vi)) { at.push(f); left.push(D.ammo.of(0).left); }
+      }
+      release();
+      return { at, left, dry: sfx.filter((s) => s === 'dry').length, reload: sfx.filter((s) => s === 'reload').length, m: D.ammo.of(0) };
+    };
+    t('battle magazine: each animal its own (n, reload); 능력 끄기: the base 3 in 2.0 s for all; co-op / solo: none', () => {
+      const own = CH.map((c) => c + ' ' + D.ammo.kit(c).join('/')).join(' | ');
+      info('magazines (blows / reload frames): ' + own + ' | base ' + D.ammo.base().join('/'));
+      const ks = CH.map((c) => D.ammo.kit(c).join()), base = D.ammo.base();
+      if (base.join() !== '3,120') return 'base ' + base;
+      if (new Set(ks).size !== CH.length) return 'two animals share a magazine: ' + own;
+      if (!CH.every((c) => { const k = D.ammo.kit(c); return k[0] >= 2 && k[0] <= 4 && k[1] >= 60 && k[1] <= 180; })) return 'out of range ' + own;
+      for (const c of CH) { battle([c, 'duck']); const m = D.ammo.of(0), k = D.ammo.kit(c); if (!m || m.n !== k[0] || m.rl !== k[1] || m.left !== k[0] || m.cap !== Math.max(3, k[0])) return c + ' ' + JSON.stringify(m); }
+      battle(['cat', 'penguin'], null, true);
+      if (![0, 1].every((s) => { const m = D.ammo.of(s); return m && m.n === 3 && m.rl === 120; })) return 'perks off ' + JSON.stringify([D.ammo.of(0), D.ammo.of(1)]);
+      solo('cat', ROOM_F); if (D.ammo.of(0)) return 'solo has one';
+      D.local.coop(['cat', 'duck'], 0); if (D.ammo.of(0)) return 'co-op has one';
+    });
+    t('battle magazine: tapping - n blows, then each press a quiet 칙 and nothing; the reload frames after the last blow it blows again (full), and a soft reload cue', () => {
+      const out = [];
+      for (const c of CH) {
+        const k = D.ammo.kit(c), r = magRun(c, false), gap = r.at[k[0]] - r.at[k[0] - 1];
+        out.push(c + ' at ' + r.at.slice(0, k[0] + 2).join(',') + ' gap ' + gap + ' dry ' + r.dry + ' cue ' + r.reload);
+        if (r.at.length < k[0] + 1 || r.left[k[0] - 1] !== 0 || gap < k[1] || gap > k[1] + 2 || !r.dry || r.reload < 1 || r.left[k[0]] !== k[0] - 1) return c + ' ' + JSON.stringify(r);
+      }
+      info('tapping: ' + out.join(' | '));
+    });
+    t('battle magazine: a held button - no 칙, it blows on the very frame the magazine refills', () => {
+      const out = [];
+      for (const c of CH) {
+        const k = D.ammo.kit(c), r = magRun(c, true), gap = r.at[k[0]] - r.at[k[0] - 1];
+        out.push(c + ' gap ' + gap);
+        if (r.at.length < k[0] + 1 || gap !== k[1] || r.dry) return c + ' ' + JSON.stringify(r);
+      }
+      info('held: ' + out.join(' | '));
+    });
+    t('battle magazine: a part-spent magazine refills whole after the reload frames with no blow (one timer from the last blow)', () => {
+      for (const c of ['duck', 'cat']) {
+        const k = D.ammo.kit(c); const [p, v] = battle([c, 'duck']); put(p, 30, FLOOR, 1); put(v, 200, FLOOR, -1);
+        if (!blow(0).length) return c + ' no blow';
+        const a = D.ammo.of(0).left; step(k[1] - 2); v.invuln = 60; const b = D.ammo.of(0).left; step(3); const d = D.ammo.of(0).left;
+        if (a !== k[0] - 1 || b !== k[0] - 1 || d !== k[0]) return c + ' ' + [a, b, d];
+      }
     });
 
     // ==================================================================== every bubble

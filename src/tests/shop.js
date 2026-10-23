@@ -977,7 +977,7 @@
     SH.close(); fresh(20261020); SH.set({ ce: 300, sh: 1, lh: 1 }); SH.open('shop'); await sleep(30);
     slotTab('h'); pickCell('h1'); $('pg-shop-buy').click(); $('pg-shop-buy').click(); await sleep(20);
     ok('lh: a first purchase with lh - its line wins: "샀어요! 꽥꽥이가 바로 썼어요 · 이제 동물마다 따로 꾸며요"', S().hub.msg === '샀어요! ' + SJ() + ' 바로 썼어요 · 이제 동물마다 따로 꾸며요' && S().lh === 0, [S().hub.msg, S().lh]);
-    ok('subj: the six subjects - 꽥꽥이가 까삐가 해롱이가 펭펭이가 냥냥이가 개굴이가', D.chars().map((c) => SH.subj(c.id)).join(' ') === '꽥꽥이가 까삐가 해롱이가 펭펭이가 냥냥이가 개굴이가', D.chars().map((c) => SH.subj(c.id)));
+    ok('subj: the six subjects - 꽥꽥이가 까삐가 해롱이가 펭펭이가 냥냥이가 깨굴이가', D.chars().map((c) => SH.subj(c.id)).join(' ') === '꽥꽥이가 까삐가 해롱이가 펭펭이가 냥냥이가 깨굴이가', D.chars().map((c) => SH.subj(c.id)));
     SH.close();
     // read-only (a newer page's store): every state says so
     localStorage.setItem('ppogeul-trophy-shopro2', JSON.stringify({ v: 6, dev: 'abcdefgh', t: 1 }));

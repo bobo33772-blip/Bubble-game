@@ -104,12 +104,15 @@ window.PG = window.PG || {};
     cat: { name: '냥냥', animal: '고양이', col: '#f2a65a', dark: '#4a2410', role: '곡예', tag: '2단 점프로 폴짝, 털실은 데굴데굴',
       badge: '', stats: [3, 5, 3, 3], hue: '#c9a8ff',
       move: { name: '냥냥 2단 점프', how: '공중에서 점프 한 번 더! 더 높이', word: '냥냥!', touch: '두 번: 2단' }, bub: { name: '털실 거품', desc: '땅에서 쏘면 통통 굴러가요' } },
-    frog: { name: '개굴이', animal: '개구리', col: '#6cc644', dark: '#1d4a14', role: '함정', tag: '폴짝폴짝 뛰며 개구리알 함정 깔기',
+    frog: { name: '깨굴이', animal: '개구리', col: '#6cc644', dark: '#1d4a14', role: '함정', tag: '폴짝폴짝 뛰며 개구리알 함정 깔기',
       badge: '', stats: [3, 4, 1, 4], hue: '#9be86a',
-      move: { name: '개굴 3단 뛰기', how: '착지하자마자 또 점프! 점점 높이', word: '개굴!', touch: '착지 때 또' }, bub: { name: '개구리알 거품', desc: '앞에 멈춰 기다리는 함정' } },
+      move: { name: '깨굴 3단 뛰기', how: '착지하자마자 또 점프! 점점 높이', word: '깨굴!', touch: '착지 때 또' }, bub: { name: '개구리알 거품', desc: '앞에 멈춰 기다리는 함정' } },
   };
   // the kit card's stat rows and its 능력 끄기 line (every animal the same base kit: 3/3/3/3)
   const STAT_NAMES = ['속도', '점프', '사거리', '연사'], STATS_OFF = [3, 3, 3, 3];
+  // (AMMO: a battle room's rule line, and a magazine as its kit line says it - 거품 3발 · 장전 2초 / 1.4초)
+  const AMMO_RULE = '거품을 다 쏘면 잠깐 장전해요 · 동물마다 발 수와 장전 시간이 달라요';
+  const magTx = (m) => '거품 ' + m[0] + '발 · 장전 ' + Math.round(m[1] / 6) / 10 + '초';
   const OFF_LINE = '능력 꺼짐 · 모두 같은 기본 능력이에요', OFF_COUNT = '능력 꺼짐 · 모두 같은 기본 능력';
   const CHAR_ANIMS = { idle: 2, walk: 4, jump: 1, fall: 1, shoot: 1, die: 4 };
   // an animal id from outside (network, storage, tests): one of the six, never an inherited key like 'constructor'
@@ -147,37 +150,39 @@ window.PG = window.PG || {};
   // the bubbles (shot): ty = the path stepShot runs, v px/f, f = shot-phase frames (capture on; then it floats), r the
   // capture radius against enemies (boss r + 2, spores r + 1), rP against rivals; sh = the shampoo variant (every shot
   // phase stays <= SHOT_MAX f: the guest's prediction and its sid live that long)
-  const KIT_BASE = { walk: 1, cd: [14, 24], shot: { ty: 'line', v: 3.5, f: 22, r: 8, rP: 8, sh: { f: 33, r: 12, rP: 12 } } };
+  // mag: battle only - [blows per magazine, frames of quiet that refill it whole] (장전: see AMMO below; 능력 끄기 /
+  // KIT_BASE 3 in 2.0 s for everyone; co-op and solo never read it)
+  const KIT_BASE = { walk: 1, cd: [14, 24], mag: [3, 120], shot: { ty: 'line', v: 3.5, f: 22, r: 8, rP: 8, sh: { f: 33, r: 12, rP: 12 } } };
   const KIT = {
     // 둥실 활공: hold JUMP while falling - vy eased down to `fall` (x brake per frame), air speed x air, max frames (battle maxB)
     // 메아리 거품: out at v slowing by dec a frame, turns at 0, comes back speeding up by dec (the same 0.10 with shampoo) to `back`
-    duck: { walk: 1, cd: [14, 24], shot: { ty: 'echo', v: 3.5, dec: 0.10, back: 2.6, f: 80, r: 8, rP: 8, sh: { r: 12, rP: 12, dec: 0.08 } },
+    duck: { walk: 1, cd: [14, 24], mag: [3, 132], shot: { ty: 'echo', v: 3.5, dec: 0.10, back: 2.6, f: 80, r: 8, rP: 8, sh: { r: 12, rP: 12, dec: 0.08 } },
       glide: { fall: 0.65, brake: 0.7, air: 1.15, max: 75, maxB: 60 } },
     // 털썩 엉덩방아: wind-up (hang) `wind` f, slam at vy, recovery `rec` f, then cd; the quake box is centre x +- dx,
     // feet - up .. feet + dn; soak frames, enemy hop vy, boss soap at most once per bossCd f per capy
     // 왕방울 거품: big and slow (drawn x scale)
-    capy: { walk: 0.92, cd: [14, 24], shot: { ty: 'line', v: 2.8, f: 22, r: 11, rP: 10, scale: 1.25, sh: { f: 33, r: 15, rP: 14 } },
+    capy: { walk: 0.92, cd: [14, 24], mag: [2, 72], shot: { ty: 'line', v: 2.8, f: 22, r: 11, rP: 10, scale: 1.25, sh: { f: 33, r: 15, rP: 14 } },
       slam: { clear: 16, wind: 8, vy: 5.0, rec: 14, cd: 45, dx: 36, up: 24, dn: 8, soak: 300, hop: -1.6, bossCd: 90, rate: 40 } },
     // 휙 대시: v px/f flat (no gravity) for f frames, then cd
     // 물장구 거품: a straight centre + two droplets (vx, -+vy) that catch rivals only up to rivalAge and burst at the end
-    otter: { walk: 1.12, cd: [16, 26], shot: { ty: 'fan', v: 3.6, f: 16, r: 8, rP: 8, sh: { f: 24, r: 12, rP: 12 },
+    otter: { walk: 1.12, cd: [16, 26], mag: [2, 96], shot: { ty: 'fan', v: 3.6, f: 16, r: 8, rP: 8, sh: { f: 24, r: 12, rP: 12 },
       drop: { vx: 3.3, vy: 0.75, f: 13, r: 6, rP: 6, rivalAge: 8, sh: { r: 10, rP: 10 } } },
       dash: { v: 3.2, f: 10, cd: 20 } },
     // 쭉 배미끄럼: dive (vx, vy >= diveVy), belly slide at >= v decaying x held / free / ice per frame (brake: opposite
     // input), ends below `end` px/f or at max f; a wall bonks for `bonk` f; slide-jump / ledge carry x carry (opposite: carryOpp)
     // 고드름 거품: fast and long, a thin catch against rivals
-    penguin: { walk: 1, cd: [20, 32], shot: { ty: 'line', v: 4.5, f: 26, r: 8, rP: 6, sh: { f: 39, r: 12, rP: 10 } },
+    penguin: { walk: 1, cd: [20, 32], mag: [2, 78], shot: { ty: 'line', v: 4.5, f: 26, r: 8, rP: 6, sh: { f: 39, r: 12, rP: 10 } },
       slide: { diveVx: 2.6, diveVy: 1.8, v: 2.6, held: 0.985, free: 0.97, ice: 0.997, brake: 0.18,
         end: 1.3, max: 90, bonk: 10, carry: 0.995, carryOpp: 0.25 } },
     // 냥냥 2단 점프: vy, curl pose frames
     // 털실 거품 (blown on the ground): vx / vy under gravity g; each landing hops at `hop` keeping vx x keep; floats after
     // `lands` landings or f frames. In the air the cat blows the base bubble (airShot)
-    cat: { walk: 1, cd: [14, 24], shot: { ty: 'yarn', v: 2.0, vy: -1.0, g: 0.16, hop: -1.8, keep: 0.92, lands: 3, f: 64, r: 8, rP: 8, sh: { r: 12, rP: 12, lands: 4, f: 86 } },
+    cat: { walk: 1, cd: [14, 24], mag: [4, 144], shot: { ty: 'yarn', v: 2.0, vy: -1.0, g: 0.16, hop: -1.8, keep: 0.92, lands: 3, f: 64, r: 8, rP: 8, sh: { r: 12, rP: 12, lands: 4, f: 86 } },
       airShot: 'base', dj: { vy: -3.4, curl: 10 } },
-    // 개굴 3단 뛰기: JUMP within win f of landing (battle winB) chains x mul[level] (battle mulB)
+    // 깨굴 3단 뛰기: JUMP within win f of landing (battle winB) chains x mul[level] (battle mulB)
     // 개구리알 거품: flies `go` f at v x decay a frame, then hangs (still capturing) hold f (battle holdB); at most cap (battle
     // capB) hang per frog - one more lets the oldest float
-    frog: { walk: 1, cd: [12, 20], shot: { ty: 'egg', v: 4.2, decay: 0.92, go: 18, hold: 86, holdB: 70, cap: 3, capB: 2, r: 8, rP: 8, sh: { r: 12, rP: 12, cap: 4, capB: 3 } },
+    frog: { walk: 1, cd: [12, 20], mag: [3, 108], shot: { ty: 'egg', v: 4.2, decay: 0.92, go: 18, hold: 86, holdB: 70, cap: 3, capB: 2, r: 8, rP: 8, sh: { r: 12, rP: 12, cap: 4, capB: 3 } },
       hop: { mul: [1, 1.12, 1.24], mulB: [1, 1.10, 1.20], win: 8, winB: 6 } },
   };
   const SHOT_MAX = 110; // (no shot phase is longer: checked by newShot's numbers above, see the guest's prediction)
@@ -242,6 +247,8 @@ window.PG = window.PG || {};
   const V3_TEXT = CHAR_IDS.map((c) => { const d = CHARS[c]; return [d.name, d.animal, d.role, d.tag, d.badge, d.move.name, d.move.how, d.move.touch, d.bub.name, d.bub.desc].join(' '); }).join(' ') +
     // (v4 kit cards, hints, the countdown line; the pips' aria text)
     ' ' + STAT_NAMES.join(' ') + ' 특기: 거품: ' + OFF_LINE + ' 내 특기: 5점 중 3점' +
+    // (AMMO: the battle room's magazine line, its rule; the kit card's aria text)
+    ' 배틀 거품 발 · 장전 초 . ' + AMMO_RULE +
     ' 혼자 하기 친구와 하기 같이 하기 배틀 보스 난입! 뽀득 KO! 냥! 시작! 결과 발표 한 판 더 로비로 MVP 점 때 구조 위 KO 살아났다! 다 함께 덕분에 목욕탕이 뽀득뽀득해졌어요 1234' +
     // (online panels / messages)
     ' 친구 기기와 연결하지 못했어요 같은 와이파이에서 해 보거나 잠시 뒤 다시 해 주세요' +
@@ -386,7 +393,7 @@ window.PG = window.PG || {};
   const DRAW_ONLY = DRAW_POOL.filter((id) => ITEM[id].dr);                             // the draw-only ids drawn now (10)
   const isPoolId = (id) => typeof id === 'string' && DRAW_IDS.includes(id);
   // (looks-per-animal.md 8) an animal's name as a subject: a final consonant takes the friendly 이 first, as a kid says a
-  // pet's name - "꽥꽥이가" / "까삐가" / "해롱이가" / "펭펭이가" / "냥냥이가" / "개굴이가"
+  // pet's name - "꽥꽥이가" / "까삐가" / "해롱이가" / "펭펭이가" / "냥냥이가" / "깨굴이가"
   const aniSubj = (c) => { const n = (CHARS[c] || CHARS.duck).name, k = n.charCodeAt(n.length - 1) - 0xac00; return n + (k >= 0 && k < 11172 && k % 28 ? '이가' : '가'); };
   // every Korean string the shop UI shows (warmed in setupDOM next to TRO_TEXT; section 12)
   const SHOP_TEXT = ITEMS.map((it) => it.name + ' ' + it.desc).join(' ') + ' ' + RARITY.map((r) => r.name).join(' ') +
@@ -1722,7 +1729,7 @@ window.PG = window.PG || {};
     if (inp.jumpP && !took) p.jumpBuf = JUMP_BUF; else if (p.jumpBuf > 0) p.jumpBuf--;
     if (p.onGround) { p.coyote = COYOTE; p.landT++; } else if (p.coyote > 0) p.coyote--;
     if (p.jumpBuf > 0 && p.coyote > 0 && !MV_NOJUMP[p.mv]) {
-      // 개굴 3단 뛰기: a jump within `win` frames of landing from a jump goes one level higher (x1.12, x1.24); a jump out
+      // 깨굴 3단 뛰기: a jump within `win` frames of landing from a jump goes one level higher (x1.12, x1.24); a jump out
       // of the water starts at level 1 (연못 점프)
       let mul = 1;
       if (kc === 'frog') {
@@ -1810,10 +1817,15 @@ window.PG = window.PG || {};
     if (p.autoCd > 0) p.autoCd--;
     if (inp.shootP) p.shootBuf = 6; else if (p.shootBuf > 0) p.shootBuf--;
     if (p.shootCd === 0 && (p.shootBuf > 0 || (inp.shoot && p.autoCd === 0))) {
-      if (shotCapped(p)) Snd.sfx('dry'); // (only a guest of an older host: its in-flight cap - see SHOT_CAP)
-      else fire(p, !p.onGround); // (the cat's yarn rolls only when blown on the ground)
-      p.shootBuf = 0;
-      p.shootCd = k.cd[0]; p.autoCd = k.cd[1];
+      // battle, the magazine empty (AMMO): nothing - a press says a quiet 칙 (its buffer stays: a press just before the
+      // refill blows on it), a held button just waits and blows on the frame it refills (no cooldown spent)
+      if (!shotCapped(p) && !ammoTake(p)) { if (inp.shootP) Snd.sfx('dry'); p.autoCd = 0; }
+      else {
+        p.shootBuf = 0;
+        if (shotCapped(p)) Snd.sfx('dry'); // (only a guest of an older host: its in-flight cap - see SHOT_CAP)
+        else fire(p, !p.onGround); // (the cat's yarn rolls only when blown on the ground)
+        p.shootCd = k.cd[0]; p.autoCd = k.cd[1];
+      }
     }
     if (p.shootAnim > 0) p.shootAnim--;
     p.walkT += Math.abs(p.vx);
@@ -2233,7 +2245,8 @@ window.PG = window.PG || {};
     for (const b of fl) n.set(b.owner, (n.get(b.owner) | 0) + 1);
     let left = fl.length;
     const end = (b) => { b.age = endAge; n.set(b.owner, n.get(b.owner) - 1); left--; };
-    if (cap) for (const b of fl) if (b.owner >= 0 && n.get(b.owner) > cap && !ridden(b)) end(b);
+    const capFor = (o) => (G.gameMode === 'battle' ? capOf(G.players.find((q) => q.slot === o)) : 0);
+    if (cap) for (const b of fl) if (b.owner >= 0 && n.get(b.owner) > Math.max(cap, capFor(b.owner)) && !ridden(b)) end(b);
     while (all && left > all) {
       let pick = null;
       for (const b of fl) if (b.age <= life && !ridden(b) && (!pick || n.get(b.owner) > n.get(pick.owner))) pick = b;
@@ -3279,6 +3292,7 @@ window.PG = window.PG || {};
     // (a boss round gets its "… 등장!" banner and music from the boss itself when it lands)
     if (G.introT === INTRO_NAME && !G.attract && !G.boss && !battle) { showBanner('준비!', '', INTRO_READY, 'ready'); kitHint(); if (G.music === 'clear' || G.music === 'victory') setMusic('main'); }
     for (const pl of G.players) if (pl.power && --pl.power.t <= 0) pl.power = null;
+    if (battle) for (const pl of G.players) ammoTick(pl); // (AMMO: the host's count for every player)
     for (const pl of G.players) updateBody(pl, ins[pl.slot] || NO_INPUT);
     if (battle && G.online) for (const pl of G.players) notePos(pl);
     for (const e of G.enemies) updateEnemy(e);
@@ -3544,17 +3558,56 @@ window.PG = window.PG || {};
   // bubble, hanging or floating (its hang cap, eggCap, may still let an old egg float: it stays counted); a bubble that
   // caught a rival / a monster is not the player's any more. A blow with SHOT_CAP out first pops the oldest (capMine:
   // the plain self-pop - no score, no chain): the oldest floating one; one in flight next (a volley goes whole); one
-  // bounced on in the last RIDE_HOLD frames only when nothing else is left. No press is refused, no 칙. The host's world
+  // bounced on in the last RIDE_HOLD frames only when nothing else is left. The cap refuses no press (the magazine,
+  // AMMO below, does: the cap is its backstop, at least the magazine - capOf). The host's world
   // decides (fire): a guest shows its new shot at once and sees the pop with the snapshot. Co-op / solo: no such limit
   // (capEmpties only). An older host sent g.sc and refused past SHOT_CAP in flight: its guest still stops there with
   // the quiet 'dry' (shotCapped). This host sends no g.sc: an older guest page fires freely and this host pops its oldest
   const SHOT_CAP = 3;
+  // ---- battle: the magazine (장전 - the user, 2026-10-23). Each animal blows up to mag[0] bubbles (an otter's volley and
+  // a frog's egg count one blow), then must wait: the magazine refills WHOLE once mag[1] frames pass with no blow - one
+  // timer from the last blow, whether it is empty or only part spent (a burst then a pause refills it; firing on and on
+  // never trickles one back). A press with nothing left does nothing but a quiet 칙 ('dry'); a held button blows on the
+  // frame it refills; refilled from empty: a soft 'reload' and a flash on my gauge (the HUD seat's pip column, pips
+  // under my animal while short). Battle only (co-op / solo: never); 능력 끄기: KIT_BASE's 3 in 2.0 s for everyone.
+  // The host decides: updateWorld ticks every player, a guest's blow (hostShot) is refused with nothing left - its refill
+  // counted AMMO_SLACK frames early there, so a late message never loses an honest blow. A guest runs the same count
+  // for itself (guestSelf ticks, updatePlayer asks), so it never shows a blow the host refuses (the host is the
+  // lenient side). g.am = 1: this host keeps magazines - an older host sends none and its guest fires as before
+  // (NET.hostAm); an older guest page fires freely, its blows past the magazine are refused here and its own copies of
+  // them give up (predGiveUp), nothing else. The P rows carry each player's [left, quiet frames] (24, 25) for the HUD.
+  // SHOT_CAP stays the clutter backstop, at least the magazine (capOf)
+  const AMMO_SLACK = 20;
+  let AMMO_OFF = false; // (PG.debug.ammo.off: the older tests of the cap alone)
+  const magOf = (p) => (AMMO_OFF || G.gameMode !== 'battle' || (G.online && G.role === 'guest' && !NET.hostAm) ? null : (kitOf(p).mag || KIT_BASE.mag));
+  const capOf = (p) => { const m = p && magOf(p); return m ? Math.max(SHOT_CAP, m[0]) : SHOT_CAP; };
+  function ammoInit(p, m) { if (p.amN === undefined) { p.amN = m[0]; p.amT = m[1]; } }
+  // one frame of a player's magazine (the host: every player, while playing; a guest: its own)
+  function ammoTick(p) {
+    const m = magOf(p); if (!m) return;
+    ammoInit(p, m);
+    if (p.amT < 9999) p.amT++;
+    if (p.amN < m[0] && p.amT >= m[1]) {
+      const was = p.amN; p.amN = m[0];
+      if (p.local !== false) { p.amFx = G.frame; if (!was) Snd.sfx('reload'); }
+    }
+  }
+  // may p blow now? Takes one from the magazine (no magazine: always yes). slack: the host's early refill for a guest
+  function ammoTake(p, slack) {
+    const m = magOf(p); if (!m) return true;
+    ammoInit(p, m);
+    if (slack && p.amN < m[0] && p.amT >= m[1] - slack) p.amN = m[0];
+    if (p.amN <= 0) { G.ammoDry = (G.ammoDry | 0) + 1; return false; } // (for the headless tests)
+    p.amN--; p.amT = 0;
+    return true;
+  }
+  const ammoRow = (p) => (p.amN === undefined || !magOf(p) ? [-1, 0] : [p.amN | 0, Math.min(9999, p.amT | 0)]);
   const mineOut = (slot) => G.bubbles.filter((b) => !b.dead && b.owner === slot && b.kind === 'empty' && !b.drop && (b.state === 'shot' || b.state === 'float'));
   function capMine(p) {
     const mine = mineOut(p.slot);
     // (0 floating, 1 in flight, 2 floating but ridden lately; the oldest first within one - the age counts from the blow)
     const rank = (b) => (b.state !== 'float' ? 1 : b.rideF !== undefined && G.frame - b.rideF < RIDE_HOLD ? 2 : 0);
-    while (mine.length >= SHOT_CAP) {
+    while (mine.length >= capOf(p)) {
       let pick = null;
       for (const b of mine) if (!pick || rank(b) < rank(pick) || (rank(b) === rank(pick) && (b.age > pick.age || (b.age === pick.age && b.id < pick.id)))) pick = b;
       mine.splice(mine.indexOf(pick), 1);
@@ -7351,13 +7404,13 @@ window.PG = window.PG || {};
     already: '이미 친구예요', both: '서로 요청해서 바로 친구가 됐어요', sent0: '이미 요청했어요', sent: '친구 요청을 보냈어요', later: '잠시 후 다시 해 주세요',
     added: '{0}님과 친구가 됐어요', declined: '요청을 거절했어요', cutDone: '{0}님과 친구를 끊었어요',
     offline: '인터넷이 연결되면 다시 볼 수 있어요', rules: '친구 기능을 준비 중이에요', busy: '지금은 사람이 많아요 · 잠시 후 다시', fail: '잠시 후 다시',
-    demo: '미리보기 · 예시 친구들이에요 (저장되지 않아요)', none0: '기록 없음',
+    demo: '미리보기 · 예시 친구들이에요 (저장되지 않아요)', none0: '기록 없음', best: '최고 {0}라운드',
     // (친구 초대: a friend row's 초대 and what it says - here or, once the room shows, on the room's line)
     iv: '초대', ivSent: '{0}님을 초대했어요', ivWait: '10초 뒤에 다시 초대할 수 있어요', ivFull: '방이 가득 찼어요', ivStarted: '게임 중에는 초대할 수 없어요',
     ivFail: '초대를 보내지 못했어요 · 잠시 후 다시', ivDemo: '미리보기라 초대는 보내지 않아요', ivNet: '{0}',
   };
   const PAL_OK = { copied: 1, sent: 1, added: 1, both: 1, declined: 1, cutDone: 1, ivSent: 1, ivDemo: 1 };
-  const PAL_TEXT = Object.keys(PAL_TX).map((k) => PAL_TX[k].replace(/\{0\}/g, '')).join(' ') + ' 위 회차 탕 점 개 받은 요청 · ( ) - 0123456789,';
+  const PAL_TEXT = Object.keys(PAL_TX).map((k) => PAL_TX[k].replace(/\{0\}/g, '')).join(' ') + ' 위 최고 라운드 점 개 받은 요청 · ( ) - 0123456789,';
   // (per page load. gen: bumped by a sign-out / an account switch - a late answer for the old account is dropped; uid /
   // code / prof: the account, its code and the card the server has (sent: its JSON); run: this solo game counts (newGame);
   // t / wr / deny: the card's debounce, the write in flight, one refused write retried; rows / reqs / at: the friends'
@@ -7378,11 +7431,11 @@ window.PG = window.PG || {};
   const palJson = (c) => JSON.stringify([c.nick, c.st, c.hi, c.tr, c.c, c.lk]);
   const palTs = (v) => { try { return v && typeof v.toMillis === 'function' ? +v.toMillis() || 0 : 0; } catch (e) { return 0; } };
   const palDocs = (qs) => { try { return qs && Array.isArray(qs.docs) ? qs.docs : []; } catch (e) { return []; } };
-  // the 탕 reached, as the game-over card says it: 5탕 / 2회차 5탕 (0: none yet)
+  // the best reached as ONE round count from the very first 탕 - st itself (the user, 2026-10-23: no 회차 / 탕 in the
+  // ranking): 2회차's 5번째 탕 is 최고 29라운드 (0: none yet)
   function palStTx(st) {
     st = clamp(st | 0, 0, PAL_TANG * 100); if (!st) return PAL_TX.none0;
-    const lp = Math.floor((st - 1) / PAL_TANG), r = (st - 1) % PAL_TANG + 1;
-    return (lp ? (lp + 1) + '회차 ' : '') + r + '탕';
+    return PAL_TX.best.replace('{0}', String(st));
   }
   // startRound: this browser's best 탕 of 혼자 하기 (st = G.loop * 24 + G.round + 1), raise-only; only a solo game begun
   // at 탕 1 (newGame sets PAL.run) - never co-op, battle, online, the attract demo or a debug start further in
@@ -7586,7 +7639,7 @@ window.PG = window.PG || {};
     palRender();
     return PAL.loading;
   }
-  // the ranking: my friends and me - the best 탕 first, then the best score, trophies, the name
+  // the ranking: my friends and me - the best round count (st) first, then the best score, trophies, the name
   function palRank() {
     const me = Object.assign(palCard(), { uid: PAL.uid || 'me', code: PAL.code, me: true });
     return (PAL.rows || []).concat([me]).sort((a, b) => b.st - a.st || b.hi - a.hi || b.tr - a.tr || (a.nick < b.nick ? -1 : a.nick > b.nick ? 1 : 0) || (a.me ? -1 : 1));
@@ -8572,7 +8625,7 @@ window.PG = window.PG || {};
       return hasSpr(POSE.cat) ? { name: POSE.cat, fi: 0 } : { name: c + '_jump', fi: 0, q: ((((F - fx.aAt) / 3) | 0) % 4) * d };
     }
     if (c === 'frog' && upA) {
-      // 개굴 3단 뛰기: a lily pad where a chained hop took off (bigger on level 2, with a splash of green)
+      // 깨굴 3단 뛰기: a lily pad where a chained hop took off (bigger on level 2, with a splash of green)
       const near = Math.abs(fx.gy - (y + 16)) < 14, gx = near ? fx.gx : x + 8, gy = near ? fx.gy : y + 18;
       kfx({ k: 'ring', low: true, x: gx, y: gy, r0: B ? 6 : 4.5, r1: B ? 8 : 6, flat: 0.35, dur: 10, col: '#6cc644', fill: '#c8f08a' });
       if (B) for (let i = 0; i < 4 && G.parts.length < 360; i++) G.parts.push({ x: gx + (i - 1.5) * 3, y: gy - 1, vx: (i - 1.5) * 0.5, vy: -0.8 - fxr() * 0.6, life: 14, max: 14, c: i & 1 ? '#6cc644' : '#c8f08a', sz: 1, g: 0.12 });
@@ -9432,6 +9485,39 @@ window.PG = window.PG || {};
       if (lead > 0 && p.score === lead) drawRaw(SPR_CROWN, 0, x + 8, 8);
       text(String(p.score), x + 17, 1, p.color);
       text('KO ' + p.kos, x + 17, 9, '#9fb8b4');
+      drawMagHud(p, x);
+    }
+  }
+  // AMMO on a seat's panel: a column of pips at its right edge (x+47, bottom up; 2x3 each, 2x2 for a magazine of 4),
+  // lit = a blow left (mine / every local seat white-ish, a rival in its slot colour), dark = spent; while short the
+  // dark ones fill from the bottom as the quiet refill runs (amT / rl); white for 10 frames when it fills (amFx)
+  function drawMagHud(p, x) {
+    const m = magOf(p); if (!m) return;
+    const n = m[0], left = p.amN === undefined ? n : clamp(p.amN, 0, n), ph = n >= 4 ? 2 : 3;
+    const fx = p.amFx !== undefined && G.frame - p.amFx >= 0 && G.frame - p.amFx < 10;
+    const lit = fx ? '#ffffff' : !G.online || isMe(p) ? '#e8fbff' : p.color;
+    let fill = left < n ? Math.floor((n - left) * ph * clamp((p.amT | 0) / m[1], 0, 1)) : 0;
+    for (let k = 0; k < n; k++) {
+      const y = 15 - (k + 1) * (ph + 1);
+      if (k < left) { ctx.fillStyle = lit; ctx.fillRect(x + 47, y, 2, ph); continue; }
+      ctx.fillStyle = 'rgba(10,26,29,0.8)'; ctx.fillRect(x + 47, y, 2, ph);
+      const fr = Math.min(ph, fill); fill -= fr;
+      if (fr > 0) { ctx.globalAlpha = 0.55; ctx.fillStyle = p.color; ctx.fillRect(x + 47, y + ph - fr, 2, fr); ctx.globalAlpha = 1; }
+    }
+  }
+  // AMMO under my own animal (online: me; on one screen: every local player) while its magazine is short: n pips (2x2),
+  // lit white; empty: the refill runs along them in my colour; a white flash when it fills
+  function drawMagFeet() {
+    if (G.gameMode !== 'battle' || G.mode !== 'playing') return;
+    for (const p of G.players) {
+      if (G.online ? !isMe(p) : !p.local) continue;
+      const m = magOf(p); if (!m || p.amN === undefined || p.out || p.koT > 0 || p.trap || p.dead) continue;
+      const n = m[0], fx = p.amFx !== undefined && G.frame - p.amFx >= 0 && G.frame - p.amFx < 12;
+      if (p.amN >= n && !fx) continue;
+      const w = n * 3 - 1, x0 = Math.round(p.x + 8 - w / 2), y0 = Math.round(p.y + 18);
+      ctx.fillStyle = 'rgba(6,20,24,0.72)'; ctx.fillRect(x0 - 1, y0 - 1, w + 2, 4);
+      for (let k = 0; k < n; k++) { ctx.fillStyle = fx || k < p.amN ? '#ffffff' : '#35585a'; ctx.fillRect(x0 + k * 3, y0, 2, 2); }
+      if (p.amN === 0 && !fx) { ctx.fillStyle = p.color; ctx.fillRect(x0, y0, Math.max(1, Math.round(w * clamp((p.amT | 0) / m[1], 0, 1))), 2); }
     }
   }
   // the podium: a stand for 1st / 2nd / 3rd (4th on the low step), crowns, ranks and scores; the animals dance
@@ -9541,7 +9627,7 @@ window.PG = window.PG || {};
       if (q.combo) text(q.combo, q.x, q.y - 9, '#ffffff', { align: 'center', outline: '#2a0f1c' });
       text(q.txt, q.x, q.y, q.color, { align: 'center', scale: q.scale, outline: '#2a0f1c' });
     }
-    if (!inTrans) { drawMeSpot(); drawTagArrows(); }
+    if (!inTrans) { drawMeSpot(); drawMagFeet(); drawTagArrows(); }
     if (inTrans && G.trans) drawDoors(G.trans.door);
     ctx.restore();
     drawHUD();
@@ -10485,7 +10571,7 @@ window.PG = window.PG || {};
   // a player's own movement sounds are played by that player's engine only (v4: the moves and the kit shoot sounds;
   // 'quake' and 'pop' are echoed)
   const NO_ECHO = { jump: 1, shoot: 1, bounce: 1, splash: 1, pause: 1, start: 1,
-    flap: 1, slam: 1, dash: 1, slide: 1, djump: 1, hop: 1, b_echo: 1, b_onsen: 1, b_splash: 1, b_icicle: 1, b_yarn: 1, b_egg: 1, dry: 1 };
+    flap: 1, slam: 1, dash: 1, slide: 1, djump: 1, hop: 1, b_echo: 1, b_onsen: 1, b_splash: 1, b_icicle: 1, b_yarn: 1, b_egg: 1, dry: 1, reload: 1 };
   const PH_CODE = { playing: 'p', countdown: 'c', transition: 't', gameover: 'o', ending: 'e', podium: 'd', dying: 'p', paused: 'p', title: 'p' };
   const PH_NAME = { p: 'playing', c: 'countdown', t: 'transition', o: 'gameover', e: 'ending', d: 'podium' };
   const MUSICS = [null, 'main', 'hurry', 'boss', 'final', 'clear', 'victory', 'battle', 'podium', 'gameover', 'ending', 'title', 'lobby'];
@@ -11269,6 +11355,7 @@ window.PG = window.PG || {};
     const t = G.frame;
     rem.shots = rem.shots.filter((f) => t - f < 24);
     if (rem.shots.length >= 3) return; // (a frog fires every 10 frames: 3 in 24 is plenty)
+    if (!ammoTake(pl, AMMO_SLACK)) { NET.amNo = (NET.amNo | 0) + 1; return; } // (AMMO: nothing left - its copy gives up)
     rem.shots.push(t);
     let x = nNum(m.x, WALL_L - 4, WALL_R - 12, pl.x), y = nNum(m.y, PF_TOP - 16, PF_BOT, pl.y);
     if (Math.abs(x - pl.x) > 32 || Math.abs(y - pl.y) > 32) { x = pl.x; y = pl.y; }
@@ -11365,7 +11452,7 @@ window.PG = window.PG || {};
       return [p.slot, p.ep | 0, r1(p.x), r1(p.y), Math.round(p.vx * 10), Math.round(p.vy * 10), p.facing < 0 ? -1 : 1, fl,
         p.score | 0, p.kills | 0, p.revives | 0, p.kos | 0, p.koed | 0, p.invuln | 0, p.stunT | 0, p.shield | 0,
         p.power ? POWER_TYPES.indexOf(p.power.type) : -1, p.power ? p.power.t | 0 : 0,
-        p.ghost ? p.ghost.t | 0 : -1, p.trap ? Math.round(p.trap.prog) : -1, p.trap && p.trap.b ? p.trap.b.id : 0, p.koT | 0, p.dieT | 0, p.rank | 0];
+        p.ghost ? p.ghost.t | 0 : -1, p.trap ? Math.round(p.trap.prog) : -1, p.trap && p.trap.b ? p.trap.b.id : 0, p.koT | 0, p.dieT | 0, p.rank | 0].concat(ammoRow(p));
     });
   }
   const R0 = Math.round;
@@ -11429,7 +11516,7 @@ window.PG = window.PG || {};
     // the floating-empty life this world runs (EMPTY_RULE): a guest blinks the bubbles at it, not at its own rule (an
     // older host sends none - it runs EMPTY_LIFE, which is what a guest then takes)
     const el = emptyRule()[0]; if (el !== EMPTY_LIFE) g.el = el;
-    if (G.gameMode === 'battle') g.lc = 1; // (battle: send me your catches - see hostClaim; no g.sc any more: see SHOT_CAP)
+    if (G.gameMode === 'battle') { g.lc = 1; if (!AMMO_OFF) g.am = 1; } // (battle: send me your catches - see hostClaim; no g.sc any more: see SHOT_CAP; am: AMMO)
     if (G.stampFlash > 0) g.sf = G.stampFlash;
     if (G.ticketFlash > 0) g.tf = G.ticketFlash;
     const mu = MUSICS.indexOf(G.music); if (mu > 0) g.mu = mu;
@@ -11588,7 +11675,7 @@ window.PG = window.PG || {};
     G.loop = nInt(g.lp, 0, 99, 0); G.lives = nInt(g.L, 0, 99, 0); G.score = nInt(g.S, 0, 1e10, 0); G.stamps = nInt(g.st, 0, 99, 0);
     G.hurry = !!g.hu; G.stampFlash = nInt(g.sf, 0, 300, 0); G.ticketFlash = nInt(g.tf, 0, 300, 0);
     NET.el = nInt(g.el, 60, 2000, EMPTY_LIFE); // (the host's floating-empty life: emptyLife, the blink)
-    NET.hostLc = g.lc === 1; NET.shotCap = nInt(g.sc, 0, 9, 0); // (no lc: an older host - no claims; g.sc: only an older host's in-flight cap)
+    NET.hostLc = g.lc === 1; NET.hostAm = g.am === 1; NET.shotCap = nInt(g.sc, 0, 9, 0); // (no lc: an older host - no claims; g.sc: only an older host's in-flight cap)
     G.battle = arena ? { left: Math.max(0, nInt(g.tl, 0, 1e7, 0) - (ph === 'playing' ? el : 0)), total: 0, intruded: true, enemyT: 1e9, powerT: 1e9 } : null;
     const mu = MUSICS[nInt(g.mu, 0, MUSICS.length - 1, 0)];
     if (mu !== G.music && !(mu === null && G.music === undefined)) setMusic(mu);
@@ -11640,6 +11727,8 @@ window.PG = window.PG || {};
       const pw = nInt(r[16], -1, POWER_TYPES.length - 1, -1);
       p.power = pw >= 0 ? { type: POWER_TYPES[pw], t: Math.max(1, nInt(r[17], 0, 1e5, 0) - el) } : null;
       const mine = slot === G.localSlot;
+      // (AMMO: a rival's magazine for its HUD seat - an older host's row has none: -1; mine is my own count)
+      if (!mine) { const an = nInt(r[24], -1, 9, -1); p.amN = an >= 0 ? an : undefined; p.amT = nInt(r[25], 0, 9999, 0); }
       if (mine) {
         if (ep !== p.ep) takeOver(p, r, ep, fl);
         if (NET.ctl === 'local') continue;
@@ -11830,6 +11919,7 @@ window.PG = window.PG || {};
   // ---- my own animal (prediction) and what it does
   function guestSelf(ins) {
     const me = myPlayer(); if (!me) return;
+    if (G.mode === 'playing') ammoTick(me); // (AMMO: my own count, as the host keeps it)
     const inp = ins[G.localSlot] || NO_INPUT;
     NET.jumpHeld = !!inp.jump;
     if (NET.ctl !== 'local') {
@@ -12276,10 +12366,13 @@ window.PG = window.PG || {};
     // my pick's compact kit card (char-kits §12.3): name, role chip, the pips, the 특기 name; 능력 끄기 (a battle room
     // with the setting off) greys it, every bar 3/3/3/3, one line "능력 꺼짐 · 모두 같은 기본 능력이에요"
     const rc = CHARS[G.sel] || CHARS.duck, roff = NET.mode === 'battle' && NET.opts.perks === false;
+    // (AMMO: a battle room says my pick's magazine - 능력 끄기: the base one, everyone's)
+    const rmag = NET.mode === 'battle' ? magTx(((roff ? KIT_BASE : KIT[G.sel]) || KIT_BASE).mag) : '';
     if (dom.roomKit) {
       dom.roomKit.style.setProperty('--hue', rc.hue); dom.roomKit.classList.toggle('off', roff);
-      dom.roomKit.setAttribute('aria-label', rc.name + ' (' + rc.animal + ', ' + rc.role + '): ' + (roff ? OFF_LINE : '특기 ' + rc.move.name + ': ' + rc.move.how));
+      dom.roomKit.setAttribute('aria-label', rc.name + ' (' + rc.animal + ', ' + rc.role + '): ' + (roff ? OFF_LINE : '특기 ' + rc.move.name + ': ' + rc.move.how) + (rmag ? '. 배틀 ' + rmag : ''));
     }
+    const rmEl = $('pg-room-mag'); if (rmEl) { rmEl.hidden = !rmag; if (rmag) setTxt($('pg-room-pmag'), rmag); }
     setTxt(dom.roomPName, rc.name); setTxt(dom.roomRole, rc.role); setTxt(dom.roomPPerk, roff ? OFF_LINE : rc.move.name);
     statPips(dom.roomStats, roff ? STATS_OFF : rc.stats);
     // (distinction §2.10: my pick duplicates a lower seat's animal -> the colour I will play in; it names the colour,
@@ -12332,7 +12425,7 @@ window.PG = window.PG || {};
       const tro = q === 1 ? ['연습 경기예요: 이 브라우저의 탭끼리는 트로피가 바뀌지 않아요'] : q === 2 ? ['연습 경기예요: 같은 기기에서 들어온 친구가 있어요']
         : NET.mode === 'battle' ? [troRulesLine(), troFreeLine(), '끝까지 한 판마다 오늘 트로피 보너스 +' + TRO_PLAY + ' (하루 ' + DAY_CAP + '개까지)', '견습 리그는 등수로 잃지 않아요 · 판 중간에 나가면 꼴찌로 쳐요'].filter(Boolean) : ['끝까지 갈수록 모두 트로피를 받아요 (잃지 않아요)'];
       const rules = tro.concat([coinRule(q)], NET.mode === 'battle'
-        ? (NET.opts.monsters === false ? ['몬스터 없이 친구끼리만 겨뤄요'] : []).concat(['갇히면 점프·거품 연타로 빨리 빠져나와요', '갇힌 친구를 터뜨리면 뽀득 KO +500'])
+        ? (NET.opts.monsters === false ? ['몬스터 없이 친구끼리만 겨뤄요'] : []).concat([AMMO_RULE, '갇히면 점프·거품 연타로 빨리 빠져나와요', '갇힌 친구를 터뜨리면 뽀득 KO +500'])
         : ['쓰러진 친구는 거품이 돼요. 거품에 닿으면 바로 살아나요', '목숨은 다 함께 써요']);
       const key = rules.join('|');
       if (dom.roomRules._key !== key) { dom.roomRules._key = key; dom.roomRules.textContent = ''; for (const r of rules) dom.roomRules.appendChild(h('li', '', r)); }
@@ -12657,6 +12750,11 @@ window.PG = window.PG || {};
     // the floating-empty rule this screen runs now (EMPTY_RULE): life (the blink starts after it), blink, cap per player
     // and for all (0: none), a capped bubble's blink; life is the one the blink uses here (a guest: its host's, g.el)
     emptyRule() { const R = emptyRule(); return { life: emptyLife(), flash: R[1], cap: R[2], all: R[3], capBlink: CAP_BLINK }; },
+    // AMMO: a player's magazine now ({ left, t, n, rl, cap } or null: none here), a kit's numbers; off(true): no
+    // magazine on this page at all (the older tests of the cap alone - a host then sends no g.am)
+    ammo: { of(slot) { const p = slot === undefined ? G.p : G.players.find((q) => q.slot === slot); const m = p && magOf(p); return m ? { left: p.amN === undefined ? m[0] : p.amN, t: p.amN === undefined ? m[1] : p.amT, n: m[0], rl: m[1], cap: capOf(p) } : null; },
+      kit: (c) => (KIT[c] || KIT_BASE).mag.slice(), base: () => KIT_BASE.mag.slice(), slack: AMMO_SLACK, off(on) { AMMO_OFF = !!on; }, dry: () => G.ammoDry | 0, refused: () => NET.amNo | 0,
+      set(c, n, rl) { const k = c === 'base' ? KIT_BASE : KIT[c]; if (k) k.mag = [clamp(n | 0, 1, 9), clamp(rl | 0, 1, 9999)]; } }, // (set: balance runs only)
     spawnFromGap, spawnPickup,
     waterAt(x, y) { const i = waterIdx(x, y); return i < 0 ? null : { kind: WATER[i] === 1 ? 'hot' : 'cold', surfaceY: surfY(i) }; },
     setPlayer(x, y, slot) { const p = slot ? G.players.find((q) => q.slot === slot) : G.p; if (!p) return; p.x = x; p.y = y; p.vx = 0; p.vy = 0; p.onGround = false; },

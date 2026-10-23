@@ -9,7 +9,7 @@
                      boss_hit(o.n?) boss_stun boss_damage boss_roar shockwave spore
                      scald_warn scald_splash splash freeze melt stamp ticket powerup door(o.open?)
                      join leave ready countdown go trap_player revive ghost ko win      (v3 online)
-                     dry                                                         (battle shot cap)
+                     dry reload                                    (battle: an empty press, the magazine refilled)
                      flap slam quake dash slide(o.n) djump hop(o.n)              (v4 kit moves)
                      b_echo(o.n) b_onsen b_splash b_icicle b_yarn(o.n) b_egg(o.n) (v4 kit bubbles)
                      stake tro_fly(o.n) tro_up tro_down promote                  (v4 trophies)
@@ -901,7 +901,7 @@ window.PG = window.PG || {};
     (t) => {
       voice(sfxBus, { w: 'p25', f: 760, f2: 1500, t, d: 0.07, v: 0.18, vib: 0.05, vr: 22, vd: 0.01, a: 0.002, dc: 0.05, s: 0.5, r: 0.03 });
     },
-    // 6 개굴이 "뽁": a tight jelly pop, then a low croak-bloop
+    // 6 깨굴이 "뽁": a tight jelly pop, then a low croak-bloop
     (t) => {
       voice(sfxBus, { w: 'sine', f: 800, f2: 1600, t, d: 0.03, v: 0.22, a: 0.001, dc: 0.025, s: 0.3, r: 0.015 });
       voice(sfxBus, { w: 'square', f: 190, f2: 130, t: t + 0.02, d: 0.04, v: 0.09, a: 0.002, dc: 0.03, s: 0.4, r: 0.02 });
@@ -1231,6 +1231,12 @@ window.PG = window.PG || {};
       noise(sfxBus, { t, d: 0.07, v: 0.05, ft: 'highpass', f: 3800, a: 0.002, s: 0, dc: 0.06, r: 0.02 });
       voice(sfxBus, { w: 'square', f: 2200, t, d: 0.012, v: 0.025, a: 0.001, s: 0, dc: 0.01, r: 0.005 });
     },
+    // battle: my magazine refilled after it ran dry (장전 끝) - a soft little "뽁-뽁" pair of rising bubble blips
+    reload(t) {
+      voice(sfxBus, { w: 'sine', f: 740, f2: 1110, sl: 0.035, t, d: 0.045, v: 0.07, a: 0.002, s: 0, dc: 0.04, r: 0.02 });
+      voice(sfxBus, { w: 'sine', f: 988, f2: 1480, sl: 0.035, t: t + 0.075, d: 0.055, v: 0.08, a: 0.002, s: 0, dc: 0.05, r: 0.03 });
+      noise(sfxBus, { t: t + 0.075, d: 0.02, v: 0.02, ft: 'highpass', f: 6000, s: 0, dc: 0.02, r: 0.01 });
+    },
     // a partner frees a ghost: the ghost bubble pops, a harp-like run climbs, a warm G-major bell blooms
     revive(t) {
       voice(sfxBus, { w: 'sine', f: 520, f2: 1560, sl: 0.05, t, d: 0.06, v: 0.2, a: 0.002, dc: 0.05, s: 0.3, r: 0.03 });
@@ -1320,7 +1326,7 @@ window.PG = window.PG || {};
       voice(sfxBus, { w: 'p25', f: 880, f2: 1320, sl: 0.05, t, d: 0.08, v: 0.14, a: 0.003, dc: 0.06, s: 0.5, r: 0.03 });
       voice(sfxBus, { w: 'triangle', f: 1760, t, d: 0.05, v: 0.06, a: 0.002, dc: 0.04, s: 0.3, r: 0.03 });
     },
-    // 개굴이 3단 뛰기 "개굴" (rise, then fall): o.n = chain level 1..2, k = 3 / 6 semitones up as the chain climbs
+    // 깨굴 3단 뛰기 "깨굴" (rise, then fall): o.n = chain level 1..2, k = 3 / 6 semitones up as the chain climbs
     hop(t, o) {
       const k = [1.19, 1.41][variant('hop', o) - 1];
       voice(sfxBus, { w: 'square', f: 220 * k, f2: 330 * k, t, d: 0.06, v: 0.14, a: 0.003, dc: 0.05, s: 0.6, r: 0.02 });
