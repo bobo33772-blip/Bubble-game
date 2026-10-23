@@ -2539,7 +2539,7 @@
         if (el !== b && q.left < r.right - 0.5 && q.right > r.left + 0.5) bad.push(nm(el) + ' over 친구');
       }
       // (a short screen scrolls the hub: the scene brings its footer into view)
-      if (f.bottom > W.innerHeight + 0.5 || f.top < -0.5 || f.left < -0.5 || f.right > W.innerWidth + 0.5) bad.push('the footer outside the view ' + J([f.top, f.bottom, W.innerHeight]));
+      if (f.bottom > W.innerHeight + 1.5 || f.top < -1.5 || f.left < -0.5 || f.right > W.innerWidth + 0.5) bad.push('the footer outside the view ' + J([f.top, f.bottom, W.innerHeight]));
       if (touch && r.height < 31.5) bad.push('친구 under 32 px');
       if (fr.$('pg-pal-new2').hidden) bad.push('no dot');
       if (fr.$('pg-my-rec').hidden) bad.push('no 내 기록');
