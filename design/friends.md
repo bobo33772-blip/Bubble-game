@@ -302,3 +302,7 @@ everything else -> `F.PR(op, path, auth, ctx)` with `ctx.get(path)` (before the 
   panel. Shots `pal-iv-844`, `pal-iv-1x`, `pal-gate-844`, `pal-gate-1x` check it. peer-deploy's page is now built
   without the cloud config (it plays online as a guest).
 - Owner: deploy the rules before merging (they only add collections; older pages are unaffected).
+
+### As built (invites, 2026-10-23): the cooldown per friend
+
+The user could not invite friends in a row: one ivbox per sender held ALL invites 10 s. Now an invite is created at once for any friend, and the SAME friend is invited again only 10 s after its own invite (the rules' update rule on invites/{to}/in/{from}); the page keeps the wait per friend (IV.sent). The ivbox rules stay so a page not reloaded yet still writes its batch.
