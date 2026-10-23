@@ -112,6 +112,8 @@ window.PG = window.PG || {};
   const STAT_NAMES = ['속도', '점프', '사거리', '연사'], STATS_OFF = [3, 3, 3, 3];
   // (AMMO: a battle room's rule line, and a magazine as its kit line says it - 거품 3발 · 장전 2초 / 1.4초)
   const AMMO_RULE = '거품을 다 쏘면 잠깐 장전해요 · 동물마다 발 수와 장전 시간이 달라요';
+  // (RAPID: the 연사 option's sub-label, the rules line in its place, the room kit line instead of the magazine)
+  const RAPID_SUB = '장전 없이 계속 쏴요', RAPID_RULE = '연사: 장전 없이 계속 쏴요 · 내 거품은 3개까지, 더 쏘면 먼저 쏜 거품이 터져요', RAPID_KIT = '연사 · 장전 없이 계속 쏴요';
   const magTx = (m) => '거품 ' + m[0] + '발 · 장전 ' + Math.round(m[1] / 6) / 10 + '초';
   const OFF_LINE = '능력 꺼짐 · 모두 같은 기본 능력이에요', OFF_COUNT = '능력 꺼짐 · 모두 같은 기본 능력';
   const CHAR_ANIMS = { idle: 2, walk: 4, jump: 1, fall: 1, shoot: 1, die: 4 };
@@ -248,7 +250,7 @@ window.PG = window.PG || {};
     // (v4 kit cards, hints, the countdown line; the pips' aria text)
     ' ' + STAT_NAMES.join(' ') + ' 특기: 거품: ' + OFF_LINE + ' 내 특기: 5점 중 3점' +
     // (AMMO: the battle room's magazine line, its rule; the kit card's aria text)
-    ' 배틀 거품 발 · 장전 초 . ' + AMMO_RULE +
+    ' 배틀 거품 발 · 장전 초 . ' + AMMO_RULE + ' 연사 ' + RAPID_RULE +
     ' 혼자 하기 친구와 하기 같이 하기 배틀 보스 난입! 뽀득 KO! 냥! 시작! 결과 발표 한 판 더 로비로 MVP 점 때 구조 위 KO 살아났다! 다 함께 덕분에 목욕탕이 뽀득뽀득해졌어요 1234' +
     // (online panels / messages)
     ' 친구 기기와 연결하지 못했어요 같은 와이파이에서 해 보거나 잠시 뒤 다시 해 주세요' +
@@ -1249,7 +1251,7 @@ window.PG = window.PG || {};
     boss: null, hazards: [], foam: [], shotLog: [],
     // v3: N players. gameMode 'solo' | 'coop' | 'battle'; role 'host' (this engine runs the world) | 'guest'
     players: [], gameMode: 'solo', role: 'host', online: false, localSlot: 0, sel: 'duck', perksOff: false,
-    opts: { arena: -1, time: 3, perks: true, monsters: true, intrusion: true }, battle: null, coopOverT: 0, countT: 0, countNext: null,
+    opts: { arena: -1, time: 3, perks: true, monsters: true, intrusion: true, rapid: false }, battle: null, coopOverT: 0, countT: 0, countNext: null,
     podium: null, words: [], menuOpen: false,
     rid: 0, // (+1 for every round / arena this engine loads: a move's word pops once per round)
   };
@@ -1541,7 +1543,8 @@ window.PG = window.PG || {};
     if (countdown !== false) beginCountdown();
   }
   // 배틀: 2-4 players in an arena; opts {arena (-1 = random), time (2 / 3 / 5 minutes), perks, monsters, intrusion,
-  // countdown}; matchNo: 0 for a new battle, +1 for each 한 판 더 (monsters: the 몬스터 출현 switch, on unless false)
+  // countdown, rapid}; matchNo: 0 for a new battle, +1 for each 한 판 더 (monsters: the 몬스터 출현 switch, on unless false;
+  // rapid: the 연사 switch, off unless true - RAPID)
   function newBattle(list, opts, matchNo) {
     opts = opts || {};
     G.matchNo = matchNo | 0;
@@ -1552,6 +1555,7 @@ window.PG = window.PG || {};
       perks: opts.perks !== false,
       monsters: opts.monsters !== false,
       intrusion: opts.intrusion !== false,
+      rapid: opts.rapid === true,
     };
     resetGame('battle', list);
     G.lives = 0;
@@ -3559,7 +3563,8 @@ window.PG = window.PG || {};
   // caught a rival / a monster is not the player's any more. A blow with SHOT_CAP out first pops the oldest (capMine:
   // the plain self-pop - no score, no chain): the oldest floating one; one in flight next (a volley goes whole); one
   // bounced on in the last RIDE_HOLD frames only when nothing else is left. The cap refuses no press (the magazine,
-  // AMMO below, does: the cap is its backstop, at least the magazine - capOf). The host's world
+  // AMMO below, does: the cap is its backstop). SHOT_CAP for every animal, the cat's magazine of 4 too (the user,
+  // 2026-10-23: "최대거품3개는 유지") and with 연사 (RAPID: no magazine, the cap alone). The host's world
   // decides (fire): a guest shows its new shot at once and sees the pop with the snapshot. Co-op / solo: no such limit
   // (capEmpties only). An older host sent g.sc and refused past SHOT_CAP in flight: its guest still stops there with
   // the quiet 'dry' (shotCapped). This host sends no g.sc: an older guest page fires freely and this host pops its oldest
@@ -3576,11 +3581,17 @@ window.PG = window.PG || {};
   // lenient side). g.am = 1: this host keeps magazines - an older host sends none and its guest fires as before
   // (NET.hostAm); an older guest page fires freely, its blows past the magazine are refused here and its own copies of
   // them give up (predGiveUp), nothing else. The P rows carry each player's [left, quiet frames] (24, 25) for the HUD.
-  // SHOT_CAP stays the clutter backstop, at least the magazine (capOf)
+  // SHOT_CAP stays the clutter backstop (3 for all: capOf)
+  // ---- battle: 연사 (RAPID - the user, 2026-10-23: "연사가능하게도 체크박스"). A room option, off by default: on, no
+  // magazine at all (magOf null: no 칙, no reload, no pips) - each animal blows at its kit cooldown (cd) for as long as
+  // the button is held / tapped, still SHOT_CAP of mine out (the oldest pops). The host decides: R.o[6] = 1 (appended,
+  // an older guest ignores it; an older host never sends it = off), G.opts.rapid on every page. A rapid host sends no
+  // g.am, so an older guest page in its room fires freely too (as under a host without magazines); a new guest knows
+  // from G.opts.rapid as well and predicts the same, so no blow of it is refused
   const AMMO_SLACK = 20;
   let AMMO_OFF = false; // (PG.debug.ammo.off: the older tests of the cap alone)
-  const magOf = (p) => (AMMO_OFF || G.gameMode !== 'battle' || (G.online && G.role === 'guest' && !NET.hostAm) ? null : (kitOf(p).mag || KIT_BASE.mag));
-  const capOf = (p) => { const m = p && magOf(p); return m ? Math.max(SHOT_CAP, m[0]) : SHOT_CAP; };
+  const magOf = (p) => (AMMO_OFF || G.gameMode !== 'battle' || G.opts.rapid === true || (G.online && G.role === 'guest' && !NET.hostAm) ? null : (kitOf(p).mag || KIT_BASE.mag));
+  const capOf = () => SHOT_CAP;
   function ammoInit(p, m) { if (p.amN === undefined) { p.amN = m[0]; p.amT = m[1]; } }
   // one frame of a player's magazine (the host: every player, while playing; a guest: its own)
   function ammoTick(p) {
@@ -10625,7 +10636,7 @@ window.PG = window.PG || {};
   const NET = {
     tr: null, trForced: false, trInfo: null, trP: null, trDone: false,
     sess: null, role: null, code: '', selfId: null, hostId: null, screen: null, unsubs: [],
-    mode: 'coop', opts: { arena: -1, time: 3, perks: true, monsters: true, intrusion: true, bet: 0 },
+    mode: 'coop', opts: { arena: -1, time: 3, perks: true, monsters: true, intrusion: true, rapid: false, bet: 0 },
     roster: [], slots: new Map(), gid: 0, ph: 'room', hostPh: 'room', ready: false, nick: '', busy: false, err: '', status: '',
     // (v4 trophies: ms the host session's series id - match id = ms + '.' + gid; q 0 = 트로피 경기, 1 / 2 = 연습 경기)
     ms: '', q: 1,
@@ -11009,13 +11020,13 @@ window.PG = window.PG || {};
   const canStart = () => NET.role === 'host' && NET.roster.length >= 2 && NET.roster.every((r) => r.id === NET.selfId || r.ready) && NET.roster.every(canAfford);
   // R: o[4] the stake; ms (ranked: the series id) or q (practice: why); each seat's trophy count in the room phase only
   // (the game snapshots stay lean; the podium gate uses the host's own r.cup); o[5] 몬스터 출현 (0 = off; appended
-  // after the stake so an older guest just ignores it - NET_V stays 4). v4 shop (7.1): a room-phase seat that wears
+  // after the stake so an older guest just ignores it - NET_V stays 4); o[6] 연사 (1 = on, RAPID; appended the same way). v4 shop (7.1): a room-phase seat that wears
   // something carries its worn set at index 5 (an older guest ignores it); game-phase seats carry none - looks are
   // frozen at match start, so the snapshots lose no byte to them
   function roomInfo() {
     const room = NET.screen !== 'game', q = room ? troPractice() : NET.q;
     const R = { gid: NET.gid, ph: NET.ph, m: NET.mode === 'battle' ? 'b' : 'c',
-      o: [NET.opts.arena, NET.opts.time, NET.opts.perks ? 1 : 0, NET.opts.intrusion ? 1 : 0, stakeNow(), NET.opts.monsters === false ? 0 : 1],
+      o: [NET.opts.arena, NET.opts.time, NET.opts.perks ? 1 : 0, NET.opts.intrusion ? 1 : 0, stakeNow(), NET.opts.monsters === false ? 0 : 1, NET.opts.rapid ? 1 : 0],
       p: NET.roster.map((r) => {
         const e = [r.slot, r.nick, r.char, r.ready ? 1 : 0];
         if (room) { e.push(r.id === NET.selfId ? (TRO.s ? TRO.s.t : -1) : r.cup); const lk = r.id === NET.selfId ? myLook(r.char) : r.lk || LOOK0; if (lk !== LOOK0) e.push(lk); }
@@ -11035,6 +11046,7 @@ window.PG = window.PG || {};
     if ('time' in o) NET.opts.time = [2, 3, 5].includes(+o.time) ? +o.time : 3;
     if ('perks' in o) NET.opts.perks = !!o.perks;
     if ('monsters' in o) NET.opts.monsters = o.monsters !== false;
+    if ('rapid' in o) NET.opts.rapid = o.rapid === true;
     if ('intrusion' in o) NET.opts.intrusion = !!o.intrusion;
     if ('mode' in o && (!NET.sess || NET.screen === 'room')) NET.mode = o.mode === 'battle' ? 'battle' : 'coop';
     // 트로피 걸기: one of STAKES the host can cover, set in the room (or before hosting) - never mid-game
@@ -11225,8 +11237,9 @@ window.PG = window.PG || {};
     else for (const q of roster) { const o = NET.roster.find((x) => x.slot === q.slot); q.f = !!(o && o.f); }
     NET.roster = roster;
     NET.mode = R.m === 'b' ? 'battle' : 'coop';
-    // (o[5] 몬스터 출현: only an explicit 0 is off - missing (an older host), junk or 1 all mean on, as an older host plays)
-    if (Array.isArray(R.o)) NET.opts = { arena: nInt(R.o[0], -1, 9, -1), time: [2, 3, 5].includes(R.o[1]) ? R.o[1] : 3, perks: R.o[2] !== 0, monsters: R.o[5] !== 0, intrusion: R.o[3] !== 0, bet: STAKES.includes(R.o[4]) ? R.o[4] : 0 };
+    // (o[5] 몬스터 출현: only an explicit 0 is off - missing (an older host), junk or 1 all mean on, as an older host plays;
+    // o[6] 연사: only an explicit 1 is on - missing (an older host), junk or 0 all mean off, the magazine as an older host plays)
+    if (Array.isArray(R.o)) NET.opts = { arena: nInt(R.o[0], -1, 9, -1), time: [2, 3, 5].includes(R.o[1]) ? R.o[1] : 3, perks: R.o[2] !== 0, monsters: R.o[5] !== 0, rapid: R.o[6] === 1, intrusion: R.o[3] !== 0, bet: STAKES.includes(R.o[4]) ? R.o[4] : 0 };
     // ranked (a valid series id) or practice (anything else: an old page fails safe)
     NET.q = typeof R.ms === 'string' && ID6_RE.test(R.ms) ? 0 : nInt(R.q, 1, 2, 1);
     NET.ms = NET.q === 0 ? R.ms : '';
@@ -11516,7 +11529,7 @@ window.PG = window.PG || {};
     // the floating-empty life this world runs (EMPTY_RULE): a guest blinks the bubbles at it, not at its own rule (an
     // older host sends none - it runs EMPTY_LIFE, which is what a guest then takes)
     const el = emptyRule()[0]; if (el !== EMPTY_LIFE) g.el = el;
-    if (G.gameMode === 'battle') { g.lc = 1; if (!AMMO_OFF) g.am = 1; } // (battle: send me your catches - see hostClaim; no g.sc any more: see SHOT_CAP; am: AMMO)
+    if (G.gameMode === 'battle') { g.lc = 1; if (!AMMO_OFF && !G.opts.rapid) g.am = 1; } // (battle: send me your catches - see hostClaim; no g.sc any more: see SHOT_CAP; am: AMMO)
     if (G.stampFlash > 0) g.sf = G.stampFlash;
     if (G.ticketFlash > 0) g.tf = G.ticketFlash;
     const mu = MUSICS.indexOf(G.music); if (mu > 0) g.mu = mu;
@@ -11585,7 +11598,7 @@ window.PG = window.PG || {};
     NET.gid = id; NET.screen = 'game'; NET.buf = mkBuf(); NET.evQ = []; NET.view = newView(); NET.pred = []; NET.bounces = [];
     NET.rvSent = {}; NET.ctl = 'remote'; NET.viewIdx = -1; NET.bnId = 0; NET.mash = []; NET.sidSeen = new Map();
     const list = NET.roster.map((r) => ({ slot: r.slot, char: r.char, nick: r.nick, local: r.slot === mine, id: r.id, look: r.lk })); // (the room's looks: shop.md 6.5)
-    G.opts = { arena: NET.opts.arena, time: NET.opts.time, perks: NET.opts.perks, monsters: NET.opts.monsters !== false, intrusion: NET.opts.intrusion };
+    G.opts = { arena: NET.opts.arena, time: NET.opts.time, perks: NET.opts.perks, monsters: NET.opts.monsters !== false, intrusion: NET.opts.intrusion, rapid: NET.opts.rapid === true };
     G.manual = false;
     resetGame(g.m === 'b' ? 'battle' : 'coop', list);
     G.online = true; G.role = 'guest'; G.localSlot = mine; G.menuOpen = false;
@@ -12151,6 +12164,7 @@ window.PG = window.PG || {};
       box.appendChild(l);
     };
     chk('perks', '능력 끄기', '동물 능력 없이 겨뤄요');
+    chk('rapid', '연사', RAPID_SUB);
     chk('monsters', '몬스터 출현', '경기 내내 때 몬스터가 나와요');
     chk('intrusion', '보스 난입', '1분 30초 남으면 보스가 와요');
     // 트로피 걸기 (v4 trophies): 안 걸기 / 5 / 10 / 20 / 50 - everyone puts it in, 1st takes it all
@@ -12174,6 +12188,7 @@ window.PG = window.PG || {};
     for (const b of box.querySelectorAll('[data-time]')) b.setAttribute('aria-checked', +b.dataset.time === o.time ? 'true' : 'false');
     const p = box.querySelector('[data-opt="perks"]'); if (p) p.checked = !o.perks;
     const mo = box.querySelector('[data-opt="monsters"]'); if (mo) mo.checked = o.monsters !== false;
+    const ra = box.querySelector('[data-opt="rapid"]'); if (ra) ra.checked = o.rapid === true;
     const n = box.querySelector('[data-opt="intrusion"]'); if (n) n.checked = !!o.intrusion;
     // (a stake above my own count: off, with the reason as its title)
     for (const b of box.querySelectorAll('[data-bet]')) {
@@ -12366,8 +12381,8 @@ window.PG = window.PG || {};
     // my pick's compact kit card (char-kits §12.3): name, role chip, the pips, the 특기 name; 능력 끄기 (a battle room
     // with the setting off) greys it, every bar 3/3/3/3, one line "능력 꺼짐 · 모두 같은 기본 능력이에요"
     const rc = CHARS[G.sel] || CHARS.duck, roff = NET.mode === 'battle' && NET.opts.perks === false;
-    // (AMMO: a battle room says my pick's magazine - 능력 끄기: the base one, everyone's)
-    const rmag = NET.mode === 'battle' ? magTx(((roff ? KIT_BASE : KIT[G.sel]) || KIT_BASE).mag) : '';
+    // (AMMO: a battle room says my pick's magazine - 능력 끄기: the base one, everyone's; 연사: none, RAPID_KIT)
+    const rmag = NET.mode !== 'battle' ? '' : NET.opts.rapid ? RAPID_KIT : magTx(((roff ? KIT_BASE : KIT[G.sel]) || KIT_BASE).mag);
     if (dom.roomKit) {
       dom.roomKit.style.setProperty('--hue', rc.hue); dom.roomKit.classList.toggle('off', roff);
       dom.roomKit.setAttribute('aria-label', rc.name + ' (' + rc.animal + ', ' + rc.role + '): ' + (roff ? OFF_LINE : '특기 ' + rc.move.name + ': ' + rc.move.how) + (rmag ? '. 배틀 ' + rmag : ''));
@@ -12393,8 +12408,8 @@ window.PG = window.PG || {};
     if (dom.roomSum) {
       dom.roomSum.hidden = host;
       const o = NET.opts, A = ARENAS[o.arena];
-      // (몬스터 없음 only when off: the default line stays as it was)
-      const parts = NET.mode === 'battle' ? [(A ? A.name : '랜덤 경기장'), o.time + '분', o.perks ? '능력 있음' : '능력 없음'].concat(o.monsters === false ? ['몬스터 없음'] : [],
+      // (몬스터 없음 only when off, 연사 only when on: the default line stays as it was)
+      const parts = NET.mode === 'battle' ? [(A ? A.name : '랜덤 경기장'), o.time + '분', o.perks ? '능력 있음' : '능력 없음'].concat(o.rapid ? ['연사'] : [], o.monsters === false ? ['몬스터 없음'] : [],
         [o.intrusion ? '보스 난입' : '보스 없음', '트로피 ' + troStakeTxt(stake)]) : ['첫 번째 탕부터 끝까지 청소'];
       if (q) parts.push('연습 경기');
       const key = NET.mode + parts.join();
@@ -12425,7 +12440,7 @@ window.PG = window.PG || {};
       const tro = q === 1 ? ['연습 경기예요: 이 브라우저의 탭끼리는 트로피가 바뀌지 않아요'] : q === 2 ? ['연습 경기예요: 같은 기기에서 들어온 친구가 있어요']
         : NET.mode === 'battle' ? [troRulesLine(), troFreeLine(), '끝까지 한 판마다 오늘 트로피 보너스 +' + TRO_PLAY + ' (하루 ' + DAY_CAP + '개까지)', '견습 리그는 등수로 잃지 않아요 · 판 중간에 나가면 꼴찌로 쳐요'].filter(Boolean) : ['끝까지 갈수록 모두 트로피를 받아요 (잃지 않아요)'];
       const rules = tro.concat([coinRule(q)], NET.mode === 'battle'
-        ? (NET.opts.monsters === false ? ['몬스터 없이 친구끼리만 겨뤄요'] : []).concat([AMMO_RULE, '갇히면 점프·거품 연타로 빨리 빠져나와요', '갇힌 친구를 터뜨리면 뽀득 KO +500'])
+        ? (NET.opts.monsters === false ? ['몬스터 없이 친구끼리만 겨뤄요'] : []).concat([NET.opts.rapid ? RAPID_RULE : AMMO_RULE, '갇히면 점프·거품 연타로 빨리 빠져나와요', '갇힌 친구를 터뜨리면 뽀득 KO +500'])
         : ['쓰러진 친구는 거품이 돼요. 거품에 닿으면 바로 살아나요', '목숨은 다 함께 써요']);
       const key = rules.join('|');
       if (dom.roomRules._key !== key) { dom.roomRules._key = key; dom.roomRules.textContent = ''; for (const r of rules) dom.roomRules.appendChild(h('li', '', r)); }
@@ -12545,7 +12560,7 @@ window.PG = window.PG || {};
   }
   function netDebugApi() {
     return {
-      // host(opts): {mode:'coop'|'battle', arena, time, perks, monsters, intrusion, bet, nick, char, net} -> Promise<code|null>
+      // host(opts): {mode:'coop'|'battle', arena, time, perks, monsters, intrusion, rapid, bet, nick, char, net} -> Promise<code|null>
       async host(opts) {
         opts = opts || {};
         G.manual = false; clearDbg();

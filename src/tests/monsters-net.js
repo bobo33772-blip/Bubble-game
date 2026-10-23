@@ -9,15 +9,20 @@
 //    false, #pg-room-sum says 몬스터 없음, the rules lead with 몬스터 없이 친구끼리만 겨뤄요, the guest's checkbox is
 //    disabled; in game neither world has an enemy (past the opening-wave delay), 시작! says 몬스터 없음 on the guest too
 //    (the arena banner itself is covered by the 3-2-1), snapMax <= 3400;
-// 3. back in the room the host ticks it again: o[5] = 1, the guest's line is the default one, the next match has enemies.
+// 3. back in the room the host ticks it again: o[5] = 1, the guest's line is the default one, the next match has enemies;
+// 4. 연사 (game.js RAPID, R.o[6]): off by default (o[6] = 0, the magazine rule); the host ticks it in the room: o[6] = 1,
+//    the guest's line says 연사, the rules swap the magazine line for the 연사 one, its kit line says no reload; in game
+//    both G.opts.rapid, no magazine on either screen (the host sends no g.am).
 // Screenshot scenes (?shot=friends|room|roomg; the scene's frame fills the window, then "SHOT READY"): the friends
-// panel's battle options, the host's room and the guest's room with 몬스터 출현 off (look at them at 390 and 900 px).
+// panel's battle options, the host's room and the guest's room with 몬스터 출현 off (look at them at 390 and 900 px);
+// &rapid=1: 연사 ticked too, the room scrolled to its row (look at it at 844x390).
 // Prints "MONNET PASS|FAIL <name>", "MONNET INFO ...", "MONNET DONE pass=N fail=M".
 (function () {
   'use strict';
   const Q = new URLSearchParams(location.search);
   const LINK = Q.get('link') || 'lat=20&jit=10&drop=0';
   const SHOT = Q.get('shot') || '';
+  const RAPID = Q.get('rapid') === '1';
   let pass = 0, fail = 0;
   const log = (s) => console.log(s);
   const J = (v) => { try { return JSON.stringify(v); } catch (e) { return String(v); } };
@@ -144,23 +149,24 @@
     // ---- 1. the default
     await until(() => hostR(H) && Array.isArray(hostR(H).o), 3000);
     const R0 = hostR(H);
-    ok('default: the host\'s R.o has 6 entries, o[5] = 1 (the stake keeps index 4)', R0 && R0.o.length === 6 && R0.o[5] === 1 && R0.o[4] === 0, R0 && R0.o);
+    ok('default: the host\'s R.o has 7 entries, o[5] = 1, o[6] = 0 (연사 off; the stake keeps index 4)', R0 && R0.o.length === 7 && R0.o[5] === 1 && R0.o[6] === 0 && R0.o[4] === 0, R0 && R0.o);
     const box = '#pg-room-opts [data-opt="monsters"]';
     ok('default: the host\'s room switch is ticked and editable', q(H, box).checked && !q(H, box).disabled && shown(q(H, box)));
     await until(() => /배틀/.test(text(G1, 'pg-room-sum')), 3000);
     const sum0 = text(G1, 'pg-room-sum');
-    ok('default: the guest reads on; its summary line has no 몬스터 word', N(G1).opts.monsters === true && sum0.indexOf('몬스터') < 0 && /능력 있음 · 보스 난입/.test(sum0), { o: N(G1).opts, sum0 });
+    ok('default: the guest reads on; its summary line has no 몬스터 word (and no 연사)', N(G1).opts.monsters === true && N(G1).opts.rapid === false && sum0.indexOf('몬스터') < 0 && sum0.indexOf('연사') < 0 && /능력 있음 · 보스 난입/.test(sum0), { o: N(G1).opts, sum0 });
     // ---- 2. off
     ok('the host unticks 몬스터 출현 in the room (a click)', flip(H, box, false) && N(H).opts.monsters === false);
     const r5 = await until(() => hostR(H) && hostR(H).o[5] === 0, 3000);
-    ok('off: the host\'s R.o.length === 6 && R.o[5] === 0', r5 && hostR(H).o.length === 6 && hostR(H).o[5] === 0, hostR(H) && hostR(H).o);
+    ok('off: the host\'s R.o.length === 7 && R.o[5] === 0', r5 && hostR(H).o.length === 7 && hostR(H).o[5] === 0, hostR(H) && hostR(H).o);
     const got = await until(() => N(G1).opts.monsters === false && /몬스터 없음/.test(text(G1, 'pg-room-sum')), 4000);
     const sum1 = text(G1, 'pg-room-sum');
     ok('off: the guest has NET.opts.monsters false and #pg-room-sum says 몬스터 없음 after 능력', !!got && /능력 있음 · 몬스터 없음 · 보스 난입/.test(sum1), { o: N(G1).opts, sum1 });
     ok('off: the guest\'s checkbox is disabled (and hidden: guests read the line)', q(G1, box).disabled === true && !shown(q(G1, box)), { d: q(G1, box).disabled });
     const rules = (fr) => Array.from(fr.w.document.querySelectorAll('#pg-room-rules li')).map((e) => e.textContent);
     const ruleAt = (fr) => rules(fr).indexOf('몬스터 없이 친구끼리만 겨뤄요');
-    ok('off: the rules lead the battle lines with 몬스터 없이 친구끼리만 겨뤄요 (host and guest)', [H, G1].every((f) => ruleAt(f) >= 0 && rules(f)[ruleAt(f) + 1] === '갇히면 점프·거품 연타로 빨리 빠져나와요'), [rules(H), rules(G1)]);
+    const AMMO_RULE = '거품을 다 쏘면 잠깐 장전해요 · 동물마다 발 수와 장전 시간이 달라요', RAPID_RULE = '연사: 장전 없이 계속 쏴요 · 내 거품은 3개까지, 더 쏘면 먼저 쏜 거품이 터져요';
+    ok('off: the rules lead the battle lines with 몬스터 없이 친구끼리만 겨뤄요, then the magazine line (host and guest)', [H, G1].every((f) => ruleAt(f) >= 0 && rules(f)[ruleAt(f) + 1] === AMMO_RULE && rules(f)[ruleAt(f) + 2] === '갇히면 점프·거품 연타로 빨리 빠져나와요' && rules(f).indexOf(RAPID_RULE) < 0), [rules(H), rules(G1)]);
     // ---- in game
     const st = await startUI(H, G1);
     if (!ok('off: 시작 -> both playing', st.playing, [S(H).phase, S(G1).phase])) return;
@@ -186,6 +192,24 @@
     ok('on again: 시작! has no sub (as before)', st2.subs.has('시작!|') && !st2.subs.has('시작!|몬스터 없음'), Array.from(st2.subs));
     const seen = await until(() => V(G1).enemies.length > 0 && H.G.enemies.length > 0, 8000);
     ok('on again: the enemies come back (host and guest)', !!seen, { host: H.G.enemies.length, guest: V(G1).enemies.length });
+    const gs = () => G1.G.players.find((p) => p.local !== false), sg = gs() ? gs().slot : 1;
+    ok('연사 off: both screens keep the guest\'s magazine, G.opts.rapid false', !!G1.D.ammo.of(sg) && !!H.D.ammo.of(sg) && H.G.opts.rapid === false && G1.G.opts.rapid === false, [G1.D.ammo.of(sg), H.D.ammo.of(sg)]);
+    // ---- 4. 연사 on (the room checkbox, a click)
+    H.mp.toRoom();
+    await until(() => [H, G1].every((f) => N(f).screen === 'room'), 8000);
+    await sleep(300);
+    const rbox = '#pg-room-opts [data-opt="rapid"]';
+    ok('연사: the host\'s room switch is unticked by default, editable, its sub-label says 장전 없이 계속 쏴요', !!q(H, rbox) && !q(H, rbox).checked && !q(H, rbox).disabled && shown(q(H, rbox)) && q(H, rbox).parentElement.textContent === '장전 없이 계속 쏴요', q(H, rbox) && q(H, rbox).parentElement.textContent);
+    ok('연사: the host ticks it (a click), R.o[6] === 1 (7 entries)', flip(H, rbox, true) && N(H).opts.rapid === true && !!(await until(() => hostR(H) && hostR(H).o[6] === 1 && hostR(H).o.length === 7, 3000)), hostR(H) && hostR(H).o);
+    const rOn = await until(() => N(G1).opts.rapid === true && /연사/.test(text(G1, 'pg-room-sum')), 4000);
+    const sumR = text(G1, 'pg-room-sum');
+    ok('연사: the guest has NET.opts.rapid and #pg-room-sum says 연사 after 능력', !!rOn && /능력 있음 · 연사 · 보스 난입/.test(sumR), { o: N(G1).opts, sumR });
+    ok('연사: the rules swap the magazine line for the 연사 one (host and guest)', [H, G1].every((f) => rules(f).indexOf(RAPID_RULE) >= 0 && rules(f).indexOf(AMMO_RULE) < 0), [rules(H), rules(G1)]);
+    ok('연사: the guest\'s kit line says no reload; its checkbox is ticked, disabled and hidden', text(G1, 'pg-room-pmag') === '연사 · 장전 없이 계속 쏴요' && q(G1, rbox).disabled === true && q(G1, rbox).checked === true && !shown(q(G1, rbox)), { kit: text(G1, 'pg-room-pmag'), d: q(G1, rbox).disabled });
+    const st3 = await startUI(H, G1);
+    if (!ok('연사: 시작 -> both playing', st3.playing, [S(H).phase, S(G1).phase])) return;
+    const noMag = await until(() => !G1.D.ammo.of(sg) && !H.D.ammo.of(sg) && !H.D.ammo.of(0), 3000);
+    ok('연사: both G.opts.rapid; no magazine for anyone on either screen (the host sends no g.am)', !!noMag && H.G.opts.rapid === true && G1.G.opts.rapid === true, [H.G.opts, G1.G.opts, G1.D.ammo.of(sg)]);
     ok('no page error / console error in either frame', frames.every((f) => !f.errors.length), frames.map((f) => f.errors.slice(0, 3)));
   }
 
@@ -201,14 +225,15 @@
       const { H, G1, code } = await uiRoom(2);
       if (!code) throw new Error('no room');
       flip(H, '#pg-room-opts [data-opt="monsters"]', false);
-      await until(() => N(G1).opts.monsters === false, 4000);
+      if (RAPID) flip(H, '#pg-room-opts [data-opt="rapid"]', true);
+      await until(() => N(G1).opts.monsters === false && (!RAPID || N(G1).opts.rapid === true), 4000);
       click(G1, 'pg-ready');
       await sleep(600);
       const fr = name === 'room' ? H : G1;
       fill(fr);
       await sleep(400);
       // (the settings: the host's switches / the guest's summary line and rules, scrolled into view)
-      const el = name === 'room' ? q(fr, '#pg-room-opts [data-opt="monsters"]') : $(fr, 'pg-room-sum');
+      const el = name === 'room' ? q(fr, '#pg-room-opts [data-opt="' + (RAPID ? 'rapid' : 'monsters') + '"]') : $(fr, 'pg-room-sum');
       if (el) el.scrollIntoView({ block: 'center' });
       await sleep(400);
     }
