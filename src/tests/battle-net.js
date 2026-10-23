@@ -9,8 +9,9 @@
 //   gg   guest -> guest (the victim drawn from its own body stream): as gh
 //   hg   host -> guest (the guest drawn from its interpolated stream on the host): as gh
 //   old  an older guest page (no lc in its states, no 'tp'): its shot still catches a host player standing still
-//   cap  (perks on, a duck guest tapping for 3 s) at most 3 of its shots in flight on its screen and on the host's,
-//        the host refused none of its presses (no prediction it will not honour), the quiet 'dry' on the guest
+//   cap  (perks on, a duck guest tapping for 3 s) at most 3 of its bubbles out in all (in flight + floating) on the
+//        host, every press past 3 popped its oldest there (no refusal, never a 'dry' on the guest), the guest's own
+//        screen back to <= 3 once the pops have arrived
 // Prints "BNET PASS|FAIL <name>", "BNET METRIC <name> <json>", "BNET DONE pass=N fail=M".
 (function () {
   'use strict';
@@ -167,19 +168,19 @@
     if (!ok('cap room: 2-player battle (perks on) playing', R.playing)) return;
     const [H, A] = R.F, sa = slotOf(A);
     await place(R.F, H, [205, 40], [-1, 1]);
-    const fly = (fr, slot) => fr.G.bubbles.filter((b) => !b.dead && b.owner === slot && b.state === 'shot' && b.kind === 'empty' && !b.drop).length;
+    const out = (fr, slot) => fr.G.bubbles.filter((b) => !b.dead && b.owner === slot && b.kind === 'empty' && !b.drop && (b.state === 'shot' || b.state === 'float')).length;
     let gMax = 0, hMax = 0;
-    A.mp.tap(() => { gMax = Math.max(gMax, fly(A, sa)); });
-    H.mp.tap(() => { hMax = Math.max(hMax, fly(H, sa)); for (const p of H.G.players) p.invuln = 0; });
-    const st0 = N(A), dry0 = A.sfx.filter((n) => n === 'dry').length, cap0 = N(H).claims.capNo;
+    A.mp.tap(() => { gMax = Math.max(gMax, out(A, sa)); });
+    H.mp.tap(() => { hMax = Math.max(hMax, out(H, sa)); for (const p of H.G.players) p.invuln = 0; });
+    const st0 = N(A), dry0 = A.sfx.filter((n) => n === 'dry').length, cp0 = H.G.capPops | 0;
     const t0 = now();
     while (now() - t0 < 3000) { for (const e of H.G.enemies) { e.state = 'descend'; e.delay = 1e9; e.y = -300; } press(A, 'shoot', true); await sleep(40); press(A, 'shoot', false); await sleep(40); }
     await sleep(800);
     A.mp.tap(null); H.mp.tap(null);
-    const st1 = N(A), dry = A.sfx.filter((n) => n === 'dry').length - dry0, capNo = N(H).claims.capNo - cap0;
-    metric('cap', { guestMax: gMax, hostMax: hMax, dry, hostRefused: capNo, predGiveUp: (st1.predGiveUp | 0) - (st0.predGiveUp | 0) });
-    ok('cap: a duck tapping for 3 s has at most 3 shots in flight on its own screen and on the host\'s (and reaches 3)', gMax === 3 && hMax <= 3 && hMax >= 2, { gMax, hMax });
-    ok('cap: the host refused none of its presses; the extra presses were a quiet dry', capNo === 0 && dry >= 3, { capNo, dry });
+    const st1 = N(A), dry = A.sfx.filter((n) => n === 'dry').length - dry0, capPops = (H.G.capPops | 0) - cp0, gEnd = out(A, sa), hEnd = out(H, sa);
+    metric('cap', { guestMax: gMax, hostMax: hMax, guestEnd: gEnd, hostEnd: hEnd, dry, capPops, predGiveUp: (st1.predGiveUp | 0) - (st0.predGiveUp | 0) });
+    ok('cap: a duck tapping for 3 s has at most 3 of its bubbles out in all on the host (and reaches 3)', hMax === 3 && hEnd <= 3, { hMax, hEnd });
+    ok('cap: each press past 3 popped its oldest on the host (no refusal, never a dry); the guest\'s screen is back to <= 3', capPops >= 5 && dry === 0 && gEnd <= 3, { capPops, dry, gEnd });
     ok('cap room: no page errors', R.F.every((f) => !f.errors.length), R.F.map((f) => f.errors));
   }
 

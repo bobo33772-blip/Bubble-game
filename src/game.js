@@ -22,11 +22,12 @@ window.PG = window.PG || {};
   // player keeps only a few: [life (frames from the blow; the blink starts here), blink frames, floating empties one
   // player may keep (0: no cap), all players' together (0: no cap)]. Solo stays EMPTY_LIFE + FLASH (14 s), no cap;
   // co-op ~7 s (still long enough to ride one and to chain a cluster), battle ~5 s (a short-lived obstacle / step).
-  // The caps only catch a held / mashed BUBBLE (7 / 6 each: two players never reach the 14 / 12 in all), and a capped
-  // bubble is not popped at once: it blinks CAP_BLINK frames first (capEmpties). Read only through emptyRule() /
-  // emptyLife() (the host's world, a guest's view of it and the drawing all agree). Measured with
-  // tests/review-mpbal.js exp=clutter (4 bots blowing ~1.7 a second)
-  const EMPTY_RULE = { solo: [EMPTY_LIFE, FLASH, 0, 0], coop: [330, 90, 7, 14], battle: [210, 90, 6, 12] };
+  // The caps only catch a held / mashed BUBBLE (co-op 7 each: two players never reach the 14 in all), and a capped
+  // bubble is not popped at once: it blinks CAP_BLINK frames first (capEmpties). Battle's 3 each (12 in all) is only a
+  // backstop: there a player has at most SHOT_CAP (3) of their own out in all, the 4th blow pops the oldest at once
+  // (capMine). Read only through emptyRule() / emptyLife() (the host's world, a guest's view of it and the drawing all
+  // agree). Measured with tests/review-mpbal.js exp=clutter (4 bots blowing ~1.7 a second)
+  const EMPTY_RULE = { solo: [EMPTY_LIFE, FLASH, 0, 0], coop: [330, 90, 7, 14], battle: [210, 90, 3, 12] };
   // a capped bubble's warning blink (then the plain self-pop); a bubble bounced on in the last RIDE_HOLD frames (one
   // bounce cycle is ~34 frames, a gliding duck's ~52) is never the one a cap takes - the next-oldest goes instead
   const CAP_BLINK = 30, RIDE_HOLD = 90;
@@ -1809,7 +1810,7 @@ window.PG = window.PG || {};
     if (p.autoCd > 0) p.autoCd--;
     if (inp.shootP) p.shootBuf = 6; else if (p.shootBuf > 0) p.shootBuf--;
     if (p.shootCd === 0 && (p.shootBuf > 0 || (inp.shoot && p.autoCd === 0))) {
-      if (shotCapped(p)) Snd.sfx('dry'); // (battle: SHOT_CAP in flight - nothing more until one ends)
+      if (shotCapped(p)) Snd.sfx('dry'); // (only a guest of an older host: its in-flight cap - see SHOT_CAP)
       else fire(p, !p.onGround); // (the cat's yarn rolls only when blown on the ground)
       p.shootBuf = 0;
       p.shootCd = k.cd[0]; p.autoCd = k.cd[1];
@@ -1979,6 +1980,7 @@ window.PG = window.PG || {};
     // battle: blowing a bubble ends your own blink (respawn / escape / stun) - nobody attacks from behind it
     if (battle) p.invuln = 0;
     const specs = newShot(p, air);
+    if (battle) capMine(p); // (SHOT_CAP of mine out in all: the oldest pops first)
     if (specs[0].ty === 'egg') eggCap(G.bubbles, p.slot, specs[0].cap);
     let c = null, vi = 0; // (the first bubble: the one hostShot gives the guest's sid; an otter volley shares its id as `vol`)
     for (const s of specs) {
@@ -3537,19 +3539,38 @@ window.PG = window.PG || {};
     }
     return false;
   }
-  // battle: at most SHOT_CAP of a player's bubbles in their capture phase at once (an otter's volley counts once; the
-  // frog's eggs keep their own cap, eggCap). One press more is a quiet 칙 ('dry') and nothing else - the same count on a
-  // guest (its predictions + its rows in the view: never later than the host's), the host allows a guest one more
-  // (two presses that cross a shot's end on a jittery link); an older host sends no g.sc: no cap there
+  // battle: at most SHOT_CAP of a player's OWN bubbles out at once in all - in flight + floating empties (the user,
+  // 2026-10-22: "합쳐서 3개"). An otter's volley counts once (its droplets never float); a frog's eggs count like any
+  // bubble, hanging or floating (its hang cap, eggCap, may still let an old egg float: it stays counted); a bubble that
+  // caught a rival / a monster is not the player's any more. A blow with SHOT_CAP out first pops the oldest (capMine:
+  // the plain self-pop - no score, no chain): the oldest floating one; one in flight next (a volley goes whole); one
+  // bounced on in the last RIDE_HOLD frames only when nothing else is left. No press is refused, no 칙. The host's world
+  // decides (fire): a guest shows its new shot at once and sees the pop with the snapshot. Co-op / solo: no such limit
+  // (capEmpties only). An older host sent g.sc and refused past SHOT_CAP in flight: its guest still stops there with
+  // the quiet 'dry' (shotCapped). This host sends no g.sc: an older guest page fires freely and this host pops its oldest
   const SHOT_CAP = 3;
+  const mineOut = (slot) => G.bubbles.filter((b) => !b.dead && b.owner === slot && b.kind === 'empty' && !b.drop && (b.state === 'shot' || b.state === 'float'));
+  function capMine(p) {
+    const mine = mineOut(p.slot);
+    // (0 floating, 1 in flight, 2 floating but ridden lately; the oldest first within one - the age counts from the blow)
+    const rank = (b) => (b.state !== 'float' ? 1 : b.rideF !== undefined && G.frame - b.rideF < RIDE_HOLD ? 2 : 0);
+    while (mine.length >= SHOT_CAP) {
+      let pick = null;
+      for (const b of mine) if (!pick || rank(b) < rank(pick) || (rank(b) === rank(pick) && (b.age > pick.age || (b.age === pick.age && b.id < pick.id)))) pick = b;
+      mine.splice(mine.indexOf(pick), 1);
+      if (pick.state === 'shot') for (const o of G.bubbles) if (o.drop && !o.dead && o.vol === pick.vol && o.owner === pick.owner && o.state === 'shot') popBubble(o, null, 'self');
+      popBubble(pick, null, 'self');
+      G.capPops = (G.capPops | 0) + 1; // (for the headless tests)
+    }
+  }
   function inFlight(slot) {
     let n = 0;
     for (const b of G.bubbles) if (!b.dead && b.owner === slot && b.state === 'shot' && b.kind === 'empty' && !b.drop && b.ty !== 'egg') n++;
     return n;
   }
   function shotCapped(p) {
-    if (G.gameMode !== 'battle' || kitOf(p).shot.ty === 'egg') return false;
-    const cap = G.online && G.role === 'guest' ? NET.shotCap | 0 : SHOT_CAP;
+    if (G.gameMode !== 'battle' || !G.online || G.role !== 'guest' || kitOf(p).shot.ty === 'egg') return false;
+    const cap = NET.shotCap | 0; // (only an older host sends one)
     return cap > 0 && inFlight(p.slot) >= cap;
   }
   // the host's world, frame by frame: where each player was (a guest's claim names the snapshot tick it drew from)
@@ -4920,7 +4941,7 @@ window.PG = window.PG || {};
     hubDisarm();
     showOverlay('hub');
     hubShow(tab === 'my' || tab === 'draw' ? tab : 'shop', !back);
-    if (back) try { $('pg-my-rec').focus({ preventScroll: true }); } catch (e) { /* ignore */ }
+    if (back) try { $(back === 'pal' ? 'pg-my-pal' : 'pg-my-rec').focus({ preventScroll: true }); } catch (e) { /* ignore */ }
   }
   // the hub's animal d steps on (1 the next, -1 the previous, wrapping): every tab shows and dresses it from now on
   function hubCycle(d) {
@@ -4960,6 +4981,7 @@ window.PG = window.PG || {};
     // (the footer pattern, looks-per-animal.md 4.0: [message][the tab's own ghost button][닫기] - 내 기록 on 마이페이지,
     // 확률 보기 on 뽑기)
     if (dom.myRec) dom.myRec.hidden = HUB.tab !== 'my';
+    if (dom.myPal) dom.myPal.hidden = HUB.tab !== 'my'; // (친구: with the cloud / on a preview only - palSetupDOM)
     if (dom.oddsBtn) dom.oddsBtn.hidden = HUB.tab !== 'draw';
     if (HUB.tab === 'draw') {
       if (S && !S.gs && !TRO.ro) troMut((q) => { q.gs = 1; });
@@ -7321,7 +7343,7 @@ window.PG = window.PG || {};
   const PAL_OLD_MS = 14 * 864e5, PAL_MUTE_MS = 30 * 864e5, PAL_MUTE_MAX = 50, PAL_REFRESH_MS = 10000, PAL_RETRY_MS = 60000, PAL_DENY_MS = 6000, PAL_MSG_MS = 6000;
   const PAL_ABC = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789', PAL_CODE_RE = /^[A-HJKMNP-Z2-9]{8}$/, PAL_LK_RE = /^[0-9a-z]{5}$/;
   const PAL_TX = {
-    title: '친구 순위', code: '내 코드', copy: '복사', copied: '복사했어요', ph: '친구 코드 8자리', send: '친구 요청', reqs: '받은 요청', rank: '혼자 하기 최고 기록',
+    title: '친구 순위', friend: '친구', ivWait: '초대 왔어요', code: '내 코드', copy: '복사', copied: '복사했어요', ph: '친구 코드 8자리', send: '친구 요청', reqs: '받은 요청', rank: '혼자 하기 최고 기록',
     me: '(나)', accept: '수락', decline: '거절', cut: '끊기', cancel: '취소', ask: '{0}님과 친구를 끊을까요?', refresh: '새로고침', close: '닫기',
     loading: '불러오는 중…', empty: '아직 친구가 없어요 · 내 코드를 알려 주거나 친구 코드를 넣어 보세요',
     guest: '로그인하면 친구 코드로 친구를 맺고 서로의 기록을 볼 수 있어요', login: '구글로 로그인', retry: '다시 시도',
@@ -7710,7 +7732,8 @@ window.PG = window.PG || {};
   // ---- UI (design/friends.md 5): 내 기록's 친구 순위 button and #pg-pal, a full-stage .pg-panel like #pg-hub. Made here,
   // with the cloud or on a preview only. (The button sits at the top right of 내 기록's card: its button row has no room
   // for a third button at 1x - see the "As built" note.) The red dot (requests waiting) is mirrored on the title's
-  // trophy badge and on 마이페이지's 내 기록 button
+  // trophy badge; 마이페이지 has its own 친구 button (the hub footer, beside 내 기록 - the easy way in, 2026-10-23) with
+  // the dot for requests or an invite waiting; its 친구 순위 closes back to 마이페이지
   function palSetupDOM() {
     if (!(CLOUD.on || PREVIEW) || $('pg-pal-btn') || !dom.recCard) return;
     const b = h('button', 'pg-btn pg-ghost pg-small pg-pal-btn'); b.type = 'button'; b.id = 'pg-pal-btn';
@@ -7722,7 +7745,14 @@ window.PG = window.PG || {};
     dom.recCard.classList.add('has-pal');
     listen(b, 'click', (e) => { e.preventDefault(); palOpen(); });
     const mr = $('pg-my-rec');
-    if (mr) { const d2 = h('i', 'pg-tro-new'); d2.id = 'pg-pal-new2'; d2.hidden = true; d2.setAttribute('aria-hidden', 'true'); mr.appendChild(d2); mr.classList.add('has-pal'); }
+    if (mr && !$('pg-my-pal')) {
+      const fb = h('button', 'pg-btn pg-ghost pg-small pg-my-pal'); fb.type = 'button'; fb.id = 'pg-my-pal'; fb.hidden = mr.hidden;
+      const d2 = h('i', 'pg-tro-new'); d2.id = 'pg-pal-new2'; d2.hidden = true; d2.setAttribute('aria-hidden', 'true');
+      fb.append(h('span', '', PAL_TX.friend), d2);
+      mr.parentNode.insertBefore(fb, mr);
+      listen(fb, 'click', (e) => { e.preventDefault(); palOpen('hub'); });
+      dom.myPal = fb;
+    }
     try { for (const q of ['.pg-fw-body', '.pg-fw-sign']) { const fw = document.querySelector('#pg-fontwarm ' + q); if (fw && fw.textContent.indexOf(PAL_TX.rank) < 0) fw.textContent += ' ' + PAL_TEXT + ' ' + IV_TEXT; } } catch (e) { /* ignore */ }
     // (친구 초대: the room's 친구 초대 beside 코드 복사 - a host in its room phase, signed in or on a preview)
     const side = $('pg-room') && $('pg-room').querySelector('.pg-room-side'), cp = $('pg-copy');
@@ -7737,10 +7767,12 @@ window.PG = window.PG || {};
   }
   // the dots: requests are waiting (here and on the title's badge)
   function palDots() {
-    const on = PAL.reqs.length > 0;
-    for (const id of ['pg-pal-new', 'pg-pal-new2']) { const d = $(id); if (d && d.hidden === on) d.hidden = !on; }
-    const b = $('pg-pal-btn'), aria = PAL_TX.title + (on ? ' · 받은 요청 ' + PAL.reqs.length + '개' : '');
+    const on = PAL.reqs.length > 0, iv = ivWaiting(), req = on ? ' · 받은 요청 ' + PAL.reqs.length + '개' : '';
+    for (const [id, v] of [['pg-pal-new', on], ['pg-pal-new2', on || iv]]) { const d = $(id); if (d && d.hidden === v) d.hidden = !v; }
+    const b = $('pg-pal-btn'), aria = PAL_TX.title + req;
     if (b && b.getAttribute('aria-label') !== aria) b.setAttribute('aria-label', aria);
+    const fa = PAL_TX.friend + req + (iv ? ' · ' + PAL_TX.ivWait : '');
+    if (dom.myPal && dom.myPal.getAttribute('aria-label') !== fa) dom.myPal.setAttribute('aria-label', fa);
     if (dom.troNew && TRO.s) dom.troNew.hidden = !!TRO.s.seen && !on;
   }
   function palBtn(cls, txt, id) { const b = h('button', 'pg-btn ' + cls, txt); b.type = 'button'; if (id) b.id = id; return b; }
@@ -7813,7 +7845,7 @@ window.PG = window.PG || {};
     firstGesture();
     if (!palBuild()) return;
     PAL.open = true; PAL.ask = ''; PAL.msg = ''; clearTimeout(PAL.msgT); PAL.dom.inp.value = ''; PAL.dom.cin.hidden = true;
-    PAL.from = from === 'room' && NET.sess && NET.screen === 'room' ? 'room' : '';
+    PAL.from = from === 'room' && NET.sess && NET.screen === 'room' ? 'room' : from === 'hub' && shownOverlay === 'hub' ? 'hub' : '';
     showOverlay('pal');
     if (palDemoOn()) { palDemoStart(); ivDemoStage(); }
     else {
@@ -7829,10 +7861,11 @@ window.PG = window.PG || {};
       try { t.focus({ preventScroll: true }); } catch (e) { /* ignore */ }
     }, 40);
   }
-  // 닫기 / Escape: back to 내 기록 (which goes back where it came from)
+  // 닫기 / Escape: back to 내 기록 (which goes back where it came from) - or to the room / 마이페이지 it was opened from
   function palClose() {
     if (shownOverlay !== 'pal') return;
     PAL.open = false; PAL.ask = '';
+    if (PAL.from === 'hub') { PAL.from = ''; openHub('my', HUB.from, 'pal'); return; }
     if (PAL.from === 'room' && NET.sess && NET.screen === 'room') {
       PAL.from = ''; showOverlay('room'); renderRoom();
       setTimeout(() => { if (shownOverlay === 'room' && !touchMode) try { const b = $('pg-room-iv'); if (b && !b.hidden) b.focus({ preventScroll: true }); } catch (e) { /* ignore */ } }, 60);
@@ -7977,6 +8010,12 @@ window.PG = window.PG || {};
     out.sort((a, b) => b.at - a.at);
     IV.list = out; ivShow();
   }
+  // an invite waiting for me (the staged one on a preview too): 마이페이지's 친구 dot
+  function ivWaiting() {
+    if (IV.demo && !IV.gone.has(ivKey(IV.demo))) return true;
+    const now = clNow();
+    return IV.list.some((v) => !IV.gone.has(ivKey(v)) && now - v.at < IV_MS);
+  }
   function ivDel(from) {
     if (!palOn() || !IV.uid || IV.uid !== CLOUD.user.uid) return;
     try { ivCol(IV.uid).doc(from).delete().catch(() => { /* (offline, gone already: it expires) */ }); } catch (e) { /* ignore */ }
@@ -7990,6 +8029,7 @@ window.PG = window.PG || {};
     IV.cur = cur && !NET.sess && !NET.busy && IV_WHERE[shownOverlay] ? cur : null;
     if (IV.cur) ivPaint(IV.cur);
     else if (IV.dom && !IV.dom.el.hidden) IV.dom.el.hidden = true;
+    palDots(); // (마이페이지's 친구 dot: an invite waiting)
     if (cur && !cur.demo) IV.t = setTimeout(() => { IV.t = 0; if (!stopped) ivShow(); }, clT(Math.max(50, IV_MS - (now - cur.at) + 20)));
   }
   function ivBuild() {
@@ -8100,6 +8140,7 @@ window.PG = window.PG || {};
         local: palLocal(), busy: PAL.busy, rows: PAL.rows ? PAL.rows.map((r) => ({ uid: r.uid, nick: r.nick, st: r.st, hi: r.hi, tr: r.tr, c: r.c, lk: r.lk })) : null,
         reqs: PAL.reqs.map((r) => ({ uid: r.uid, n: r.n, cd: r.cd })), at: PAL.at, err: PAL.err, bootErr: PAL.bootErr, booting: !!PAL.booting, loading: !!PAL.loading,
         msg: PAL.msg, said: PAL.said, open: PAL.open, shown: shownOverlay === 'pal', made: !!PAL.dom, btn: !!$('pg-pal-btn'), dot: !!$('pg-pal-new') && !$('pg-pal-new').hidden,
+        myBtn: !!dom.myPal, myShown: !!dom.myPal && !dom.myPal.hidden, myDot: !!$('pg-pal-new2') && !$('pg-pal-new2').hidden, palFrom: PAL.from || '',
         badgeDot: !!dom.troNew && !dom.troNew.hidden, debounce: !!PAL.t, writing: !!PAL.wr, gen: PAL.gen, ask: PAL.ask, mute: sget(palMuteKey()) || '',
         view: !D() ? '' : !D().guest.hidden ? 'guest' : !D().form.hidden ? 'main' : 'wait',
         line: D() && !D().line.hidden ? D().line.textContent : '', gline: D() && !D().guest.hidden ? D().gl.textContent : '', note: D() && !D().note.hidden ? D().note.textContent : '',
@@ -11228,7 +11269,6 @@ window.PG = window.PG || {};
     const t = G.frame;
     rem.shots = rem.shots.filter((f) => t - f < 24);
     if (rem.shots.length >= 3) return; // (a frog fires every 10 frames: 3 in 24 is plenty)
-    if (G.gameMode === 'battle' && kitOf(pl).shot.ty !== 'egg' && inFlight(pl.slot) > SHOT_CAP) { NET.capNo = (NET.capNo | 0) + 1; return; }
     rem.shots.push(t);
     let x = nNum(m.x, WALL_L - 4, WALL_R - 12, pl.x), y = nNum(m.y, PF_TOP - 16, PF_BOT, pl.y);
     if (Math.abs(x - pl.x) > 32 || Math.abs(y - pl.y) > 32) { x = pl.x; y = pl.y; }
@@ -11389,7 +11429,7 @@ window.PG = window.PG || {};
     // the floating-empty life this world runs (EMPTY_RULE): a guest blinks the bubbles at it, not at its own rule (an
     // older host sends none - it runs EMPTY_LIFE, which is what a guest then takes)
     const el = emptyRule()[0]; if (el !== EMPTY_LIFE) g.el = el;
-    if (G.gameMode === 'battle') { g.lc = 1; g.sc = SHOT_CAP; } // (battle: send me your catches / the shot cap - see hostClaim)
+    if (G.gameMode === 'battle') g.lc = 1; // (battle: send me your catches - see hostClaim; no g.sc any more: see SHOT_CAP)
     if (G.stampFlash > 0) g.sf = G.stampFlash;
     if (G.ticketFlash > 0) g.tf = G.ticketFlash;
     const mu = MUSICS.indexOf(G.music); if (mu > 0) g.mu = mu;
@@ -11548,7 +11588,7 @@ window.PG = window.PG || {};
     G.loop = nInt(g.lp, 0, 99, 0); G.lives = nInt(g.L, 0, 99, 0); G.score = nInt(g.S, 0, 1e10, 0); G.stamps = nInt(g.st, 0, 99, 0);
     G.hurry = !!g.hu; G.stampFlash = nInt(g.sf, 0, 300, 0); G.ticketFlash = nInt(g.tf, 0, 300, 0);
     NET.el = nInt(g.el, 60, 2000, EMPTY_LIFE); // (the host's floating-empty life: emptyLife, the blink)
-    NET.hostLc = g.lc === 1; NET.shotCap = nInt(g.sc, 0, 9, 0); // (an older host: neither - no claims, no cap)
+    NET.hostLc = g.lc === 1; NET.shotCap = nInt(g.sc, 0, 9, 0); // (no lc: an older host - no claims; g.sc: only an older host's in-flight cap)
     G.battle = arena ? { left: Math.max(0, nInt(g.tl, 0, 1e7, 0) - (ph === 'playing' ? el : 0)), total: 0, intruded: true, enemyT: 1e9, powerT: 1e9 } : null;
     const mu = MUSICS[nInt(g.mu, 0, MUSICS.length - 1, 0)];
     if (mu !== G.music && !(mu === null && G.music === undefined)) setMusic(mu);
@@ -12405,7 +12445,7 @@ window.PG = window.PG || {};
       tro: { q: NET.role === 'host' && NET.screen !== 'game' ? troPractice() : NET.q, ms: NET.ms, bet: NET.opts.bet | 0, stake: stakeNow(), R: NET.role === 'host' && NET.R ? JSON.parse(JSON.stringify(NET.R)) : null },
       selfId: NET.selfId, mySlot: NET.role === 'host' ? 0 : NET.slots.get(NET.selfId), ctl: NET.ctl,
       stats, snap: { count: NET.snapN, bytes: NET.snapBytes, max: NET.snapMax, trims: NET.snapTrim, refused: NET.snapFail },
-      claims: { sent: NET.claimsSent | 0, refused: NET.claimNo | 0, why: Object.assign({}, NET.claimWhy || {}), capNo: NET.capNo | 0 },
+      claims: { sent: NET.claimsSent | 0, refused: NET.claimNo | 0, why: Object.assign({}, NET.claimWhy || {}) },
       renderTick: NET.rt, newestTick: NET.buf ? NET.buf.last : -1, viewFrames: NET.viewFrames, starvedFrames: NET.starveFrames, evQ: NET.evQ.length, pred: NET.pred.length, games: NET.games.slice(),
       predSplit: NET.predSplit | 0, predGiveUp: NET.predGiveUp | 0, // (v4: predictions handed to the host row by the 6 px rule / given up)
     };

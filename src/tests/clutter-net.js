@@ -8,8 +8,9 @@
 //          age past 330) for ~90 frames before it popped; the guest blinks at the life its host sends (g.el): an older
 //          host's snapshots (no g.el) -> 720, what such a host runs; a bubble the guest bounces on is marked ridden on the
 //          host (the cap skips it)
-//   battle host capy + guest penguin (no monsters): the rule 210 + 90, 6 each, 12 in all on both screens; 8 blows -
-//          at most 6 count, the 2 oldest blink and pop on the host and on the guest's view
+//   battle host capy + guest penguin (no monsters): the rule 210 + 90, 3 each, 12 in all on both screens; 8 blows -
+//          at most 3 of the guest's float at once (3 out in all), the 4th..8th each pop the oldest at once (no blink, no
+//          chain) on the host, and the guest's view sees those very pops, then its 3 floating
 //   node tools/serve.js   (background)
 //   node tools/run-chrome.js http://localhost:8765/test-clutter-net.html - 1200 500 rt240000 "CLUTTERNET DONE"
 // Prints "CLUTTERNET PASS|FAIL <name>", "CLUTTERNET INFO ..." and "CLUTTERNET DONE pass=N fail=M".
@@ -209,16 +210,16 @@
     if (host.G.battle) { host.G.battle.enemyT = 1e9; host.G.battle.powerT = 1e9; }
     stand(host, 216, -1);
     const hr = host.D.emptyRule(), gr = g.D.emptyRule();
-    ok('battle: the guest runs the host\'s rule (210 + 90, 6 each, 12 in all)', J(hr) === J(gr) && hr.life === 210 && hr.flash === 90 && hr.cap === 6 && hr.all === 12, { host: hr, guest: gr });
+    ok('battle: the guest runs the host\'s rule (210 + 90, 3 each, 12 in all)', J(hr) === J(gr) && hr.life === 210 && hr.flash === 90 && hr.cap === 3 && hr.all === 12, { host: hr, guest: gr });
     await sleep(300);
     const r = await blowSeries(host, g, 8, 380, 1100);
-    const capPops = capPopsOf(r, 290), oldest2 = r.blown.slice(0, 2), bms = viewBlinkMs(r, capPops);
+    const capPops = capPopsOf(r, 200), oldest5 = r.blown.slice(0, 5);
     info('battle cap: host saw ' + r.blown.length + ' float, most at once ' + r.most + ' (+ blinking ' + r.mostAll + '), cap pops ' + J(capPops) + ' at ages ' + J(capPops.map((id) => r.hostPops.get(id).age)) +
-      ' / real ' + J(capPops.map((id) => r.hostPops.get(id).real)) + ', guest view blinked them ' + J(bms) + ' ms, popping ' + J(Array.from(r.viewPops)) + ', floating now ' + r.viewFloat);
-    ok('battle: at most 6 of the guest\'s bubbles count at once on the host; its 2 oldest blinked out by themselves (at 301)', r.blown.length === 8 && r.most === 6 && J(capPops) === J(oldest2) && capPops.every((id) => r.hostPops.get(id).age === 301),
-      { blown: r.blown, most: r.most, capPops, pops: Array.from(r.hostPops.entries()) });
-    ok('battle: the guest\'s view drew those blinking ~30 frames, saw them pop, then its 6 floating', capPops.length === 2 && capPops.every((id) => r.viewPops.has(id)) && bms.every((ms) => ms >= 300 && ms <= 900) && r.viewFloat === 6,
-      { viewPops: Array.from(r.viewPops), bms, viewFloat: r.viewFloat });
+      ', guest view blinked ' + J(capPops.map((id) => r.viewBlink.has(id))) + ', popping ' + J(Array.from(r.viewPops)) + ', floating now ' + r.viewFloat);
+    ok('battle: at most 3 of the guest\'s bubbles float at once on the host; each blow past 3 popped its oldest at once (no blink, no chain)', r.blown.length === 8 && r.most === 3 && r.mostAll === 3 && J(capPops) === J(oldest5) && capPops.every((id) => r.hostPops.get(id).age < 150),
+      { blown: r.blown, most: r.most, mostAll: r.mostAll, capPops, pops: Array.from(r.hostPops.entries()) });
+    ok('battle: the guest\'s view saw those very pops (never drawn blinking), then its 3 floating', capPops.length === 5 && capPops.every((id) => r.viewPops.has(id) && !r.viewBlink.has(id)) && r.viewFloat === 3,
+      { viewPops: Array.from(r.viewPops), viewFloat: r.viewFloat });
     ok('battle: no page errors', F.every((f) => !f.errors.length), F.map((f) => f.errors));
     return drop(F);
   }

@@ -564,30 +564,54 @@
       info('drawn-touch radii: duck 11.7 ' + r[0] + ' 12.5 ' + r[1] + ' | capy 14.0 ' + r[2] + ' 14.8 ' + r[3]);
       if (!r[0] || r[1] || !r[2] || r[3]) return 'radii ' + r.join(',');
     });
-    // tap BUBBLE every other frame for 4 s: the most capture-phase shots in flight (an otter volley = 1), how many 'dry'
+    // tap BUBBLE every other frame for 4 s: the most of my bubbles out (in flight + floating; an otter volley = 1), the
+    // most in flight, how many 'dry', how many blows popped my oldest (G.capPops)
+    const outOf = (slot) => G.bubbles.filter((b) => !b.dead && b.owner === slot && b.kind === 'empty' && !b.drop && (b.state === 'shot' || b.state === 'float'));
     const capRun = (char, mode) => {
       if (mode === 'battle') { const [p, v] = battle([char, 'duck']); put(p, 30, FLOOR, 1); put(v, 200, FLOOR, -1); }
       else { solo(char, ROOM_F); if (mode === 'coop') { D.local.coop([char, 'duck'], 0); D.setInvincible(true); D.setPerks(true); park(); step(5); park(); clean(); release(); } put(P(0), 30, FLOOR, 1); if (P(1)) put(P(1), 200, FLOOR, -1); }
-      sfx.length = 0; let max = 0;
+      sfx.length = 0; let max = 0, out = 0; const cp0 = G.capPops | 0;
       for (let f = 0; f < 240; f++) {
         D.press('shoot', f % 2 === 0, 0); step(1);
         if (P(1)) P(1).invuln = 60; // (nobody gets caught: every bubble flies its whole way)
-        let n = 0; for (const b of G.bubbles) if (!b.dead && b.owner === 0 && b.kind === 'empty' && b.state === 'shot' && !b.drop) n++;
-        max = Math.max(max, n);
+        const o = outOf(0);
+        out = Math.max(out, o.length); max = Math.max(max, o.filter((b) => b.state === 'shot').length);
       }
       release();
-      return { max, dry: sfx.filter((s) => s === 'dry').length };
+      return { out, max, dry: sfx.filter((s) => s === 'dry').length, capPops: (G.capPops | 0) - cp0 };
     };
-    t('battle shot cap 3: a tapping duck / cat never has more than 3 in flight (a quiet dry instead); capy / penguin / otter / frog never meet it', () => {
+    t('battle: 3 of my bubbles out in all (in flight + floating) - every animal tapping 4 s reaches 3, never more; the extra blows pop my oldest, never a dry', () => {
       const r = {}; for (const c of CH) r[c] = capRun(c, 'battle');
-      info('battle cap: ' + CH.map((c) => c + ' max ' + r[c].max + ' dry ' + r[c].dry).join(' | '));
-      if (r.duck.max !== 3 || r.cat.max !== 3 || r.duck.dry < 3 || r.cat.dry < 3) return 'duck/cat ' + JSON.stringify([r.duck, r.cat]);
-      for (const c of ['capy', 'penguin', 'otter', 'frog']) if (r[c].dry || r[c].max > 2) return c + ' ' + JSON.stringify(r[c]);
+      info('battle cap: ' + CH.map((c) => c + ' out ' + r[c].out + ' flying ' + r[c].max + ' pops ' + r[c].capPops + ' dry ' + r[c].dry).join(' | '));
+      for (const c of CH) if (r[c].out !== 3 || r[c].dry || r[c].capPops < 3) return c + ' ' + JSON.stringify(r[c]);
     });
-    t('no shot cap outside battle: a tapping duck has 5+ echoes out solo and in co-op, never a dry', () => {
+    // 3 blown and floating, then the 4th: the oldest pops (plain self-pop: no score, no chain), the new one flies
+    t('battle: the 4th blow pops the oldest (no score, no chain); a just-ridden one is skipped; all in flight: the oldest volley goes whole', () => {
+      const scores = () => [G.score].concat(G.players.map((q) => q.score)).join(',');
+      let [p, v] = battle(['capy', 'duck']); put(v, 200, FLOOR, -1);
+      const bs = [];
+      for (let k = 0; k < 3; k++) { put(p, 30 + k * 30, FLOOR, 1); bs.push(blow(0)[0]); step(40); v.invuln = 60; }
+      if (!bs.every((b) => b && b.state === 'float')) return 'not floating ' + bs.map((b) => b && b.state);
+      const s0 = scores(); put(p, 150, FLOOR, -1); const b4 = blow(0)[0];
+      const st = bs.map((b) => b.state).join(',');
+      if (st !== 'pop,float,float' || bs[0].chain || !b4 || b4.state !== 'shot' || outOf(0).length !== 3 || scores() !== s0) return 'oldest ' + st + ' chain ' + !!bs[0].chain + ' out ' + outOf(0).length + ' scores ' + s0 + ' -> ' + scores();
+      step(40); v.invuln = 60;
+      bs[1].rideF = G.frame; // (bounced on just now: the next-oldest goes)
+      put(p, 150, FLOOR, -1); blow(0);
+      const st2 = [bs[1].state, bs[2].state, b4.state].join(',');
+      if (st2 !== 'float,pop,float' || outOf(0).length !== 3) return 'ridden ' + st2;
+      // otters blowing 4 volleys 2 frames apart: all in flight - the 4th pops the 1st volley, centre and droplets
+      [p, v] = battle(['otter', 'duck']); put(v, 200, FLOOR, -1);
+      const vs = [];
+      for (let k = 0; k < 4; k++) { put(p, 30, FLOOR, 1); vs.push(blow(0)); step(1); v.invuln = 60; }
+      const vst = vs.map((a) => a.map((b) => b.state[0]).join('')).join(' ');
+      info('4th blow: ' + st + ' | ridden skipped: ' + st2 + ' | otter volleys (s shot, p pop): ' + vst);
+      if (!/^ppp sss sss sss$/.test(vst) || outOf(0).length !== 3) return 'volleys ' + vst;
+    });
+    t('co-op / solo unchanged: a tapping duck has 5+ echoes out, nothing popped for it, never a dry', () => {
       const s = capRun('duck', 'solo'), c = capRun('duck', 'coop');
       info('solo ' + JSON.stringify(s) + ' coop ' + JSON.stringify(c));
-      if (s.max < 5 || c.max < 5 || s.dry || c.dry) return JSON.stringify({ s, c });
+      if (s.max < 5 || c.max < 5 || s.dry || c.dry || s.capPops || c.capPops) return JSON.stringify({ s, c });
     });
 
     // ==================================================================== cat: 냥냥 2단 점프
@@ -715,7 +739,7 @@
       info('egg trap: grime trapped at egg age ' + age);
       if (age < 40 || age > 80) return 'age ' + age;
     });
-    t('frog egg cap: the 4th egg sends the oldest to float (battle: the 3rd); every hold phase <= 110 f; laid at the wall', () => {
+    t('frog egg cap: the 4th egg sends the oldest to float (battle: the 3rd; the 4th pops the oldest - 3 out in all); every hold phase <= 110 f; laid at the wall', () => {
       const capRun = (bt) => {
         const p = bt ? battle(['frog', 'duck'])[0] : solo('frog', ROOM_F);
         put(p, 30, FLOOR, 1);
@@ -728,7 +752,7 @@
       p = solo('frog', ROOM_F); put(p, WALL_R - 14 - 24, FLOOR, 1); const w2 = blow(0)[0]; step(30); const wall2 = w2.state + ' x ' + f1(w2.x) + ' ph ' + w2.ph + ' stop ' + w2.stopAt;
       info('egg cap solo: ' + solo4 + ' | battle: ' + bat + ' | blown into the wall: ' + wall + ' | toward it: ' + wall2);
       if (!/^float,shot,shot,shot/.test(solo4)) return 'solo cap ' + solo4;
-      if (!/^float,float,shot,shot/.test(bat)) return 'battle cap ' + bat;
+      if (!/^pop,float,shot,shot/.test(bat)) return 'battle cap ' + bat; // (the 4th: 3 out in all - the oldest, floating, pops)
       if (!/^shot x 224\.0 ph 1$/.test(wall) || !/^shot x 224\.0 ph 1 stop \d+$/.test(wall2)) return 'wall';
     });
 
