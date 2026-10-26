@@ -197,6 +197,7 @@ R (24x3, afloat: two ripples at the waterline; the middle 16 columns stay clear)
 
 **What changes.**
 - Only the animal's own body ramp keys (`PG.TWIN_KEYS[char]`, §2.2) are swapped, by exact pixel match on the baked frame (`recolourFrame(f, map)` → `finishFrame`, cached `lookOf(f, 'v' + slot)`). A pixel match is a key match because no two palette keys share a value (57 keys, all distinct today); `check-sprites.js` asserts that it stays so.
+  - (As built, 2026-10 fix: "같은 동물 그림 깨짐") The match reads the art's own pixels (`f.px`, kept by `bakeFrame` for the animals' frames), never a canvas read back: Safari 26 (by default), Firefox and Brave private modes add noise to `getImageData`, and the exact match then left speckles of the first copy's colour on every twin. Only a stand-in frame without art still reads a scratch canvas. Test: `distinction` "2 twins come from the art" (noisy readback, 288 twin frames exact).
 - Eyes, beak, cheeks, outlines and any item layer keep their colours: the recolour runs on the bare body frame, **before** shop.md's items are composited onto it.
 - The `L / M / D / DD` columns mean the `SLOT_RAMP[slot]` entries:
 

@@ -564,7 +564,8 @@ window.PG = window.PG || {};
       }
     }
     x.putImageData(id, 0, 0);
-    return finishFrame(c);
+    const fr = finishFrame(c); fr.px = d;   // (the pixels as written: the twin recolour reads these, never the canvas)
+    return fr;
   }
   // ---- v3 fallbacks: simple stand-in animals (used only while the art for one is missing)
   const ANIMAL_RE = /^(capy|otter|penguin|cat|frog)_(idle|walk|jump|fall|shoot|die)$/;
@@ -715,6 +716,7 @@ window.PG = window.PG || {};
       const list = frames.length && typeof frames[0] === 'string' && frames.every((r) => typeof r === 'string') && frames.length > 4 ? [frames] : frames;
       const baked = [];
       for (const f of list) { try { const b = bakeFrame(f, rgb); if (b) baked.push(b); } catch (e) { /* skip bad frame */ } }
+      if (!TWIN_RE.test(name)) for (const b of baked) delete b.px;   // (only the animals' frames can be twins)
       if (baked.length) SPR[name] = baked;
     }
     for (const name in OPT_SPR) {
@@ -785,12 +787,19 @@ window.PG = window.PG || {};
     twinMaps.set(id, m);
     return m;
   }
-  // (the pixels are read back from a scratch canvas, never from the new frame: a canvas read back is kept in a slower
-  // CPU mode by the browser, and the twin frames are drawn every frame)
+  // The pixels come from the art itself (f.px, kept by bakeFrame), never from a canvas: browsers with fingerprint
+  // protection (Safari 26 by default, Firefox / Brave private modes) add noise to canvas readback, so an exact match on
+  // read-back pixels left speckles of the first copy's colour all over a twin (the "broken" twins of 2026-10). Only a
+  // frame without art (a stand-in) still reads a scratch canvas - never the new frame: a canvas read back is kept in a
+  // slower CPU mode by the browser, and the twin frames are drawn every frame
   function recolourFrame(f, map) {
-    const r = mk(f.w, f.h), rx = r.getContext('2d', { willReadFrequently: true });
-    rx.drawImage(f.c, 0, 0);
-    const id = rx.getImageData(0, 0, f.w, f.h), d = id.data;
+    let id, d;
+    if (f.px && f.px.length === f.w * f.h * 4) { id = new ImageData(new Uint8ClampedArray(f.px), f.w, f.h); d = id.data; }
+    else {
+      const r = mk(f.w, f.h), rx = r.getContext('2d', { willReadFrequently: true });
+      rx.drawImage(f.c, 0, 0);
+      id = rx.getImageData(0, 0, f.w, f.h); d = id.data;
+    }
     for (let o = 0; o < d.length; o += 4) {
       if (!d[o + 3]) continue;
       const to = map.get((d[o] << 16) | (d[o + 1] << 8) | d[o + 2]);
@@ -802,7 +811,7 @@ window.PG = window.PG || {};
   // frame f of sprite `name` (a body pose, life_<animal> or portrait_<animal>) as the twin of seat `slot` (cached per
   // frame object); f itself for slot 0 / an animal without twin keys / any other sprite
   // (cached per frame object as [_, slot 1, slot 2, slot 3]: a drawn frame costs one WeakMap lookup)
-  const twinCache = new WeakMap();
+  let twinCache = new WeakMap();   // (let: PG.debug.twinReset starts it over)
   function twinFrame(f, name, slot) {
     if (!f || !(slot > 0)) return f;
     let a = twinCache.get(f); if (!a) { a = []; twinCache.set(f, a); }
@@ -12794,6 +12803,7 @@ window.PG = window.PG || {};
     spot: () => ({ age: spotAge(), on: G.online && multi() && spotAge() >= 0 && spotAge() < (reducedMotion() ? SPOT_CALM_F : SPOT_F) }),
     // (tests) the pixels of a body pose / life_ / portrait_ frame as the twin of seat `slot` (slot 0: as drawn naturally)
     twinPixels(name, i, slot) { const f = twinFrame(frameOf(name, i), name, slot | 0); return f ? f.c.getContext('2d').getImageData(0, 0, f.w, f.h) : null; },
+    twinReset() { twinCache = new WeakMap(); twinMaps.clear(); },   // (tests) every twin frame is made again on its next draw
     pause: pauseGame, resume: resumeGame, toTitle,
     // online (PG.Net): drive the 친구와 하기 / room flow of this page like a player would
     mp: netDebugApi(),
