@@ -8020,7 +8020,8 @@ window.PG = window.PG || {};
   }
   // ---- 친구 초대 (design/friends.md "As built (invites)"): 친구 순위's 초대 on a friend's row - my room (made now the
   // normal way when I have none: netHost with my mode and options, then the room screen) and an invite into it,
-  // invites/{friend}/in/{me} {code, mode, nick, at}, with my ivbox bumped in the same batch (one write per 10 s); the
+  // invites/{friend}/in/{me} {code, mode, nick, at} (the same friend again only 10 s later - per friend, so several friends
+  // can be invited in a row: the rules' update rule; until 2026-10-23 one ivbox per sender held ALL invites 10 s); the
   // room's 친구 초대 opens 친구 순위 over it. Signed in: one listener on my own invites (stopped on sign-out / another
   // account); the newest younger than 10 minutes is a banner over the menus (never in a game, a room or the login
   // screen) - 참여 joins with its code (netJoin, as typed), 나중에 lets it go; both, and an expired one seen, delete it.
@@ -8031,7 +8032,7 @@ window.PG = window.PG || {};
     demoJoin: '미리보기라 예시 초대로는 참여할 수 없어요' };
   const IV_TEXT = Object.keys(IV_TX).map((k) => IV_TX[k]).join(' ') + ' 이가 님의 방에 참여 초대';
   const IV_WHERE = { title: 1, rec: 1, pal: 1, hub: 1, friends: 1, over: 1, ending: 1 };
-  const IV = { un: null, uid: '', gen: 0, errAt: 0, list: [], gone: new Set(), sentAt: 0, busy: false, out: [], dom: null, cur: null, t: 0, demo: null, staged: false, said: '' };
+  const IV = { un: null, uid: '', gen: 0, errAt: 0, list: [], gone: new Set(), sent: {}, busy: false, out: [], dom: null, cur: null, t: 0, demo: null, staged: false, said: '' };
   const ivKey = (v) => v.from + ':' + v.at;
   const ivCol = (u) => CLOUD.db.collection('invites').doc(u).collection('in');
   // 이 / 가 after a nick: 이 after a final consonant (받침), else 가
@@ -8057,7 +8058,7 @@ window.PG = window.PG || {};
   function ivStop() {
     IV.gen++;
     if (IV.un) { try { IV.un(); } catch (e) { /* ignore */ } }
-    Object.assign(IV, { un: null, uid: '', errAt: 0, list: [], out: [], sentAt: 0 });
+    Object.assign(IV, { un: null, uid: '', errAt: 0, list: [], out: [], sent: {} });
     ivShow();
   }
   // my invites as the server has them: well-formed ones younger than 10 minutes, newest first (older ones deleted)
@@ -8159,7 +8160,8 @@ window.PG = window.PG || {};
     if (!r || IV.busy || PAL.busy || (!demo && !palOn())) return;
     const why = ivWhy();
     if (why) { ivSay(why === 'full' ? 'ivFull' : why === 'started' ? 'ivStarted' : 'later'); return; }
-    if (!demo && IV.sentAt && clNow() - IV.sentAt < IV_GAP_MS) { ivSay('ivWait'); return; }
+    const last = IV.sent && IV.sent[x];      // (10 s per friend: another friend can be invited at once)
+    if (!demo && last && clNow() - last < IV_GAP_MS) { ivSay('ivWait'); return; }
     const gen = PAL.gen;
     let code = NET.sess ? NET.code : '', key = '', arg;
     IV.busy = true; palRender();
@@ -8170,12 +8172,10 @@ window.PG = window.PG || {};
       }
       if (demo) { key = 'ivDemo'; return; }
       if (gen !== PAL.gen || !palOn()) return;
-      const me = CLOUD.user.uid, ts = FV().serverTimestamp(), b = CLOUD.db.batch();
-      b.set(palDoc('ivbox', me), { at: ts });
-      b.set(ivCol(x).doc(me), { code, mode: NET.mode === 'battle' ? 'battle' : 'coop', nick: cleanNick(NET.nick) || '손님', at: ts });
-      await b.commit();
+      const me = CLOUD.user.uid, ts = FV().serverTimestamp();
+      await ivCol(x).doc(me).set({ code, mode: NET.mode === 'battle' ? 'battle' : 'coop', nick: cleanNick(NET.nick) || '손님', at: ts });
       if (gen !== PAL.gen) return;
-      IV.sentAt = clNow(); IV.out = IV.out.filter((o) => o.to !== x).concat([{ to: x, code }]);
+      IV.sent = Object.assign(IV.sent || {}, { [x]: clNow() }); IV.out = IV.out.filter((o) => o.to !== x).concat([{ to: x, code }]);
       key = 'ivSent'; arg = r.nick;
     } catch (e) { key = palErrKey(e) === 'offline' ? 'offline' : 'ivFail'; }
     finally {
@@ -8226,7 +8226,7 @@ window.PG = window.PG || {};
         cur: IV.cur ? IV.cur.from : '', demo: !!IV.demo, said: IV.said, busy: IV.busy, why: ivWhy(), out: IV.out.map((o) => Object.assign({}, o)), roomBtn: !!dom.roomIv && !dom.roomIv.hidden, from: PAL.from || '' }),
       invite: (uid) => ivInvite(uid).then(() => api.iv()),
       ivJoin() { ivJoin(); return api.iv(); }, ivLater() { ivLater(); return api.iv(); },
-      ivUnwait() { IV.sentAt = 0; return api.iv(); },
+      ivUnwait() { IV.sent = {}; return api.iv(); },
       openFromRoom() { palOpen('room'); return api.state(); },
     };
     return api;

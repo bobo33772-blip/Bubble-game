@@ -76,8 +76,8 @@ const hasCfg = fs.existsSync(path.join(ROOT, 'firebase.config.json'));
   ok('artifact / deploy: no 친구 초대 markup (#pg-iv / #pg-room-iv / #pg-net-gate come from game.js only)', !/id="pg-(iv|room-iv|net-gate)\b/.test(art) && !/id="pg-(iv|room-iv|net-gate)\b/.test(dep));
   {
     const R = read(path.join(ROOT, 'firebase', 'firestore.rules'));
-    ok('rules: the 친구 초대 collections (invites/{to}/in, ivbox), above the closed catch-all; the invite needs the friend pair and the ivbox',
-      ['match /invites/{to}/in/{from}', 'match /ivbox/{uid}'].every((m) => R.includes(m) && R.indexOf(m) < R.indexOf('match /{document=**}')) && /exists\(frP\(to, from\)\) && getAfter\(ivP\(from\)\)/.test(R)
+    ok('rules: the 친구 초대 collections (invites/{to}/in, ivbox), above the closed catch-all; the invite needs the friend pair, the same friend again only 10 s later',
+      ['match /invites/{to}/in/{from}', 'match /ivbox/{uid}'].every((m) => R.includes(m) && R.indexOf(m) < R.indexOf('match /{document=**}')) && /exists\(frP\(to, from\)\);/.test(R) && /allow update: if signedIn\(from\) && ivOk\(to, from\) && request\.time > resource\.data\.at \+ duration\.value\(10, 's'\)/.test(R)
       && /request\.query\.limit <= 50/.test(R) && /duration\.value\(10, 's'\)/.test(R));
     ok('rules: the 친구 순위 collections (profiles, codes, outbox, reqs/{to}/in, friends/{uid}/f), above the closed catch-all', ['match /profiles/{uid}', 'match /codes/{code}', 'match /outbox/{uid}', 'match /reqs/{to}/in/{from}', 'match /friends/{uid}/f/{other}'].every((m) => R.includes(m) && R.indexOf(m) < R.indexOf('match /{document=**}')) && !R.includes('{path=**}'));
   }
