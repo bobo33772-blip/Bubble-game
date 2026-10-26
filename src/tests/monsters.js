@@ -213,12 +213,12 @@
     });
 
     // ================================================================== the option row (friends panel)
-    t('friends panel: 몬스터 출현 sits between 능력 끄기 and 보스 난입, checked by default; unticking sets NET.opts', () => {
+    t('friends panel: 몬스터 출현 sits between 능력 끄기 / 연사 and 보스 난입, checked by default; unticking sets NET.opts', () => {
       D.mp.openFriends();
       const box = document.getElementById('pg-host-opts');
       if (!box) return 'no #pg-host-opts';
       const labels = Array.from(box.children).filter((e) => e.tagName === 'SPAN').map((e) => e.textContent);
-      if (labels.join('|') !== '경기장|시간|능력 끄기|몬스터 출현|보스 난입|트로피 걸기') return 'labels ' + labels.join('|');
+      if (labels.join('|') !== '경기장|시간|능력 끄기|연사|몬스터 출현|보스 난입|트로피 걸기') return 'labels ' + labels.join('|');
       const c = box.querySelector('[data-opt="monsters"]'), room = document.querySelector('#pg-room-opts [data-opt="monsters"]');
       if (!c || !room) return 'checkbox missing ' + J([!!c, !!room]);
       if (room.id !== 'pg-room-opts-monsters') return 'room id ' + room.id;
@@ -243,10 +243,45 @@
       D.mp.setOpts({ monsters: true });
       if (!c.checked) return 'syncOpts back';
     });
+    // ================================================================== 연사 (game.js RAPID: R.o[6], the room option)
+    t('연사 guestRoom: o of length 6 (an older host) -> off; o[6] = 1 -> on; 0 / junk / true / "1" -> off; the others intact', () => {
+      const mp = D.mp;
+      const R = (o) => ({ gid: 1, ph: 'room', m: 'b', o, p: [[0, '방장', 'duck', 1, 10], [1, '친구', 'cat', 0, 10]] });
+      const rs = [[1, 5, 0, 0, 0], [1, 5, 1, 1, 0, 0], [1, 5, 1, 1, 0, 1, 1], [1, 5, 1, 1, 0, 1, 0], [1, 5, 1, 1, 0, 1, 'x'], [1, 5, 1, 1, 0, 1, true], [1, 5, 1, 1, 0, 1, '1'], [1, 5, 1, 1, 0, 1, 2], [1, 5, 1, 1, 0, 0, 1, 9]].map((o) => mp.guestRoom(R(o)));
+      const got = rs.map((o) => o && o.rapid);
+      if (got.join() !== 'false,false,true,false,false,false,false,false,true') return 'rapid ' + J(got);
+      if (!(rs[2].monsters === true && rs[2].time === 5 && rs[2].perks === true && rs[8].monsters === false && rs[1].monsters === false)) return 'others ' + J([rs[2], rs[8], rs[1]]);
+      if (mp.state().opts.rapid !== false) return 'state ' + J(mp.state().opts);
+    });
+    t('연사 netSetOpts: only true -> on (default off); the battle reads G.opts.rapid only from true', () => {
+      const mp = D.mp;
+      if (mp.state().opts.rapid !== false) return 'default ' + mp.state().opts.rapid;
+      mp.setOpts({ rapid: true }); const on = mp.state().opts.rapid;
+      mp.setOpts({ rapid: 'yes' }); const junk = mp.state().opts.rapid;
+      mp.setOpts({ rapid: true }); mp.setOpts({ rapid: false });
+      if (on !== true || junk !== false || mp.state().opts.rapid !== false) return J([on, junk, mp.state().opts.rapid]);
+      battle({ rapid: true, intrusion: false }); const a = G.opts.rapid;
+      battle({ intrusion: false }); const b = G.opts.rapid;
+      if (a !== true || b !== false) return 'G.opts ' + J([a, b]);
+    });
+    t('연사 friends panel: the row (unticked by default, sub 장전 없이 계속 쏴요), ticking sets NET.opts.rapid, syncOpts mirrors it back (the room box: monsters-net)', () => {
+      D.mp.openFriends();
+      const c = document.querySelector('#pg-host-opts [data-opt="rapid"]'), room = document.querySelector('#pg-room-opts [data-opt="rapid"]');
+      if (!c || !room) return 'checkbox missing ' + J([!!c, !!room]);
+      if (c.id !== 'pg-host-opts-rapid' || room.id !== 'pg-room-opts-rapid') return 'ids ' + J([c.id, room.id]);
+      if (c.checked) return 'checked by default';
+      if (c.parentElement.textContent !== '장전 없이 계속 쏴요') return 'sub ' + c.parentElement.textContent;
+      c.checked = true; c.dispatchEvent(new Event('change', { bubbles: true }));
+      if (D.mp.state().opts.rapid !== true) return 'tick -> ' + D.mp.state().opts.rapid;
+      c.checked = false; c.dispatchEvent(new Event('change', { bubbles: true }));
+      if (D.mp.state().opts.rapid !== false) return 'untick -> ' + D.mp.state().opts.rapid;
+      D.mp.setOpts({ rapid: true }); if (!c.checked) return 'syncOpts left it unticked';
+      D.mp.setOpts({ rapid: false }); if (c.checked) return 'syncOpts back';
+    });
     t('the new strings are in the font warm-up', () => {
       const fw = document.querySelector('#pg-fontwarm .pg-fw-body');
       const txt = fw ? fw.textContent : '';
-      const miss = ['몬스터 출현', '경기 내내 때 몬스터가 나와요', '몬스터 없음', '몬스터 없이 친구끼리만 겨뤄요'].filter((s) => txt.indexOf(s) < 0);
+      const miss = ['몬스터 출현', '경기 내내 때 몬스터가 나와요', '몬스터 없음', '몬스터 없이 친구끼리만 겨뤄요', '연사', '장전 없이 계속 쏴요', '연사: 장전 없이 계속 쏴요 · 내 거품은 3개까지, 더 쏘면 먼저 쏜 거품이 터져요'].filter((s) => txt.indexOf(s) < 0);
       if (miss.length) return 'missing ' + miss.join(', ');
     });
 

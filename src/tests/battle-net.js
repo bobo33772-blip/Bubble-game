@@ -17,6 +17,11 @@
 //        host refuses nothing); the guest's count matches the host's; the guest's HUD has the host's magazine from the
 //        snapshot. An older guest page (no magazine: AMMO off there) fires freely - the host refuses its blows past the
 //        magazine, its copies just give up; an older host (AMMO off there: no g.am) - its guest fires freely, no 칙
+//   rapid (the 연사 room option - game.js RAPID - a cat guest, magazine 4 without it) the guest reads it from the room;
+//        no magazine on either screen; 8 presses blow 8 on the guest and the host (no 칙, nothing refused, no copy gives
+//        up), at most 3 of its bubbles out on the host (the cat too: each press past 3 pops its oldest); the HUD rows
+//        carry no magazine; an older guest page (one that never read o[6]: its G.opts.rapid false) still keeps none -
+//        this host sends no g.am - and fires freely too
 // Prints "BNET PASS|FAIL <name>", "BNET METRIC <name> <json>", "BNET DONE pass=N fail=M".
 (function () {
   'use strict';
@@ -245,12 +250,49 @@
     ok('ammo room: no page errors', R.F.every((f) => !f.errors.length), R.F.map((f) => f.errors));
   }
 
+  async function rapidRoom() {
+    if (ONLY.length && !ONLY.includes('rapid')) return;
+    const R = await room(2, { perks: true, rapid: true }, ['capy', 'cat']);
+    if (!ok('rapid room: 2-player battle (perks on, 연사 on) playing', R.playing)) return;
+    const [H, A] = R.F, sa = slotOf(A), sh = slotOf(H);
+    ok('rapid: the guest read 연사 from the room; both G.opts.rapid; no magazine on either screen', N(A).opts.rapid === true && A.G.opts.rapid === true && H.G.opts.rapid === true && !A.D.ammo.of(sa) && !H.D.ammo.of(sa) && !H.D.ammo.of(sh), [N(A).opts, A.D.ammo.of(sa), H.D.ammo.of(sa)]);
+    await place(R.F, H, [205, 40], [-1, 1]);
+    const out = (fr, slot) => fr.G.bubbles.filter((b) => !b.dead && b.owner === slot && b.kind === 'empty' && !b.drop && (b.state === 'shot' || b.state === 'float')).length;
+    const hSeen = new Set(); let hMax = 0, old = null; // (old: the host's bubbles before the older-guest part)
+    const calm = (fr) => { for (const e of fr.G.enemies) { e.state = 'descend'; e.delay = 1e9; e.y = -300; } };
+    H.mp.tap(() => { calm(H); for (const b of H.G.bubbles) if (b.owner === sa && b.kind === 'empty' && !b.drop && !b.vi && !(old && old.has(b.id))) hSeen.add(b.id); hMax = Math.max(hMax, out(H, sa)); for (const p of H.G.players) p.invuln = 60; });
+    const tapA = async () => { press(A, 'shoot', true); await sleep(50); press(A, 'shoot', false); };
+    const dryA = () => A.sfx.filter((n) => n === 'dry').length;
+    const st0 = N(A), ref0 = H.D.ammo.refused(), d0 = dryA(), cp0 = H.G.capPops | 0;
+    for (let k = 0; k < 8; k++) { await tapA(); await sleep(250); }
+    await until(() => hSeen.size >= 8, 2000); await sleep(600);
+    const st1 = N(A), dry = dryA() - d0, capPops = (H.G.capPops | 0) - cp0;
+    metric('rapid', { host: hSeen.size, hMax, capPops, dry, refused: H.D.ammo.refused() - ref0, giveUp: (st1.predGiveUp | 0) - (st0.predGiveUp | 0), guestEnd: out(A, sa) });
+    ok('rapid: 8 presses of a cat guest (magazine 4 without 연사) blow 8 on the host - no 칙, nothing refused, no copy gave up', hSeen.size === 8 && dry === 0 && H.D.ammo.refused() === ref0 && (st1.predGiveUp | 0) === (st0.predGiveUp | 0), { host: hSeen.size, dry, refused: H.D.ammo.refused() - ref0 });
+    ok('rapid: at most 3 of the cat\'s bubbles out on the host (and reaches 3), each press past 3 popped its oldest; the guest back to <= 3', hMax === 3 && capPops >= 5 && out(A, sa) <= 3, { hMax, capPops, guestEnd: out(A, sa) });
+    const hostOnA = A.G.players.find((p) => p.slot === sh);
+    ok('rapid: the HUD rows carry no magazine (the guest has none for the host seat)', !!hostOnA && hostOnA.amN === undefined, hostOnA && hostOnA.amN);
+    // ---- an older guest page: it never read o[6] (G.opts.rapid false there) - this host sent no g.am, so no magazine either
+    A.G.opts.rapid = false; old = new Set(H.G.bubbles.map((b) => b.id)); hSeen.clear();
+    const ref1 = H.D.ammo.refused(), d1 = dryA();
+    const noAm = !A.D.ammo.of(sa);
+    for (let k = 0; k < 6; k++) { await tapA(); await sleep(250); }
+    await until(() => hSeen.size >= 6, 2000); await sleep(600);
+    metric('rapid-old-guest', { noAm, host: hSeen.size, dry: dryA() - d1, refused: H.D.ammo.refused() - ref1 });
+    ok('rapid: an older guest page in a 연사 room keeps no magazine either (no g.am): 6 presses blow 6, no 칙, nothing refused', noAm && hSeen.size === 6 && dryA() === d1 && H.D.ammo.refused() === ref1, { noAm, host: hSeen.size, dry: dryA() - d1 });
+    A.G.opts.rapid = true;
+    H.mp.tap(null);
+    ok('rapid room: no page errors', R.F.every((f) => !f.errors.length), R.F.map((f) => f.errors));
+  }
+
   (async () => {
     try { await lagRoom(); } catch (e) { fail++; log('BNET error ' + (e && e.stack || e)); }
     dropAll();
     try { await capRoom(); } catch (e) { fail++; log('BNET error ' + (e && e.stack || e)); }
     dropAll();
     try { await ammoRoom(); } catch (e) { fail++; log('BNET error ' + (e && e.stack || e)); }
+    dropAll();
+    try { await rapidRoom(); } catch (e) { fail++; log('BNET error ' + (e && e.stack || e)); }
     dropAll();
     log('BNET DONE pass=' + pass + ' fail=' + fail);
   })();

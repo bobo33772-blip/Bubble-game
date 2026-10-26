@@ -47,8 +47,8 @@
     const settle = () => { D.setInvincible(true); park(); step(2); park(); clean(); release(); };
     function solo(char) { D.seed(7); D.start(0, char); settle(); return P(0); }
     function coop(chars) { D.seed(7); D.local.coop(chars, 0); settle(); return G.players; }
-    function battle(chars, perksOff) {
-      D.seed(7); D.local.battle(chars, { arena: 0, countdown: false, perks: !perksOff, intrusion: false, monsters: false });
+    function battle(chars, perksOff, rapid) {
+      D.seed(7); D.local.battle(chars, { arena: 0, countdown: false, perks: !perksOff, intrusion: false, monsters: false, rapid: !!rapid });
       if (G.battle) { G.battle.powerT = 1e9; G.battle.enemyT = 1e9; }
       settle(); for (const p of G.players) p.invuln = 0;
       return G.players;
@@ -307,10 +307,10 @@
     });
     // (the backstop alone, every blow allowed: the battle magazine off - game.js AMMO; with it on, just below)
     t('battle: a player has at most 3 out in all - the 4th..8th blow each pop the oldest at once (plain self-pop, no blink, no chain); 4 players keep 3 each / 12 in all (magazine off)', () => { D.ammo.off(true); try { return capAlone(); } finally { D.ammo.off(false); } });
-    // the magazine on (AMMO): the cap is at least the magazine - a cat (4) keeps 4 out, the 5th blow (after its reload,
-    // the first four still floating) pops its oldest at once; a penguin (2) is under the 3 anyway: its 3rd blow, after
-    // a reload, pops nothing
-    t('battle with the magazine: a cat keeps 4 out (cap = its magazine of 4), its 5th blow after the reload pops the oldest; a penguin (2) never reaches the cap', () => {
+    // the magazine on (AMMO): the cap stays 3 for every animal (the user, 2026-10-23) - a cat (4) keeps 3 out: its 4th
+    // blow pops its oldest at once, the 5th (after its reload, the others still floating) the next; a penguin (2) is
+    // under the 3 anyway: its 3rd blow, after a reload, pops nothing
+    t('battle with the magazine: a cat (magazine 4) keeps 3 out - its 4th blow pops the oldest, the 5th after the reload the next; a penguin (2) never reaches the cap', () => {
       const out = {};
       for (const c of ['cat', 'penguin']) {
         const [p0, p1] = battle([c, 'capy']); put(p0, 24, 1); put(p1, 216, -1);
@@ -327,8 +327,27 @@
         out[c] = { blows: mine.length, most, gone, cap: D.ammo.of(0).cap };
       }
       info('magazine + cap: ' + J(out));
-      if (out.cat.blows !== 5 || out.cat.cap !== 4 || out.cat.most !== 4 || J(out.cat.gone) !== '[0]') return J(out);
+      if (out.cat.blows !== 5 || out.cat.cap !== 3 || out.cat.most !== 3 || J(out.cat.gone) !== '[0,1]') return J(out);
       if (out.penguin.blows !== 3 || out.penguin.cap !== 3 || out.penguin.most !== 3 || out.penguin.gone.length) return J(out);
+    });
+    // 연사 (game.js RAPID): no magazine - a cat / a duck blowing 8 at the tap cooldown keeps 3 out, each blow past 3 pops
+    // the oldest (the plain self-pop, as above), no 칙; 4 players keep 3 each / 12 in all
+    t('battle 연사: a cat and a duck blow 8 each at the tap cooldown - every blow goes (no 칙), 3 out at most, blows 4..8 each pop the oldest; 4 players: 3 each', () => {
+      const out = {};
+      for (const c of ['cat', 'duck']) {
+        const [p0, p1] = battle([c, 'capy'], false, true); put(p0, 24, 1); put(p1, 216, -1);
+        if (D.ammo.of(0)) return c + ' has a magazine';
+        const mine = [], cp0 = G.capPops | 0, dry0 = G.ammoDry | 0; let most = 0;
+        const look = () => { most = Math.max(most, G.bubbles.filter((b) => !b.dead && b.owner === 0 && b.kind === 'empty' && !b.drop && (b.state === 'shot' || b.state === 'float')).length); };
+        for (let i = 0; i < 8; i++) { mine.push(...blow(0)); look(); for (let f = 0; f < 15; f++) { step(1); look(); } put(p0, 24, 1); put(p1, 216, -1); }
+        out[c] = { blows: mine.length, most, capPops: (G.capPops | 0) - cp0, dry: (G.ammoDry | 0) - dry0, gone: mine.filter((b) => b.dead || b.state === 'pop').map((b) => mine.indexOf(b)).slice(0, 5) };
+      }
+      info('연사 + cap: ' + J(out));
+      for (const c of ['cat', 'duck']) { const o = out[c]; if (o.blows !== 8 || o.most !== 3 || o.capPops !== 5 || o.dry || J(o.gone) !== '[0,1,2,3,4]') return c + ' ' + J(o); }
+      const P4 = battle(['cat', 'duck', 'frog', 'otter'], false, true); let most4 = 0;
+      P4.forEach((p, i) => put(p, 24 + i * 56, 1));
+      for (let i = 0; i < 6; i++) { for (let s = 0; s < 4; s++) { D.press('shoot', true, s); } step(1); for (let s = 0; s < 4; s++) D.press('shoot', false, s); for (let f = 0; f < 15; f++) { step(1); for (const p of P4) p.invuln = 60; most4 = Math.max(most4, ...[0, 1, 2, 3].map((s) => G.bubbles.filter((b) => !b.dead && b.owner === s && b.kind === 'empty' && !b.drop && (b.state === 'shot' || b.state === 'float')).length)); } P4.forEach((p, i) => put(p, 24 + i * 56, 1)); }
+      if (most4 !== 3) return '4 players: most ' + most4;
     });
     function capAlone() {
       const [p0, p1] = battle(['penguin', 'capy']); put(p0, 24, 1); put(p1, 216, -1);

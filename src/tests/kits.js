@@ -61,9 +61,9 @@
       park(); step(90); park(); clean(); release();
       return P(0);
     }
-    function battle(chars, room, perksOff) {
+    function battle(chars, room, perksOff, more) {
       Object.assign(A0, { map: room || ROOM_F, players: SPAWNS, enemySpawns: [], gather: { col: 16, row: 3 } });
-      D.seed(5); D.local.battle(chars, { arena: 0, countdown: false, perks: !perksOff, intrusion: false });
+      D.seed(5); D.local.battle(chars, Object.assign({ arena: 0, countdown: false, perks: !perksOff, intrusion: false }, more || {}));
       D.setInvincible(true); D.setPerks(!perksOff);
       step(5); clean(); release();
       for (const p of G.players) p.invuln = 0;
@@ -761,16 +761,18 @@
     // ==================================================================== battle: the magazine (장전, game.js AMMO)
     // BUBBLE tapped every other frame (tap) or held (hold) for 330 frames from a full magazine: the frames it blew on
     // (a volley = 1), the 'dry' / 'reload' sounds, the magazine left after each blow
-    const magRun = (char, hold, perksOff) => {
-      const [p, v] = battle([char, 'duck'], null, perksOff); put(p, 30, FLOOR, 1); put(v, 200, FLOOR, -1);
-      sfx.length = 0; const at = [], left = [];
+    // (rapid: the 연사 room option - no magazine, left -1; most: the most of mine out at once)
+    const magRun = (char, hold, perksOff, rapid) => {
+      const [p, v] = battle([char, 'duck'], null, perksOff, rapid ? { rapid: true } : null); put(p, 30, FLOOR, 1); put(v, 200, FLOOR, -1);
+      sfx.length = 0; const at = [], left = []; let most = 0;
       for (let f = 0; f < 330; f++) {
         D.press('shoot', hold ? true : f % 2 === 0, 0); step(1);
         v.invuln = 60; if (p.x !== 30) put(p, 30, FLOOR, 1);
-        if (G.bubbles.some((b) => b.owner === 0 && b.kind === 'empty' && b.born === G.frame && !b.vi)) { at.push(f); left.push(D.ammo.of(0).left); }
+        if (G.bubbles.some((b) => b.owner === 0 && b.kind === 'empty' && b.born === G.frame && !b.vi)) { at.push(f); const m = D.ammo.of(0); left.push(m ? m.left : -1); }
+        most = Math.max(most, G.bubbles.filter((b) => !b.dead && b.owner === 0 && b.kind === 'empty' && !b.drop && (b.state === 'shot' || b.state === 'float')).length);
       }
       release();
-      return { at, left, dry: sfx.filter((s) => s === 'dry').length, reload: sfx.filter((s) => s === 'reload').length, m: D.ammo.of(0) };
+      return { at, left, most, dry: sfx.filter((s) => s === 'dry').length, reload: sfx.filter((s) => s === 'reload').length, m: D.ammo.of(0) };
     };
     t('battle magazine: each animal its own (n, reload); 능력 끄기: the base 3 in 2.0 s for all; co-op / solo: none', () => {
       const own = CH.map((c) => c + ' ' + D.ammo.kit(c).join('/')).join(' | ');
@@ -779,7 +781,7 @@
       if (base.join() !== '3,120') return 'base ' + base;
       if (new Set(ks).size !== CH.length) return 'two animals share a magazine: ' + own;
       if (!CH.every((c) => { const k = D.ammo.kit(c); return k[0] >= 2 && k[0] <= 4 && k[1] >= 60 && k[1] <= 180; })) return 'out of range ' + own;
-      for (const c of CH) { battle([c, 'duck']); const m = D.ammo.of(0), k = D.ammo.kit(c); if (!m || m.n !== k[0] || m.rl !== k[1] || m.left !== k[0] || m.cap !== Math.max(3, k[0])) return c + ' ' + JSON.stringify(m); }
+      for (const c of CH) { battle([c, 'duck']); const m = D.ammo.of(0), k = D.ammo.kit(c); if (!m || m.n !== k[0] || m.rl !== k[1] || m.left !== k[0] || m.cap !== 3) return c + ' ' + JSON.stringify(m); } // (the cap: 3 for all, the cat's 4 too)
       battle(['cat', 'penguin'], null, true);
       if (![0, 1].every((s) => { const m = D.ammo.of(s); return m && m.n === 3 && m.rl === 120; })) return 'perks off ' + JSON.stringify([D.ammo.of(0), D.ammo.of(1)]);
       solo('cat', ROOM_F); if (D.ammo.of(0)) return 'solo has one';
@@ -810,6 +812,27 @@
         const a = D.ammo.of(0).left; step(k[1] - 2); v.invuln = 60; const b = D.ammo.of(0).left; step(3); const d = D.ammo.of(0).left;
         if (a !== k[0] - 1 || b !== k[0] - 1 || d !== k[0]) return c + ' ' + [a, b, d];
       }
+    });
+    // ---- 연사 (the room option, game.js RAPID): no magazine - each animal at its kit cooldown, never a 칙; the cap 3 holds
+    t('battle 연사: no magazine (ammo.of null, G.opts.rapid); off by default, the magazine as before; co-op never reads it', () => {
+      battle(['cat', 'duck'], null, false, { rapid: true });
+      if (G.opts.rapid !== true || D.ammo.of(0) || D.ammo.of(1)) return 'on ' + JSON.stringify([G.opts, D.ammo.of(0)]);
+      battle(['cat', 'duck'], null, true, { rapid: true }); if (D.ammo.of(0)) return 'on + perks off has one';
+      for (const more of [null, { rapid: false }, { rapid: 1 }, { rapid: 'yes' }]) { battle(['cat', 'duck'], null, false, more); const m = D.ammo.of(0); if (G.opts.rapid !== false || !m || m.n !== 4) return 'off ' + JSON.stringify([more, G.opts.rapid, m]); }
+    });
+    t('battle 연사: tapping / held for 330 f - every animal blows at its kit cooldown (cd[0] tapped, cd[1] held) right past its magazine, no 칙, no reload cue; at most 3 of mine out', () => {
+      const out = [];
+      for (const c of CH) for (const hold of [false, true]) {
+        const k = D.ammo.kit(c), cd = D.kit(c).cd[hold ? 1 : 0], r = magRun(c, hold, false, true);
+        const gaps = r.at.slice(1).map((f, i) => f - r.at[i]), want = Math.floor(329 / (cd + 1)) + 1;
+        out.push(c + (hold ? ' held' : ' tap') + ' ' + r.at.length + ' blows gaps ' + Array.from(new Set(gaps)).join('/') + ' most ' + r.most);
+        if (r.at.length < Math.max(want, k[0] + 3) || gaps.some((g) => g < cd || g > cd + 1) || r.dry || r.reload || r.most !== 3 || r.m || r.left.some((n) => n !== -1)) return c + (hold ? ' held ' : ' tap ') + JSON.stringify(r);
+      }
+      info('연사: ' + out.join(' | '));
+    });
+    t('battle 연사 off (the default): the cat still stops at its magazine of 4 with a 칙 (the magazine as before)', () => {
+      const r = magRun('cat', false), k = D.ammo.kit('cat');
+      if (r.left.slice(0, k[0]).join() !== '3,2,1,0' || !r.dry || r.at[k[0]] - r.at[k[0] - 1] < k[1] || r.most !== 3) return JSON.stringify(r);
     });
 
     // ==================================================================== every bubble
