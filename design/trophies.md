@@ -191,6 +191,24 @@ who readied without the stake both play without it.
 
 ---
 
+## As built: 꼴등 빼고 (the last place gets no +5)
+
+The user's pick after "트로피가 8개 아래로 안 줄어요" (2026-10): a 견습 player covering stake 5 lost 5 and got the +5 back,
+so its count never moved (8 → 8), and a short one played without the stake (8 → 13 → 8). Now **the last place of a real
+match gets no 오늘 트로피 보너스**. 견습 protection and 안 걸고 참여 are unchanged.
+
+- **Who is last.** The highest place in the result table among 2+ finishers; a tie for it: every member of it. A 무승부 has
+  every row 1st, so there is no last and everyone keeps the +5. A 기권승 pays no +5 anyway, and leavers have no row.
+- **Where.** `troApply`, inside the same mutation: each page decides for its own row from the table it applied (the
+  host's rows, place `r[1]`). Nothing on the wire changes (`NET_V` stays). An older page in the room still pays itself
+  the +5 as last; its own store stays consistent with what it shows.
+- **What shows.** The last place's podium has no `#pg-podium-bonus` line and its sr summary no bonus part (both already
+  follow `bonus > 0`). The room line reads "끝까지 한 판마다 오늘 트로피 보너스 +5 (꼴등 빼고 · 하루 40개까지)".
+- **Numbers.** 8 trophies (견습), stake 5, lost: 8 → 3 (was 8). Short of the stake it still plays without it and keeps
+  its count (8 at stake 10 stays 8: nothing in, nothing lost, no +5).
+- **Tests.** `trophies` (2-player loser, 4th of 4, a tie for last, a 무승부, the 3rd / the 2nd still paid, 8 → 3) and
+  `trophies-net` (3 and 4 players: the last's count, `de`, podium line and sr summary).
+
 ## 0. Decisions in one table
 
 | Question | Decision |

@@ -228,6 +228,47 @@
         if (!inkKept) return c + ': the ink changed';
       }
     });
+    // (the "broken" twins of 2026-10: the recolour matched read-back canvas pixels exactly, and a browser with fingerprint
+    // protection - Safari 26 by default, Firefox / Brave private modes - adds noise to every readback, so a twin kept
+    // speckles of the first copy's colour. Every twin frame is made here under such noise, then read back clean)
+    t('2 twins come from the art, never a canvas read back: under noisy readback every twin pose / icon / portrait of every animal is exactly its ramp swap', () => {
+      const KEYS = PG.TWIN_KEYS, PAL = PG.PALETTE, SPS = PG.SPRITES, gid = CanvasRenderingContext2D.prototype.getImageData;
+      let seed = 11, noisy = true;
+      const rnd = () => ((seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 4294967296);
+      CanvasRenderingContext2D.prototype.getImageData = function () {
+        const id = gid.apply(this, arguments), d = id.data;
+        if (noisy) for (let o = 0; o < d.length; o += 4) if (d[o + 3] && rnd() < 0.1) { const ch = o + ((rnd() * 3) | 0); d[ch] = d[ch] < 255 ? d[ch] + 1 : 254; }
+        return id;
+      };
+      const bad = [], list = [];
+      try {
+        D.twinReset();
+        for (const c of Object.keys(KEYS)) {
+          for (const n of ['idle', 'walk', 'jump', 'fall', 'shoot', 'die', 'glide', 'slam', 'dash', 'slide', 'flip'].map((a) => c + '_' + a).concat(['life_' + c, 'portrait_' + c])) {
+            for (let i = 0; SPS[n] && i < SPS[n].length; i++) list.push([c, n, i]);
+          }
+        }
+        for (const [, n, i] of list) for (const s of [1, 2, 3]) D.twinPixels(n, i, s);   // made under noise (these reads are dropped)
+        noisy = false;
+        for (const [c, n, i] of list) {
+          const nat = D.twinPixels(n, i, 0).data;
+          for (const s of [1, 2, 3]) {
+            const tw = D.twinPixels(n, i, s).data, to = {};
+            for (const k in KEYS[c]) to[PAL[k].toLowerCase()] = rgb(SLOT_RAMP[s][KEYS[c][k]]);
+            let off = 0;
+            for (let o = 0; o < nat.length; o += 4) {
+              if (nat[o + 3] !== tw[o + 3]) { off++; continue; }
+              if (!nat[o + 3]) continue;
+              const w = to[hex([nat[o], nat[o + 1], nat[o + 2]])] || [nat[o], nat[o + 1], nat[o + 2]];
+              if (tw[o] !== w[0] || tw[o + 1] !== w[1] || tw[o + 2] !== w[2]) off++;
+            }
+            if (off) bad.push(n + ' #' + i + ' seat ' + (s + 1) + ': ' + off + ' px');
+          }
+        }
+      } finally { CanvasRenderingContext2D.prototype.getImageData = gid; D.twinReset(); }
+      if (bad.length) return bad.length + ' of ' + list.length * 3 + ' twin frames off: ' + bad.slice(0, 6).join(', ');
+      info('twin frames exact under noisy readback: ' + list.length * 3);
+    });
 
     // ================================================================== 3. twin freeze
     t('3 twin freeze: slot 1 leaves mid-match -> slot 2 stays a (pink) twin; 한 판 더 recomputes (now the first duck)', () => {
