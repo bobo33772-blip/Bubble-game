@@ -440,6 +440,31 @@ body {
 .pg-touch-on .pg-podium-title { font-size: 1.65em; }
 .pg-podium .pg-tbonus { color: var(--duck); }
 .pg-touch-on .pg-podium .pg-wait { margin-top: 0.1em; padding: 0.12em 0.8em; font-size: 0.85em; }
+/* 파티 (design/party.md 9.2): the card before each 판, budgeted for the tightest in-game box - the 1x desktop window
+   (23.3em x 20.4em): round, name, the one-line how-to, the keys, the board of 4, the bar fit there; the rule line shows
+   from 22em of screen height (the 568x320 phone, 2x), the round line and the bar step aside under 17em */
+.pg-party-card { width: 20em; padding: 0.75em 1.2em 0.85em; }
+.pg-touch-on .pg-party-card { padding: 0.7em 1.1em 0.8em; }
+.pg-party-round { margin: 0 0 0.1em; font-size: 0.85em; line-height: 1.25; font-weight: 700; color: var(--mint); }
+.pg-party-card .pg-h2 { margin: 0 0 0.2em; font-size: 1.6em; color: var(--duck); }
+.pg-party-how { margin: 0 0 0.2em; font-size: 0.9em; line-height: 1.3; color: var(--cream); }
+.pg-party-rule { margin: 0 0 0.2em; font-size: 0.82em; line-height: 1.3; color: var(--cream-dim); text-wrap: balance; }
+.pg-party-keys { margin: 0 0 0.3em; font-size: 0.8em; line-height: 1.3; color: var(--cream-dim); }
+.pg-party-team { margin: 0 0 0.3em; font-size: 0.82em; line-height: 1.3; color: var(--pink); }
+.pg-party-board { list-style: none; margin: 0.25em 0 0; padding: 0; display: grid; gap: 0.15em; text-align: left; font-size: 0.9em; }
+.pg-party-row { display: flex; align-items: center; gap: 0.35em; min-width: 0; padding: 0 0.35em; border-radius: 0.45em; line-height: 1.3; background: rgba(127, 220, 200, 0.08); box-shadow: inset 0.2em 0 0 var(--slot, var(--mint)); }
+.pg-party-row.is-me { background: rgba(255, 255, 255, 0.12); }
+.pg-party-pl { flex: none; width: 1em; text-align: center; font-family: var(--font-sign); font-weight: 400; color: var(--slot, var(--cream)); }
+.pg-party-cv { flex: none; width: 1.25em; height: 1.25em; image-rendering: pixelated; }
+.pg-party-nick { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--cream); }
+.pg-party-me { flex: none; font-style: normal; font-size: 0.8em; padding: 0 0.4em; border-radius: 999px; background: #ffffff; color: var(--ink); font-weight: 700; }
+.pg-party-pts { flex: none; font-weight: 700; color: var(--cream); white-space: nowrap; }
+.pg-party-gain { flex: none; min-width: 1.6em; text-align: right; font-weight: 700; color: #7fe08f; }
+.pg-party-bar { display: block; height: 0.4em; margin: 0.5em 0 0; border-radius: 999px; overflow: hidden; background: rgba(127, 220, 200, 0.16); }
+.pg-party-bar > i { display: block; height: 100%; background: var(--duck); transform-origin: 0 50%; transform: scaleX(0); }
+@container (max-height: 22em) { #pg-party-rule { display: none; } }
+@container (max-height: 17em) { .pg-party-round, .pg-party-bar { display: none; } .pg-party-board { grid-template-columns: 1fr 1fr; } }
+@container (max-width: 19em) { .pg-party-board { grid-template-columns: 1fr 1fr; } }
 /* ---- v3 online panels (친구와 하기, the room): they cover the whole stage, so phones get the full height */
 .pg-panel {
   position: absolute; inset: 0; z-index: 6; overflow-y: auto; overscroll-behavior: contain;
@@ -1428,7 +1453,7 @@ html.pg-sa, html.pg-sa body { overscroll-behavior: none; }
 
         <section id="pg-podium" class="pg-ov pg-podium" aria-label="결과 발표" hidden>
           <div>
-            <h2 class="pg-podium-title">결과 발표!<span id="pg-podium-tag" class="pg-podium-tag" hidden></span></h2>
+            <h2 class="pg-podium-title"><span id="pg-podium-h">결과 발표!</span><span id="pg-podium-tag" class="pg-podium-tag" hidden></span></h2>
             <p class="pg-wait" data-net-wait hidden>방장이 다음 판을 고르고 있어요</p>
             <p id="pg-podium-note" class="pg-wait" hidden></p>
             <p id="pg-podium-bonus" class="pg-wait pg-tbonus" hidden></p>
@@ -1440,6 +1465,20 @@ html.pg-sa, html.pg-sa body { overscroll-behavior: none; }
               <button id="pg-podium-room" class="pg-btn pg-ghost" type="button" hidden>방으로</button>
               <button id="pg-podium-lobby" class="pg-btn pg-ghost" type="button">로비로</button>
             </div>
+          </div>
+        </section>
+
+        <!-- 파티 (design/party.md 9.2): a minigame's card before each 판, over the shut doors (game.js fillParty) -->
+        <section id="pg-party" class="pg-ov pg-party" aria-labelledby="pg-party-name" hidden>
+          <div class="pg-card pg-party-card" aria-live="polite">
+            <p id="pg-party-round" class="pg-party-round">1판 / 3판</p>
+            <h2 id="pg-party-name" class="pg-h2">물 차오르기</h2>
+            <p id="pg-party-how" class="pg-party-how"></p>
+            <p id="pg-party-rule" class="pg-party-rule"></p>
+            <p id="pg-party-keys" class="pg-party-keys"></p>
+            <p id="pg-party-team" class="pg-party-team" hidden></p>
+            <ol id="pg-party-board" class="pg-party-board" aria-label="점수판"></ol>
+            <i class="pg-party-bar" aria-hidden="true"><i id="pg-party-fill"></i></i>
           </div>
         </section>
 
@@ -1518,6 +1557,7 @@ html.pg-sa, html.pg-sa body { overscroll-behavior: none; }
           <div class="pg-seg" role="radiogroup" aria-label="모드" data-modes>
             <button type="button" role="radio" data-mode="coop" aria-checked="true">같이 하기</button>
             <button type="button" role="radio" data-mode="battle" aria-checked="false">배틀</button>
+            <button type="button" role="radio" data-mode="party" aria-checked="false">파티</button>
           </div>
           <p class="pg-desc" id="pg-mode-desc">2~4명이 힘을 합쳐 모든 탕을 청소해요</p>
           <div class="pg-opts" id="pg-host-opts" data-opts hidden></div>
@@ -1570,6 +1610,7 @@ html.pg-sa, html.pg-sa body { overscroll-behavior: none; }
           <div class="pg-seg" role="radiogroup" aria-label="모드" data-modes>
             <button type="button" role="radio" data-mode="coop" aria-checked="true">같이 하기</button>
             <button type="button" role="radio" data-mode="battle" aria-checked="false">배틀</button>
+            <button type="button" role="radio" data-mode="party" aria-checked="false">파티</button>
           </div>
           <div class="pg-opts" id="pg-room-opts" data-opts hidden style="margin-top:0.65em"></div>
           <ul id="pg-room-rules" class="pg-rules" aria-label="규칙"></ul>

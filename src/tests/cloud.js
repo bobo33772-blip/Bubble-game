@@ -218,7 +218,7 @@
       const ivP = (u) => 'ivbox/' + u, IVK = ['code', 'mode', 'nick', 'at'];
       const ivVal = () => hasOnly(d, ['at']) && tsIs(d.at, now);
       const ivOk = (to, from) => to !== from && hasAll(d, IVK) && hasOnly(d, IVK) && typeof d.code === 'string' && /^[a-z0-9]{4}$/.test(d.code)
-        && (d.mode === 'coop' || d.mode === 'battle') && nickValue(d.nick) && tsIs(d.at, now) && exists(frP(to, from));
+        && (d.mode === 'coop' || d.mode === 'battle' || d.mode === 'party') && nickValue(d.nick) && tsIs(d.at, now) && exists(frP(to, from));
       const lim = (n) => typeof ctx.limit === 'number' && ctx.limit <= n;
       let ok = false;
       if (sg[0] === 'profiles' && sg.length === 2) {
@@ -2179,6 +2179,7 @@
     const i1 = yi('a friend invites with the ivbox bumped (first invite: the ivbox created)', Wf, 'A', [ivb('A'), iv('C', 'A')]);
     ok('invite rules: ... the invite as written, the ivbox at the same time', J(Object.keys(i1.after.get('invites/C/in/A') || {}).sort()) === J(['at', 'code', 'mode', 'nick']) && !!i1.after.get('ivbox/A') && i1.calls <= 4, i1.calls);
     yi('battle, a 12-character nick', Wf, 'A', [ivb('A'), iv('C', 'A', { mode: 'battle', nick: '거품거품거품거품거품거품' })]);
+    yi('a party room (파티, design/party.md 6.2)', Wf, 'A', [ivb('A'), iv('C', 'A', { mode: 'party' })]);
     yi('an invite without an ivbox (the cooldown is per friend now)', Wf, 'A', [iv('C', 'A')]);
     { const W2 = with2([['friends/A/f/C', { at: T0 }], ['friends/C/f/A', { at: T0 }], ['friends/A/f/D', { at: T0 }], ['friends/D/f/A', { at: T0 }],
         ['invites/C/in/A', { code: 'ab12', mode: 'coop', nick: '뽀숑', at: new TS(now - 2000) }]]);
@@ -2607,7 +2608,7 @@
     N(B).openFriends(); await sleep(80);
     let ns = N(B).state();
     ok('online gate: a guest on the deploy - 친구와 하기 is the card (Google로 계속하기, the 혼자 하기 hint), no 방 만들기 / 코드로 참여 / 이름',
-      ns.gated && ns.gate && B.$('pg-net-gate-go').textContent === 'Google로 계속하기' && /온라인 같이 하기·배틀은 Google 로그인하고 할 수 있어요/.test(B.$('pg-net-gate').textContent)
+      ns.gated && ns.gate && B.$('pg-net-gate-go').textContent === 'Google로 계속하기' && /온라인 같이 하기·배틀·파티는 Google 로그인하고 할 수 있어요/.test(B.$('pg-net-gate').textContent)
       && /혼자 하기/.test(B.$('pg-net-gate').textContent) && [...B.$('pg-friends').querySelectorAll('.pg-box, .pg-field')].every((e) => !e.getClientRects().length) && !!B.$('pg-friends-back').getClientRects().length, ns);
     const hc = await N(B).host({ mode: 'coop' }), jr = await N(B).join('ab12');
     ok('online gate: ... hosting and joining refused (the test API too), no room', hc === null && !jr.ok && jr.code === 'login' && !N(B).session() && N(B).state().gate, [hc, jr]);

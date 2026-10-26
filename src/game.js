@@ -246,7 +246,45 @@ window.PG = window.PG || {};
     // (안 걸고 참여: the seat mark, the ready button, the rules, the room / podium lines)
     ' 안 걸고 참여 안 걸고 준비 트로피가 모자라요 · 안 걸고 같이 해요 판돈 개 (명이 개씩): 건 사람 중 1등이 다 가져요 안 걸고 참여: 등수 점수만 받아요' +
     ' 트로피가 모자라면 안 걸고 참여해요 (등수 점수만 받아요) 내 트로피가 모자라서 다음 판은 안 걸고 해요 다음 판은 안 걸고 하는 친구가 있어요 나는 안 걸고 해요';
-  const V3_TEXT = CHAR_IDS.map((c) => { const d = CHARS[c]; return [d.name, d.animal, d.role, d.tag, d.badge, d.move.name, d.move.how, d.move.touch, d.bub.name, d.bub.desc].join(' '); }).join(' ') +
+  // ---- 파티 (design/party.md): constants up here - PARTY_TEXT and the font warm-up read them at load (the sequencer and
+  // the minigames are their own section after rematch)
+  const PARTY_V = 1;                          // hi's pa: the minigames this page plays (the board PR needs 2)
+  const PARTY_ROUNDS = [3, 5];
+  const PARTY_PTS = { 2: [4, 0], 3: [4, 2, 0], 4: [4, 2, 1, 0] };   // by place; n = players at that 판's 시작!
+  const PARTY_F = { card: 300, result: 180, early: 60 };             // frames: the card, the result beat, last one standing
+  // each minigame: c its wire code, secs, ar the arena (['p', i] PG.PARTY_ARENAS[i], ['b'] a dry battle arena), fits(n),
+  // and the card texts: name; how - the ONE-LINE how-to, which also says how to win (<= 17 syllables: one line at 0.9em in
+  // the 1x window's 17.4em, 9.2); rule - the one extra line, hidden on short screens (9.2). (거품 축구 comes with the next
+  // PR: an entry here, its arena in PG.PARTY_ARENAS and its MINI_FN hooks, nothing else)
+  const MINI = {
+    water: { c: 'w', secs: 75, ar: ['p', 0], fits: (n) => n >= 2, name: '물 차오르기',
+      how: '물이 차올라요! 끝까지 안 젖으면 1등', rule: '물에 닿으면 탈락 · 거품에 갇히면 물로 가라앉아요 · 끝까지 남은 친구는 모두 1등' },
+    crown: { c: 'c', secs: 60, ar: ['b'], fits: (n) => n >= 2, name: '왕관 뺏기',
+      how: '왕관을 쓰고 가장 오래 버티면 1등', rule: '왕관을 쓰면 조금 느려요 · 거품에 갇히면 왕관이 떨어져요' },
+  };
+  const MINI_IDS = ['water', 'crown'];
+  // (a short no-KO capture in every minigame; prisons sink in 물 0.3 px/f; out once the feet are 3 px under the surface; a
+  // guest draws the water at its estimate of the host's NOW, at most WATER_LEAD frames past the newest snapshot - 4.1;
+  // the crown holder walks at 0.85x, its dropper waits 1.5 s to take it again, a remote body touches it with 4 px slack)
+  const MINI_TRAP = 90, MINI_SINK = 0.3, WATER_SLACK = 3, WATER_LEAD = 30, CROWN_SLOW = 0.85, CROWN_NOPICK = 90, CROWN_SLACK = 4;
+  // every fixed Korean line of the party (9.1 - 9.6), by key
+  const PARTY_TX = {
+    mode: '파티', host: '파티 방 만들기', desc: '2~4명이 미니게임 여러 판으로 겨뤄요', rounds: '판 수', r3: '3판', r5: '5판',
+    refresh: '새로고침 필요', refreshMsg: '새로고침이 필요한 친구가 있어요 · 파티는 새 버전에서만 해요',
+    tie: '같은 기록이면 같은 등수 · 동점이면 1등을 더 많이 한 친구가 위예요', games: '물 차오르기 · 왕관 뺏기',
+    coin0: '끝까지 하면 등수대로 비누 코인을 받아요', coin1: '연습 경기예요: 이 브라우저의 탭끼리는 비누 코인이 없어요',
+    coin2: '연습 경기예요: 같은 기기에서 들어온 친구가 있어요 · 비누 코인 없음', noTro: '트로피는 걸지 않아요',
+    trap: '거품에 갇히면 잠깐 꼼짝 못 해요 · 연타로 빨리 빠져나와요', leave: '판 중간에 나가면 비누 코인이 없어요',
+    keys: '←→ 이동 · ↑/Z 점프 · ↓ 내려가기 · X 거품', keysT: '조이스틱 이동 · 아래로 당기면 내려가기 · 점프 · 거품',
+    last: '마지막 판!', water1: '물이 차올라요!', water2: '더 높이!', waterLast: '마지막 물결!', out: '탈락!', watch: '친구들을 구경해요',
+    crownIn: '왕관이 나타났어요!', crownGot: '왕관!', crownDrop: '떨어졌다!', winSolo: '등', winShared: '공동 1등!',
+    next: '끝 · 다음 판으로', lastEnd: '마지막 판 끝!', title: '파티 결과!', titleB: '결과 발표!', again: '파티 한 번 더',
+    noteWins: '동점은 1등을 더 많이 한 친구가 위예요', noteLast: '동점은 마지막 판 등수로 정했어요', noteWalk: '친구가 나가서 일찍 끝났어요',
+    shared: '공동', board: '점수판', me: '나', practice: '연습 경기', minis: '미니게임', perksOn: '능력 있음', perksOff: '능력 없음',
+  };
+  const PARTY_TEXT = MINI_IDS.map((id) => MINI[id].name + ' ' + MINI[id].how + ' ' + MINI[id].rule).join(' ') + ' ' +
+    Object.keys(PARTY_TX).map((k) => PARTY_TX[k]).join(' ') + ' 판 등 점 공동 승리 무승부 팀 왼쪽 오른쪽 1등 2등 3등 4등 0123456789+/:·!';
+  const V3_TEXT =CHAR_IDS.map((c) => { const d = CHARS[c]; return [d.name, d.animal, d.role, d.tag, d.badge, d.move.name, d.move.how, d.move.touch, d.bub.name, d.bub.desc].join(' '); }).join(' ') +
     // (v4 kit cards, hints, the countdown line; the pips' aria text)
     ' ' + STAT_NAMES.join(' ') + ' 특기: 거품: ' + OFF_LINE + ' 내 특기: 5점 중 3점' +
     // (AMMO: the battle room's magazine line, its rule; the kit card's aria text)
@@ -301,6 +339,8 @@ window.PG = window.PG || {};
     bBase: 2, bMin: 4, minF: 3600, walkF: 60,  // battle: 2 + 4 per full minute played (pays from 60 s; > 60 f early = walkover)
     place: { 2: [6, 0], 3: [8, 4, 0], 4: [8, 4, 2, 0] },   // battle place bonus by players at 시작! (not for a walkover)
     ko: 1, koMax: 6,                           // battle: each 뽀득 KO, at most 6 a match
+    pBase: 2, pRound: 4,                                       // 파티: 2 for a finished party + 4 per 판 I took part in
+    pPlace: { 2: [6, 0], 3: [8, 4, 0], 4: [10, 5, 2, 0] },     // 파티: the final-rank bonus by players at the podium
     roundShots: 2, gameShots: 5,               // anti-AFK: a 탕 pays if I blew >= 2 bubbles in it; a battle / the play coin: >= 5
     day: [20, 25, 30, 35, 40],                 // the day's first paid game, by streak day (day 5 and on: 40)
     soft: 400,                                 // coins a local day at full rate; then every award is halved (the day bonus never)
@@ -1053,9 +1093,11 @@ window.PG = window.PG || {};
       for (let c = 2; c < COLS - 2; c++) if (isLiquid(a[c]) && map[r + 1][c] === '.') a[c] = '.';
       map[r] = a.join('');
     }
+    // (a closed map - the party arenas - has a solid floor and ceiling: nothing wraps there, no drain is opened)
+    if (L.closed) map[0] = map[ROWS - 1] = '#'.repeat(COLS);
     let gap = [];
     for (let c = 2; c < COLS - 2; c++) if (map[ROWS - 1][c] === '.') gap.push(c);
-    if (!gap.length) {
+    if (!gap.length && !L.closed) {
       for (const r of [0, ROWS - 1]) { const a = map[r].split(''); for (let c = 14; c <= 17; c++) a[c] = '.'; map[r] = a.join(''); }
       gap = [14, 15, 16, 17];
     }
@@ -1079,7 +1121,7 @@ window.PG = window.PG || {};
       // boss rounds: the boss type and the top-left cell of its 4x4-cell body
       boss: typeof L.boss === 'string' ? L.boss : null,
       bossSpawn: L.bossSpawn && isFinite(L.bossSpawn.col) && isFinite(L.bossSpawn.row) ? { col: L.bossSpawn.col | 0, row: L.bossSpawn.row | 0 } : null,
-      gapX: ((gap[0] + gap[gap.length - 1] + 1) / 2) * TS,
+      gapX: gap.length ? ((gap[0] + gap[gap.length - 1] + 1) / 2) * TS : W / 2,
       // battle arenas: where the grime family (re)spawns
       enemySpawns: es.length ? es : enemies.map((e) => ({ col: clamp(e.col | 0, 2, 29), row: clamp(e.row | 0, 1, 24) })),
       arena: !!L.arena,
@@ -1136,6 +1178,44 @@ window.PG = window.PG || {};
     ARENAS = src.map((A, i) => {
       const base = A && typeof A === 'object' ? A : fallbackArena();
       try { return normLevel(Object.assign({}, base, { arena: true, enemies: [], boss: null, special: undefined }), i); } catch (e) { return normLevel(Object.assign(fallbackArena(), { arena: true }), i); }
+    });
+    loadPartyArenas();
+  }
+  // ---- party arenas (PG.PARTY_ARENAS, design/party.md 5): closed maps with their minigame's own fields; a missing or
+  // broken entry gets a built-in closed one (the water tiers), like fallbackArena
+  function fallbackPartyArena() {
+    const map = [];
+    for (let r = 0; r < ROWS; r++) {
+      let s = '##' + '.'.repeat(28) + '##';
+      if (r === 0 || r === ROWS - 1) s = '#'.repeat(COLS);
+      if (r === 21) s = '##....######........######....##';
+      if (r === 17) s = '##..####.....######.....####..##';
+      if (r === 13) s = '##......####........####......##';
+      if (r === 9) s = '##..###......######......###..##';
+      if (r === 5) s = '##.....####..........####.....##';
+      map.push(s);
+    }
+    return { key: 'water', name: '물 차는 대욕장', theme: 1, closed: true, map, gather: { col: 15, row: 2 },
+      players: [{ col: 4, row: 24 }, { col: 27, row: 24 }, { col: 10, row: 24 }, { col: 21, row: 24 }],
+      rise: { y0: 222, warn: 2, steps: [[5, 9, 206], [19, 23, 174], [33, 37, 142], [47, 51, 110], [61, 65, 78]] } };
+  }
+  // a rise schedule as the engine runs it: numbers clamped, at most 8 steps sorted by start, null when unusable
+  function riseOf(R) {
+    if (!R || typeof R !== 'object' || !Array.isArray(R.steps)) return null;
+    const steps = R.steps.filter((q) => Array.isArray(q) && q.length >= 3 && q.every((v) => isFinite(+v)))
+      .map((q) => [clamp(+q[0], 0, 600), clamp(+q[1], 0, 600), clamp(+q[2], CEIL_Y, PF_BOT)]).filter((q) => q[1] > q[0])
+      .sort((a, b) => a[0] - b[0]).slice(0, 8);
+    return steps.length ? { y0: clamp(isFinite(+R.y0) ? +R.y0 : PF_BOT - 2, CEIL_Y, PF_BOT), warn: clamp(isFinite(+R.warn) ? +R.warn : 2, 0, 10), steps } : null;
+  }
+  let PARTY_ARENAS = [];
+  function loadPartyArenas() {
+    const src = Array.isArray(PG.PARTY_ARENAS) && PG.PARTY_ARENAS.length ? PG.PARTY_ARENAS : [fallbackPartyArena()];
+    PARTY_ARENAS = src.map((A, i) => {
+      let base = A && typeof A === 'object' && Array.isArray(A.map) ? A : fallbackPartyArena();
+      if (base.key === 'water' && !riseOf(base.rise)) base = fallbackPartyArena();
+      const mk1 = (B) => Object.assign(normLevel(Object.assign({}, B, { arena: true, closed: true, enemies: [], boss: null, special: undefined }), i),
+        { key: typeof B.key === 'string' ? B.key : '', closed: true, rise: riseOf(B.rise) });
+      try { return mk1(base); } catch (e) { return mk1(fallbackPartyArena()); }
     });
   }
 
@@ -1264,6 +1344,9 @@ window.PG = window.PG || {};
     opts: { arena: -1, time: 3, perks: true, monsters: true, intrusion: true, rapid: false }, battle: null, coopOverT: 0, countT: 0, countNext: null,
     podium: null, words: [], menuOpen: false,
     rid: 0, // (+1 for every round / arena this engine loads: a move's word pops once per round)
+    // (파티, design/party.md: party the sequencer, mini the minigame now - both null outside a party; arenaKind 'b' | 'p':
+    // the list G.arena indexes, ARENAS or PARTY_ARENAS)
+    party: null, mini: null, arenaKind: 'b',
   };
   // the single-player era's `G.p` / `G.power` stay as views of player 1
   Object.defineProperty(G, 'p', {
@@ -1368,7 +1451,7 @@ window.PG = window.PG || {};
   // points go to a player's own score; solo / co-op also add them to the team score (the HUD's and the high
   // score's), a battle keeps only the personal ones
   function addScore(n, pl) {
-    if (G.attract) return;
+    if (G.attract || G.party) return; // (a party's p.score is its points total: the sequencer alone sets it)
     if (!pl && G.players.length === 1) pl = G.players[0];
     if (pl) pl.score = Math.max(0, pl.score + n);
     if (G.gameMode === 'battle') return;
@@ -1530,6 +1613,7 @@ window.PG = window.PG || {};
     G.lives = gameMode === 'coop' ? 3 + (G.players.length - 1) : gameMode === 'solo' ? SOLO_LIVES : 3;   // (solo: SOLO_LIVES; co-op: the team's 3 + 1 a partner)
     G.stampT = 0; // re-rolled by startRound
     G.bannerQ = []; G.battle = null; G.podium = null; G.coopOverT = 0; G.words = []; G.menuOpen = false;
+    G.party = null; G.mini = null; G.arenaKind = 'b';
     G.perksOff = gameMode === 'battle' && G.opts.perks === false;
     TRO.run = null; // (a 목욕 보너스 run: newGame / newCoop / continueLoop start one; a battle has none)
     CO.run = null; CO.pod = null; // (the 비누 코인 run likewise; the podium's coin line belongs to one game)
@@ -1577,6 +1661,7 @@ window.PG = window.PG || {};
     if (NET.sess) netClose(); // (the title is offline: an online game is left first)
     if (G.mode !== 'title') saveHi();
     G.gameMode = 'solo'; G.online = false; G.role = 'host'; G.perksOff = false; G.battle = null; G.podium = null; G.words = []; G.menuOpen = false;
+    G.party = null; G.mini = null; G.arenaKind = 'b';
     TRO.run = null; TRO.pod = null; CO.run = null; CO.pod = null;
     setupPlayers([{ char: G.sel, look: myLook(G.sel) }]); // (the attract demo wears my pick's set: shop.md 6.5, looks-per-animal.md 3)
     G.attract = true; G.score = 0; G.lives = SOLO_LIVES; G.stamps = 0; G.loop = 0; G.banner = null; G.bannerQ = []; G.stampT = 0; G.power = null;
@@ -1622,6 +1707,8 @@ window.PG = window.PG || {};
       if (G.gameMode === 'coop' && LV) { showBanner(LV.name, (G.round + 1) + '번째 탕 · 다 함께!', INTRO_NAME, 'round'); G.introT = Math.max(G.introT, INTRO_NAME + 1); }
       // (몬스터 출현 off: 시작! says 몬스터 없음 - the arena's own banner, '배틀 · N분 · 몬스터 없음', is replaced by the
       // "3" on the countdown's first frame, so a countdown start would never show the word otherwise)
+      // (파티: 시작! names the minigame; its players are counted now - a leaver during the card / 3-2-1 is not)
+      else if (G.party && G.mini) { showBanner('시작!', MINI[G.mini.id].name, 60, 'ready'); coinGo(); miniStart(); }
       else { showBanner('시작!', G.gameMode === 'battle' && G.opts.monsters === false ? '몬스터 없음' : '', 60, 'ready'); troHostGo(); coinGo(); }
     }
   }
@@ -1709,7 +1796,7 @@ window.PG = window.PG || {};
       else if (perk(p, 'otter')) wmul = WATER_SLOW * OTTER_SWIM;
     }
     const ice = perk(p, 'penguin') && onIce(p);
-    let walk = WALK * k.walk * (slip ? 1.4 : 1) * wmul * (ice ? PENGUIN_ICE : 1);
+    let walk = WALK * k.walk * (slip ? 1.4 : 1) * wmul * (ice ? PENGUIN_ICE : 1) * (crownHolder(p) ? CROWN_SLOW : 1); // (왕관 뺏기: the holder is slower)
     const acc = ice ? PENGUIN_GRIP : 0.5; // the penguin skates: slow to start and to stop on ice
     // ---- 특기 (the move on the JUMP button). An air press (capy / otter / penguin / cat) is looked at BEFORE the jump
     // buffer: one the gate takes sets no buffered jump; one it refuses stays today's 5-frame buffered jump (no jump is
@@ -2155,9 +2242,10 @@ window.PG = window.PG || {};
       if (chain && k === 2) maybeDropPower(cx, cy);
       if (chain && k === 3) addStamps(1, cx, cy, by);
     } else if (b.kind === 'player') {
-      // battle: a trapped opponent. Any other player's touch (or a chain they set off) pops it: 뽀득 KO!
+      // battle: a trapped opponent. Any other player's touch (or a chain they set off) pops it: 뽀득 KO! (파티: a touch
+      // only frees it - no KO, no points)
       const v = b.victim; b.victim = null;
-      if (v && v.trap && v.trap.b === b) { if (by && by !== v) knockOut(v, by, b); else releasePlayer(v); }
+      if (v && v.trap && v.trap.b === b) { if (by && by !== v && !G.party) knockOut(v, by, b); else releasePlayer(v); }
     } else if (b.kind === 'empty') {
       // (a bubble spent on the boss or on a spore scores through that hit instead)
       if (cause !== 'self' && cause !== 'boss' && cause !== 'spore') addScore(10, by);
@@ -2181,6 +2269,8 @@ window.PG = window.PG || {};
     if (b.y > PF_BOT - 14) { b.y = PF_BOT - 14; if (b.vy > 0) b.vy = 0; }
   }
   function floatMove(b) {
+    // (물 차오르기: a prison sinks toward the water instead of drifting to the gather - never through the floor)
+    if (b.kind === 'player' && G.mini && G.mini.id === 'water') { b.vx *= 0.9; b.vy = MINI_SINK; b.x += b.vx; b.y = Math.min(b.y + b.vy, PF_BOT - TS - 16); clampBubble(b); return; }
     const g = G.gather, cx = b.x + 8, cy = b.y + 8, dx = g.x - cx, dy = g.y - cy;
     let tvx, tvy;
     // rising: drift sideways toward the (off-centre) gather point while climbing; hot water below lifts faster
@@ -3406,6 +3496,7 @@ window.PG = window.PG || {};
         if (G.gameMode === 'coop') coopDie(pl); else stunPlayer(pl);
       }
     }
+    if (G.party) { if (G.mode === 'playing' && G.mini && miniOver()) partyResult(); return; } // (파티: a 판 ends, never the battle)
     if (battle) { if (G.battle && G.battle.left <= 0 && G.mode === 'playing') endBattle(); return; }
     if (G.gameMode === 'coop' && coopWiped()) return;
     // round clear (a boss round clears only when its boss is beaten: defeatBoss starts the clear)
@@ -3814,7 +3905,10 @@ window.PG = window.PG || {};
     clearMoves(v); bumpEp(v);
     burst(b.x + 8, b.y + 8, 10, [SLOT_COLS[b.owner] || '#ffffff', '#ffffff', '#c8f4ff'], 1.3, 14);
     Snd.sfx('trap_player');
+    if (G.mini && G.mini.id === 'crown') crownDrop(v, b); // (왕관 뺏기: a caught holder drops the crown)
   }
+  // a capture's length: a minigame's short no-KO trap, else the battle's (updateTrapped, mashTrap, a prison's wobble)
+  const ptrapMax = () => (G.mini ? MINI_TRAP : PTRAP_FRAMES);
   function updateTrapped(pl, inp) {
     const t = pl.trap, b = t.b;
     if (!b || b.dead || b.state === 'pop' || b.victim !== pl) { releasePlayer(pl); return; }
@@ -3825,9 +3919,9 @@ window.PG = window.PG || {};
     const mash = pl.local ? inp.jumpP || inp.shootP : false;
     t.prog += 1 + (mash ? PTRAP_MASH : 0);
     if (mash) { t.mash++; b.squish = 6; b.vx += (fxr() - 0.5) * 0.6; }
-    if (t.prog >= PTRAP_FRAMES) escapeTrap(pl);
+    if (t.prog >= ptrapMax()) escapeTrap(pl);
   }
-  function mashTrap(pl) { if (pl && pl.trap) { pl.trap.prog += PTRAP_MASH; pl.trap.mash++; if (pl.trap.prog >= PTRAP_FRAMES) escapeTrap(pl); } }
+  function mashTrap(pl) { if (pl && pl.trap) { pl.trap.prog += PTRAP_MASH; pl.trap.mash++; if (pl.trap.prog >= ptrapMax()) escapeTrap(pl); } }
   function escapeTrap(pl) {
     const b = pl.trap && pl.trap.b;
     if (b) burst(b.x + 8, b.y + 8, 10, ['#ffffff', '#c8f4ff', pl.color], 1.5, 14);
@@ -3886,18 +3980,22 @@ window.PG = window.PG || {};
     Snd.sfx('escape');
   }
   // ---- battle: the arena, its timer, the grime family coming back, power-ups, the boss dropping in
-  function startArena(idx) {
-    if (!ARENAS.length) loadArenas();
-    const i = idx >= 0 && idx < ARENAS.length ? idx | 0 : ri(0, ARENAS.length - 1);
-    LV = ARENAS[i]; MAP = LV.map; G.rid++;
+  // an arena's map and an empty world (startArena, and a party's miniLoad): kind 'b' (ARENAS) | 'p' (PARTY_ARENAS)
+  function loadArenaLV(L, i, kind) {
+    LV = L; MAP = LV.map; G.rid++;
     buildWater(MAP);
     roundCanvas = buildRoundCanvas(LV);
-    G.round = 0; G.loop = 0; G.arena = i;
+    G.round = 0; G.loop = 0; G.arena = i; G.arenaKind = kind;
     G.gather = { x: LV.gather.col * TS + 4, y: PF_TOP + LV.gather.row * TS + 4 };
     G.enemies = []; G.bubbles = []; G.items = []; G.bolts = []; G.parts = []; G.kfx = []; G.pops = []; G.drops = []; G.ice = []; G.pickup = null;
     G.hazards = []; G.foam = []; G.boss = null; G.shotLog = [];
     G.hurry = false; G.scald = false; G.roundT = 0; G.roundClock = 0; G.roundDeaths = 0; G.introT = 0; G.clearT = -1; G.trans = null;
     G.stampT = 1e9; G.steamT = -1; G.loopMul = 1; G.trapTime = 420;
+  }
+  function startArena(idx) {
+    if (!ARENAS.length) loadArenas();
+    const i = idx >= 0 && idx < ARENAS.length ? idx | 0 : ri(0, ARENAS.length - 1);
+    loadArenaLV(ARENAS[i], i, 'b');
     // start spots: every other match (한 판 더) the floor and top spawn pairs swap, so no slot always starts in the
     // same place (mirror pairs stay together: a 1v1 is always corner vs corner); everyone blinks for 2.5 s after 시작!
     const pss = LV.players || [];
@@ -3933,6 +4031,7 @@ window.PG = window.PG || {};
     if (bt.left > 0) bt.left--;
     if (bt.left > 0 && bt.left <= 180 && bt.left % 60 === 0) Snd.sfx('countdown');
     if (bt.left === 600) showBanner('10초 남았어요!', '', 60, 'hurry');
+    if (G.mini) { miniTick(); return; } // (파티: the minigame's own frame - no enemies, power-ups or intruder)
     if (!bt.intruded && G.opts.intrusion !== false && bt.left <= INTRUDE_LEFT && bt.left > 0) intrude();
     const up = G.enemies.filter((e) => e.state !== 'dead' && !e.minion).length;
     // (몬스터 출현 off: nobody comes back - bt.enemyT simply stops counting)
@@ -3999,8 +4098,498 @@ window.PG = window.PG || {};
   }
   function rematch() {
     const list = G.players.map((p) => ({ slot: p.slot, char: p.char, nick: p.nick, local: p.local, id: p.id, look: p.look })); // (the match's looks carry over)
+    if (G.party) { newParty(list, G.party.opts); return; } // (파티 한 번 더: a new party, the same options)
     newBattle(list, Object.assign({}, G.opts), (G.matchNo | 0) + 1); // (start spots swap every match: see startArena)
   }
+
+  // ------------------------------------------------------------------ 파티 (design/party.md)
+  // 2-4 friends play 3 or 5 short minigames (판) in a row, each on one fixed screen, for placement points (4 / 2 / 1 / 0),
+  // and finish on the podium; 비누 코인 only (no trophies). G.gameMode stays 'battle' (rival capture, the magazine, the
+  // claims, the snapshots' lc / am work unchanged); G.party is the sequencer, G.mini the minigame now. Host flow:
+  //   newParty -> partyNext: miniLoad, 'card' (5 s) -> 3-2-1 -> 시작! (miniStart) -> 'playing' (miniTick each frame) ->
+  //   miniOver -> partyResult: places -> points, 'result' (3 s) -> partyNext ... -> partyFinal: the podium, the coins
+  // The minigame layer is a round with a placement result - the sequencer (and the board of a later PR) only calls
+  // miniLoad / miniStart / miniTick / miniOver / miniPlaces / miniSnap / miniView / miniDrop / miniDraw / miniHud, which
+  // dispatch to each game's MINI_FN entry (거품 축구 slots in as one more entry). Guests mirror G.party / G.mini from the
+  // snapshot (g.pa, g.mg); no new message type in either direction
+  // (debug only: fast - every game 12 s, card 60 f, result 40 f, the coin's play-time gate waived; force - every party
+  // from now on plays exactly this list of game ids, until cleared)
+  let PARTY_FAST = false, PARTY_FORCE = null, partySn = 0;
+  const partySecs = (id) => (PARTY_FAST ? 12 : MINI[id].secs);
+  const partyCardF = () => (PARTY_FAST ? 60 : PARTY_F.card);
+  const partyResultF = () => (PARTY_FAST ? 40 : PARTY_F.result);
+  // competition ranking: rows [{slot, k}] (bigger k is better) -> Map slot -> place; equal k share the best place
+  function rankBy(rows) {
+    const s = rows.slice().sort((a, b) => b.k - a.k || a.slot - b.slot), out = new Map();
+    s.forEach((r, i) => out.set(r.slot, i && s[i - 1].k === r.k ? out.get(s[i - 1].slot) : i + 1));
+    return out;
+  }
+  // the 판 list: a shuffled bag of the games that fit n, refilled when empty, never the same game twice in a row (two
+  // games: A B A / A B A B A). from: the 판 already decided (kept)
+  function partyPlan(n, rounds, from) {
+    const ok = MINI_IDS.filter((id) => MINI[id].fits(n)), out = (from || []).slice();
+    let bag = [];
+    while (out.length < rounds && ok.length) {
+      if (!bag.length) {
+        bag = ok.slice(); for (let i = bag.length - 1; i > 0; i--) { const j = ri(0, i); [bag[i], bag[j]] = [bag[j], bag[i]]; }
+        if (out.length && bag.length > 1 && bag[0] === out[out.length - 1]) [bag[0], bag[1]] = [bag[1], bag[0]];
+      }
+      out.push(bag.shift());
+    }
+    return out;
+  }
+  // a forced list (debug): 1-5 known game ids that all fit n, else null
+  const partyForced = (plan, n) => (Array.isArray(plan) && plan.length >= 1 && plan.length <= 5 && plan.every((id) => MINI[id] && MINI[id].fits(n)) ? plan.slice() : null);
+  // the 판 line: the card's "1판 / 3판" ("마지막 판! 3판 / 3판"); count: the countdown's "1판 / 3판" ("3판 / 3판 · 마지막 판!")
+  function partyRoundTx(count) {
+    const P = G.party; if (!P) return '';
+    const i = clamp(P.i, 0, Math.max(0, P.n - 1)) + 1, last = i === P.n, base = i + '판 / ' + P.n + '판';
+    return count ? base + (last ? ' · ' + PARTY_TX.last : '') : (last ? PARTY_TX.last + ' ' : '') + base;
+  }
+  // a new party (host / offline): opts {perks, rapid, rounds, plan (debug)}; list as newBattle's
+  function newParty(list, opts) {
+    opts = opts || {};
+    const rounds = opts.rounds === 5 ? 5 : 3;
+    G.opts = { arena: -1, time: 3, perks: opts.perks !== false, monsters: false, intrusion: false, rapid: opts.rapid === true, rounds };
+    resetGame('battle', list);
+    G.lives = 0; G.matchNo = 0;
+    const n = G.players.length, forced = partyForced(opts.plan, n) || partyForced(PARTY_FORCE, n);
+    // (sn: this page's party serial - the card's bar restarts for each card of each party)
+    G.party = { n: forced ? forced.length : rounds, opts: { perks: G.opts.perks, rapid: G.opts.rapid, rounds }, i: -1, plan: forced || partyPlan(n, rounds),
+      pts: {}, wins: {}, last: {}, gain: {}, t: 0, fin: false, done: false, walk: false, crownAr: -1, res: null, sn: 'h' + (++partySn) };
+    for (const p of G.players) { p.score = 0; G.party.pts[p.slot] = 0; G.party.wins[p.slot] = 0; }
+    coinPartyStart();
+    partyNext();
+  }
+  // the next 판: its arena behind the shut doors and its card (the last one played: the final podium)
+  function partyNext() {
+    const P = G.party; if (!P) return;
+    P.i++; P.res = null;
+    if (P.i >= P.n) { partyFinal(false); return; }
+    miniLoad(P.plan[P.i]);
+    G.mode = 'card'; P.t = 0; G.countNext = null;
+    G.banner = null; G.bannerQ = [];
+    setMusic('lobby'); Snd.sfx('door');
+    // (an open online menu stays open; the first card of an online party is shown by netAgain, once G.online is set)
+    showOverlay(G.menuOpen ? 'pause' : 'party'); fillParty();
+  }
+  // the card (no input skips it), then the usual 3-2-1
+  function updateCard() {
+    const P = G.party; if (!P) return;
+    P.t++;
+    updateFx();
+    if (P.t >= partyCardF()) { if (!G.menuOpen) showOverlay(null); beginCountdown(); }
+  }
+  // a 판 ended (miniOver): its places -> points (the table of the players at its 시작!), the result beat
+  function partyResult() {
+    const P = G.party, M = G.mini; if (!P || !M) return;
+    const places = miniPlaces(), tbl = PARTY_PTS[clamp(M.n0 | 0, 2, 4)];
+    P.gain = {};
+    for (const p of G.players) {
+      const pl = places.get(p.slot) || G.players.length, gain = tbl[pl - 1] || 0;
+      P.pts[p.slot] = (P.pts[p.slot] | 0) + gain; p.score = P.pts[p.slot];
+      P.wins[p.slot] = (P.wins[p.slot] | 0) + (pl === 1 ? 1 : 0); P.last[p.slot] = pl; P.gain[p.slot] = gain;
+    }
+    P.res = places;
+    coinPartyRound();
+    G.mode = 'result'; P.t = 0;
+    // (the world freezes: every prison opens, the bubbles burst away)
+    for (const p of G.players) if (p.trap) releasePlayer(p);
+    for (const b of G.bubbles) if (!b.dead && b.state !== 'pop') burst(b.x + 8, b.y + 8, 5, BUBBLE_COLS, 1.1, 12);
+    G.bubbles = []; G.bannerQ = [];
+    const firsts = G.players.filter((p) => places.get(p.slot) === 1);
+    showBanner(firsts.length === 1 ? '1등 ' + nameOf(firsts[0]) + '!' : PARTY_TX.winShared, P.i + 1 >= P.n ? PARTY_TX.lastEnd : MINI[M.id].name + ' ' + PARTY_TX.next, partyResultF(), 'clear');
+    for (const p of G.players) wordPop(p.x + 8, headTop(p) - (crownHolder(p) ? 24 : 16), places.get(p.slot) + '등 +' + P.gain[p.slot], p.color); // (above the name tag)
+    Snd.sfx('win');
+  }
+  function updateResult() {
+    const P = G.party; if (!P) return;
+    P.t++;
+    updateFx();
+    if (P.t >= partyResultF()) partyNext();
+  }
+  // the final standing: total points; then more 1등; then the better place in the last 판; still tied: a shared place
+  function partyStandings(P, slots) {
+    const lastOf = (s) => P.last[s] || 9;
+    const s = slots.slice().sort((a, b) => (P.pts[b] | 0) - (P.pts[a] | 0) || (P.wins[b] | 0) - (P.wins[a] | 0) || lastOf(a) - lastOf(b) || a - b);
+    const same = (a, b) => (P.pts[a] | 0) === (P.pts[b] | 0) && (P.wins[a] | 0) === (P.wins[b] | 0) && lastOf(a) === lastOf(b);
+    const out = []; s.forEach((sl, i) => out.push({ slot: sl, place: i && same(s[i - 1], sl) ? out[i - 1].place : i + 1 }));
+    return out;
+  }
+  // the podium (walk: fewer than 2 players were left - participation coins only)
+  function partyFinal(walk) {
+    const P = G.party; if (!P) return;
+    const st = partyStandings(P, G.players.map((p) => p.slot));
+    for (const p of G.players) {
+      // (p.out back to false: drawPlayer draws nothing for an out animal - one out in the last 물 stands on the podium too)
+      if (p.trap) releasePlayer(p);
+      p.koT = 0; p.stunT = 0; p.dead = false; p.ghost = null; p.out = false; p.invuln = 0; p.vx = 0; p.vy = 0; p.shield = 0; p.power = null;
+      const r = st.find((q) => q.slot === p.slot); p.rank = r ? r.place : 0;
+      bumpEp(p);
+    }
+    G.podium = { order: st.map((r) => r.slot), t: 0, te: 0, pl: st.map((r) => r.place) };
+    if (G.battle) G.battle.left = 0;
+    G.mode = 'podium'; P.fin = true; P.done = !walk; P.walk = !!walk; P.res = null;
+    G.mini = null; G.boss = null; G.hazards = []; G.drops = []; G.bubbles = []; G.bolts = []; G.pickup = null;
+    G.bannerQ = []; G.banner = null;
+    setMusic('podium'); Snd.sfx('win');
+    const k = G.podium.order.indexOf(G.localSlot), place = k >= 0 ? G.podium.pl[k] : 0;
+    coinPartyNow(G.podium.order.length, !walk, place, place ? G.podium.pl.filter((q) => q === place).length : 1);
+    showOverlay('podium');
+  }
+  // a player left (its animal is gone already): its game lets go of it; < 2 left -> a walkover podium; else the plan is
+  // drawn again where a game no longer fits (during the card / 3-2-1: this 판 too)
+  function partyDrop(slot) {
+    const P = G.party; if (!P || G.mode === 'podium') return;
+    if (G.mini && MINI_FN[G.mini.id]) MINI_FN[G.mini.id].drop(slot, G.mini);
+    if (G.players.length < 2) { partyFinal(true); return; }
+    partyReplan();
+  }
+  function partyReplan() {
+    const P = G.party, n = G.players.length, pre = G.mode === 'card' || G.mode === 'countdown', keep = pre ? P.i : P.i + 1;
+    if (P.plan.slice(keep).every((id) => MINI[id] && MINI[id].fits(n))) return;
+    const cur = P.plan[P.i];
+    P.plan = partyPlan(n, P.n, P.plan.slice(0, keep));
+    if (pre && P.plan[P.i] !== cur) { miniLoad(P.plan[P.i]); G.mode = 'card'; P.t = 0; G.countNext = null; showOverlay(G.menuOpen ? 'pause' : 'party'); fillParty(); }
+  }
+  // the host's snapshot part (6.4): n, i, the plan's codes, [slot, points, 1등 count, last place, last gain (-1: none)],
+  // t (frames into the card / result), ft (this 판's playing frames in all), cl (the card's frames), F (final), W (walkover)
+  function partySnap() {
+    const P = G.party;
+    const o = { n: P.n, i: P.i, L: P.plan.map((id) => MINI[id].c).join(''), t: P.t | 0, ft: G.battle ? G.battle.total | 0 : 0, cl: partyCardF(),
+      P: G.players.map((p) => [p.slot, P.pts[p.slot] | 0, P.wins[p.slot] | 0, P.last[p.slot] | 0, P.gain[p.slot] === undefined ? -1 : P.gain[p.slot]]) };
+    if (P.fin) o.F = 1;
+    if (P.walk) o.W = 1;
+    return o;
+  }
+  // guest: G.party / G.mini as the host's snapshot says (before guestPhase: the card is filled from this snapshot)
+  function partyView(g, g1, t) {
+    const pa = g.pa; if (!pa || typeof pa !== 'object') return;
+    const plan = (typeof pa.L === 'string' ? pa.L.slice(0, 5) : '').split('').map((c) => MINI_IDS.find((id) => MINI[id].c === c) || MINI_IDS[0]);
+    const P = G.party || (G.party = { opts: { perks: G.opts.perks, rapid: G.opts.rapid, rounds: G.opts.rounds }, crownAr: -1, res: null });
+    P.n = nInt(pa.n, 1, 5, 3); P.i = nInt(pa.i, -1, 4, 0); P.plan = plan.length ? plan : [MINI_IDS[0]]; P.t = nInt(pa.t, 0, 1e5, 0);
+    P.cl = nInt(pa.cl, 1, 1e4, PARTY_F.card); P.ft = nInt(pa.ft, 0, 1e6, 0);
+    P.pts = {}; P.wins = {}; P.last = {}; P.gain = {};
+    for (const r of Array.isArray(pa.P) ? pa.P.slice(0, MAX_PLAYERS) : []) {
+      if (!Array.isArray(r)) continue;
+      const s = nInt(r[0], -1, MAX_PLAYERS - 1, -1); if (s < 0) continue;
+      P.pts[s] = nInt(r[1], 0, 99, 0); P.wins[s] = nInt(r[2], 0, 9, 0); const l = nInt(r[3], 0, 4, 0); if (l) P.last[s] = l;
+      const gn = nInt(r[4], -1, 4, -1); if (gn >= 0) P.gain[s] = gn;
+    }
+    P.fin = pa.F === 1; P.walk = pa.W === 1; P.done = P.fin && !P.walk;
+    G.mini = Array.isArray(g.mg) ? miniView(g.mg, g1 && Array.isArray(g1.mg) && g1.mg[0] === g.mg[0] ? g1.mg : null, t, g) : null;
+    if (shownOverlay === 'party') fillParty();
+  }
+
+  // ---- the minigame layer (2): load / start / tick / over / places / snap / view / drop / draw / hud
+  // (the games 왕관 뺏기 may use: the dry battle arenas - 냉온탕 대결's hot tub would give the capy a shield that keeps it)
+  const dryArenas = () => ARENAS.map((A, i) => (A.map.some((row) => /[~=]/.test(row)) ? -1 : i)).filter((i) => i >= 0);
+  function miniLoad(id) {
+    const D = MINI[id], P = G.party, F = MINI_FN[id];
+    if (!ARENAS.length) loadArenas();
+    let i = 0, L = null, kind = 'b';
+    if (D.ar[0] === 'p') { i = clamp(D.ar[1] | 0, 0, PARTY_ARENAS.length - 1); L = PARTY_ARENAS[i]; kind = 'p'; }
+    else {
+      const dry = dryArenas(), pool = dry.length ? dry : ARENAS.map((A, k) => k), fresh = pool.filter((k) => !P || k !== P.crownAr);
+      const from = fresh.length ? fresh : pool;
+      i = from[ri(0, from.length - 1)]; L = ARENAS[i];
+      if (P) P.crownAr = i;
+    }
+    loadArenaLV(L, i, kind);
+    G.matchNo = P ? Math.max(0, P.i) : 0;
+    // spawns: the game's own rule (2.4); everyone blinks START_INV as in battle. A magazine emptied at the end of the last
+    // 판 is full again (ammoTick only runs while playing)
+    const sp = F.spawns();
+    G.players.forEach((pl, k) => { placePlayer(pl, sp[k] || spawnOf(pl.slot)); pl.invuln = START_INV; pl.amN = undefined; pl.amT = undefined; });
+    const total = partySecs(id) * 60;
+    G.battle = { arena: i, total, left: total, intruded: true, enemyT: 1e9, powerT: 1e9 };
+    G.mini = Object.assign({ id, c: D.c, n0: G.players.length, t: 0, endAt: -1 }, F.init());
+  }
+  // 시작! (updateCountdown): its players count from now; the game's own start
+  function miniStart() {
+    const M = G.mini; if (!M) return;
+    M.n0 = G.players.length;
+    setMusic('battle');
+    MINI_FN[M.id].start(M);
+  }
+  function miniTick() {
+    const M = G.mini; if (!M || G.mode !== 'playing' || !G.battle) return;
+    M.t = G.battle.total - G.battle.left;
+    MINI_FN[M.id].tick(M);
+  }
+  const miniOver = () => !!G.mini && !!G.battle && (G.battle.left <= 0 || (G.mini.endAt >= 0 && G.frame >= G.mini.endAt));
+  function miniPlaces() { const M = G.mini, F = MINI_FN[M.id]; return rankBy(G.players.map((p) => ({ slot: p.slot, k: F.key(p, M) }))); }
+  const miniSnap = () => MINI_FN[G.mini.id].snap(G.mini);
+  function miniView(mg, mg1, t, g) {
+    const id = MINI_IDS.find((q) => MINI[q].c === mg[0]); if (!id) return null;
+    const pi = g.pa ? nInt(g.pa.i, -1, 9, -1) : -1, prev = G.mini && G.mini.id === id && G.mini.pi === pi ? G.mini : null; // (a new 판: a fresh mirror)
+    return MINI_FN[id].view(mg, mg1, t, g, prev || { id, c: MINI[id].c, pi, n0: G.players.length, t: 0, endAt: -1, outs: [], held: {} });
+  }
+  function miniDraw(front) { const M = G.mini; if (M && MINI_FN[M.id] && G.mode !== 'card') MINI_FN[M.id].draw(M, front); }
+  function miniHud(p, x) { const M = G.mini; if (M && MINI_FN[M.id]) MINI_FN[M.id].hud(M, p, x); }
+  // a line only this screen shows (my own 탈락): the host's G.banner rides in every snapshot (g.bn) - this one is marked
+  // local and left out; a guest owns its G.banner between host banner ids
+  function partyMyLine(main, sub) {
+    if (G.online && G.role === 'guest') { G.banner = { main, sub, end: G.frame + 120, cls: 'hurry', id: 'l' + (++G.seq) }; return; }
+    showBanner(main, sub, 120, 'hurry'); if (G.banner) G.banner.loc = true;
+  }
+  const mineHere = (p) => !!p && p.local !== false && (!G.online || isMe(p));
+
+  // ---- 물 차오르기 (4.1): the water is a full-width layer whose surface wl follows the arena's rise schedule (waterAt,
+  // pure: the guest draws it from the host's clock). Out once the feet are WATER_SLACK under it - every animal, the
+  // duck too (no tile water: nothing floats); a prison sinks (floatMove) and puts its animal out the same way. The last
+  // one standing ends it PARTY_F.early later; places: the later out the better, every survivor shares 1st
+  // the surface at frame f of the 판: linear inside a step, flat between, y0 before the first; k: the time scale (the
+  // debug fast party runs the schedule in 12 s)
+  function waterAt(f, R, k) {
+    if (!R) return PF_BOT;
+    const s = f / 60 / (k || 1);
+    let y = R.y0;
+    for (const q of R.steps) {
+      if (s <= q[0]) break;
+      if (s < q[1]) return y + (q[2] - y) * (s - q[0]) / (q[1] - q[0]);
+      y = q[2];
+    }
+    return y;
+  }
+  const waterK = () => (G.battle && G.battle.total > 0 ? G.battle.total / (MINI.water.secs * 60) : 1);
+  // which body the host judges (4.1): its own animals and a trapped one (its prison) exactly; a free remote one by its
+  // latest state of the current epoch only (right after a release the host's copy sits frozen until the guest's first
+  // state of the new epoch arrives) - one stale for longer than REWIND is judged anyway (null: not judged this frame)
+  function waterBody(p) {
+    if (p.local !== false || p.trap) return p.y;
+    const rem = NET.remote.get(p.id), st = rem && rem.st;
+    if (st && st.ep === p.ep) { p.wsAt = -1; return p.y; }
+    if (!(p.wsAt >= 0)) p.wsAt = G.frame;
+    return G.frame - p.wsAt > REWIND ? p.y : null;
+  }
+  function waterTick(M) {
+    const R = LV && LV.rise, k = waterK();
+    M.wl = M.over !== null && M.over !== undefined ? M.over : waterAt(M.t, R, k);
+    if (R) R.steps.forEach((q, j) => {
+      if (M.t !== Math.round(Math.max(0, q[0] - R.warn) * 60 * k)) return;
+      showBanner(j === R.steps.length - 1 ? PARTY_TX.waterLast : PARTY_TX.water1, PARTY_TX.water2, 100, 'hurry'); Snd.sfx('hurry');
+      if (j === 3) setMusic('hurry');
+    });
+    const now = [];
+    for (const p of G.players) { if (p.out) continue; const y = waterBody(p); if (y !== null && y + 16 > M.wl + WATER_SLACK) now.push(p); }
+    for (const p of now) waterOut(p, M);
+    if (now.length) { const pl = miniPlaces(); for (const p of now) if (mineHere(p)) partyMyLine(PARTY_TX.out + ' ' + pl.get(p.slot) + '등', PARTY_TX.watch); }
+    if (M.endAt < 0 && M.n0 >= 2 && G.players.filter((p) => !p.out).length <= 1) M.endAt = G.frame + PARTY_F.early;
+  }
+  function waterOut(p, M) {
+    if (p.trap) { const b = p.trap.b; if (b) burst(b.x + 8, b.y + 8, 10, ['#ffffff', '#c8f4ff', p.color], 1.5, 14); releasePlayer(p); }
+    p.out = true; p.vx = 0; p.vy = 0; p.invuln = 0; p.shootAnim = 0; clearMoves(p); bumpEp(p);
+    M.outs.push([p.slot, G.frame]);
+    splash(p.x + 8, M.wl, 2, 12);
+    wordPop(p.x + 8, M.wl - 10, PARTY_TX.out, p.color);
+    Snd.sfx('splash'); // (NO_ECHO: each guest plays its own when the slot shows up in its outs)
+  }
+  // guest: the water at its estimate of the host's NOW (the newest snapshot's clock + the ticks since it was sent, at
+  // most WATER_LEAD), not at its view's delay; outs as the host decided them (a new one splashes; mine says my place)
+  function waterView(mg, mg1, t, g, M) {
+    const R = LV && LV.rise, B = NET.buf, last = B && B.list.length ? B.list[B.list.length - 1].d : null;
+    const gn = last && last.pa && g.pa && last.pa.i === g.pa.i && Array.isArray(last.mg) && last.mg[0] === 'w' ? last : g;
+    const ft = nInt(gn.pa && gn.pa.ft, 1, 1e6, MINI.water.secs * 60), tl = nInt(gn.tl, 0, 1e6, ft);
+    const lead = gn.ph === 'p' && B && B.off !== null ? clamp(nowTicks() + B.off - nInt(gn.k, 0, 1e12, 0), 0, WATER_LEAD) : 0;
+    M.wl = R ? waterAt(Math.max(0, ft - tl) + lead, R, ft / (MINI.water.secs * 60)) : nNum(mg[1], 0, 3000, PF_BOT * 10) / 10;
+    const outs = [], seen = new Set(M.outs.map((o) => o[0]));
+    for (const o of Array.isArray(mg[2]) ? mg[2].slice(0, MAX_PLAYERS) : []) {
+      if (!Array.isArray(o)) continue;
+      const s = nInt(o[0], -1, MAX_PLAYERS - 1, -1), pl = nInt(o[1], 1, 4, 4); if (s < 0 || outs.some((q) => q[0] === s)) continue;
+      outs.push([s, pl]);
+      if (!seen.has(s) && M.seeded) {
+        const p = G.players.find((q) => q.slot === s);
+        if (p) splash(p.x + 8, M.wl, 2, 12);
+        Snd.sfx('splash');
+        if (s === G.localSlot) partyMyLine(PARTY_TX.out + ' ' + pl + '등', PARTY_TX.watch);
+      }
+    }
+    M.outs = outs; M.seeded = true; // (the first mirror of a 판 only records who is out already)
+    return M;
+  }
+  function waterDraw(M, front) {
+    if (!front) return;
+    const y = Math.round(M.wl); if (y >= PF_BOT - 1) return;
+    ctx.fillStyle = 'rgba(63,191,224,0.35)'; ctx.fillRect(WALL_L, y + 3, WALL_R - WALL_L, PF_BOT - y - 3);
+    ctx.globalAlpha = 0.82;
+    const fr = (G.frame / 14) | 0;
+    for (let x = WALL_L; x < WALL_R; x += TS) { const f = frameOf('water_cold_top', fr + x / TS); if (f) ctx.drawImage(f.c, x, y, TS, TS); else { ctx.fillStyle = '#8fdcff'; ctx.fillRect(x, y, TS, 2); } }
+    ctx.globalAlpha = 1;
+  }
+  function waterHud(M, p, x) {
+    const o = M.outs.find((q) => q[0] === p.slot); if (!o) return;
+    const place = G.role === 'guest' && G.online ? o[1] : (miniPlaces().get(p.slot) | 0);
+    const f = frameOf('water_cold_top', 0); if (f) ctx.drawImage(f.c, x + 17, 8);
+    text(String(place), x + 27, 9, '#8fdcff');
+  }
+
+  // ---- 왕관 뺏기 (4.2): a 16x16 crown falls from the gather onto the centre stage at 시작!; the first free player to
+  // touch it wears it (CROWN_SLOW), held frames count, a capture of the holder drops it (its dropper waits CROWN_NOPICK);
+  // places by time held (nobody touched it: all share 1st). holder -2: not out yet, -1: free
+  const crownHolder = (p) => !!p && !!G.mini && G.mini.id === 'crown' && !!G.mini.cr && G.mini.cr.holder === p.slot;
+  function crownTick(M) {
+    const cr = M.cr; if (cr.holder < -1) return;
+    if (cr.holder >= 0) {
+      const p = G.players.find((q) => q.slot === cr.holder);
+      if (!p) { cr.holder = -1; cr.vx = 0; cr.vy = 0; cr.onGround = false; }   // (its holder left: it drops where it was)
+      else { cr.x = clamp(p.x, WALL_L - 2, WALL_R - 14); cr.y = p.y - 8; M.held[p.slot] = (M.held[p.slot] | 0) + 1; return; }
+    }
+    if (cr.onGround) cr.vx *= 0.8;
+    physBody(cr);
+    if (Math.abs(cr.vx) < 0.05) cr.vx = 0;
+    let best = null, bd = 1e9;
+    for (const p of G.players) {
+      if (!canTouch(p) || (p.slot === cr.noPick && G.frame < cr.noUntil)) continue;
+      const s = p.local ? 0 : CROWN_SLACK;
+      if (!overlap(p.x + 2 - s, p.y + 2 - s, 12 + 2 * s, 14 + 2 * s, cr.x + 2, cr.y + 4, 12, 12)) continue;
+      const d = Math.abs(p.x - cr.x) + Math.abs(p.y - cr.y);
+      if (d < bd) { bd = d; best = p; }
+    }
+    if (best) {
+      cr.holder = best.slot; cr.noPick = -1; cr.vx = 0; cr.vy = 0;
+      wordPop(best.x + 8, best.y - 6, PARTY_TX.crownGot, best.color); Snd.sfx('stamp');
+    }
+  }
+  // trapPlayer on the holder: the crown flies out, away from the bubble (a capy's shield taking the capture keeps it)
+  function crownDrop(v, b) {
+    const cr = G.mini && G.mini.cr; if (!cr || cr.holder !== v.slot) return;
+    Object.assign(cr, { x: clamp(v.x, WALL_L - 2, WALL_R - 14), y: clamp(v.y - 8, CEIL_Y - 4, PF_BOT - 24), vx: v.x + 8 < b.x + 8 ? -1.2 : 1.2, vy: -2.6, onGround: false,
+      holder: -1, noPick: v.slot, noUntil: G.frame + CROWN_NOPICK });
+    wordPop(v.x + 8, v.y - 6, PARTY_TX.crownDrop, v.color); Snd.sfx('pop');
+  }
+  function crownView(mg, mg1, t, g, M) {
+    const cr = M.cr || (M.cr = { x: 120, y: 60, vx: 0, vy: 0, onGround: false, holder: -2, noPick: -1, noUntil: 0 });
+    const h0 = nInt(mg[1], -2, MAX_PLAYERS - 1, -2), q = mg1 && nInt(mg1[1], -2, 3, -2) === h0 && h0 < 0 ? mg1 : null;
+    cr.holder = h0; cr.x = lx(mg[2], q && q[2], t); cr.y = ly(mg[3], q && q[3], t); cr.noPick = nInt(mg[8], -1, 3, -1);
+    M.held = {}; for (let s = 0; s < MAX_PLAYERS; s++) { const f = nInt(mg[4 + s], 0, 1e6, 0); if (f) M.held[s] = f; }
+    return M;
+  }
+  function crownDraw(M, front) {
+    const cr = M.cr; if (!front || !cr || cr.holder !== -1) return;   // (worn: drawPlayer draws it on the holder's head)
+    const f = frameOf(SPR_CROWN, 0); if (!f) return;
+    const glint = !reducedMotion() && ((G.frame >> 3) & 3) === 0, c = glint ? tintOf(f, '#ffffff', 0.5) : f;
+    wrapDraw(cr.y, (y) => ctx.drawImage(c.c, Math.round(cr.x), Math.round(y), 16, 16));
+  }
+  function crownOn(p) { const f = frameOf(SPR_CROWN, 0); if (f) ctx.drawImage(f.c, Math.round(p.x + 4), Math.round(headTop(p) - 9)); }
+  function crownHud(M, p, x) {
+    const f = frameOf(SPR_CROWN, 0), on = M.cr && M.cr.holder === p.slot;
+    if (f && !(on && ((G.frame >> 3) & 1))) ctx.drawImage((on ? f : tintOf(f, '#8a9b98', 0.8)).c, x + 17, 8);
+    text(String(Math.floor((M.held[p.slot] | 0) / 60)), x + 27, 9, on ? '#ffd447' : '#9fb8b4');
+  }
+
+  // each minigame's hooks: spawns (the k-th player's spawn), init (its state), start (시작!), tick (a playing frame),
+  // key (the place key, bigger is better), snap / view (its wire array, 6.4), drop (a leaver), draw, hud (a seat's 2nd line)
+  const MINI_FN = {
+    water: {
+      spawns: () => (LV.players || []).slice(0, MAX_PLAYERS),               // (the k-th present player in slot order)
+      init: () => ({ wl: LV && LV.rise ? LV.rise.y0 : PF_BOT, outs: [], over: null }),
+      start() {},
+      tick: waterTick,
+      key: (p, M) => { const o = M.outs.find((q) => q[0] === p.slot); return o ? o[1] : 1e12; },
+      snap: (M) => { const pl = miniPlaces(); return ['w', Math.round(M.wl * 10), M.outs.map((o) => [o[0], pl.get(o[0]) | 0])]; },
+      view: waterView,
+      drop() {},
+      draw: waterDraw,
+      hud: waterHud,
+    },
+    crown: {
+      // (the battle arena's spawns with startArena's swap by 판: G.matchNo = the 판 index)
+      spawns: () => { const pss = LV.players || [], rot = (G.matchNo | 0) % 2 ? [2, 3, 0, 1] : [0, 1, 2, 3]; return G.players.map((p) => pss[rot[p.slot]]); },
+      init: () => ({ cr: { x: G.gather.x - 8, y: G.gather.y - 8, vx: 0, vy: 0, onGround: false, holder: -2, noPick: -1, noUntil: 0 }, held: {} }),
+      start(M) { Object.assign(M.cr, { x: G.gather.x - 8, y: G.gather.y - 8, vx: 0, vy: 0, holder: -1 }); queueBanner(PARTY_TX.crownIn, '', 80, 'round'); Snd.sfx('powerup'); },
+      tick: crownTick,
+      key: (p, M) => M.held[p.slot] | 0,
+      snap: (M) => { const cr = M.cr; return ['c', cr.holder, R0(cr.x), R0(cr.y), M.held[0] | 0, M.held[1] | 0, M.held[2] | 0, M.held[3] | 0, cr.noPick]; },
+      view: crownView,
+      drop(slot, M) { if (M.cr && M.cr.holder === slot) { M.cr.holder = -1; M.cr.vx = 0; M.cr.vy = 0; M.cr.onGround = false; } },
+      draw: crownDraw,
+      hud: crownHud,
+    },
+  };
+
+  // ---- the party's HUD (9.4): the clock as in battle; per seat the party points and the minigame's 2nd line (no leader
+  // crown: it would read as 왕관 뺏기's)
+  function drawHUDParty() {
+    const bt = G.battle, left = bt ? bt.left : 0, secs = Math.ceil(left / 60), m = Math.floor(secs / 60), s = secs % 60;
+    const warn = G.mode === 'playing' && secs <= 10 && ((G.frame >> 3) & 1);
+    text(m + ':' + (s < 10 ? '0' : '') + s, 128, 1, warn ? '#ff7a6b' : '#fbf0d9', { align: 'center', scale: 2, shadow: '#16363a' });
+    const X = [1, 53, 153, 205];
+    for (const p of G.players) {
+      const x = X[p.slot]; if (x === undefined) continue;
+      hudPanel(x, 0, 50, 16, p, isMe(p));
+      if (p.out || p.trap) ctx.globalAlpha = 0.45;
+      drawRawTwin('life_' + p.char, p.twin ? p.slot : 0, x + 8, 0);
+      text(String(p.score), x + 17, 1, p.color);
+      ctx.globalAlpha = 1;
+      if (G.mode !== 'card') miniHud(p, x);
+      drawMagHud(p, x);
+    }
+  }
+  // ---- the card (9.2, #pg-party): the 판 line, the game's name, its one-line how-to (and its rule line where the screen
+  // is tall enough: CSS), the keys, the running scoreboard (best first, +N of the last 판), the bar over the 5 s
+  function fillParty() {
+    const P = G.party, el = dom.party; if (!el || !P) return;
+    const D = MINI[P.plan[clamp(P.i, 0, P.plan.length - 1)]] || MINI.water;
+    setTxt($('pg-party-round'), partyRoundTx(false)); setTxt($('pg-party-name'), D.name);
+    setTxt($('pg-party-how'), D.how); setTxt($('pg-party-rule'), D.rule);
+    setTxt($('pg-party-keys'), touchMode ? PARTY_TX.keysT : PARTY_TX.keys);
+    const team = $('pg-party-team'); if (team && !team.hidden) team.hidden = true;   // (거품 축구's team line: the next PR)
+    const box = $('pg-party-board'), st = partyStandings(P, G.players.map((p) => p.slot)), me = G.online ? G.localSlot : -1;
+    const key = JSON.stringify([st, st.map((r) => [P.pts[r.slot] | 0, P.gain[r.slot]]), G.players.map((p) => [p.slot, p.nick, p.char, p.look, p.twin]), me]);
+    if (box && box._key !== key) {
+      box._key = key; box.textContent = '';
+      for (const r of st) {
+        const p = G.players.find((q) => q.slot === r.slot); if (!p) continue;
+        const li = h('li', 'pg-party-row' + (p.slot === me ? ' is-me' : '')), g = P.gain[r.slot], pts = P.pts[r.slot] | 0;
+        li.style.setProperty('--slot', p.color);
+        const cv = portraitCanvas(p.char, 'portrait_', 16, p.look, p.twin ? p.slot : 0); cv.className = 'pg-party-cv'; cv.setAttribute('aria-hidden', 'true');
+        li.append(h('b', 'pg-party-pl', String(r.place)), cv, h('span', 'pg-party-nick', nameOf(p)));
+        if (p.slot === me) li.appendChild(h('i', 'pg-party-me', PARTY_TX.me));
+        li.appendChild(h('span', 'pg-party-pts', pts + '점'));
+        const gn = h('span', 'pg-party-gain', g >= 0 ? '+' + g : ''); gn.hidden = !(g >= 0); li.appendChild(gn);
+        li.setAttribute('aria-label', r.place + '등 ' + nameOf(p) + ' ' + pts + '점' + (g >= 0 ? ', 지난 판 +' + g : ''));
+        box.appendChild(li);
+      }
+    }
+    // (the bar: from the card's own clock - a guest's first card starts part-way - to full over what is left of it)
+    const fill = $('pg-party-fill'), cl = P.cl || partyCardF(), bk = (P.sn || 'g' + NET.gid) + ':' + P.i;
+    if (fill && fill._k !== bk) {
+      fill._k = bk;
+      const u = clamp(P.t / cl, 0, 1);
+      fill.style.transition = 'none'; fill.style.transform = 'scaleX(' + (reducedMotion() ? 1 : u).toFixed(3) + ')';
+      if (!reducedMotion()) { void fill.offsetWidth; fill.style.transition = 'transform ' + Math.round((cl - P.t) * STEP_MS) + 'ms linear'; fill.style.transform = 'scaleX(1)'; }
+    }
+  }
+  // ---- the podium (9.6): 파티 결과! (결과 발표! again for a battle), the 판 count tag, the tie / walkover note
+  function partyPodiumTitle() {
+    const t = G.party ? PARTY_TX.title : PARTY_TX.titleB;
+    setTxt($('pg-podium-h'), t);
+    if (dom.podium && dom.podium.getAttribute('aria-label') !== t.replace('!', '')) dom.podium.setAttribute('aria-label', t.replace('!', ''));
+  }
+  function partyPodiumUI() {
+    const P = G.party, pd = G.podium, tag = $('pg-podium-tag'), note = $('pg-podium-note'), bonus = $('pg-podium-bonus');
+    if (tag) { setTxt(tag, P.n + '판'); if (tag.className !== 'pg-podium-tag') tag.className = 'pg-podium-tag'; tag.hidden = false; }
+    if (bonus) bonus.hidden = true;
+    let txt = '';
+    if (P.walk) txt = PARTY_TX.noteWalk;
+    else if (pd && pd.pl) {
+      // (equal points next to each other: a shared place says so, an order a tie-break decided says by what)
+      let wins = false, last = false, shared = 0;
+      for (let k = 1; k < pd.order.length; k++) {
+        const a = pd.order[k - 1], b = pd.order[k];
+        if ((P.pts[a] | 0) !== (P.pts[b] | 0)) continue;
+        if (pd.pl[k] === pd.pl[k - 1]) { if (!shared) shared = pd.pl[k]; } else if ((P.wins[a] | 0) !== (P.wins[b] | 0)) wins = true; else last = true;
+      }
+      txt = wins ? PARTY_TX.noteWins : last ? PARTY_TX.noteLast : shared ? PARTY_TX.shared + ' ' + shared + '등!' : '';
+    }
+    if (note) { setTxt(note, txt); note.hidden = !txt; }
+    const again = $('pg-podium-again'); if (again) again.disabled = false;
+    const w = dom.podium ? dom.podium.querySelector('[data-net-wait]') : null;
+    if (w) setTxt(w, '방장이 다음 판을 고르고 있어요');
+  }
+  // host: a 판 ended - my own counters close it (8.3)
+  function coinPartyRound() { const A = CO.pa, P = G.party; if (!A || !P || !G.mini) return; A.pf[P.i] = Math.max(A.pf[P.i] | 0, G.mini.t | 0); A.go = P.i; coinPartyClose(P.i); }
 
   // ------------------------------------------------------------------ word pops (Korean: drawn as DOM labels)
   function wordPop(x, y, txt, col) {
@@ -4380,7 +4969,7 @@ window.PG = window.PG || {};
   // message: no stake in the pot, and its row tells it to pay none); an older guest page (no r.z) can only ready covering
   // the stake and pays it from its own hold, so it counts when its count covers it, as before
   function troHostGo() {
-    if (!G.online || G.role !== 'host' || G.gameMode !== 'battle' || NET.q !== 0 || !NET.ms) return;
+    if (!G.online || G.role !== 'host' || G.gameMode !== 'battle' || G.party || NET.q !== 0 || !NET.ms) return; // (a party holds no trophies)
     const mid = NET.ms + '.' + NET.gid, s = stakeNow(), p = {}, st = {};
     let hs = 0;
     for (const pl of G.players) {
@@ -4461,8 +5050,9 @@ window.PG = window.PG || {};
     return L.how === 'refund' ? '걸었던 트로피를 돌려받았어요' : '이번 판은 진 걸로 쳤어요';
   }
   // the countdown's "2" / "1" line (and its class: letters only - guests filter it)
-  const troCountSub = () => (!G.online || G.gameMode !== 'battle' ? '' : NET.q ? '연습 경기 · 트로피 없음' : stakeNow() ? '트로피 ' + stakeNow() + '개씩 걸어요!' : '트로피 경기');
-  const troCountCls = () => (!G.online || G.gameMode !== 'battle' ? '' : NET.q ? ' prac' : stakeNow() ? ' bet' : '');
+  // (a party, online or not: "2" / "1" say which 판 this is - "1판 / 3판", the last one "3판 / 3판 · 마지막 판!")
+  const troCountSub = () => (G.party ? partyRoundTx(true) : !G.online || G.gameMode !== 'battle' ? '' : NET.q ? '연습 경기 · 트로피 없음' : stakeNow() ? '트로피 ' + stakeNow() + '개씩 걸어요!' : '트로피 경기');
+  const troCountCls = () => (G.party || !G.online || G.gameMode !== 'battle' ? '' : NET.q ? ' prac' : stakeNow() ? ' bet' : '');
   // (8.7) the armed label of 방으로 / 나가기 in the menu: what leaving now costs (this tab's held trophies)
   function troLeaveLabel(host) {
     const h = troHeld(), base = host ? '한 번 더 누르면 모두 방으로' : '한 번 더 누르면 나가요';
@@ -4585,6 +5175,10 @@ window.PG = window.PG || {};
     el.hidden = !txt;
   }
   function troPodiumUI() {
+    // (파티: its own title, tag, note and buttons - before the practice TRO.pod below, which would add a trophy line to a
+    // party that has no trophies; a battle afterwards gets 결과 발표! back)
+    partyPodiumTitle();
+    if (G.party) { partyPodiumUI(); return; }
     if (G.online && NET.sess && NET.q !== 0 && G.podium) {
       const mid = NET.ms + '.' + NET.gid;
       if (!TRO.pod || TRO.pod.mid !== mid) TRO.pod = { mid, kind: 'prac', rows: new Map(), promo: -1, at: 0, t0: -1, fl: null, flipAt: -1, landed: 0 };
@@ -4724,7 +5318,8 @@ window.PG = window.PG || {};
   //  - battle coins: every screen computes its own from the podium it shows (coinBattle) - nothing is sent
   // (per tab, never stored: the run, the battle's shots and players at 시작!, the podium's coin line)
   // (eqSent / eqT: v4 shop S4 - the worn set this guest last told its host, and the 300 ms timer of the next 'eq')
-  const CO = { run: null, bshots: 0, n: 0, goId: -1, tl: 0, gi: -1, pod: null, cardT: 0, allowBc: false, eqSent: '', eqT: 0 };
+  // (pa: 파티 - this party's own counters, coinPartyStart)
+  const CO = { run: null, bshots: 0, n: 0, goId: -1, tl: 0, gi: -1, pod: null, cardT: 0, allowBc: false, eqSent: '', eqT: 0, pa: null };
   const coinBal = (S) => clamp((S ? S.ce - S.sp : 0) | 0, 0, COIN_MAX);
   // the local date before / after YYYYMMDD
   function troDayAdd(d, k) { const x = new Date(Math.floor(d / 10000), Math.floor(d / 100) % 100 - 1, d % 100 + k); return x.getFullYear() * 10000 + (x.getMonth() + 1) * 100 + x.getDate(); }
@@ -4849,6 +5444,58 @@ window.PG = window.PG || {};
     const me = fin.find((f) => f.slot === G.localSlot);
     // (the host's own end clock, te - an older host sends none: then the last 'p' snapshot's clock)
     coinBattleNow(fin, g.te !== undefined ? nInt(g.te, 0, 1e7, 0) : CO.tl, me ? me.k : 0);
+  }
+  // ---- 파티 (design/party.md 8): my coins for a party that reached its podium: n = players on the podium, done = every
+  // planned 판 played (not a walkover), act = per 판 [I blew >= COIN.roundShots in it], shots = all my blows, playF =
+  // 'playing' frames I saw, place = my final place, tie = how many share it. Pure
+  function coinParty(n, done, act, shots, playF, place, tie) {
+    if (shots < COIN.gameShots || playF < COIN.minF) return 0;
+    const c = COIN.pBase + COIN.pRound * (Array.isArray(act) ? act : []).filter(Boolean).length;
+    if (!done || n < 2 || !(place >= 1)) return c;                // a walkover: no rank bonus (alt farming earns nothing extra)
+    const B = COIN.pPlace[clamp(n | 0, 2, 4)], t = Math.max(1, tie | 0); let s = 0;
+    for (let q = place - 1; q < place - 1 + t; q++) s += B[Math.min(q, B.length - 1)] | 0;
+    return c + Math.floor(s / t);                                  // a shared place averages its bonuses (as coinBattle)
+  }
+  // every player counts for itself (8.3): CO.pa = this party's game id (NET.gid online, -1 offline - G.online is not set
+  // yet inside netAgain's fn on the first start), act / pf per 판 index (pf: the playing frames seen, from the host's
+  // clock), all my blows, the last index closed, the last index whose 시작! I saw
+  function coinPartyStart() { CO.pa = { gid: NET.sess && NET.screen === 'game' ? NET.gid : -1, act: [], pf: [], shots: 0, seen: -1, go: -1 }; }
+  // a 판 ended for me (once per index): did I blow enough in it; its blows join the party's
+  function coinPartyClose(i) {
+    const A = CO.pa; if (!A || i <= A.seen) return;
+    for (let j = A.seen + 1; j < i; j++) A.act[j] = false;        // (one I never saw end: nothing for it)
+    A.act[i] = CO.bshots >= COIN.roundShots; A.shots += CO.bshots; A.seen = i;
+  }
+  // the podium: my coins, once per game id, into CO.pod (coinPodLine / coinPodSr show it as for a battle). place / tie /
+  // n from the podium this screen shows; done: the host's own (not a walkover), a guest's from the snapshots (8.3)
+  function coinPartyNow(n, done, place, tie) {
+    const gid = coinGid(), A = CO.pa; if (gid < 0 || (CO.pod && CO.pod.gid === gid) || !A || A.gid !== gid) return;
+    CO.pod = { gid, give: 0, bonus: 0, prac: coinPrac(), rang: false };
+    if (!coinOk()) return;
+    const playF = PARTY_FAST ? 1e9 : A.pf.reduce((s, f) => s + (f | 0), 0);
+    const a = coinParty(n, done, A.act, A.shots, playF, place, tie);
+    const res = a > 0 ? coinGive(a, true) : null;
+    if (res) { CO.pod.give = res.give; CO.pod.bonus = res.bonus; }
+    if (shownOverlay === 'podium') fillPodium();
+  }
+  // guest, on every accepted 'p' snapshot (a network event: a hidden tab too): a 판's first 'p' is its 시작! for me (my
+  // blow count starts again), every 'p' / 'r' carries the host's clock, its first 'r' (or any later index, or the final
+  // 'd') ends it for me, the first 'd' with F is my podium
+  function coinPartyGuest(g, id) {
+    const A = CO.pa, pa = g.pa; if (!A || A.gid !== id || !pa || typeof pa !== 'object') return;
+    const i = nInt(pa.i, -1, 9, -1), ft = nInt(pa.ft, 0, 1e6, 0);
+    if (i < 0) return;
+    if (i > A.seen + 1 && A.go >= A.seen + 1) coinPartyClose(i - 1);      // (that 판's 'r' never reached me)
+    if (g.ph === 'p' && A.go !== i) { if (A.seen < i - 1) coinPartyClose(i - 1); A.go = i; let n = 0; for (const r of Array.isArray(g.P) ? g.P.slice(0, MAX_PLAYERS) : []) if (Array.isArray(r)) n++; coinGo(n || G.players.length); }
+    if ((g.ph === 'p' || g.ph === 'r') && A.go === i) A.pf[i] = Math.max(A.pf[i] | 0, ft - nInt(g.tl, 0, 1e6, ft));
+    if (g.ph === 'r' && A.go === i) coinPartyClose(i);
+    if (g.ph === 'd' && pa.F === 1) {
+      if (A.go > A.seen) coinPartyClose(A.go);
+      const pd = Array.isArray(g.pd) ? g.pd.slice(0, MAX_PLAYERS).map((v) => nInt(v, -1, 3, -1)) : [], pl = Array.isArray(g.pl) ? g.pl.slice(0, MAX_PLAYERS).map((v) => nInt(v, 1, 4, 4)) : [];
+      const k = pd.indexOf(G.localSlot), place = k >= 0 ? pl[k] || k + 1 : 0, tie = place ? pl.filter((q) => q === place).length || 1 : 1;
+      const n = nInt(pa.n, 1, 5, 3), done = pa.W !== 1 && A.act.length === n && A.seen === n - 1;
+      coinPartyNow(pd.length, done, place, tie);
+    }
   }
   // ---- the podium (9.8): my block's 2nd line alternates every 90 f between its usual content and [coin] +N, from T1 =
   // (the trophy flip's end, or 75) + 40; the coin's glint frame for 4 f at each swap; sfx 'coin' at the first swap
@@ -8004,7 +8651,7 @@ window.PG = window.PG || {};
       if (PAL.busy) cut.setAttribute('aria-disabled', 'true');
       // (친구 초대: off while a call is in flight, my room is full or playing, or I am in someone else's room)
       const why = ivWhy(), iv = h('button', 'pg-pal-iv', PAL_TX.iv); iv.type = 'button'; iv.dataset.act = 'iv';
-      iv.setAttribute('aria-label', r.nick + '님을 ' + (NET.mode === 'battle' ? IV_TX.battle : IV_TX.coop) + '에 초대');
+      iv.setAttribute('aria-label', r.nick + '님을 ' + (IV_TX[NET.mode] || IV_TX.coop) + '에 초대');
       if (PAL.busy || IV.busy || why) iv.setAttribute('aria-disabled', 'true');
       if (why === 'full' || why === 'started') iv.title = PAL_TX[why === 'full' ? 'ivFull' : 'ivStarted'];
       const acts = h('span', 'pg-pal-racts'); acts.append(iv, cut);
@@ -8080,7 +8727,7 @@ window.PG = window.PG || {};
   // Closing my room deletes the invites I sent into it. A PR preview: 초대 makes the room and says nothing was sent, and
   // one staged invite shows when 친구 순위 first opens. The artifact has none of it
   const IV_MS = 600000, IV_GAP_MS = 10000, IV_LIST = 50, IV_RETRY_MS = 60000, IV_DEMO_MS = 1500;
-  const IV_TX = { ask: '같이 하자고 해요', join: '참여', later: '나중에', coop: '같이 하기', battle: '배틀', room: '친구 초대', demo: '미리보기 · 예시 초대예요',
+  const IV_TX = { ask: '같이 하자고 해요', join: '참여', later: '나중에', coop: '같이 하기', battle: '배틀', party: '파티', room: '친구 초대', demo: '미리보기 · 예시 초대예요',
     demoJoin: '미리보기라 예시 초대로는 참여할 수 없어요' };
   const IV_TEXT = Object.keys(IV_TX).map((k) => IV_TX[k]).join(' ') + ' 이가 님의 방에 참여 초대';
   const IV_WHERE = { title: 1, rec: 1, pal: 1, hub: 1, friends: 1, over: 1, ending: 1 };
@@ -8119,7 +8766,7 @@ window.PG = window.PG || {};
     for (const d of palDocs(qs)) {
       let x = null; try { x = d.data(); } catch (e) { x = null; }
       const from = d && typeof d.id === 'string' ? d.id : '', at = x ? palTs(x.at) : 0;
-      if (!from || !x || !at || typeof x.code !== 'string' || !/^[a-z0-9]{4}$/.test(x.code) || (x.mode !== 'coop' && x.mode !== 'battle')) continue;
+      if (!from || !x || !at || typeof x.code !== 'string' || !/^[a-z0-9]{4}$/.test(x.code) || (x.mode !== 'coop' && x.mode !== 'battle' && x.mode !== 'party')) continue; // (파티: a page from before it drops a party invite - it cannot play it)
       const v = { from, code: x.code, mode: x.mode, nick: palNick(x.nick), at };
       if (now - at >= IV_MS) { if (!IV.gone.has(ivKey(v))) { IV.gone.add(ivKey(v)); ivDel(from); } continue; }
       out.push(v);
@@ -8170,12 +8817,12 @@ window.PG = window.PG || {};
   function ivPaint(v) {
     const D = ivBuild(); if (!D) return;
     // (a friend in my list: its bust, and its nick as my list has it)
-    const fr = (PAL.rows || []).find((q) => q.uid === v.from && !q.me), nick = fr ? fr.nick : v.nick, mode = v.mode === 'battle' ? IV_TX.battle : IV_TX.coop;
+    const fr = (PAL.rows || []).find((q) => q.uid === v.from && !q.me), nick = fr ? fr.nick : v.nick, mode = IV_TX[v.mode] || IV_TX.coop;
     const key = [v.from, v.at, nick, mode, fr ? fr.c + fr.lk : '', v.demo ? 1 : 0].join('|');
     if (D.key !== key) {
       D.key = key; D.av.textContent = ''; D.tx.textContent = '';
       if (fr) { const cv = portraitCanvas(CHAR_IDS[fr.c] || 'duck', 'portrait_', 32, fr.lk); cv.className = 'pg-iv-cv'; D.av.appendChild(cv); }
-      const md = h('span', 'pg-iv-mode' + (v.mode === 'battle' ? ' is-battle' : ''), mode);
+      const md = h('span', 'pg-iv-mode' + (v.mode === 'battle' || v.mode === 'party' ? ' is-battle' : ''), mode);
       D.tx.append(h('b', '', nick), document.createTextNode(ivJosa(nick) + ' ' + IV_TX.ask + ' '), h('span', 'pg-iv-dot', '·'), document.createTextNode(' '), md);
       if (v.demo) D.tx.appendChild(h('small', '', IV_TX.demo));
       D.join.setAttribute('aria-label', nick + '님의 ' + mode + ' 방에 참여');
@@ -8225,7 +8872,7 @@ window.PG = window.PG || {};
       if (demo) { key = 'ivDemo'; return; }
       if (gen !== PAL.gen || !palOn()) return;
       const me = CLOUD.user.uid, ts = FV().serverTimestamp();
-      await ivCol(x).doc(me).set({ code, mode: NET.mode === 'battle' ? 'battle' : 'coop', nick: cleanNick(NET.nick) || '손님', at: ts });
+      await ivCol(x).doc(me).set({ code, mode: NET.mode === 'battle' || NET.mode === 'party' ? NET.mode : 'coop', nick: cleanNick(NET.nick) || '손님', at: ts });
       if (gen !== PAL.gen) return;
       IV.sent = Object.assign(IV.sent || {}, { [x]: clNow() }); IV.out = IV.out.filter((o) => o.to !== x).concat([{ to: x, code }]);
       key = 'ivSent'; arg = r.nick;
@@ -8392,6 +9039,8 @@ window.PG = window.PG || {};
       case 'transition': updateTransition(); break;
       case 'countdown': updateCountdown(); break;
       case 'podium': updatePodium(); break;
+      case 'card': updateCard(); break;     // (파티: a minigame's card, then its result beat - nothing moves)
+      case 'result': updateResult(); break;
       default: updateFx(); break;
     }
     if (G.bannerQ.length && (!G.banner || G.frame >= G.banner.end) && (G.mode === 'playing' || G.mode === 'dying')) {
@@ -8918,6 +9567,7 @@ window.PG = window.PG || {};
     }
     const dy = lk && lk.dy ? lk.dy : 0;
     wrapDraw(p.y + bob + dy, (y) => (lk && lk.q ? drawTurned(name, fi, p.x, y, flip, lk.q, o) : drawEnt(name, fi, p.x, y, flip, o)));
+    if (crownHolder(p) && G.mode !== 'podium') crownOn(p); // (왕관 뺏기: the worn crown, 8 px over the head)
     if (p.dead && dieT > 8) {
       for (let i = 0; i < 3; i++) {
         const a = dieT * 0.18 + i * (Math.PI * 2 / 3);
@@ -8954,11 +9604,11 @@ window.PG = window.PG || {};
     for (const p of G.players) {
       if (p.out || p.koT > 0) continue;
       const f = frameOf(SPR_TAG, 0); if (!f) continue;
-      const tf = tintOf(f, isMe(p) ? '#ffffff' : p.color, 1), lift = G.mode === 'podium' ? 9 : 0;
+      const tf = tintOf(f, isMe(p) ? '#ffffff' : p.color, 1), lift = G.mode === 'podium' ? 9 : crownHolder(p) ? 8 : 0; // (over a worn crown too)
       ctx.drawImage(tf.c, Math.round(p.x + 8 - f.w / 2), Math.round(headTop(p) - f.h - 2 - lift));
     }
   }
-  const tagsOn = () => multi() && (G.mode === 'playing' || G.mode === 'transition' || G.mode === 'countdown' || G.mode === 'paused' || G.mode === 'podium');
+  const tagsOn = () => multi() && (G.mode === 'playing' || G.mode === 'transition' || G.mode === 'countdown' || G.mode === 'paused' || G.mode === 'podium' || G.mode === 'result');
   function drawEnemy(e) {
     if (e.state === 'trapped' || e.state === 'frozen') return;
     if (e.state === 'dead') {
@@ -9104,7 +9754,7 @@ window.PG = window.PG || {};
       const v = b.victim, t = v.trap;
       name = v.char + '_trapped'; fi = (b.age / 14) | 0;
       tint = SLOT_COLS[b.owner] || null; tintA = 0.3; ring = tint; // (+ a 2 px ring in the trapper's colour, distinction §2.9)
-      if (t && PTRAP_FRAMES - t.prog < 60) { dx = Math.round(Math.sin(G.frame * 0.9) * 1.4); if ((G.frame >> 2) & 1) white = 0.45; }
+      if (t && ptrapMax() - t.prog < ptrapMax() / 4) { dx = Math.round(Math.sin(G.frame * 0.9) * 1.4); if ((G.frame >> 2) & 1) white = 0.45; }
     } else if (b.kind === 'stamp') { name = 'stamp_bubble'; fi = (b.age / 12) | 0; }
     else if (b.kind === 'steam') { name = 'steam_bubble'; fi = (b.age / 12) | 0; }
     else {
@@ -9462,7 +10112,7 @@ window.PG = window.PG || {};
   function drawHUD() {
     ctx.fillStyle = '#0a1a1d'; ctx.fillRect(0, 0, W, PF_TOP);
     ctx.fillStyle = '#16363a'; ctx.fillRect(0, PF_TOP - 1, W, 1);
-    if (G.gameMode === 'battle') { drawHUDBattle(); return; }
+    if (G.gameMode === 'battle') { (G.party ? drawHUDParty : drawHUDBattle)(); return; }
     if (G.gameMode === 'coop') { drawHUDCoop(); return; }
     const lv = Math.max(0, G.lives);
     const shown = Math.min(lv, 5);
@@ -9600,14 +10250,17 @@ window.PG = window.PG || {};
     ctx.fillStyle = gl; ctx.fillRect(40, 30, 176, 150);
     const FLOOR = 176;
     ctx.fillStyle = '#123236'; ctx.fillRect(WALL_L, FLOOR, WALL_R - WALL_L, 2);
+    // (파티: pd.pl - the place per block, a shared place repeats; the digit, the colour and the crowns go by place, the
+    // block heights by index)
+    const placeOf = (i) => (pd.pl ? pd.pl[i] || i + 1 : i + 1);
     pd.order.forEach((slot, i) => {
-      const sp = PODIUM[i] || PODIUM[3], top = sp[1], x0 = sp[0] - 16;
-      const col = MEDALS[i] || '#7fdcc8';
+      const sp = PODIUM[i] || PODIUM[3], top = sp[1], x0 = sp[0] - 16, pl = placeOf(i);
+      const col = MEDALS[pl - 1] || '#7fdcc8';
       ctx.fillStyle = '#0c2629'; ctx.fillRect(x0 - 1, top - 1, 34, FLOOR - top + 1);
       ctx.fillStyle = i < 3 ? '#2f7f78' : '#24504c'; ctx.fillRect(x0, top, 32, FLOOR - top);
       ctx.fillStyle = 'rgba(255,255,255,0.18)'; ctx.fillRect(x0, top, 32, 1);
       ctx.fillStyle = col; ctx.fillRect(x0, top + 1, 32, 2);
-      text(String(i + 1), sp[0], top + 5, col, { align: 'center', scale: 2, outline: '#0c2629' });
+      text(String(pl), sp[0], top + 5, col, { align: 'center', scale: 2, outline: '#0c2629' });
       const p = G.players.find((q) => q.slot === slot);
       // (an online ranked battle: the 2nd line flips from the score to the trophy change - the HUD keeps the scores)
       // (my block: from T1 it alternates with my 비누 코인 line - coinPodLine)
@@ -9616,11 +10269,12 @@ window.PG = window.PG || {};
     for (let k = pd.order.length - 1; k >= 0; k--) {
       const p = G.players.find((q) => q.slot === pd.order[k]); if (!p) continue;
       drawPlayer(p);
-      if (k < 3) {
+      const pk = placeOf(k) - 1;
+      if (pk < 3) {
         const f = frameOf(SPR_CROWN, 0);
         // (over a worn hat: 1 px above its top row, as over a bare head - the crown's own outline reaches its row 6, so
         // headTop - 7 would sit on the hat's top row; lookReach is the same idle-0 measure headTop's lift comes from)
-        if (f) { const cf = k === 0 ? f : tintOf(f, MEDALS[k], 0.75); ctx.drawImage(cf.c, Math.round(p.x + 4), Math.round(p.y - 7 - Math.max(0, lookReach(p.char, p.look) + 1))); }
+        if (f) { const cf = pk === 0 ? f : tintOf(f, MEDALS[pk], 0.75); ctx.drawImage(cf.c, Math.round(p.x + 4), Math.round(p.y - 7 - Math.max(0, lookReach(p.char, p.look) + 1))); }
       }
     }
     troPodCups();
@@ -9671,9 +10325,11 @@ window.PG = window.PG || {};
       for (const e of G.enemies) drawEnemy(e);
     }
     drawKfx(true); // (v4 rings lying on the floor: the capy's slam splash, the frog's lily pads)
+    miniDraw(false); // (파티: a minigame's layer behind the animals)
     for (const p of G.players) drawDucklings(p);   // (v4 뽑기 e7: under every animal)
     for (let k = G.players.length - 1; k >= 0; k--) drawPlayer(G.players[k]);
     drawWater();
+    miniDraw(true);  // (파티: the rising water over the animals, the free crown in front)
     drawMarkers(true); // (the ripples beside floating animals, markers on a water surface)
     drawIce();
     for (const b of G.bubbles) drawBubble(b);
@@ -9698,6 +10354,7 @@ window.PG = window.PG || {};
     }
     if (!inTrans) { drawMeSpot(); drawMagFeet(); drawTagArrows(); }
     if (inTrans && G.trans) drawDoors(G.trans.door);
+    if (G.mode === 'card' || (G.mode === 'paused' && G.pausedFrom === 'card')) drawDoors(1); // (파티: the doors stay shut over the next arena while its card shows)
     ctx.restore();
     drawHUD();
     if (G.boss && !inTrans) drawBossBar();
@@ -9766,7 +10423,7 @@ window.PG = window.PG || {};
       if (dom.endNext) dom.endNext.textContent = (G.loop + 2) + '회차 도전';
       if (dom.endSub) dom.endSub.textContent = G.gameMode === 'coop' ? '다 함께 목욕탕을 뽀득뽀득 닦았어요' : CHARS[G.p ? G.p.char : 'duck'].name + ' 덕분에 목욕탕이 뽀득뽀득해졌어요';
     }
-    if (dom.pauseBtn) dom.pauseBtn.disabled = !(name === null || name === 'pause');
+    if (dom.pauseBtn) dom.pauseBtn.disabled = !(name === null || name === 'pause' || name === 'party'); // (파티: the menu opens over a card too)
     // the online panels cover the whole stage (touch pads hidden); result cards / menu get the online buttons
     if (dom.app) dom.app.classList.toggle('pg-panel-open', name === 'friends' || name === 'room' || name === 'hub' || name === 'pal');
     netCardLabels(name);
@@ -9781,7 +10438,7 @@ window.PG = window.PG || {};
     syncJumpSub(); // (a game started / my animal or the setting changed: the touch JUMP's move line follows)
     if (!dom.banner) return;
     const bn = G.banner;
-    const live = bn && G.frame < bn.end && !G.attract && (G.mode === 'playing' || G.mode === 'transition' || G.mode === 'dying' || G.mode === 'countdown');
+    const live = bn && G.frame < bn.end && !G.attract && (G.mode === 'playing' || G.mode === 'transition' || G.mode === 'dying' || G.mode === 'countdown' || G.mode === 'result');
     if (live) {
       if (shownBannerId !== bn.id) {
         shownBannerId = bn.id;
@@ -9798,7 +10455,7 @@ window.PG = window.PG || {};
     syncWords();
   }
   // ---- v3 DOM: the animal picker (title), co-op results, the podium card, name tags and word pops
-  const OVERLAYS = ['title', 'pause', 'over', 'ending', 'podium', 'friends', 'room', 'rec', 'hub', 'login', 'pal'];
+  const OVERLAYS = ['title', 'pause', 'over', 'ending', 'podium', 'friends', 'room', 'rec', 'hub', 'login', 'pal', 'party'];
   // (lk: a worn set - a portrait_ bust wears its 머리 / 얼굴 / 목 (lookPortrait, shop.md 6.8); tw: the seat whose twin
   // colour the bust takes, distinction §2.10 - recoloured first, then the items are drawn on it)
   function portraitCanvas(c, name, size, lk, tw) {
@@ -9874,7 +10531,7 @@ window.PG = window.PG || {};
     const el = dom.tJumpSub; if (!el) return;
     const me = G.mode !== 'title' ? myPlayer() || G.p : null;
     const c = me && isChar(me.char) ? me.char : G.sel;
-    const off = me ? !!G.perksOff : NET.screen === 'room' && NET.mode === 'battle' && NET.opts.perks === false;
+    const off = me ? !!G.perksOff : NET.screen === 'room' && pvp() && NET.opts.perks === false;
     const txt = (CHARS[c] || CHARS.duck).move.touch;
     if (el.textContent !== txt) el.textContent = txt;
     if (el.hidden !== off) el.hidden = off;
@@ -9947,8 +10604,8 @@ window.PG = window.PG || {};
     const P = G.online ? troPodNow() : null, mine = P && P.rows.get(G.localSlot);
     const tro = !P ? '' : P.kind === 'prac' ? ', 연습 경기라 트로피는 그대로예요' : mine && P.now !== null ? ', 내 트로피 ' + troSigned(mine.net) + '개' + (P.free ? ' (안 걸고 참여)' : '') + (P.bonus > 0 ? ', 오늘 트로피 보너스 +' + P.bonus + '개' : '') + ', 지금 ' + P.now + '개' : '';
     dom.podiumSum.textContent = G.podium.order.map((slot, i) => {
-      const p = G.players.find((q) => q.slot === slot);
-      return p ? (i + 1) + '위 ' + nameOf(p) + ' (' + CHARS[p.char].name + ') ' + p.score.toLocaleString('ko-KR') + '점' : '';
+      const p = G.players.find((q) => q.slot === slot), pl = G.podium.pl ? G.podium.pl[i] || i + 1 : i + 1; // (파티: a shared place repeats)
+      return p ? pl + '위 ' + nameOf(p) + ' (' + CHARS[p.char].name + ') ' + p.score.toLocaleString('ko-KR') + '점' : '';
     }).join(', ') + tro + coinPodSr();
   }
   // name tags: the nick in the slot colour over every animal (DOM, so Korean nicks stay crisp)
@@ -9982,7 +10639,7 @@ window.PG = window.PG || {};
   const tagHi = (p) => isMe(p) && spotAge() >= 0 && spotAge() < SPOT_HI_F; // (the big 나 after a spotlight trigger)
   function syncTags() {
     if (!dom.tags) return;
-    const on = multi() && (G.mode === 'playing' || G.mode === 'countdown' || G.mode === 'podium' || (G.mode === 'paused' && G.pausedFrom !== 'transition'));
+    const on = multi() && (G.mode === 'playing' || G.mode === 'countdown' || G.mode === 'podium' || G.mode === 'result' || (G.mode === 'paused' && G.pausedFrom !== 'transition' && G.pausedFrom !== 'card'));
     const me = G.online ? myPlayer() : null, self = G.players.find((q) => q.slot === G.localSlot) || null; // (self: the hint chips, offline too)
     const k = screenScale || 1;
     const order = G.players.slice(0, MAX_PLAYERS).sort((a, b) => (b === me) - (a === me) || a.slot - b.slot);
@@ -10038,7 +10695,7 @@ window.PG = window.PG || {};
         el.className = base; el._wF = el.offsetWidth / k; el._hF = el.offsetHeight / k;
         el.className = base + ' is-cmp'; el._wC = el.offsetWidth / k; el._hC = el.offsetHeight / k;
       }
-      const lift = pod ? 9 : 0, px = p.x + 8, anchor = headTop(p) - 5 - lift;
+      const lift = pod ? 9 : crownHolder(p) ? 8 : 0, px = p.x + 8, anchor = headTop(p) - 5 - lift;
       let box, cmp = false;
       if (el._rid !== G.rid) { el._rid = G.rid; el._fitAt = null; } // (a new round / arena: everyone starts compact)
       if (mine) box = tagSpot(el._wF, el._hF, px, anchor, -0.5, p.slot); // (always full, placed first: only animals in the way)
@@ -10097,7 +10754,7 @@ window.PG = window.PG || {};
   }
   function startGame() { firstGesture(); Snd.unlock(); newGame(0); Snd.sfx('start'); }
   function pauseGame() {
-    if (G.mode !== 'playing' && G.mode !== 'dying' && G.mode !== 'transition' && G.mode !== 'countdown') return;
+    if (G.mode !== 'playing' && G.mode !== 'dying' && G.mode !== 'transition' && G.mode !== 'countdown' && G.mode !== 'card' && G.mode !== 'result') return;
     if (G.online) {
       // an online game keeps running for everyone: the menu opens on this screen only
       if (G.menuOpen) return;
@@ -10109,11 +10766,12 @@ window.PG = window.PG || {};
     showOverlay('pause');
   }
   function resumeGame() {
-    if (G.menuOpen) { G.menuOpen = false; showOverlay(null); return; }
+    // (파티: back onto its card when the menu was opened over it)
+    if (G.menuOpen) { G.menuOpen = false; showOverlay(G.mode === 'card' ? 'party' : null); if (G.mode === 'card') fillParty(); return; }
     if (G.mode !== 'paused') return;
     G.mode = G.pausedFrom || 'playing'; G.pausedFrom = null;
     if (G.music !== 'clear' && G.music !== 'gameover') Snd.music(G.music); else Snd.cur = G.music;
-    showOverlay(null);
+    showOverlay(G.mode === 'card' ? 'party' : null);
   }
   function togglePause() { if (G.mode === 'paused' || G.menuOpen) resumeGame(); else pauseGame(); }
   function updateMuteUI() {
@@ -10351,7 +11009,7 @@ window.PG = window.PG || {};
     dom.titleHi = $('pg-title-hi'); dom.overScore = $('pg-over-score'); dom.overHi = $('pg-over-hi'); dom.overRound = $('pg-over-round'); dom.overNew = $('pg-over-new');
     dom.endScore = $('pg-end-score'); dom.endNext = $('pg-end-next');
     dom.soundBtn = $('pg-sound'); dom.pauseBtn = $('pg-pausebtn'); dom.stickZone = $('pg-stick-zone'); dom.stick = $('pg-stick'); dom.stickKnob = $('pg-stick-knob');
-    dom.podium = $('pg-podium'); dom.friends = $('pg-friends'); dom.podiumSum = $('pg-podium-sum');
+    dom.podium = $('pg-podium'); dom.friends = $('pg-friends'); dom.podiumSum = $('pg-podium-sum'); dom.party = $('pg-party');
     dom.overTeam = $('pg-over-team'); dom.endTeam = $('pg-end-team'); dom.endSub = $('pg-end-sub');
     dom.pick = $('pg-pick'); dom.pickName = $('pg-pick-name'); dom.pickPerk = $('pg-pick-perk');
     dom.kit = $('pg-kit'); dom.pickAnimal = $('pg-pick-animal'); dom.pickRole = $('pg-pick-role'); dom.pickBadge = $('pg-pick-badge'); dom.pickStats = $('pg-pick-stats');
@@ -10367,8 +11025,8 @@ window.PG = window.PG || {};
     dom.tags = layer('pg-tags'); dom.words = layer('pg-words');
     // warm the Korean web-font slices for round names too (banners / game-over card show them later)
     try { const fw = document.querySelector('#pg-fontwarm .pg-fw-sign'); if (fw) fw.textContent += ' ' + GAME_NAME + ' ' + LEVELS.map((l) => l.name).join(' ') + ' ' + BOSS_TEXT; } catch (e) { /* ignore */ }
-    try { const fb = document.querySelector('#pg-fontwarm .pg-fw-body'); if (fb) fb.textContent += ' ' + BOSS_TEXT + ' ' + V3_TEXT + ' ' + TRO_TEXT + ' ' + SHOP_TEXT + ' ' + GACHA_TEXT; } catch (e) { /* ignore */ }
-    try { const fs2 = document.querySelector('#pg-fontwarm .pg-fw-sign'); if (fs2) fs2.textContent += ' ' + V3_TEXT + ' ' + TRO_TEXT + ' ' + SHOP_TEXT + ' ' + GACHA_TEXT; } catch (e) { /* ignore */ }
+    try { const fb = document.querySelector('#pg-fontwarm .pg-fw-body'); if (fb) fb.textContent += ' ' + BOSS_TEXT + ' ' + V3_TEXT + ' ' + TRO_TEXT + ' ' + PARTY_TEXT + ' ' + SHOP_TEXT + ' ' + GACHA_TEXT; } catch (e) { /* ignore */ }
+    try { const fs2 = document.querySelector('#pg-fontwarm .pg-fw-sign'); if (fs2) fs2.textContent += ' ' + V3_TEXT + ' ' + TRO_TEXT + ' ' + PARTY_TEXT + ' ' + SHOP_TEXT + ' ' + GACHA_TEXT; } catch (e) { /* ignore */ }
     paintCups(document); paintCoins(document);
     const click = (id, fn) => { const el = $(id); if (el) listen(el, 'click', (e) => { e.preventDefault(); fn(); if (el.closest('#pg-head')) el.blur(); }); };
     click('pg-start', startGame);
@@ -10642,8 +11300,9 @@ window.PG = window.PG || {};
   // 'quake' and 'pop' are echoed)
   const NO_ECHO = { jump: 1, shoot: 1, bounce: 1, splash: 1, pause: 1, start: 1,
     flap: 1, slam: 1, dash: 1, slide: 1, djump: 1, hop: 1, b_echo: 1, b_onsen: 1, b_splash: 1, b_icicle: 1, b_yarn: 1, b_egg: 1, dry: 1, reload: 1 };
-  const PH_CODE = { playing: 'p', countdown: 'c', transition: 't', gameover: 'o', ending: 'e', podium: 'd', dying: 'p', paused: 'p', title: 'p' };
-  const PH_NAME = { p: 'playing', c: 'countdown', t: 'transition', o: 'gameover', e: 'ending', d: 'podium' };
+  // (파티's card 'a' and result 'r': only pages that said pa in their hi ever get them)
+  const PH_CODE = { playing: 'p', countdown: 'c', transition: 't', gameover: 'o', ending: 'e', podium: 'd', dying: 'p', paused: 'p', title: 'p', card: 'a', result: 'r' };
+  const PH_NAME = { p: 'playing', c: 'countdown', t: 'transition', o: 'gameover', e: 'ending', d: 'podium', a: 'card', r: 'result' };
   const MUSICS = [null, 'main', 'hurry', 'boss', 'final', 'clear', 'victory', 'battle', 'podium', 'gameover', 'ending', 'title', 'lobby'];
   const E_STATES = ['descend', 'active', 'trapped', 'frozen', 'dead'];
   const U_KINDS = ['empty', 'trapped', 'player', 'stamp', 'steam'];
@@ -10669,7 +11328,14 @@ window.PG = window.PG || {};
     peerHow: '인터넷을 확인하고 새로고침해 주세요', joinOffPeer: '온라인 연결 도구가 없어요 · 새로고침해 주세요', hostOffPeer: '온라인 연결 도구가 없어요 · 새로고침해 주세요',
     reload: '새로고침',
   };
-  const MODE_DESC = { coop: '2~4명이 힘을 합쳐 모든 탕을 청소해요', battle: '거품으로 친구를 가두고 터뜨려 점수를 겨뤄요' };
+  const MODE_DESC = { coop: '2~4명이 힘을 합쳐 모든 탕을 청소해요', battle: '거품으로 친구를 가두고 터뜨려 점수를 겨뤄요', party: PARTY_TX.desc };
+  // (a mode with the kit options - 능력 끄기, 연사, the magazine line: battle and party)
+  const pvp = () => NET.mode !== 'coop';
+  // ready as this host counts it (6.1): in a party room a seat whose hi said no pa (an older page) is never ready - its own
+  // ready flag is kept, so a switch back to 같이 하기 / 배틀 needs no new 준비 (a guest: the host's R.p flag already is this)
+  const seatReady = (r) => !!r.ready && (NET.role !== 'host' || NET.mode !== 'party' || r.id === NET.selfId || r.pa >= PARTY_V);
+  // ... and the seats that must refresh first: host - a hi without pa; guest - the host's R.u
+  const seatOld = (r) => NET.mode === 'party' && (NET.role === 'host' ? r.id !== NET.selfId && !!r.hi && !(r.pa >= PARTY_V) : (NET.partyU || []).includes(r.slot));
   const NICK_BAD = new RegExp('[' + [[0x00, 0x1f], [0x7f, 0x9f], [0xad, 0xad], [0x200b, 0x200f], [0x2028, 0x202e], [0x2060, 0x206f], [0xfeff, 0xfeff], [0xfff9, 0xfffb]]
     .map((r) => String.fromCharCode(r[0]) + '-' + String.fromCharCode(r[1])).join('') + ']', 'g');
   function cleanNick(s) { return typeof s === 'string' ? Array.from(s.replace(NICK_BAD, '').trim()).slice(0, 12).join('') : ''; }
@@ -10695,7 +11361,8 @@ window.PG = window.PG || {};
   const NET = {
     tr: null, trForced: false, trInfo: null, trP: null, trDone: false,
     sess: null, role: null, code: '', selfId: null, hostId: null, screen: null, unsubs: [],
-    mode: 'coop', opts: { arena: -1, time: 3, perks: true, monsters: true, intrusion: true, rapid: false, bet: 0 },
+    // (rounds: 파티's 판 수, 3 | 5; partyU: a guest's copy of the host's R.u - the seats whose page cannot play the party)
+    mode: 'coop', opts: { arena: -1, time: 3, perks: true, monsters: true, intrusion: true, rapid: false, bet: 0, rounds: 3 }, partyU: [],
     roster: [], slots: new Map(), gid: 0, ph: 'room', hostPh: 'room', ready: false, nick: '', busy: false, err: '', status: '',
     // (v4 trophies: ms the host session's series id - match id = ms + '.' + gid; q 0 = 트로피 경기, 1 / 2 = 연습 경기)
     ms: '', q: 1,
@@ -10708,7 +11375,7 @@ window.PG = window.PG || {};
     // guest
     buf: null, evQ: [], evSeen: 0, others: new Map(), ctl: 'remote', shotN: 0, pred: [], bounces: [], nyang: 0, drops: 0, rvSent: {},
     dropSeen: 0, // (내려가기 dust shown for another screen's player: a guest's through dp, the host's through event 'd')
-    viewIdx: -1, viewArena: false, bnId: 0, view: null, jumpHeld: false, mash: [], rt: 0, starve: 0, sidSeen: new Map(), viewFrames: 0, starveFrames: 0,
+    viewIdx: -1, viewKind: 'l', viewPi: -2, bnId: 0, view: null, jumpHeld: false, mash: [], rt: 0, starve: 0, sidSeen: new Map(), viewFrames: 0, starveFrames: 0,
   };
 
   // ---- interpolation buffers: entries {k (sender tick), d}.
@@ -10994,8 +11661,10 @@ window.PG = window.PG || {};
       s.onStatus((k, d) => netStatusIn(k, d)),
     ];
     // (cu: my trophy count, d: my device as this room sees it - the host's same-device check; lk: my worn set, shop.md 7.1;
-    // z: this page has 안 걸고 참여 - short of a stake, it plays without it, and says what it put in: 'st')
-    if (role === 'guest') { CO.eqSent = myLook(G.sel); s.send(NET.hostId, { t: 'hi', n: NET.nick, c: G.sel, cu: TRO.s ? TRO.s.t : -1, d: troDevHash(s.code), lk: CO.eqSent, z: 1 }); }
+    // z: this page has 안 걸고 참여 - short of a stake, it plays without it, and says what it put in: 'st'; pa: the 파티
+    // minigames it plays, PARTY_V - an older page sends none and is never counted ready in a party room)
+    if (role === 'guest') { CO.eqSent = myLook(G.sel); s.send(NET.hostId, { t: 'hi', n: NET.nick, c: G.sel, cu: TRO.s ? TRO.s.t : -1, d: troDevHash(s.code), lk: CO.eqSent, z: 1, pa: PARTY_V }); }
+    NET.partyU = [];
     NET.roomDirty = true;
     netAdvertise();
     NET.screen = 'room';
@@ -11056,7 +11725,8 @@ window.PG = window.PG || {};
       }
       for (const p of list) {
         if (NET.roster.some((r) => r.id === p.id)) continue;
-        NET.roster.push({ id: p.id, slot: p.slot, nick: '손님', char: 'duck', ready: false, cup: -1, d: '' }); // (cup -1: not reported yet)
+        // (cup -1: not reported yet; hi false / pa 0 until its hi lands - no 새로고침 필요 flicker on a new page joining)
+        NET.roster.push({ id: p.id, slot: p.slot, nick: '손님', char: 'duck', ready: false, cup: -1, d: '', hi: false, pa: 0 });
         uiSfx('join');
       }
       NET.roster.sort((a, b) => a.slot - b.slot);
@@ -11072,29 +11742,34 @@ window.PG = window.PG || {};
   function hostDropPlayer(r) {
     const pl = G.players.find((p) => p.id === r.id);
     if (pl) removePlayer(pl.slot);
+    if (G.party) { if (pl) partyDrop(pl.slot); return; } // (파티: its points go with it; < 2 left: a walkover podium)
     if (G.gameMode === 'battle' && G.players.length < 2 && G.mode !== 'podium') endBattle();
   }
 
   // ================================================================== room screen (host side)
   // (trophies: everyone, the host included, can cover the stake)
-  const canStart = () => NET.role === 'host' && NET.roster.length >= 2 && NET.roster.every((r) => r.id === NET.selfId || r.ready) && NET.roster.every(canAfford);
+  const canStart = () => NET.role === 'host' && NET.roster.length >= 2 && NET.roster.every((r) => r.id === NET.selfId || seatReady(r)) && NET.roster.every(canAfford);
   // R: o[4] the stake; ms (ranked: the series id) or q (practice: why); each seat's trophy count in the room phase only
   // (the game snapshots stay lean; the podium gate uses the host's own r.cup); o[5] 몬스터 출현 (0 = off; appended
   // after the stake so an older guest just ignores it - NET_V stays 4); o[6] 연사 (1 = on, RAPID; appended the same way). v4 shop (7.1): a room-phase seat that wears
   // something carries its worn set at index 5 (an older guest ignores it); game-phase seats carry none - looks are
   // frozen at match start, so the snapshots lose no byte to them
+  // 파티 (design/party.md 6.1): m 'p' for a party room; o[7] the 판 수 (3 | 5, always sent - an older guest ignores it);
+  // in a party room's room phase, u: the seats whose page cannot play the party (no pa in their hi - an older guest
+  // ignores it); every seat's ready flag is seatReady (an older seat in a party room shows "not ready" everywhere)
   function roomInfo() {
     const room = NET.screen !== 'game', q = room ? troPractice() : NET.q;
-    const R = { gid: NET.gid, ph: NET.ph, m: NET.mode === 'battle' ? 'b' : 'c',
-      o: [NET.opts.arena, NET.opts.time, NET.opts.perks ? 1 : 0, NET.opts.intrusion ? 1 : 0, stakeNow(), NET.opts.monsters === false ? 0 : 1, NET.opts.rapid ? 1 : 0],
+    const R = { gid: NET.gid, ph: NET.ph, m: NET.mode === 'battle' ? 'b' : NET.mode === 'party' ? 'p' : 'c',
+      o: [NET.opts.arena, NET.opts.time, NET.opts.perks ? 1 : 0, NET.opts.intrusion ? 1 : 0, stakeNow(), NET.opts.monsters === false ? 0 : 1, NET.opts.rapid ? 1 : 0, NET.opts.rounds === 5 ? 5 : 3],
       p: NET.roster.map((r) => {
-        const e = [r.slot, r.nick, r.char, r.ready ? 1 : 0];
+        const e = [r.slot, r.nick, r.char, seatReady(r) ? 1 : 0];
         if (room) { e.push(r.id === NET.selfId ? (TRO.s ? TRO.s.t : -1) : r.cup); const lk = r.id === NET.selfId ? myLook(r.char) : r.lk || LOOK0; if (lk !== LOOK0) e.push(lk); }
         return e;
       }) };
     // (안 걸고 참여, room phase only: the seats that play the stake without putting it in - shown on every seat card; its
     // presence tells a guest this host has the rule. An older guest ignores it)
     if (room) R.f = NET.roster.filter(troSeatFree).map((r) => r.slot);
+    if (room && NET.mode === 'party') { const u = NET.roster.filter(seatOld).map((r) => r.slot); if (u.length) R.u = u; }
     if (q === 0) R.ms = NET.ms; else R.q = q;
     return R;
   }
@@ -11108,7 +11783,8 @@ window.PG = window.PG || {};
     if ('monsters' in o) NET.opts.monsters = o.monsters !== false;
     if ('rapid' in o) NET.opts.rapid = o.rapid === true;
     if ('intrusion' in o) NET.opts.intrusion = !!o.intrusion;
-    if ('mode' in o && (!NET.sess || NET.screen === 'room')) NET.mode = o.mode === 'battle' ? 'battle' : 'coop';
+    if ('mode' in o && (!NET.sess || NET.screen === 'room')) NET.mode = o.mode === 'battle' ? 'battle' : o.mode === 'party' ? 'party' : 'coop';
+    if ('rounds' in o && (!NET.sess || NET.screen === 'room')) NET.opts.rounds = +o.rounds === 5 ? 5 : 3; // (파티's 판 수)
     // 트로피 걸기: one of STAKES the host can cover, set in the room (or before hosting) - never mid-game
     if ('bet' in o && (!NET.sess || NET.screen === 'room')) { const b = nInt(o.bet, 0, 99, -1); if (STAKES.includes(b) && (b === 0 || (TRO.s && b <= TRO.s.t))) NET.opts.bet = b; }
     // (consent: ready means ready for that stake - any change of it un-readies every guest; they are told in guestRoom)
@@ -11156,7 +11832,8 @@ window.PG = window.PG || {};
     const list = NET.roster.slice().sort((a, b) => a.slot - b.slot)
       .map((r) => ({ slot: r.slot, char: r.char, nick: r.nick, local: r.id === NET.selfId, id: r.id, look: r.id === NET.selfId ? myLook(r.char) : r.lk }));
     netAgain(() => {
-      if (NET.mode === 'battle') newBattle(list, Object.assign({}, NET.opts, { countdown: true }));
+      if (NET.mode === 'party') newParty(list, { perks: NET.opts.perks, rapid: NET.opts.rapid, rounds: NET.opts.rounds });
+      else if (NET.mode === 'battle') newBattle(list, Object.assign({}, NET.opts, { countdown: true }));
       else newCoop(list, 0, true);
     }, true);
     return true;
@@ -11175,7 +11852,9 @@ window.PG = window.PG || {};
     G.online = true; G.role = 'host'; G.localSlot = 0; G.menuOpen = false;
     for (const p of G.players) p.local = p.id === NET.selfId || !p.id;
     NET.rec = true;
-    showOverlay(null);
+    // (a party starts on its first card: shown and filled now - the board's 나 chip needs G.online / G.localSlot)
+    showOverlay(G.mode === 'card' ? 'party' : null);
+    if (G.mode === 'card') fillParty();
     netSnapshot(true);
   }
   // 방으로: the host brings everyone back to the room screen (guests must get ready again)
@@ -11261,13 +11940,14 @@ window.PG = window.PG || {};
     // without a result for me starts the 15 s wait)
     if (g.m === 'b' && NET.q === 0 && NET.ms) { if (g.ph === 'p') troGuestGo(id); else if (g.ph === 'd') troWait(NET.ms + '.' + id); }
     // (비누 코인, on the same event: co-op - the 탕 indexes the team passed; battle - its first 'p' is my 시작!, every 'p'
-    // carries the clock, its first 'd' is my podium)
-    if (g.m !== 'b') coinGuestIdx(nInt(g.lp, 0, 99, 0) * LEVELS.length + nInt(g.r, 0, 99, 0), g);
-    else if (g.ph === 'p') {
-      if (CO.goId !== id) { CO.goId = id; const sl = new Set(); for (const r of Array.isArray(g.P) ? g.P.slice(0, MAX_PLAYERS) : []) if (Array.isArray(r)) { const s = nInt(r[0], -1, MAX_PLAYERS - 1, -1); if (s >= 0) sl.add(s); } coinGo(sl.size || G.players.length); }
-      CO.tl = nInt(g.tl, 0, 1e7, 0);
-    }
-    else if (g.ph === 'd') coinGuestPod(g);
+    // carries the clock, its first 'd' is my podium; 파티 - per 판 the same, and its own podium: coinPartyGuest)
+    if (g.m === 'c') coinGuestIdx(nInt(g.lp, 0, 99, 0) * LEVELS.length + nInt(g.r, 0, 99, 0), g);
+    else if (g.m === 'b') {
+      if (g.ph === 'p') {
+        if (CO.goId !== id) { CO.goId = id; const sl = new Set(); for (const r of Array.isArray(g.P) ? g.P.slice(0, MAX_PLAYERS) : []) if (Array.isArray(r)) { const s = nInt(r[0], -1, MAX_PLAYERS - 1, -1); if (s >= 0) sl.add(s); } coinGo(sl.size || G.players.length); }
+        CO.tl = nInt(g.tl, 0, 1e7, 0);
+      } else if (g.ph === 'd') coinGuestPod(g);
+    } else if (g.m === 'p') coinPartyGuest(g, id);
     // sound / pop-up / word / shake events ride along for ~0.75 s: queue the new ones (ids only grow)
     if (Array.isArray(g.V)) {
       for (const ev of g.V) {
@@ -11304,10 +11984,13 @@ window.PG = window.PG || {};
     if (Array.isArray(R.f)) { NET.hz = true; const f = new Set(R.f.slice(0, MAX_PLAYERS).map((x) => nInt(x, -1, MAX_PLAYERS - 1, -1))); for (const q of roster) q.f = f.has(q.slot); }
     else for (const q of roster) { const o = NET.roster.find((x) => x.slot === q.slot); q.f = !!(o && o.f); }
     NET.roster = roster;
-    NET.mode = R.m === 'b' ? 'battle' : 'coop';
+    NET.mode = R.m === 'b' ? 'battle' : R.m === 'p' ? 'party' : 'coop';
     // (o[5] 몬스터 출현: only an explicit 0 is off - missing (an older host), junk or 1 all mean on, as an older host plays;
-    // o[6] 연사: only an explicit 1 is on - missing (an older host), junk or 0 all mean off, the magazine as an older host plays)
-    if (Array.isArray(R.o)) NET.opts = { arena: nInt(R.o[0], -1, 9, -1), time: [2, 3, 5].includes(R.o[1]) ? R.o[1] : 3, perks: R.o[2] !== 0, monsters: R.o[5] !== 0, rapid: R.o[6] === 1, intrusion: R.o[3] !== 0, bet: STAKES.includes(R.o[4]) ? R.o[4] : 0 };
+    // o[6] 연사: only an explicit 1 is on - missing (an older host), junk or 0 all mean off, the magazine as an older host plays;
+    // o[7] 파티's 판 수: 5 only when it says 5 - missing (an older host), junk: 3)
+    if (Array.isArray(R.o)) NET.opts = { arena: nInt(R.o[0], -1, 9, -1), time: [2, 3, 5].includes(R.o[1]) ? R.o[1] : 3, perks: R.o[2] !== 0, monsters: R.o[5] !== 0, rapid: R.o[6] === 1, intrusion: R.o[3] !== 0, bet: STAKES.includes(R.o[4]) ? R.o[4] : 0, rounds: R.o[7] === 5 ? 5 : 3 };
+    // (파티: the seats whose page must refresh first - the room line and their seat tags; game-phase R has none)
+    NET.partyU = Array.isArray(R.u) ? R.u.slice(0, MAX_PLAYERS).map((x) => nInt(x, -1, MAX_PLAYERS - 1, -1)).filter((x) => x >= 0) : [];
     // ranked (a valid series id) or practice (anything else: an old page fails safe)
     NET.q = typeof R.ms === 'string' && ID6_RE.test(R.ms) ? 0 : nInt(R.q, 1, 2, 1);
     NET.ms = NET.q === 0 ? R.ms : '';
@@ -11363,8 +12046,10 @@ window.PG = window.PG || {};
       // (trophies: cu = the guest's count - display, the stake gates, 견습; d = its device in this room - same-device check)
       // (lk: its worn set - self-reported cosmetics: only catalog ids survive lookParse, ownership cannot be checked; shop.md 7.1)
       // (z: the page has 안 걸고 참여 - an older one sends none and must cover a stake to ready, as before)
+      // (pa: the 파티 minigames that page plays - none from an older one: never ready in a party room, seatReady)
       case 'hi': r.nick = cleanNick(m.n) || r.nick; if (isChar(m.c) && NET.screen === 'room') r.char = m.c;
-        r.cup = nInt(m.cu, -1, TRO_MAX, -1); r.d = typeof m.d === 'string' && ID6_RE.test(m.d) ? m.d : ''; r.lk = lookParse(m.lk); r.z = m.z === 1; break;
+        r.cup = nInt(m.cu, -1, TRO_MAX, -1); r.d = typeof m.d === 'string' && ID6_RE.test(m.d) ? m.d : ''; r.lk = lookParse(m.lk); r.z = m.z === 1;
+        r.hi = true; r.pa = nInt(m.pa, 0, 9, 0); break;
       case 'nk': r.nick = cleanNick(m.n) || r.nick; if (pl) pl.nick = r.nick; break;
       // (lk: the new animal's set - a junk one is bare (lookParse); absent: unchanged, an older guest's one set fits every animal)
       case 'pk': if (isChar(m.c) && NET.screen === 'room') { r.char = m.c; if ('lk' in m) r.lk = lookParse(m.lk); } break;
@@ -11592,7 +12277,7 @@ window.PG = window.PG || {};
       b.dropRow === undefined ? -1 : b.dropRow, R0(b.sx), R0(b.sy)];
   }
   function snapOf(level) {
-    const g = { k: G.frame, id: NET.gid, m: G.gameMode === 'battle' ? 'b' : 'c', ph: PH_CODE[G.mode] || 'p',
+    const g = { k: G.frame, id: NET.gid, m: G.gameMode === 'battle' ? (G.party ? 'p' : 'b') : 'c', ph: PH_CODE[G.mode] || 'p',
       r: G.gameMode === 'battle' ? G.arena | 0 : G.round, lp: G.loop, L: G.lives, S: G.score, st: G.stamps };
     if (G.hurry) g.hu = 1;
     // the floating-empty life this world runs (EMPTY_RULE): a guest blinks the bubbles at it, not at its own rule (an
@@ -11605,8 +12290,15 @@ window.PG = window.PG || {};
     if (G.battle) g.tl = G.battle.left;
     if (G.mode === 'transition') g.tr = [G.transT, G.trans ? G.trans.next : 0];
     if (G.mode === 'podium' && G.podium) { g.pd = G.podium.order.slice(); g.pt = G.podium.t; if (G.gameMode === 'battle') g.te = G.podium.te | 0; }
+    // (파티 6.4: ak - G.arena indexes PARTY_ARENAS; pa the sequencer; mg the minigame; pl the podium's places)
+    if (G.party) {
+      if (G.arenaKind === 'p') g.ak = 1;
+      g.pa = partySnap();
+      if (G.mini) g.mg = miniSnap();
+      if (G.mode === 'podium' && G.podium && G.podium.pl) g.pl = G.podium.pl.slice();
+    }
     const bn = G.banner;
-    if (bn && G.frame < bn.end) g.bn = [bn.id, bn.main, bn.sub, bn.end - G.frame, bn.cls];
+    if (bn && G.frame < bn.end && !bn.loc) g.bn = [bn.id, bn.main, bn.sub, bn.end - G.frame, bn.cls]; // (loc: a line for this screen only)
     g.P = snapPlayers();
     g.E = snapEnemies();
     g.U = snapBubbles(level >= 2 ? 18 : 0);
@@ -11665,35 +12357,41 @@ window.PG = window.PG || {};
     const mine = NET.slots.get(NET.selfId);
     if (mine === undefined || !NET.roster.length) return false;
     NET.gid = id; NET.screen = 'game'; NET.buf = mkBuf(); NET.evQ = []; NET.view = newView(); NET.pred = []; NET.bounces = [];
-    NET.rvSent = {}; NET.ctl = 'remote'; NET.viewIdx = -1; NET.bnId = 0; NET.mash = []; NET.sidSeen = new Map();
+    NET.rvSent = {}; NET.ctl = 'remote'; NET.viewIdx = -1; NET.viewPi = -2; NET.bnId = 0; NET.mash = []; NET.sidSeen = new Map();
     const list = NET.roster.map((r) => ({ slot: r.slot, char: r.char, nick: r.nick, local: r.slot === mine, id: r.id, look: r.lk })); // (the room's looks: shop.md 6.5)
-    G.opts = { arena: NET.opts.arena, time: NET.opts.time, perks: NET.opts.perks, monsters: NET.opts.monsters !== false, intrusion: NET.opts.intrusion, rapid: NET.opts.rapid === true };
+    G.opts = { arena: NET.opts.arena, time: NET.opts.time, perks: NET.opts.perks, monsters: NET.opts.monsters !== false, intrusion: NET.opts.intrusion, rapid: NET.opts.rapid === true, rounds: NET.opts.rounds === 5 ? 5 : 3 };
     G.manual = false;
-    resetGame(g.m === 'b' ? 'battle' : 'coop', list);
+    resetGame(g.m === 'c' ? 'coop' : 'battle', list); // ('p': battle rules + the party)
     G.online = true; G.role = 'guest'; G.localSlot = mine; G.menuOpen = false;
     for (const p of G.players) { p.ep = -1; p.local = p.slot === mine; }
     G.banner = null; G.pops = []; G.parts = []; G.kfx = []; G.words = []; G.foam = [];
     G.mode = PH_NAME[g.ph] || 'playing';
-    loadView(nInt(g.r, 0, 99, 0), g.m === 'b');
+    loadView(nInt(g.r, 0, 99, 0), viewKindOf(g));
     // (trophies: a hold of mine for an earlier match waits for its late result, then is refunded; co-op starts a
     // 목욕 보너스 run at this snapshot's round)
     if (TRO.s) for (const e of TRO.s.esc.slice()) if (e.tab === TRO.tab && e.st === 'open' && e.m !== NET.ms + '.' + id) troWait(e.m);
     TRO.pod = null;
-    TRO.run = g.m === 'b' ? null : { at: nInt(g.lp, 0, 99, 0) * LEVELS.length + nInt(g.r, 0, 99, 0), got: 0 };
+    TRO.run = g.m === 'c' ? { at: nInt(g.lp, 0, 99, 0) * LEVELS.length + nInt(g.r, 0, 99, 0), got: 0 } : null;
     coinRunStart(); CO.gi = -1; CO.goId = -1; CO.tl = 0; // (비누 코인: this game's run - its first index comes with this snapshot)
-    showOverlay(null);
+    // (파티: the mirror from this first snapshot - its phase is the first card, which applyView would never show: the
+    // phase does not change from here)
+    if (g.m === 'p') { coinPartyStart(); NET.viewPi = g.pa ? nInt(g.pa.i, -1, 9, -1) : -1; partyView(g, null, 0); }
+    showOverlay(G.mode === 'card' && !G.menuOpen ? 'party' : null);
+    if (G.mode === 'card') fillParty();
     return true;
   }
-  function loadView(idx, arena) {
+  // which list a snapshot's g.r indexes: 'l' LEVELS (co-op), 'b' ARENAS (battle, 왕관 뺏기), 'p' PARTY_ARENAS (g.ak)
+  const viewKindOf = (g) => (g.m === 'c' ? 'l' : g.m === 'p' && g.ak === 1 ? 'p' : 'b');
+  function loadView(idx, kind) {
     if (!LEVELS.length) loadLevels();
-    const list = arena ? ARENAS : LEVELS;
+    const list = kind === 'p' ? PARTY_ARENAS : kind === 'b' ? ARENAS : LEVELS;
     idx = clamp(idx | 0, 0, list.length - 1);
     LV = list[idx]; MAP = LV.map; G.rid++;
     buildWater(MAP);
     roundCanvas = buildRoundCanvas(LV);
     G.gather = { x: LV.gather.col * TS + 4, y: PF_TOP + LV.gather.row * TS + 4 };
-    if (arena) { G.arena = idx; G.round = 0; } else G.round = idx;
-    NET.viewIdx = idx; NET.viewArena = !!arena;
+    if (kind !== 'l') { G.arena = idx; G.round = 0; G.arenaKind = kind; } else G.round = idx;
+    NET.viewIdx = idx; NET.viewKind = kind;
     NET.view = newView();
     G.enemies = []; G.bubbles = []; G.items = []; G.bolts = []; G.drops = []; G.ice = []; G.hazards = []; G.pickup = null; G.boss = null;
     ICE_TOP.fill(0);
@@ -11750,15 +12448,21 @@ window.PG = window.PG || {};
   }
   function applyView(s, rt) {
     const g = s.a.d, g1 = s.b ? s.b.d : null, t = s.t, el = Math.max(0, rt - s.a.k);
-    const arena = g.m === 'b';
-    const idx = nInt(g.r, 0, 99, 0);
-    if (idx !== NET.viewIdx || arena !== NET.viewArena) loadView(idx, arena);
+    const kind = viewKindOf(g), arena = kind !== 'l';
+    const idx = nInt(g.r, 0, 99, 0), pi = g.m === 'p' && g.pa ? nInt(g.pa.i, -1, 9, -1) : -1;
+    // (파티: a new 판 index reloads the view too; my predicted shots of the last 판 go and my magazine is full again, as
+    // the host's miniLoad refills everyone's)
+    if (idx !== NET.viewIdx || kind !== NET.viewKind || pi !== NET.viewPi) {
+      const fresh = g.m === 'p' && pi !== NET.viewPi;
+      loadView(idx, kind); NET.viewPi = pi;
+      if (fresh) { NET.pred = []; NET.bounces = []; const me = myPlayer(); if (me) { me.amN = undefined; me.amT = undefined; } }
+    }
     const ph = PH_NAME[g.ph] || 'playing';
     G.loop = nInt(g.lp, 0, 99, 0); G.lives = nInt(g.L, 0, 99, 0); G.score = nInt(g.S, 0, 1e10, 0); G.stamps = nInt(g.st, 0, 99, 0);
     G.hurry = !!g.hu; G.stampFlash = nInt(g.sf, 0, 300, 0); G.ticketFlash = nInt(g.tf, 0, 300, 0);
     NET.el = nInt(g.el, 60, 2000, EMPTY_LIFE); // (the host's floating-empty life: emptyLife, the blink)
     NET.hostLc = g.lc === 1; NET.hostAm = g.am === 1; NET.shotCap = nInt(g.sc, 0, 9, 0); // (no lc: an older host - no claims; g.sc: only an older host's in-flight cap)
-    G.battle = arena ? { left: Math.max(0, nInt(g.tl, 0, 1e7, 0) - (ph === 'playing' ? el : 0)), total: 0, intruded: true, enemyT: 1e9, powerT: 1e9 } : null;
+    G.battle = arena ? { left: Math.max(0, nInt(g.tl, 0, 1e7, 0) - (ph === 'playing' ? el : 0)), total: g.m === 'p' && g.pa ? nInt(g.pa.ft, 0, 1e6, 0) : 0, intruded: true, enemyT: 1e9, powerT: 1e9 } : null;
     const mu = MUSICS[nInt(g.mu, 0, MUSICS.length - 1, 0)];
     if (mu !== G.music && !(mu === null && G.music === undefined)) setMusic(mu);
     G.trans = ph === 'transition' && Array.isArray(g.tr) ? { door: doorAt(nInt(g.tr[0], 0, 999, 0) + el), next: nInt(g.tr[1], 0, 99, 0), swapped: true } : null;
@@ -11766,7 +12470,10 @@ window.PG = window.PG || {};
     guestPlayers(g.P, g1 && g1.P, t, el);
     if (!NET.sess) return; // (left: no longer in the host's game)
     viewLists(g, g1, t, el);
-    G.podium = ph === 'podium' && Array.isArray(g.pd) ? { order: g.pd.slice(0, 4).map((v) => nInt(v, 0, 3, 0)), t: nInt(g.pt, 0, 1e6, 0) + el } : null;
+    G.podium = ph === 'podium' && Array.isArray(g.pd) ? { order: g.pd.slice(0, 4).map((v) => nInt(v, 0, 3, 0)), t: nInt(g.pt, 0, 1e6, 0) + el,
+      pl: g.m === 'p' && Array.isArray(g.pl) ? g.pl.slice(0, 4).map((v) => nInt(v, 1, 4, 4)) : undefined } : null; // (파티: the places, shared ones repeat)
+    if (g.m === 'p') partyView(g, g1, t);
+    else if (G.party) { G.party = null; G.mini = null; }
     if (ph !== G.mode) guestPhase(ph);
   }
   function guestPhase(ph) {
@@ -11776,7 +12483,8 @@ window.PG = window.PG || {};
     if (ph === 'gameover') showOverlay('over');
     else if (ph === 'ending') showOverlay('ending');
     else if (ph === 'podium') showOverlay('podium');
-    else if (results(prev) || shownOverlay === 'over' || shownOverlay === 'ending' || shownOverlay === 'podium') showOverlay(G.menuOpen ? 'pause' : null);
+    else if (ph === 'card') { showOverlay(G.menuOpen ? 'pause' : 'party'); fillParty(); } // (파티: an open menu stays open)
+    else if (results(prev) || prev === 'card' || shownOverlay === 'over' || shownOverlay === 'ending' || shownOverlay === 'podium' || shownOverlay === 'party') showOverlay(G.menuOpen ? 'pause' : null);
     if (ph !== 'playing') { const me = myPlayer(); if (me && NET.ctl === 'local') { me.vx = 0; me.shootAnim = 0; } }
   }
   function guestBanner(bn, el) {
@@ -12024,8 +12732,12 @@ window.PG = window.PG || {};
       if (me.dieT > 420) { me.dead = false; me.dieT = 0; me.invuln = INVULN; }
       return;
     }
-    if (me.stunT > 0) { me.stunT--; updatePlayer(me, NO_INPUT); } else updatePlayer(me, inp);
-    guestBounce(me, inp);
+    // (물 차오르기: my feet WATER_SLACK under the surface I draw - the host's clock, so the host will agree: input frozen
+    // for at most 30 frames while its verdict comes - I never walk on under the water; no verdict, input comes back)
+    let mi = inp;
+    if (G.mini && G.mini.id === 'water' && me.y + 16 > G.mini.wl + WATER_SLACK) { me.sinkT = (me.sinkT | 0) + 1; if (me.sinkT <= 30) { mi = NO_INPUT; me.vx = 0; } } else me.sinkT = 0;
+    if (me.stunT > 0) { me.stunT--; updatePlayer(me, NO_INPUT); } else updatePlayer(me, mi);
+    guestBounce(me, mi);
     if (G.gameMode === 'coop') guestReviveTouch(me);
     if (G.invincible || me.invuln > 0 || me.stunT > 0 || !hitTest(me)) return;
     if (me.shield > 0) { useShield(me); return; }
@@ -12209,38 +12921,39 @@ window.PG = window.PG || {};
       }
     }
   }
+  // (data-for on every label / control: 'b' battle only, 'bp' battle and party, 'p' party only - syncOpts hides the rest)
   function buildOpts(box) {
     box.textContent = '';
-    const id = box.id || 'o';
-    box.append(h('span', '', '경기장'));
-    const sel = h('select'); sel.dataset.opt = 'arena'; sel.setAttribute('aria-label', '경기장');
+    const id = box.id || 'o', lab = (txt, f) => { const s = h('span', '', txt); s.dataset.for = f; box.append(s); return s; };
+    lab('경기장', 'b');
+    const sel = h('select'); sel.dataset.opt = 'arena'; sel.setAttribute('aria-label', '경기장'); sel.dataset.for = 'b';
     const o0 = h('option', '', '랜덤'); o0.value = '-1'; sel.appendChild(o0);
     ARENAS.forEach((A, i) => { const o = h('option', '', A.name); o.value = String(i); sel.appendChild(o); });
     listen(sel, 'change', () => netSetOpts({ arena: +sel.value }));
     box.appendChild(sel);
-    box.append(h('span', '', '시간'));
-    const seg = h('div', 'pg-seg'); seg.setAttribute('role', 'radiogroup'); seg.setAttribute('aria-label', '경기 시간');
+    lab('시간', 'b');
+    const seg = h('div', 'pg-seg'); seg.setAttribute('role', 'radiogroup'); seg.setAttribute('aria-label', '경기 시간'); seg.dataset.for = 'b';
     for (const m of [2, 3, 5]) {
       const b = h('button', '', m + '분'); b.type = 'button'; b.setAttribute('role', 'radio'); b.dataset.time = String(m);
       listen(b, 'click', (e) => { e.preventDefault(); netSetOpts({ time: m }); });
       seg.appendChild(b);
     }
     box.appendChild(seg);
-    const chk = (key, label, sub) => {
-      box.append(h('span', '', label));
-      const l = h('label', 'pg-check'); const c = h('input'); c.type = 'checkbox'; c.dataset.opt = key; c.id = id + '-' + key;
+    const chk = (key, label, sub, f) => {
+      lab(label, f);
+      const l = h('label', 'pg-check'); const c = h('input'); c.type = 'checkbox'; c.dataset.opt = key; c.id = id + '-' + key; l.dataset.for = f;
       // (능력 끄기 is the one negative switch: checked = perks off; the others are checked = on)
       listen(c, 'change', () => netSetOpts({ [key]: key === 'perks' ? !c.checked : c.checked }));
       l.append(c, h('span', '', sub));
       box.appendChild(l);
     };
-    chk('perks', '능력 끄기', '동물 능력 없이 겨뤄요');
-    chk('rapid', '연사', RAPID_SUB);
-    chk('monsters', '몬스터 출현', '경기 내내 때 몬스터가 나와요');
-    chk('intrusion', '보스 난입', '1분 30초 남으면 보스가 와요');
+    chk('perks', '능력 끄기', '동물 능력 없이 겨뤄요', 'bp');
+    chk('rapid', '연사', RAPID_SUB, 'bp');
+    chk('monsters', '몬스터 출현', '경기 내내 때 몬스터가 나와요', 'b');
+    chk('intrusion', '보스 난입', '1분 30초 남으면 보스가 와요', 'b');
     // 트로피 걸기 (v4 trophies): 안 걸기 / 5 / 10 / 20 / 50 - everyone puts it in, 1st takes it all
-    box.append(h('span', '', '트로피 걸기'));
-    const bets = h('div', 'pg-seg pg-bets'); bets.setAttribute('role', 'radiogroup'); bets.setAttribute('aria-label', '트로피 걸기');
+    lab('트로피 걸기', 'b');
+    const bets = h('div', 'pg-seg pg-bets'); bets.setAttribute('role', 'radiogroup'); bets.setAttribute('aria-label', '트로피 걸기'); bets.dataset.for = 'b';
     for (const s of STAKES) {
       const b = h('button'); b.type = 'button'; b.setAttribute('role', 'radio'); b.dataset.bet = String(s);
       b.setAttribute('aria-label', s ? '트로피 ' + s + '개씩 걸기' : '트로피 안 걸기');
@@ -12250,11 +12963,22 @@ window.PG = window.PG || {};
       bets.appendChild(b);
     }
     box.appendChild(bets);
+    // 파티's 판 수: 3판 / 5판
+    lab(PARTY_TX.rounds, 'p');
+    const rs = h('div', 'pg-seg'); rs.setAttribute('role', 'radiogroup'); rs.setAttribute('aria-label', PARTY_TX.rounds); rs.dataset.for = 'p';
+    for (const n of PARTY_ROUNDS) {
+      const b = h('button', '', n + '판'); b.type = 'button'; b.setAttribute('role', 'radio'); b.dataset.rounds = String(n);
+      listen(b, 'click', (e) => { e.preventDefault(); netSetOpts({ rounds: n }); });
+      rs.appendChild(b);
+    }
+    box.appendChild(rs);
   }
   function syncOpts(box, editable) {
     if (!box) return;
-    const o = NET.opts;
+    const o = NET.opts, mk = NET.mode === 'party' ? 'p' : 'b';
+    for (const el of box.querySelectorAll('[data-for]')) { const hide = el.dataset.for.indexOf(mk) < 0; if (el.hidden !== hide) el.hidden = hide; }
     for (const el of box.querySelectorAll('select, input, button')) el.disabled = !editable;
+    for (const b of box.querySelectorAll('[data-rounds]')) b.setAttribute('aria-checked', +b.dataset.rounds === (o.rounds === 5 ? 5 : 3) ? 'true' : 'false');
     const sel = box.querySelector('select'); if (sel) sel.value = String(o.arena);
     for (const b of box.querySelectorAll('[data-time]')) b.setAttribute('aria-checked', +b.dataset.time === o.time ? 'true' : 'false');
     const p = box.querySelector('[data-opt="perks"]'); if (p) p.checked = !o.perks;
@@ -12279,7 +13003,7 @@ window.PG = window.PG || {};
   // a card with Google로 계속하기 (the usual sign-in) instead: trophy stakes must belong to real accounts. 혼자 하기
   // stays open; the artifact and a PR preview (no cloud) are as they were. An invite link opened as a guest goes on to
   // its room once signed in
-  const NG_TX = { head: '온라인 같이 하기·배틀은 Google 로그인하고 할 수 있어요', solo: '혼자 하기는 로그인 없이도 바로 할 수 있어요' };
+  const NG_TX = { head: '온라인 같이 하기·배틀·파티는 Google 로그인하고 할 수 있어요', solo: '혼자 하기는 로그인 없이도 바로 할 수 있어요' };
   const netGated = () => CLOUD.on && CLOUD.st !== 'in';
   function ngBuild() {
     if (!CLOUD.on || dom.netGate || !dom.friends) return;
@@ -12341,7 +13065,7 @@ window.PG = window.PG || {};
     if (dom.myName) dom.myName.textContent = CHARS[G.sel].name;
     for (const b of document.querySelectorAll('[data-modes] [data-mode]')) b.setAttribute('aria-checked', b.dataset.mode === NET.mode ? 'true' : 'false');
     if (dom.modeDesc) dom.modeDesc.textContent = MODE_DESC[NET.mode];
-    if (dom.hostOpts) { dom.hostOpts.hidden = NET.mode !== 'battle'; syncOpts(dom.hostOpts, true); }
+    if (dom.hostOpts) { dom.hostOpts.hidden = NET.mode === 'coop'; syncOpts(dom.hostOpts, true); }
     // where online goes: explain when the artifact's room is not there
     let note = '';
     // (the standalone page ships PeerJS: when it did not load, say that instead of the Claude-only explanation)
@@ -12381,7 +13105,7 @@ window.PG = window.PG || {};
     }
     const off = NET.busy || (NET.trDone && !NET.tr) || peerLoading;
     if (dom.hostBtn) {
-      dom.hostBtn.disabled = !!off || !!offK; dom.hostBtn.textContent = NET.busy ? NET_TEXT.connecting : (NET.mode === 'battle' ? '배틀 방 만들기' : '같이 하기 방 만들기');
+      dom.hostBtn.disabled = !!off || !!offK; dom.hostBtn.textContent = NET.busy ? NET_TEXT.connecting : (NET.mode === 'battle' ? '배틀 방 만들기' : NET.mode === 'party' ? PARTY_TX.host : '같이 하기 방 만들기');
       if (card) dom.hostBtn.setAttribute('aria-describedby', 'pg-net-note'); else dom.hostBtn.removeAttribute('aria-describedby');
     }
     if (dom.joinBtn) dom.joinBtn.disabled = !!off;
@@ -12395,9 +13119,9 @@ window.PG = window.PG || {};
     if (!dom.games) return;
     dom.games.textContent = '';
     for (const gm of NET.games) {
-      const li = h('li'), b = h('button', 'pg-game'); b.type = 'button';
-      b.append(h('b', '', cleanNick(gm.hostNick) + '님의 방'), h('span', '', (gm.mode === 'battle' ? '배틀' : '같이 하기') + ' · ' + nInt(gm.n, 1, 4, 1) + '/' + nInt(gm.max, 2, 4, 4)));
-      b.setAttribute('aria-label', cleanNick(gm.hostNick) + '님의 ' + (gm.mode === 'battle' ? '배틀' : '같이 하기') + ' 방에 참여');
+      const li = h('li'), b = h('button', 'pg-game'), md = gm.mode === 'battle' ? '배틀' : gm.mode === 'party' ? PARTY_TX.mode : '같이 하기'; b.type = 'button';
+      b.append(h('b', '', cleanNick(gm.hostNick) + '님의 방'), h('span', '', md + ' · ' + nInt(gm.n, 1, 4, 1) + '/' + nInt(gm.max, 2, 4, 4)));
+      b.setAttribute('aria-label', cleanNick(gm.hostNick) + '님의 ' + md + ' 방에 참여');
       listen(b, 'click', (e) => { e.preventDefault(); firstGesture(); netJoin(gm.code); });
       li.appendChild(b); dom.games.appendChild(li);
     }
@@ -12407,7 +13131,7 @@ window.PG = window.PG || {};
     if (!dom.room || NET.screen !== 'room' && NET.screen !== 'game') return;
     const host = NET.role === 'host';
     if (dom.roomCode) dom.roomCode.textContent = (NET.code || '----').toUpperCase();
-    if (dom.roomMode) { dom.roomMode.textContent = NET.mode === 'battle' ? '배틀' : '같이 하기'; dom.roomMode.classList.toggle('is-battle', NET.mode === 'battle'); }
+    if (dom.roomMode) { dom.roomMode.textContent = NET.mode === 'battle' ? '배틀' : NET.mode === 'party' ? PARTY_TX.mode : '같이 하기'; dom.roomMode.classList.toggle('is-battle', pvp()); }
     // (trophies: the stake badge, the 연습 경기 badge; a seat's count is mine for real, a friend's as reported)
     const stake = stakeNow(), q = host ? troPractice() : NET.q, cupOf = (r) => (r.id === NET.selfId ? (TRO.s ? TRO.s.t : -1) : r.cup);
     const betB = $('pg-room-bet'); if (betB) { betB.hidden = !stake; setTxt($('pg-room-bet-n'), stake + '개씩'); }
@@ -12418,7 +13142,8 @@ window.PG = window.PG || {};
       const twinAt = (r) => NET.roster.some((o) => o.slot < r.slot && o.char === r.char);
       // (v4 shop 9.6: each card's bust wears that seat's 머리 / 얼굴 / 목 - mine from my store, a friend's as reported, S4)
       const lkOf = (r) => (r.id === NET.selfId ? myLook(r.char) : lookParse(r.lk));   // (mine: the card's animal's set)
-      const key = JSON.stringify([NET.roster.map((r) => [r.slot, r.nick, r.char, r.ready, cupOf(r), twinAt(r), lkOf(r), troSeatFree(r)]), NET.selfId, NET.slots.get(NET.selfId), stake, q]);
+      // (파티: the mode and each seat's pa flags too - a mode switch alone changes the ready / 새로고침 필요 tags)
+      const key = JSON.stringify([NET.roster.map((r) => [r.slot, r.nick, r.char, r.ready, seatReady(r), seatOld(r), cupOf(r), twinAt(r), lkOf(r), troSeatFree(r)]), NET.selfId, NET.slots.get(NET.selfId), stake, q, NET.mode]);
       if (dom.roomPlayers._key !== key) {
         dom.roomPlayers._key = key;
         dom.roomPlayers.textContent = '';
@@ -12431,9 +13156,9 @@ window.PG = window.PG || {};
           const cv = portraitCanvas(r.char, 'portrait_', 32, lkOf(r), twinAt(r) ? s : 0); cv.setAttribute('aria-hidden', 'true');
           // (안 걸고 참여: a seat that plays the stake without putting it in gets a small mark under its count; 트로피 부족 is
           // left for a guest that can do neither - an older page, or an older host's room)
-          const t = cupOf(r), free = troSeatFree(r), short = s !== 0 && !canAfford(r);
-          const tag = s === 0 ? h('span', 'pg-pc-tag is-host', '방장') : short ? h('span', 'pg-pc-tag is-short', '트로피 부족') : r.ready ? h('span', 'pg-pc-tag is-ready', '준비 완료') : h('span', 'pg-pc-tag', '기다리는 중');
-          if (s !== 0 && r.ready && !short) { const ck = portraitCanvas('', SPR_READY, 8); ck.setAttribute('aria-hidden', 'true'); tag.prepend(ck); }
+          const t = cupOf(r), free = troSeatFree(r), short = s !== 0 && !canAfford(r), old = s !== 0 && seatOld(r), rd = seatReady(r);
+          const tag = s === 0 ? h('span', 'pg-pc-tag is-host', '방장') : old ? h('span', 'pg-pc-tag is-short', PARTY_TX.refresh) : short ? h('span', 'pg-pc-tag is-short', '트로피 부족') : rd ? h('span', 'pg-pc-tag is-ready', '준비 완료') : h('span', 'pg-pc-tag', '기다리는 중');
+          if (s !== 0 && rd && !short && !old) { const ck = portraitCanvas('', SPR_READY, 8); ck.setAttribute('aria-hidden', 'true'); tag.prepend(ck); }
           const tro = h('span', 'pg-pc-tro'); tro.appendChild(troChip(t));
           li.append(cv, h('b', 'pg-pc-nick', r.nick), h('span', 'pg-pc-char', CHARS[r.char].name), tro);
           if (free) li.appendChild(h('span', 'pg-pc-free', '안 걸고 참여'));
@@ -12441,7 +13166,7 @@ window.PG = window.PG || {};
           if (s === mySlot) li.appendChild(h('span', 'pg-pc-me', '나'));
           li.appendChild(h('i', 'pg-pc-n', (s + 1) + 'P'));
           li.setAttribute('aria-label', (s + 1) + '번 ' + SLOT_NAMES[s] + ': ' + r.nick + ', ' + CHARS[r.char].name + ', ' +
-            (t >= 0 ? '트로피 ' + t + '개, ' + LEAGUES[leagueOf(t)].name : '트로피 모름') + (free ? ', 안 걸고 참여' : '') + ', ' + (s === 0 ? '방장' : short ? '트로피 부족' : r.ready ? '준비 완료' : '기다리는 중'));
+            (t >= 0 ? '트로피 ' + t + '개, ' + LEAGUES[leagueOf(t)].name : '트로피 모름') + (free ? ', 안 걸고 참여' : '') + ', ' + (s === 0 ? '방장' : old ? PARTY_TX.refresh : short ? '트로피 부족' : rd ? '준비 완료' : '기다리는 중'));
           dom.roomPlayers.appendChild(li);
         }
       }
@@ -12451,9 +13176,9 @@ window.PG = window.PG || {};
     }
     // my pick's compact kit card (char-kits §12.3): name, role chip, the pips, the 특기 name; 능력 끄기 (a battle room
     // with the setting off) greys it, every bar 3/3/3/3, one line "능력 꺼짐 · 모두 같은 기본 능력이에요"
-    const rc = CHARS[G.sel] || CHARS.duck, roff = NET.mode === 'battle' && NET.opts.perks === false;
-    // (AMMO: a battle room says my pick's magazine - 능력 끄기: the base one, everyone's; 연사: none, RAPID_KIT)
-    const rmag = NET.mode !== 'battle' ? '' : NET.opts.rapid ? RAPID_KIT : magTx(((roff ? KIT_BASE : KIT[G.sel]) || KIT_BASE).mag);
+    const rc = CHARS[G.sel] || CHARS.duck, roff = pvp() && NET.opts.perks === false;
+    // (AMMO: a battle room says my pick's magazine - 능력 끄기: the base one, everyone's; 연사: none, RAPID_KIT; a party too)
+    const rmag = !pvp() ? '' : NET.opts.rapid ? RAPID_KIT : magTx(((roff ? KIT_BASE : KIT[G.sel]) || KIT_BASE).mag);
     if (dom.roomKit) {
       dom.roomKit.style.setProperty('--hue', rc.hue); dom.roomKit.classList.toggle('off', roff);
       dom.roomKit.setAttribute('aria-label', rc.name + ' (' + rc.animal + ', ' + rc.role + '): ' + (roff ? OFF_LINE : '특기 ' + rc.move.name + ': ' + rc.move.how) + (rmag ? '. 배틀 ' + rmag : ''));
@@ -12474,18 +13199,19 @@ window.PG = window.PG || {};
     // game settings: the host edits them; a guest reads one line
     for (const b of dom.room.querySelectorAll('[data-mode]')) { b.setAttribute('aria-checked', b.dataset.mode === NET.mode ? 'true' : 'false'); b.disabled = !host; }
     const seg = dom.room.querySelector('[data-modes]'); if (seg) seg.hidden = !host;
-    if (dom.roomOpts) dom.roomOpts.hidden = !host || NET.mode !== 'battle';
+    if (dom.roomOpts) dom.roomOpts.hidden = !host || NET.mode === 'coop';
     syncOpts(dom.roomOpts, host);
     if (dom.roomSum) {
       dom.roomSum.hidden = host;
       const o = NET.opts, A = ARENAS[o.arena];
-      // (몬스터 없음 only when off, 연사 only when on: the default line stays as it was)
+      // (몬스터 없음 only when off, 연사 only when on: the default line stays as it was; 파티: 미니게임 N판 · 능력 · 연사)
       const parts = NET.mode === 'battle' ? [(A ? A.name : '랜덤 경기장'), o.time + '분', o.perks ? '능력 있음' : '능력 없음'].concat(o.rapid ? ['연사'] : [], o.monsters === false ? ['몬스터 없음'] : [],
-        [o.intrusion ? '보스 난입' : '보스 없음', '트로피 ' + troStakeTxt(stake)]) : ['첫 번째 탕부터 끝까지 청소'];
+        [o.intrusion ? '보스 난입' : '보스 없음', '트로피 ' + troStakeTxt(stake)])
+        : NET.mode === 'party' ? [PARTY_TX.minis + ' ' + (o.rounds === 5 ? 5 : 3) + '판', o.perks ? PARTY_TX.perksOn : PARTY_TX.perksOff].concat(o.rapid ? ['연사'] : []) : ['첫 번째 탕부터 끝까지 청소'];
       if (q) parts.push('연습 경기');
       const key = NET.mode + parts.join();
       if (dom.roomSum._key !== key) {
-        dom.roomSum._key = key; dom.roomSum.textContent = (NET.mode === 'battle' ? '배틀' : '같이 하기') + ' ';
+        dom.roomSum._key = key; dom.roomSum.textContent = (NET.mode === 'battle' ? '배틀' : NET.mode === 'party' ? PARTY_TX.mode : '같이 하기') + ' ';
         // (each item its own nowrap <i>: a narrow phone wraps between items, never inside one - 몬스터 / 없음; the text is
         // the same '· a · b' line as before)
         const sp = h('span', '', '· ');
@@ -12510,13 +13236,13 @@ window.PG = window.PG || {};
       // (trophies first: what each place gets - or why nothing changes; co-op: the 목욕 보너스)
       const tro = q === 1 ? ['연습 경기예요: 이 브라우저의 탭끼리는 트로피가 바뀌지 않아요'] : q === 2 ? ['연습 경기예요: 같은 기기에서 들어온 친구가 있어요']
         : NET.mode === 'battle' ? [troRulesLine(), troFreeLine(), '끝까지 한 판마다 오늘 트로피 보너스 +' + TRO_PLAY + ' (꼴등 빼고 · 하루 ' + DAY_CAP + '개까지)', '견습 리그는 등수로 잃지 않아요 · 판 중간에 나가면 꼴찌로 쳐요'].filter(Boolean) : ['끝까지 갈수록 모두 트로피를 받아요 (잃지 않아요)'];
-      const rules = tro.concat([coinRule(q)], NET.mode === 'battle'
+      const rules = NET.mode === 'party' ? partyRules(q) : tro.concat([coinRule(q)], NET.mode === 'battle'
         ? (NET.opts.monsters === false ? ['몬스터 없이 친구끼리만 겨뤄요'] : []).concat([NET.opts.rapid ? RAPID_RULE : AMMO_RULE, '갇히면 점프·거품 연타로 빨리 빠져나와요', '갇힌 친구를 터뜨리면 뽀득 KO +500'])
         : ['쓰러진 친구는 거품이 돼요. 거품에 닿으면 바로 살아나요', '목숨은 다 함께 써요']);
       const key = rules.join('|');
       if (dom.roomRules._key !== key) { dom.roomRules._key = key; dom.roomRules.textContent = ''; for (const r of rules) dom.roomRules.appendChild(h('li', '', r)); }
     }
-    const n = NET.roster.length, allReady = NET.roster.every((r) => r.slot === 0 || r.ready);
+    const n = NET.roster.length, allReady = NET.roster.every((r) => r.slot === 0 || seatReady(r));
     const meShort = !canAfford({ id: NET.selfId }), meFree = troSeatFree({ id: NET.selfId }), friendShort = host && NET.roster.some((r) => r.id !== NET.selfId && !canAfford(r));
     let msg;
     if (host) msg = n < 2 ? '친구에게 방 코드를 알려 주세요' : allReady ? '모두 준비됐어요! 시작해요' : '모두 준비하면 시작할 수 있어요';
@@ -12526,6 +13252,8 @@ window.PG = window.PG || {};
     else if (friendShort) msg = '트로피가 모자란 친구가 있어요 · 걸기를 낮춰 주세요';
     else if (!host && meShort && !NET.ready) msg = '트로피가 모자라요 · 방장에게 걸기를 낮춰 달라고 해요';
     else if (!host && !NET.ready && meFree) msg = '트로피가 모자라요 · 안 걸고 같이 해요';
+    // (파티: a seat whose page cannot play it - the host knows from its hi, a guest from R.u)
+    if (NET.mode === 'party' && NET.roster.some(seatOld)) msg = PARTY_TX.refreshMsg;
     const lt = troLastText();
     if (lt && TRO.last && !TRO.last.shown && NET.screen === 'room') { TRO.last.shown = true; troMsgSet(lt); }
     if (TRO.msg && performance.now() < TRO.msg.until) msg = TRO.msg.txt;
@@ -12542,6 +13270,14 @@ window.PG = window.PG || {};
     // (친구 초대: the room's button - a host in its room phase, signed in or on a preview; 친구 순위 over the room follows)
     if (dom.roomIv) { const on = host && NET.ph === 'room' && (palOn() || palDemoOn()); if (dom.roomIv.hidden === on) dom.roomIv.hidden = !on; }
     if (PAL.open) palRender();
+  }
+  // the party room's rules (9.1): points by the room's size, ties, the games (3 players: no 거품 축구 - listed with the
+  // next PR), coins by the room's practice kind q (no trophy lines: a party has none), the magazine / 연사, traps, leaving
+  function partyRules(q) {
+    const n = clamp(NET.roster.length, 2, 4), pts = PARTY_PTS[n].map((v, i) => (i + 1) + '등 ' + v + '점').join(' · ');
+    const coin = q === 1 && !(CO.allowBc && NET.tr === 'bc') ? PARTY_TX.coin1 : q === 2 ? PARTY_TX.coin2 : PARTY_TX.coin0;
+    return ['미니게임 ' + (NET.opts.rounds === 5 ? 5 : 3) + '판! 판마다 ' + pts, PARTY_TX.tie, PARTY_TX.games, coin, PARTY_TX.noTro,
+      NET.opts.rapid ? RAPID_RULE : AMMO_RULE, PARTY_TX.trap, PARTY_TX.leave];
   }
   // 코드 복사: an invite (the code, plus this page's link with ?join= on the standalone deploy); phones get the share sheet
   function inviteText() {
@@ -12601,7 +13337,7 @@ window.PG = window.PG || {};
       if (dom.pauseSub) dom.pauseSub.textContent = on ? '게임은 계속 진행돼요! 내 동물도 그대로 있어요' : '따끈한 물에 몸 좀 녹이고 가요';
       if (dom.pause) dom.pause.classList.toggle('pg-battle', G.gameMode === 'battle');
     }
-    if (name === 'podium') { set('pg-podium-again', '한 판 더', on && !host); if (dom.podiumRoom) dom.podiumRoom.hidden = !host; }
+    if (name === 'podium') { set('pg-podium-again', G.party ? PARTY_TX.again : '한 판 더', on && !host); if (dom.podiumRoom) dom.podiumRoom.hidden = !host; }
   }
 
   // ================================================================== test / debug view of the online layer
@@ -12628,6 +13364,8 @@ window.PG = window.PG || {};
       drops: { sent: NET.drops | 0, seen: NET.dropSeen | 0 }, // (내려가기: my own as a guest; others' shown as dust here)
       renderTick: NET.rt, newestTick: NET.buf ? NET.buf.last : -1, viewFrames: NET.viewFrames, starvedFrames: NET.starveFrames, evQ: NET.evQ.length, pred: NET.pred.length, games: NET.games.slice(),
       predSplit: NET.predSplit | 0, predGiveUp: NET.predGiveUp | 0, // (v4: predictions handed to the host row by the 6 px rule / given up)
+      // (파티: the room's mode and 판 수, each seat's hi / pa as the host knows them, the seats it says must refresh)
+      party: { mode: NET.mode, rounds: NET.opts.rounds === 5 ? 5 : 3, seats: NET.roster.map((r) => ({ slot: r.slot, hi: !!r.hi, pa: r.pa | 0, ready: seatReady(r) || r.slot === 0, old: seatOld(r) })), u: NET.role === 'host' ? NET.roster.filter(seatOld).map((r) => r.slot) : (NET.partyU || []).slice() },
     };
   }
   function netDebugApi() {
@@ -12659,9 +13397,9 @@ window.PG = window.PG || {};
       // a crafted R through the guest's reader (backward / hostile R tests) -> the options it read. Everything it sets
       // is put back afterwards, so it is harmless on any page (no session, a host); a guest's next R wins anyway
       guestRoom(R) {
-        const keep = {}; for (const k of ['roster', 'mode', 'opts', 'q', 'ms', 'hostPh', 'ready', 'outR']) keep[k] = NET[k];
+        const keep = {}; for (const k of ['roster', 'mode', 'opts', 'q', 'ms', 'hostPh', 'ready', 'outR', 'partyU']) keep[k] = NET[k];
         let o = null;
-        try { guestRoom(R && typeof R === 'object' ? R : {}); o = Object.assign({}, NET.opts); } finally { Object.assign(NET, keep); renderRoom(); }
+        try { guestRoom(R && typeof R === 'object' ? R : {}); o = Object.assign({}, NET.opts, { mode: NET.mode }); } finally { Object.assign(NET, keep); renderRoom(); } // (mode: the mode it decoded - 파티 6.1)
         return o;
       },
       session: () => NET.sess,
@@ -12750,7 +13488,7 @@ window.PG = window.PG || {};
     if (p.trap) releasePlayer(p);
     for (const b of G.bubbles) if (b.owner === slot) b.owner = -1;
     G.players = G.players.filter((q) => q !== p);
-    if (G.podium) G.podium.order = G.podium.order.filter((s) => s !== slot);
+    if (G.podium) { const k = G.podium.order.indexOf(slot); if (k >= 0 && G.podium.pl) G.podium.pl.splice(k, 1); G.podium.order = G.podium.order.filter((s) => s !== slot); }
     if (!G.players.length) setupPlayers([{ char: G.sel }]);
     return true;
   }
@@ -12764,9 +13502,11 @@ window.PG = window.PG || {};
     // several players in this one engine (all local)
     local: {
       addPlayer(char, nick) { return addLocalPlayer(char, nick); },
-      removePlayer(slot) { return removePlayer(slot); },
+      removePlayer(slot) { const ok = removePlayer(slot); if (ok && G.party) partyDrop(slot); return ok; }, // (파티: as a leaver online)
       coop(chars, round, opts) { G.manual = true; clearDbg(); newCoop(toList(chars), round | 0, !!(opts && opts.countdown)); render(); return getState(); },
       battle(chars, opts) { G.manual = true; clearDbg(); newBattle(toList(chars), Object.assign({ countdown: false }, opts || {})); render(); return getState(); },
+      // 파티 offline (design/party.md 12): opts {rounds, plan (forces the order, e.g. ['water']), perks, rapid} - offline pays no coins
+      party(chars, opts) { G.manual = true; clearDbg(); newParty(toList(chars), opts || {}); render(); return getState(); },
       players: () => G.players,
     },
     setChar(c) { const ok = pickChar(c); if (ok && G.p && G.mode !== 'title') G.p.char = c; return ok; },
@@ -12788,7 +13528,7 @@ window.PG = window.PG || {};
     },
     intrude(type) { return intrude(type); },
     setTimeLeft(sec) { if (G.battle) G.battle.left = Math.max(0, Math.round(sec * 60)); },
-    endBattle() { if (G.gameMode === 'battle' && G.mode !== 'podium') endBattle(); return getState(); },
+    endBattle() { if (G.gameMode === 'battle' && !G.party && G.mode !== 'podium') endBattle(); return getState(); }, // (never a party: partyResult / partyFinal)
     // co-op / battle helpers: knock a player down, trap one in another's bubble, mash for one
     hitPlayer(slot) { const p = G.players.find((q) => q.slot === slot); if (!p || !alive(p)) return false; if (G.gameMode === 'coop') coopDie(p); else if (G.gameMode === 'battle') stunPlayer(p); else die(); return true; },
     trapPlayer(slot, bySlot) {
@@ -12872,6 +13612,8 @@ window.PG = window.PG || {};
     mp: netDebugApi(),
     // v4 trophies (design/trophies.md §14)
     tro: troDebugApi(),
+    // 파티 (design/party.md 12): the pure parts, the state as this page shows it, fast / skip / force and the games' state
+    party: partyDebugApi(),
     // v4 shop (design/shop.md 15): the coins, the store's shop fields, the economy's pure parts
     shop: shopDebugApi(),
     // v4 cloud trophies (design/cloud-trophies.md 11): the state, a fake SDK for tests, the pure parts
@@ -12951,6 +13693,67 @@ window.PG = window.PG || {};
     return api;
   }
 
+  function partyDebugApi() {
+    const miniOut = (M) => (M ? { id: M.id, t: M.t | 0, n0: M.n0 | 0, endAt: M.endAt, wl: M.wl === undefined ? null : M.wl, outs: M.outs ? M.outs.map((o) => o.slice()) : [],
+      cr: M.cr ? Object.assign({}, M.cr) : null, held: M.held ? Object.assign({}, M.held) : {} } : null);
+    const api = {
+      // the 판 list for n players, rounds 3 / 5, from a seeded draw (pure: the page's own draws are put back)
+      plan(n, rounds, seed, from) { const keep = rng; rng = mulberry32((seed | 0) >>> 0); try { return partyPlan(n | 0, rounds | 0, from); } finally { rng = keep; } },
+      rank: (rows) => Array.from(rankBy(rows || []).entries()),
+      points: (n0, places) => (places || []).map((pl) => PARTY_PTS[clamp(n0 | 0, 2, 4)][pl - 1] || 0),
+      standings: (P, slots) => partyStandings(P, slots),
+      coin: (n, done, act, shots, playF, place, tie) => coinParty(n, done, act, shots, playF, place, tie),
+      waterAt: (f, k) => waterAt(f, PARTY_ARENAS[0] && PARTY_ARENAS[0].rise, k || 1),
+      arenas: () => PARTY_ARENAS, dry: () => dryArenas(), mini: () => JSON.parse(JSON.stringify(MINI, (k, v) => (typeof v === 'function' ? undefined : v))),
+      consts: () => ({ PARTY_V, PARTY_PTS, PARTY_F, MINI_IDS: MINI_IDS.slice(), MINI_TRAP, MINI_SINK, WATER_SLACK, WATER_LEAD, CROWN_SLOW, CROWN_NOPICK, CROWN_SLACK, pBase: COIN.pBase, pRound: COIN.pRound, pPlace: COIN.pPlace }),
+      text: () => PARTY_TEXT, tx: () => Object.assign({}, PARTY_TX),
+      // this page's view: the phase, the sequencer and the minigame
+      state() {
+        const P = G.party;
+        return { ph: G.mode, on: !!P, i: P ? P.i : -1, n: P ? P.n : 0, plan: P ? P.plan.slice() : [], pts: P ? Object.assign({}, P.pts) : {}, wins: P ? Object.assign({}, P.wins) : {},
+          last: P ? Object.assign({}, P.last) : {}, gain: P ? Object.assign({}, P.gain) : {}, t: P ? P.t | 0 : 0, fin: !!(P && P.fin), done: !!(P && P.done), walk: !!(P && P.walk),
+          kind: G.arenaKind, arena: G.arena, left: G.battle ? G.battle.left : null, total: G.battle ? G.battle.total : null, mini: miniOut(G.mini),
+          podium: G.podium ? { order: G.podium.order.slice(), pl: G.podium.pl ? G.podium.pl.slice() : null } : null, overlay: shownOverlay,
+          coins: CO.pa ? { gid: CO.pa.gid, act: CO.pa.act.slice(), pf: CO.pa.pf.slice(), shots: CO.pa.shots, seen: CO.pa.seen, go: CO.pa.go, bshots: CO.bshots } : null,
+          pod: CO.pod ? Object.assign({}, CO.pod) : null };
+      },
+      card() {
+        const q = (id) => $(id), vis = (e) => !!e && !e.hidden && getComputedStyle(e).display !== 'none';
+        return { shown: shownOverlay === 'party' && !!dom.party && !dom.party.hidden, round: q('pg-party-round') ? q('pg-party-round').textContent : '', name: q('pg-party-name') ? q('pg-party-name').textContent : '',
+          how: q('pg-party-how') ? q('pg-party-how').textContent : '', rule: q('pg-party-rule') ? q('pg-party-rule').textContent : '', ruleShown: vis(q('pg-party-rule')),
+          keys: q('pg-party-keys') ? q('pg-party-keys').textContent : '', team: vis(q('pg-party-team')),
+          board: q('pg-party-board') ? [...q('pg-party-board').children].map((li) => ({ place: li.querySelector('.pg-party-pl').textContent, nick: li.querySelector('.pg-party-nick').textContent,
+            pts: li.querySelector('.pg-party-pts').textContent, gain: vis(li.querySelector('.pg-party-gain')) ? li.querySelector('.pg-party-gain').textContent : '', me: li.classList.contains('is-me') })) : [] };
+      },
+      fast(on) { PARTY_FAST = !!on; return PARTY_FAST; },
+      force(plan) { PARTY_FORCE = Array.isArray(plan) && plan.length >= 1 && plan.length <= 5 && plan.every((id) => !!MINI[id]) ? plan.slice() : null; return PARTY_FORCE ? PARTY_FORCE.slice() : null; },
+      // host: end the current 판 now
+      skip() { if (G.party && G.mini && G.mode === 'playing' && (!G.online || G.role === 'host')) partyResult(); return api.state(); },
+      // host: a game's state by hand (the water level - null: the schedule again; the crown on a slot - -1: free at the gather)
+      level(y) { if (G.mini && G.mini.id === 'water') { G.mini.over = y === null || y === undefined ? null : +y; if (G.mini.over !== null) G.mini.wl = G.mini.over; } return api.state().mini; },
+      crown(slot) {
+        const M = G.mini; if (!M || M.id !== 'crown') return null;
+        if (slot >= 0 && G.players.some((p) => p.slot === slot)) { M.cr.holder = slot; M.cr.noPick = -1; }
+        else Object.assign(M.cr, { holder: -1, x: G.gather.x - 8, y: G.gather.y - 8, vx: 0, vy: 0, onGround: false });
+        return api.state().mini;
+      },
+      drop(slot) { const ok = removePlayer(slot); if (ok && G.party) partyDrop(slot); return ok; },
+      // (unit tests) a capture through catchPlayer (a capy's shield takes it); a seat made remote with a reported state st
+      // (null: none) - what waterBody judges; my coins for a podium as an online, non-practice screen would pay them
+      catch(slot, bySlot) { const v = G.players.find((q) => q.slot === slot); if (!v || !free(v)) return false; const b = makeBubble('empty', clamp(v.x, WALL_L, WALL_R - 16), clamp(v.y, CEIL_Y, PF_BOT - 16), bySlot | 0); G.bubbles.push(b); catchPlayer(v, b); return !!v.trap; },
+      fakeRemote(slot, st) { const p = G.players.find((q) => q.slot === slot); if (!p) return false; p.local = false; p.id = p.id || 'fake' + slot; if (st) NET.remote.set(p.id, { st: Object.assign({ ep: p.ep }, st), buf: mkBuf(), shots: [], mash: [] }); else NET.remote.delete(p.id); return true; },
+      judge(slot) { const p = G.players.find((q) => q.slot === slot); return p ? waterBody(p) : null; },
+      payNow(o) {
+        o = o || {}; const keep = { online: G.online, q: NET.q, gid: NET.gid, tr: NET.tr, pod: CO.pod };
+        try { G.online = true; NET.q = 0; NET.gid = 4242; NET.tr = null; CO.pod = null; CO.pa = { gid: 4242, act: (o.act || []).slice(), pf: (o.pf || []).slice(), shots: o.shots | 0, seen: (o.act || []).length - 1, go: -1 };
+          coinPartyNow(o.n | 0, !!o.done, o.place | 0, o.tie | 0 || 1); return CO.pod ? Object.assign({}, CO.pod) : null;
+        } finally { G.online = keep.online; NET.q = keep.q; NET.gid = keep.gid; NET.tr = keep.tr; CO.pod = keep.pod; }
+      },
+      reload(list) { const keep = PG.PARTY_ARENAS; PG.PARTY_ARENAS = list; try { loadPartyArenas(); return PARTY_ARENAS.map((A) => ({ key: A.key, name: A.name, closed: A.closed, rise: A.rise, gapX: A.gapX, floor: A.map[ROWS - 1], ceil: A.map[0] })); } finally { PG.PARTY_ARENAS = keep; loadPartyArenas(); } },
+      result: () => partyResult(), next: () => partyNext(), final: (walk) => partyFinal(!!walk), places: () => (G.mini ? Array.from(miniPlaces().entries()) : []),
+    };
+    return api;
+  }
   function shopDebugApi() {
     const runOut = (R) => (R ? { done: Array.from(R.done), shots: R.shots, all: R.all, got: R.got, bonus: R.bonus, half: R.half, first: R.first, t0: R.t0, end: R.end, rv0: R.rv0 } : null);
     const api = {

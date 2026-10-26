@@ -77,7 +77,8 @@ rules_version = '2';
 // Publish these rules BEFORE deploying a page with 친구 초대 (older pages never touch these collections; a newer page
 // against older rules only says "초대를 보내지 못했어요" and never sees an invite).
 //   invites/{to}/in/{from}  { code, mode, nick, at }  one pending invite per sender -> receiver (a new one replaces it):
-//                           the room's code (4 of [a-z0-9], as the game makes it), 'coop' | 'battle', the sender's nick
+//                           the room's code (4 of [a-z0-9], as the game makes it), 'coop' | 'battle' | 'party' (파티,
+//                           design/party.md 6.2 - publish with the deploy that ships it), the sender's nick
 //                           (checked as the cards'), this write's time. Written only by the sender, only while the
 //                           receiver lets it read its card (friends/{to}/f/{from}), with its ivbox bumped in the same
 //                           batch; read and listed (<= 50) by the receiver only; deleted by either (joined, declined,
@@ -489,7 +490,7 @@ service cloud.firestore {
     function ivOk(to, from) {
       let d = request.resource.data;
       return to != from && d.keys().hasAll(['code', 'mode', 'nick', 'at']) && d.keys().hasOnly(['code', 'mode', 'nick', 'at'])
-        && d.code is string && d.code.matches('^[a-z0-9]{4}$') && d.mode in ['coop', 'battle'] && nickValue(d.nick)
+        && d.code is string && d.code.matches('^[a-z0-9]{4}$') && d.mode in ['coop', 'battle', 'party'] && nickValue(d.nick)
         && d.at == request.time && exists(frP(to, from));
     }
   }
