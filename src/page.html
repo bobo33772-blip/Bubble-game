@@ -647,7 +647,8 @@ html, body, #pg-app, #pg-app button, #pg-app input, #pg-app select, #pg-app labe
 #pg-t-shoot { background: var(--duck); width: 74px; height: 74px; font-size: 19px; }
 /* the joystick (the left thumb): a mint ring with ◀ ▶ notches and a knob. At rest a faint ring where the thumb usually
    lands; held, game.js puts the ring under the thumb, the knob follows the thumb up to the ring's edge (the ring slides
-   after a thumb that goes further) and the notch it points to lights up. Only left / right: pushing up never jumps */
+   after a thumb that goes further) and the notch it points to lights up. Left / right, and ▼ pulled down (내려가기):
+   pushing up never jumps */
 #pg-stick-zone { position: relative; width: min(54vw, 240px); height: 118px; }
 .pg-stick {
   position: absolute; left: 4px; bottom: 0; width: calc(var(--pg-sr, 50px) * 2); height: calc(var(--pg-sr, 50px) * 2); border-radius: 50%;
@@ -661,12 +662,15 @@ html, body, #pg-app, #pg-app button, #pg-app input, #pg-app select, #pg-app labe
 .pg-stick::after { right: 4px; border-right-width: 0; border-left-color: var(--cream); }
 .pg-stick.is-l::before { border-right-color: var(--duck); opacity: 1; }
 .pg-stick.is-r::after { border-left-color: var(--duck); opacity: 1; }
+/* (the notch at the bottom: pulled down = 내려가기 through the platform underfoot - game.js stickDown) */
+.pg-stick-dn { position: absolute; left: 50%; bottom: 4px; margin-left: -6px; border: 6px solid transparent; border-bottom-width: 0; border-top-color: var(--cream); opacity: 0.6; }
+.pg-stick.is-d .pg-stick-dn { border-top-color: var(--duck); opacity: 1; }
 .pg-stick-knob {
   position: absolute; left: 50%; top: 50%; width: 48%; height: 48%; margin: -24% 0 0 -24%; border-radius: 50%;
   background: var(--mint); box-shadow: 0 0 0 2px var(--ink), inset 0 3px 0 rgba(255, 255, 255, 0.4), inset 0 -3px 0 rgba(0, 0, 0, 0.16), 0 3px 0 rgba(0, 0, 0, 0.3);
 }
 #pg-stick-zone.is-on .pg-stick { opacity: 1; transition: none; }
-.pg-stick.is-l .pg-stick-knob, .pg-stick.is-r .pg-stick-knob { background: #b4f3e6; }
+.pg-stick.is-l .pg-stick-knob, .pg-stick.is-r .pg-stick-knob, .pg-stick.is-d .pg-stick-knob { background: #b4f3e6; }
 @media (orientation: landscape) and (max-height: 560px) { #pg-head { padding-top: 6px; } }
 /* ---- landscape on a touch device (game.js puts .pg-land on #pg-app when the touch layout's viewport is wider than tall:
    phones and tablets, both builds): the game screen takes the whole height, the header leaves the top (no name; the
@@ -1388,7 +1392,7 @@ html.pg-sa, html.pg-sa body { overscroll-behavior: none; }
               <p class="pg-kit-line"><b>특기</b><span id="pg-pick-move">둥실 활공</span><span id="pg-pick-movehow" class="pg-kit-how">떨어질 때 점프를 꾹! 둥실둥실 천천히</span></p>
               <p class="pg-kit-line pg-kit-bubline"><b>거품</b><span id="pg-pick-bub">메아리 거품</span><span id="pg-pick-bubdesc" class="pg-kit-how">멀리 갔다가 다시 돌아와요</span></p>
             </div>
-            <p class="pg-keys">←→ 캐릭터 고르기 · Enter 혼자 하기 · ↑/Z 점프 · X 거품</p>
+            <p class="pg-keys">←→ 캐릭터 고르기 · Enter 혼자 하기 · ↑/Z 점프 · ↓ 내려가기 · X 거품</p>
             <p class="pg-best"><span class="pg-best-hi">최고 점수 <b id="pg-title-hi">0</b></span><button id="pg-tro" class="pg-tro" type="button"
               aria-label="내 트로피 100개 · 뽀득 새내기 · 내 기록 보기"><canvas id="pg-tro-lg" class="pg-ic pg-lg" width="8" height="8" aria-hidden="true"></canvas><canvas
               class="pg-ic pg-cup" width="8" height="8" aria-hidden="true"></canvas><b id="pg-tro-n">100</b><i id="pg-tro-cloud" class="pg-tro-cloud" hidden><svg class="pg-ic pg-cloud-ic" viewBox="0 0 8 8" aria-hidden="true" focusable="false"><path fill="currentColor" d="M4 2h2v1H4zM1 3h2v1H1zM4 3h3v1H4zM0 4h8v2H0zM1 6h6v1H1z"/></svg></i><span id="pg-tro-name" class="pg-tro-name">뽀득 새내기</span><i id="pg-tro-new" class="pg-tro-new" hidden></i></button></p>
@@ -1661,6 +1665,7 @@ html.pg-sa, html.pg-sa body { overscroll-behavior: none; }
   <footer id="pg-hints" aria-label="조작법">
     <span><kbd>←</kbd><kbd>→</kbd> 이동</span>
     <span><kbd>↑</kbd> / <kbd>Z</kbd> 점프</span>
+    <span><kbd>↓</kbd> / <kbd>S</kbd> 내려가기</span>
     <span><kbd>X</kbd> / <kbd>Space</kbd> 거품</span>
     <span><kbd>P</kbd> 일시정지</span>
     <span><kbd>M</kbd> 소리</span>
@@ -1669,7 +1674,7 @@ html.pg-sa, html.pg-sa body { overscroll-behavior: none; }
   <div id="pg-touch" aria-hidden="true">
     <!-- the left thumb's floating joystick: it appears where the thumb lands in this zone (game.js) -->
     <div id="pg-stick-zone" class="pg-pad">
-      <div id="pg-stick" class="pg-stick"><i id="pg-stick-knob" class="pg-stick-knob"></i></div>
+      <div id="pg-stick" class="pg-stick"><b class="pg-stick-dn"></b><i id="pg-stick-knob" class="pg-stick-knob"></i></div>
     </div>
     <div id="pg-act" class="pg-pad">
       <div id="pg-t-jump" class="pg-tb">점프<small id="pg-t-jump-sub" class="pg-tb-sub" hidden></small></div>

@@ -2,7 +2,7 @@
 // emulation with touch). Hash:
 //   #input          the joystick through pointer events (the dead zone and its hysteresis, drag right -> the duck walks
 //                   right, release -> it stops, left, the knob held to the ring, the ring following the thumb, up never
-//                   jumps, 점프 / 거품 with the stick held, one finger owns the stick, cancel / blur / lost capture let go),
+//                   jumps, pulled down = 내려가기 (never while walking, hysteresis), 점프 / 거품 with the stick held, one finger owns the stick, cancel / blur / lost capture let go),
 //                   no double-tap zoom (a quick second touchend on the game's surfaces is cancelled - not on a button,
 //                   an input or a panel; Safari's gesturestart is cancelled; the touch-action styles; the zoom stays 1)
 //                   and the landscape layout of this viewport                                  -> TOUCH DONE pass= fail=
@@ -79,6 +79,29 @@
     mv(ox, oy - R * 1.2);
     const y0 = D.getState().player.y; D.step(20);
     ok('pushing up does not jump (and walks nowhere)', st().dir === 0 && !st().on.jump && !st().on.left && !st().on.right && D.getState().player.y >= y0 - 1, { s: st(), dy: D.getState().player.y - y0 });
+    // 내려가기: pulled clearly down (past 0.6 of the radius, within ~27° of straight down) - a walking thumb never drops
+    {
+      const G = D.G, hx = G.p.x, hy = G.p.y, rb2 = box($('pg-stick')), rx = (rb2.l + rb2.r) / 2, ry = (rb2.t + rb2.b) / 2;
+      mv(rx + 0.8 * R, ry + 0.5 * R); const w1 = st();
+      mv(rx + 0.5 * R, ry + 0.8 * R); const w2 = st();
+      mv(rx, ry + 0.5 * R); const w3 = st();
+      ok('walking with the thumb sagging low never drops (0.8 right / 0.5 down, 0.5 / 0.8, a short 0.5 pull)', w1.on.right && w2.on.right && !w1.dn && !w2.dn && !w3.dn && !w1.on.down && !w2.on.down && !w3.on.down, { w1, w2, w3 });
+      // (a 2-wide platform with room above, open below, and only open air / platforms under it down to a solid floor)
+      const map = D.levels()[1].map; let plat = null;
+      const under = (r, c) => { for (let k = r + 1; k < 26; k++) { const s = map[k].slice(c, c + 2); if (s !== '..' && s !== '##') return false; } return map[25].slice(c, c + 2) === '##'; };
+      for (let r = 4; r < 22 && !plat; r++) for (let c = 4; c < 26 && !plat; c++) if (map[r].slice(c, c + 2) === '##' && map[r - 1].slice(c, c + 2) === '..' && map[r - 2].slice(c, c + 2) === '..' && map[r + 1].slice(c, c + 2) === '..' && under(r, c)) plat = { r, c };
+      const top = 16 + (plat ? plat.r : 0) * 8;
+      if (plat) { D.setPlayer(plat.c * 8 - 2, top - 16); D.step(3); }
+      const stood = !!plat && G.p.onGround && Math.abs(G.p.y + 16 - top) < 0.01;
+      mv(rx + 0.1 * R, ry + 0.75 * R); const dn = st();
+      D.step(30);
+      ok('pulled down on a platform: 내려가기 is on (the ▼ notch lit), no direction, and the duck drops below the platform', stood && dn.dn && dn.on.down && dn.dir === 0 && $('pg-stick').classList.contains('is-d') && G.p.y + 16 > top + 8, { plat, stood, dn, feet: G.p.y + 16, top });
+      mv(rx, ry + 0.5 * R); const h1 = st();
+      mv(rx, ry + 0.4 * R); const h2 = st();
+      mv(rx + 0.1 * R, ry + 0.75 * R); mv(rx + 0.6 * R, ry + 0.55 * R); const h3 = st();
+      ok('hysteresis: eased back to 0.5 down it stays on, under 0.45 it lets go; more sideways than down lets go too (and walks)', h1.dn && h1.on.down && !h2.dn && !h2.on.down && !h3.dn && !h3.on.down && h3.on.right && !$('pg-stick').classList.contains('is-d'), { h1, h2, h3 });
+      mv(rx, ry); D.setPlayer(hx, hy); D.step(20);
+    }
     // both thumbs: the stick held right, 점프 and 거품 on the right
     const ob2 = box($('pg-stick')); mv((ob2.l + ob2.r) / 2 + 0.7 * R, (ob2.t + ob2.b) / 2);
     D.step(2);

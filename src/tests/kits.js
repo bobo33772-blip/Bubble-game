@@ -952,8 +952,66 @@
       if (new Set(on).size < 6) return 'on: some animals draw the same (' + new Set(on).size + ' distinct)';
     });
 
+    // ---- 내려가기 (↓ / S, the stick pulled down): drop through the platform underfoot - never the bottom floor
+    // D: a shelf at row 8 cols 2-15 (feet 80), a platform at row 16 cols 2-29 (feet 144), a step on the floor at row 24
+    // cols 20-25 (feet 208: solid down to the floor row - a thick floor), the floor (feet 216)
+    const ROOM_D = mk((r) => (r === 0 || r === 25 ? SOLID : r === 8 ? '#'.repeat(16) + '.'.repeat(14) + '##' : r === 16 ? SOLID : r === 24 ? '##' + '.'.repeat(18) + '######' + '....##' : WALLS));
+    const SHELF = 16 + 8 * TS, PLAT = 16 + 16 * TS, STEP = 16 + 24 * TS;
+    const down = (on) => D.press('down', !!on);
+    const feet = () => P(0).y + 16;
+    t('내려가기, all six (+ 능력 끄기): a tap of ↓ drops one platform, held ↓ goes on through each one below to the floor; ↓ on the floor does nothing', () => {
+      const out = [];
+      for (const [c, off] of CH.map((c) => [c, false]).concat([['duck', true]])) {
+        solo(c, ROOM_D, off); put(P(0), 40, SHELF); step(2);
+        down(true); step(1); down(false); const left = !P(0).onGround && feet() > SHELF;
+        toLand(); const one = feet(); step(10);
+        put(P(0), 40, SHELF); step(2); down(true); step(120); const held = feet(), g = P(0).onGround;
+        const y0 = P(0).y; step(20); const stay = P(0).onGround && Math.abs(P(0).y - y0) < 1e-6;
+        down(false); release();
+        out.push(c + (off ? ' off' : '') + ' ' + [left, one, held, g, stay].join('/'));
+        if (!left || one !== PLAT || held !== FLOOR || !g || !stay) return out.join(' | ');
+      }
+      info('drops (left the shelf / one tap lands at / held ends at / on ground / floor stays): ' + out.join(' | '));
+    });
+    t('내려가기 never through the bottom floor: a block solid down to the floor row (a thick floor) stays; walls / the floor gap as before', () => {
+      solo('duck', ROOM_D); put(P(0), 170, STEP); step(2);
+      down(true); step(30); const st = P(0).onGround && feet() === STEP; down(false);
+      put(P(0), 120, FLOOR); step(2); down(true); step(30); const fl = P(0).onGround && feet() === FLOOR; down(false); release();
+      if (!st || !fl) return JSON.stringify({ st, fl, feet: feet() });
+    });
+    t('내려가기: jump + ↓ the same frame jumps; afloat ↓ does nothing; a drop is a ledge walk-off (no coyote jump, the frog\'s chain broken)', () => {
+      solo('duck', ROOM_D); put(P(0), 160, PLAT); step(2);
+      D.press('jump', true); down(true); step(1); const jumped = P(0).vy < 0; D.press('jump', false); down(false); toLand(); step(5);
+      // afloat in ROOM_A's hot pool (cols 22-27): ↓ held changes nothing
+      solo('duck', ROOM_A); put(P(0), 190, 16 + 24 * TS); step(40); const fy = P(0).y; down(true); step(30); const afloat = P(0).water > 0 && Math.abs(P(0).y - fy) < 1.5; down(false);
+      // no coyote jump off a drop: a jump 2 frames after it is refused (the duck keeps falling)
+      solo('duck', ROOM_D); put(P(0), 160, PLAT); step(2); down(true); step(1); down(false); step(1); tap('jump'); const noCoyote = P(0).vy > 0;
+      solo('frog', ROOM_D); put(P(0), 160, PLAT); step(2); tap('jump'); toLand(); step(1); const chainOn = P(0).hopAir; down(true); step(1); down(false); const chainOff = !P(0).hopAir;
+      release();
+      if (!jumped || !afloat || !noCoyote || !chainOn || !chainOff) return JSON.stringify({ jumped, afloat, noCoyote, chainOn, chainOff });
+    });
+    t('내려가기 with the kits: penguin slide drops on (speed carried), capy slam lands on the platform and ↓ waits out its recovery, cat 2단 / otter dash / duck glide after a drop', () => {
+      const r = {};
+      // penguin: a belly slide on the platform, then ↓
+      solo('penguin', ROOM_D); put(P(0), 24, PLAT); step(2); D.press('right', true); tap('jump'); toApex(); tap('jump');
+      for (let i = 0; i < 60 && P(0).mv !== 'slide'; i++) step(1);
+      const sl = P(0).mv === 'slide' && feet() === PLAT; step(3); down(true); step(1); down(false);
+      r.penguin = sl && P(0).mv === '' && P(0).carry && Math.abs(P(0).vx) > 1.25 * 1.1 && !P(0).onGround;
+      release();
+      // capy: ↓ held through the whole slam - it still lands on the platform (quake / recovery there), drops after
+      solo('capy', ROOM_D); put(P(0), 160, PLAT); step(2); tap('jump'); toApex(); down(true); tap('jump');
+      let rec = 0, recFeet = true; for (let i = 0; i < 80 && !(rec && P(0).mv !== 'rec'); i++) { step(1); if (P(0).mv === 'rec') { rec++; if (feet() !== PLAT) recFeet = false; } }
+      step(3); r.capy = rec > 5 && recFeet && feet() > PLAT; down(false); release();
+      // cat / otter / duck: their air move right after a drop
+      solo('cat', ROOM_D); put(P(0), 160, PLAT); step(2); down(true); step(1); down(false); step(8); tap('jump'); r.cat = P(0).vy < 0 && P(0).mv === 'curl'; release();
+      solo('otter', ROOM_D); put(P(0), 160, PLAT); step(2); down(true); step(1); down(false); step(8); tap('jump'); r.otter = P(0).mv === 'dash'; release();
+      solo('duck', ROOM_D); put(P(0), 160, PLAT); step(2); down(true); step(1); down(false); step(4); D.press('jump', true); step(8); r.duck = P(0).mv === 'glide'; release();
+      info('kits after / during a drop ' + JSON.stringify(r));
+      if (Object.values(r).some((v) => !v)) return JSON.stringify(r);
+    });
+
     D.setInvincible(false); D.setPerks(true);
-    release();
+    release(); down(false);
     Object.assign(L0, saved); Object.assign(A0, savedA);
     log('KITS DONE pass=' + pass + ' fail=' + fail);
   }

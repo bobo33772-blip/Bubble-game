@@ -1188,7 +1188,8 @@ window.PG = window.PG || {};
     return 0;
   }
   // Ground body physics: walls block horizontally, interior blocks are one-way, floor gap wraps.
-  // (g / maxFall: the moves - glide, dash, wind-up, slam; everything else keeps the defaults)
+  // (g / maxFall: the moves - glide, dash, wind-up, slam; everything else keeps the defaults. b.thruR: a player's
+  // 내려가기 - the platform row it is dropping through, see dropThrough)
   function physBody(b, g = GRAV, maxFall = MAX_FALL) {
     b.x += b.vx;
     const hit = wallClamp(b);
@@ -1198,7 +1199,7 @@ window.PG = window.PG || {};
     b.y += (vy0 + b.vy) / 2;
     b.onGround = false;
     if (b.vy >= 0) {
-      const t = landTile(b.x + 3, b.x + 13, f0, b.y + 16);
+      const t = landTile(b.x + 3, b.x + 13, f0, b.y + 16, b.thruR);
       if (t !== null) { b.y = t - 16; b.vy = 0; b.onGround = true; }
     } else if (b.y + 2 < CEIL_Y && f0 - 14 >= CEIL_Y - 0.01 && ceilingAt(b.x + 3, b.x + 13)) {
       b.y = CEIL_Y - 2; b.vy = 0;
@@ -1273,7 +1274,7 @@ window.PG = window.PG || {};
     return { x: clamp(sp.col * TS - 4, WALL_L - 2, WALL_R - 14), y: (sp.row + 1) * TS, vx: 0, vy: 0, onGround: true, facing: 1,
       coyote: 0, jumpBuf: 0, shootCd: 0, autoCd: 0, shootBuf: 0, shootAnim: 0, invuln: 0, dead: false, walkT: 0, sq: 0, water: 0, waterSkip: 0,
       splashY: undefined, splashK: undefined, dieT: 0, ghost: null, trap: null, stunT: 0, koT: 0, out: false, shield: 0, shieldCd: 0, hotIn: false,
-      ...MV_BODY };
+      thruR: -1, thruT: 0, ...MV_BODY };
   }
   // the move state of a body (v4 kits): airT airborne frames (0 on the ground / afloat); mv the move running ('' |
   // 'glide' | 'wind' | 'slam' | 'rec' | 'dash' | 'dive' | 'slide' | 'bonk' | 'curl'), mvT its frames, mvD its direction;
@@ -1748,6 +1749,9 @@ window.PG = window.PG || {};
       if (p.water) p.waterSkip = 10; // a full-strength jump out of the bath (no buoyancy damping on the way up)
       if (kc === 'frog' && p.hop > 0) { Snd.sfx('hop', { n: p.hop }); moveWord(p); } else Snd.sfx('jump');
     }
+    // 내려가기: down on an interior platform (not afloat, not in the capy's wind-up / slam / recovery, a dash, a dive or a
+    // bonk - MV_NOJUMP; a jump this frame already left the ground)
+    if (inp.down && p.onGround && !p.water && !MV_NOJUMP[p.mv]) dropThrough(p);
     const wasG = p.onGround, vy0 = p.vy, wasW = p.water, y0 = p.y;
     if (p.waterSkip > 0) p.waterSkip--;
     let wi = p.waterSkip > 0 ? -1 : waterIdx(p.x + 8, p.y + 15);
@@ -1774,6 +1778,8 @@ window.PG = window.PG || {};
       if (++p.glideT % 12 === 1) Snd.sfx('flap');
     } else hit = physBody(p);
     p.water = wi >= 0 ? WATER[wi] : 0;
+    // (내려가기: the row is let go once the feet are past its top, on landing, rising or after THRU_F frames)
+    if (p.thruR >= 0 && (p.onGround || p.vy < 0 || --p.thruT <= 0 || p.y + 16 > PF_TOP + p.thruR * TS + 1)) p.thruR = -1;
     // the capybara loves hot water: getting in gives a one-hit shield for 3 s (a new one 3 s after the last ran out:
     // bobbing in and out of the tub is not a lasting shield - in a battle it also takes a capture)
     if (p.water === 1 && !p.hotIn && perk(p, 'capy') && !(p.shieldCd > 0)) { p.shield = CAPY_SHIELD; p.shieldCd = CAPY_SHIELD + CAPY_SHIELD_CD; burst(p.x + 8, p.y + 8, 8, ['#c8f4ff', '#ffffff'], 1.2, 14); }
@@ -1864,7 +1870,41 @@ window.PG = window.PG || {};
   // a move stops where it is (vx / vy kept): stun, trap, release; a stunned capy that was slamming just falls
   function endMove(p) { p.mv = ''; p.mvT = 0; }
   // a new control epoch (trapped, released, KO'd): no move, chain or carry goes along
-  function clearMoves(p) { endMove(p); p.mvUsed = false; p.hop = 0; p.hopAir = false; p.carry = false; p.mvA = false; p.mvB = false; }
+  function clearMoves(p) { endMove(p); p.mvUsed = false; p.hop = 0; p.hopAir = false; p.carry = false; p.mvA = false; p.mvB = false; p.thruR = -1; }
+  // ---- 내려가기 (↓ / S, the stick pulled down): the platform row a standing body would drop through, or -1. Only an
+  // interior platform: never the bottom floor row, nor a block whose column stays solid down to it (a thick floor -
+  // the body would sink through it and wrap); walls never (landTile's columns stop short of them). Ice tops count
+  function dropRowOf(p) {
+    const rf = (p.y + 16 - PF_TOP) / TS, r = Math.round(rf);
+    if (Math.abs(rf - r) > 0.02 || r < 1 || r >= ROWS - 1) return -1;
+    const c0 = Math.max(2, Math.floor((p.x + 3) / TS)), c1 = Math.min(COLS - 3, Math.floor((p.x + 13 - 0.001) / TS));
+    let top = false;
+    for (let c = c0; c <= c1; c++) {
+      if (ICE_TOP[r * COLS + c] === 1) { top = true; continue; }
+      if (!solidCell(c, r) || solidCell(c, r - 1)) continue;
+      top = true;
+      let k = r; while (k < ROWS - 1 && solidCell(c, k + 1)) k++;
+      if (k >= ROWS - 1) return -1;
+    }
+    return top ? r : -1;
+  }
+  // down held while standing on one (a fresh press, or still held on landing: on through each platform below): the
+  // body leaves it like walking off a ledge (no coyote jump, the frog's chain broken, a penguin slide carries on through
+  // the air), and that row's top is ignored until the feet are past it (thruR / thruT, physBody). A little dust where it
+  // went through: the guests see the host's from an event ('d'), the others a guest's from its body state's count (dp)
+  const THRU_F = 12, THRU_VY = 1;
+  function dropThrough(p) {
+    const r = dropRowOf(p); if (r < 0) return false;
+    p.thruR = r; p.thruT = THRU_F; p.onGround = false; p.coyote = 0; p.hopAir = false; p.sq = -0.14;
+    if (p.vy < THRU_VY) p.vy = THRU_VY;
+    dropDust(p.x + 8, PF_TOP + r * TS);
+    if (G.online && G.role === 'guest') NET.drops = (NET.drops | 0) + 1;
+    else if (NET.rec) netEv('d', Math.round(p.x + 8), PF_TOP + r * TS);
+    return true;
+  }
+  function dropDust(x, y) {
+    for (let i = 0; i < 6; i++) G.parts.push({ x: x + (i - 2.5) * 2.2, y: y - 0.5, vx: (i - 2.5) * 0.32, vy: -0.12 - fxr() * 0.18, life: 13, max: 13, c: i & 1 ? '#e8f4f0' : '#cfe9ea', sz: 1, g: 0 });
+  }
   // a bubble bounce refreshes the air move and the glide meter, and ends a penguin's dive
   function bounceRefresh(p) { p.mvUsed = false; p.glideT = 0; p.carry = false; if (p.mv === 'dive' || p.mv === 'glide') endMove(p); }
   // words over the owner, on its own screen only (never echoed to the others)
@@ -3287,7 +3327,7 @@ window.PG = window.PG || {};
   }
 
   // ------------------------------------------------------------------ main world update
-  const NO_INPUT = { left: false, right: false, jump: false, shoot: false, jumpP: false, shootP: false };
+  const NO_INPUT = { left: false, right: false, jump: false, shoot: false, down: false, jumpP: false, shootP: false };
   function updateWorld(ins) {
     const battle = G.gameMode === 'battle';
     G.roundT++; G.introT++;
@@ -8260,45 +8300,51 @@ window.PG = window.PG || {};
 
   // ------------------------------------------------------------------ input
   // keyboard + touch drive this screen's own player (G.localSlot); PG.debug.press() can drive any slot
-  const ACTIONS = ['left', 'right', 'jump', 'shoot'];
-  const keys = { left: false, right: false, jump: false, shoot: false };
-  const touchIn = { left: false, right: false, jump: false, shoot: false };
+  const ACTIONS = ['left', 'right', 'jump', 'shoot', 'down'];
+  const keys = { left: false, right: false, jump: false, shoot: false, down: false };
+  const touchIn = { left: false, right: false, jump: false, shoot: false, down: false };
   // the left thumb's floating joystick (#pg-stick-zone, page.html): a touch anywhere in the zone puts the ring under the
   // thumb; the knob follows the thumb up to the ring's edge (further, the ring slides after it, so a turn-around is never
   // more than one radius away); its sideways lean drives left / right with a dead zone and hysteresis (on past 0.3 of
-  // the radius, off under 0.2: a thumb resting near the middle never flickers). Up / down do nothing - pushing up does
-  // NOT jump: a walking thumb drifts up and down, and every drift would be a jump (or a 꾹 glide / 두 번 move); 점프 is
-  // the right thumb's own button. One finger owns the stick (another finger in the zone is ignored); 점프 / 거품 are
-  // other elements with their own pointers, so both thumbs work at once
-  const STICK = { id: null, ox: 0, oy: 0, zl: 0, zt: 0, R: 50, dx: 0, dy: 0, nx: 0, dir: 0 };
-  const STICK_ON = 0.3, STICK_OFF = 0.2;
+  // the radius, off under 0.2: a thumb resting near the middle never flickers). Pushing up does NOT jump: a walking thumb
+  // drifts up and down, and every drift would be a jump (or a 꾹 glide / 두 번 move); 점프 is the right thumb's own
+  // button. Pulled clearly DOWN it is 내려가기 (↓): on past 0.6 of the radius and within ~27° of straight down (down
+  // >= 2 x sideways), off under 0.45 or once more sideways than down - a walking thumb, even one sagging low, never
+  // drops; left / right keep working while it is on. One finger owns the stick (another finger in the zone is
+  // ignored); 점프 / 거품 are other elements with their own pointers, so both thumbs work at once
+  const STICK = { id: null, ox: 0, oy: 0, zl: 0, zt: 0, R: 50, dx: 0, dy: 0, nx: 0, ny: 0, dir: 0, dn: false };
+  const STICK_ON = 0.3, STICK_OFF = 0.2, STICK_DN_ON = 0.6, STICK_DN_OFF = 0.45;
   function stickDir(nx, dir) {
     if (dir && dir * nx >= STICK_OFF) return dir;
     return nx >= STICK_ON ? 1 : nx <= -STICK_ON ? -1 : 0;
   }
+  function stickDown(nx, ny, on) {
+    if (on) return ny >= STICK_DN_OFF && ny >= Math.abs(nx);
+    return ny >= STICK_DN_ON && ny >= 2 * Math.abs(nx);
+  }
   function stickApply() {
-    touchIn.left = STICK.dir < 0; touchIn.right = STICK.dir > 0;
-    if (dom.stick) { dom.stick.classList.toggle('is-l', STICK.dir < 0); dom.stick.classList.toggle('is-r', STICK.dir > 0); }
+    touchIn.left = STICK.dir < 0; touchIn.right = STICK.dir > 0; touchIn.down = STICK.dn;
+    if (dom.stick) { dom.stick.classList.toggle('is-l', STICK.dir < 0); dom.stick.classList.toggle('is-r', STICK.dir > 0); dom.stick.classList.toggle('is-d', STICK.dn); }
   }
   function stickMove(cx, cy) {
     let dx = cx - STICK.zl - STICK.ox, dy = cy - STICK.zt - STICK.oy;
     const R = STICK.R, d = Math.hypot(dx, dy);
     if (d > R) { const k = (d - R) / d; STICK.ox += dx * k; STICK.oy += dy * k; dx -= dx * k; dy -= dy * k; }
-    STICK.dx = dx; STICK.dy = dy; STICK.nx = dx / R;
-    STICK.dir = stickDir(STICK.nx, STICK.dir);
+    STICK.dx = dx; STICK.dy = dy; STICK.nx = dx / R; STICK.ny = dy / R;
+    STICK.dir = stickDir(STICK.nx, STICK.dir); STICK.dn = stickDown(STICK.nx, STICK.ny, STICK.dn);
     stickApply();
     if (dom.stick) { const b = dom.stick.style; b.left = (STICK.ox - R).toFixed(1) + 'px'; b.top = (STICK.oy - R).toFixed(1) + 'px'; b.bottom = 'auto'; }
     if (dom.stickKnob) dom.stickKnob.style.transform = 'translate(' + dx.toFixed(1) + 'px,' + dy.toFixed(1) + 'px)';
   }
   // (a lifted / cancelled thumb, blur, a hidden page, the rotate screen: the stick lets go and goes back to rest)
   function stickReset() {
-    STICK.id = null; STICK.dir = 0; STICK.nx = 0; STICK.dx = 0; STICK.dy = 0;
-    touchIn.left = false; touchIn.right = false;
+    STICK.id = null; STICK.dir = 0; STICK.nx = 0; STICK.ny = 0; STICK.dx = 0; STICK.dy = 0; STICK.dn = false;
+    touchIn.left = false; touchIn.right = false; touchIn.down = false;
     if (dom.stickZone) dom.stickZone.classList.remove('is-on');
-    if (dom.stick) { dom.stick.classList.remove('is-l', 'is-r'); const b = dom.stick.style; b.left = ''; b.top = ''; b.bottom = ''; }
+    if (dom.stick) { dom.stick.classList.remove('is-l', 'is-r', 'is-d'); const b = dom.stick.style; b.left = ''; b.top = ''; b.bottom = ''; }
     if (dom.stickKnob) dom.stickKnob.style.transform = '';
   }
-  const dbgIns = [0, 1, 2, 3].map(() => ({ left: false, right: false, jump: false, shoot: false }));
+  const dbgIns = [0, 1, 2, 3].map(() => ({ left: false, right: false, jump: false, shoot: false, down: false }));
   const latch = { jump: false, shoot: false };
   const prevIns = [0, 1, 2, 3].map(() => ({ jump: false, shoot: false }));
   function readInputs() {
@@ -10067,7 +10113,7 @@ window.PG = window.PG || {};
     dom.soundBtn.classList.toggle('is-muted', m);
   }
   function toggleMute() { firstGesture(); Snd.setMuted(!Snd.muted()); updateMuteUI(); }
-  function clearKeys() { for (const k in keys) keys[k] = false; for (const k in touchIn) touchIn[k] = false; STICK.dir = 0; if (dom.stick) dom.stick.classList.remove('is-l', 'is-r'); }
+  function clearKeys() { for (const k in keys) keys[k] = false; for (const k in touchIn) touchIn[k] = false; STICK.dir = 0; STICK.dn = false; if (dom.stick) dom.stick.classList.remove('is-l', 'is-r', 'is-d'); }
   function primaryAction() {
     if (shownOverlay === 'hub' || shownOverlay === 'login' || shownOverlay === 'pal') return;   // (the 상점 / 마이페이지 / the login screen / 친구 순위: nothing starts a game behind it)
     if (shownOverlay === 'rec') { closeRec(); return; } // (내 기록 over the title: never a solo start)
@@ -10086,8 +10132,9 @@ window.PG = window.PG || {};
     else newGame(0);
   }
 
-  const KEYMAP = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowUp: 'jump', KeyW: 'jump', KeyZ: 'jump', KeyX: 'shoot', Space: 'shoot', KeyJ: 'shoot' };
-  const KEYFALLBACK = { arrowleft: 'ArrowLeft', arrowright: 'ArrowRight', arrowup: 'ArrowUp', arrowdown: 'ArrowDown', a: 'KeyA', d: 'KeyD', w: 'KeyW', z: 'KeyZ', x: 'KeyX', j: 'KeyJ', ' ': 'Space', p: 'KeyP', m: 'KeyM', escape: 'Escape', enter: 'Enter' };
+  // (↓ / S: 내려가기 - drop through the platform underfoot; nothing in the menus)
+  const KEYMAP = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowUp: 'jump', KeyW: 'jump', KeyZ: 'jump', KeyX: 'shoot', Space: 'shoot', KeyJ: 'shoot', ArrowDown: 'down', KeyS: 'down' };
+  const KEYFALLBACK = { arrowleft: 'ArrowLeft', arrowright: 'ArrowRight', arrowup: 'ArrowUp', arrowdown: 'ArrowDown', a: 'KeyA', d: 'KeyD', w: 'KeyW', s: 'KeyS', z: 'KeyZ', x: 'KeyX', j: 'KeyJ', ' ': 'Space', p: 'KeyP', m: 'KeyM', escape: 'Escape', enter: 'Enter' };
   function codeOf(e) { if (e.code && e.code !== 'Unidentified') return e.code; return KEYFALLBACK[String(e.key || '').toLowerCase()] || ''; }
   function onKeyDown(e) {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -10167,7 +10214,7 @@ window.PG = window.PG || {};
       e.preventDefault();
       if (!keys[act] && (act === 'jump' || act === 'shoot')) latch[act] = true;
       keys[act] = true;
-    } else if (code === 'ArrowDown') e.preventDefault();
+    }
   }
   function onKeyUp(e) {
     const code = codeOf(e);
@@ -10647,7 +10694,8 @@ window.PG = window.PG || {};
     remote: new Map(), evs: [], evId: 0, rec: false, who: -1, roomDirty: true, roomAt: -1e9, R: null,
     snapN: 0, snapBytes: 0, snapMax: 0, snapTrim: 0, snapFail: 0, trace: null,
     // guest
-    buf: null, evQ: [], evSeen: 0, others: new Map(), ctl: 'remote', shotN: 0, pred: [], bounces: [], nyang: 0, rvSent: {},
+    buf: null, evQ: [], evSeen: 0, others: new Map(), ctl: 'remote', shotN: 0, pred: [], bounces: [], nyang: 0, drops: 0, rvSent: {},
+    dropSeen: 0, // (내려가기 dust shown for another screen's player: a guest's through dp, the host's through event 'd')
     viewIdx: -1, viewArena: false, bnId: 0, view: null, jumpHeld: false, mash: [], rt: 0, starve: 0, sidSeen: new Map(), viewFrames: 0, starveFrames: 0,
   };
 
@@ -11154,13 +11202,14 @@ window.PG = window.PG || {};
     return { k, gid: nInt(st.gid, 0, 1e9, 0), ep: nInt(st.ep, -1, 1e9, -1),
       x: nNum(st.x, WALL_L - 4, WALL_R - 12, 120), y: nNum(st.y, PF_TOP - 24, PF_BOT, 100),
       vx: nNum(st.vx, -6, 6, 0), vy: nNum(st.vy, -8, 8, 0), f: st.f < 0 ? -1 : 1, fl: nInt(st.fl, 0, 1023, 0), sh: nInt(st.sh, 0, 600, 0), bb,
-      ny: nInt(st.ny, 0, 1e9, 0), rt: nInt(st.rt, 0, 1e12, 0), lc: st.lc === 1 ? 1 : 0 }; // (lc: it claims its own catches)
+      ny: nInt(st.ny, 0, 1e9, 0), rt: nInt(st.rt, 0, 1e12, 0), lc: st.lc === 1 ? 1 : 0, // (lc: it claims its own catches)
+      dp: nInt(st.dp, 0, 1e9, 0) }; // (dp: its 내려가기 count - only a rise shows, as dust; an older guest never sends it: 0)
   }
   function hostBodyIn(from, st) {
     const r = NET.roster.find((q) => q.id === from); if (!r || from === NET.selfId) return;
     const s = parseBody(st); if (!s || s.gid !== NET.gid) return;
     let rem = NET.remote.get(from);
-    if (!rem) { rem = { st: null, buf: mkBuf(), shots: [], mash: [], ny: s.ny, rv: 0 }; NET.remote.set(from, rem); }
+    if (!rem) { rem = { st: null, buf: mkBuf(), shots: [], mash: [], ny: s.ny, dp: s.dp, rv: 0 }; NET.remote.set(from, rem); }
     if (!bufPush(rem.buf, s.k, s)) return;
     rem.st = s;
     // (bit A also stamps mvAAt as it ARRIVES: hostInputs applies only the latest state each frame, so after a stall the
@@ -11172,11 +11221,18 @@ window.PG = window.PG || {};
       const pl = G.players.find((p) => p.id === from);
       if (pl && G.mode === 'playing') { const rec = NET.rec; NET.rec = false; wordPop(pl.x + 8, pl.y - 2, '냥!', pl.color); NET.rec = rec; }
     }
+    // (its 내려가기: dust here where that state has it - its position moved it already; the other guests see it from
+    // the peer stream. One puff per state at most, only a living body in play)
+    if (s.dp > rem.dp) {
+      rem.dp = s.dp;
+      const pl = G.players.find((p) => p.id === from);
+      if (pl && s.ep === pl.ep && free(pl) && G.mode === 'playing') { dropDust(s.x + 8, PF_TOP + Math.floor((s.y + 16 - PF_TOP) / TS) * TS); NET.dropSeen = (NET.dropSeen | 0) + 1; }
+    }
   }
   function guestPeerIn(from, st) {
     const s = parseBody(st); if (!s || s.gid !== NET.gid || !NET.slots.has(from)) return;
     let o = NET.others.get(from);
-    if (!o) { o = { buf: mkBuf(), ny: s.ny }; NET.others.set(from, o); }
+    if (!o) { o = { buf: mkBuf(), ny: s.ny, dp: s.dp }; NET.others.set(from, o); }
     bufPush(o.buf, s.k, s);
   }
   function guestHostIn(st) {
@@ -11446,6 +11502,7 @@ window.PG = window.PG || {};
     else if (type === 'i') ev.push(a, b, c);
     else if (type === 'w') ev.push(a, b, c, d);
     else if (type === 'k') ev.push(a);
+    else if (type === 'd') ev.push(a, b); // (a host-side 내려가기's dust: x, platform top y - an older guest skips the type)
     NET.evs.push(ev);
     if (NET.evs.length > 80) NET.evs.splice(0, NET.evs.length - 80);
   }
@@ -11766,6 +11823,7 @@ window.PG = window.PG || {};
         p.mvA = !G.perksOff && !!(a.fl & 256); p.mvB = !G.perksOff && !!(a.fl & 512);
         const o = NET.others.get(st.id);
         if (o && a.ny > o.ny) { o.ny = a.ny; wordPop(p.x + 8, p.y - 2, '냥!', p.color); }
+        if (o && a.dp > o.dp) { o.dp = a.dp; dropDust(p.x + 8, PF_TOP + Math.floor((p.y + 16 - PF_TOP) / TS) * TS); NET.dropSeen = (NET.dropSeen | 0) + 1; }
       } else {
         p.x = lx(r[2], r1v && r1v[2], t); p.y = ly(r[3], r1v && r1v[3], t);
         p.vx = nNum(r[4], -99, 99, 0) / 10; p.vy = nNum(r[5], -99, 99, 0) / 10;
@@ -11925,6 +11983,7 @@ window.PG = window.PG || {};
       } else if (type === 'w') {
         wordPop(nNum(ev[4], 0, W, 0), nNum(ev[5], 0, H, 0), nStr(ev[6], 16), safeCol(ev[7]));
       } else if (type === 'k') shake(nNum(ev[4], 0, 10, 0));
+      else if (type === 'd') { dropDust(nNum(ev[4], 0, W, 0), nNum(ev[5], PF_TOP, PF_BOT, PF_TOP)); NET.dropSeen = (NET.dropSeen | 0) + 1; }
     }
   }
   const safeCol = (c) => (typeof c === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(c) ? c : '#ffffff');
@@ -12092,7 +12151,7 @@ window.PG = window.PG || {};
     NET.bounces = NET.bounces.filter((b) => b.until > G.frame);
     // rt: the host tick my view of the world shows right now (battle traps are judged against what I saw)
     NET.sess.setState({ v: NET_V, k: G.frame, gid: NET.gid, ep: me.ep, x: r1(me.x), y: r1(me.y), vx: r2(me.vx), vy: r2(me.vy), f: me.facing < 0 ? -1 : 1,
-      fl, sh: me.shield | 0, bb: NET.bounces.map((b) => b.id).slice(-6), ny: NET.nyang, rt: Math.max(0, Math.round(NET.rt || 0)), lc: 1 });
+      fl, sh: me.shield | 0, bb: NET.bounces.map((b) => b.id).slice(-6), ny: NET.nyang, rt: Math.max(0, Math.round(NET.rt || 0)), lc: 1, dp: NET.drops | 0 });
   }
 
   // ================================================================== DOM: the friends panel and the room
@@ -12554,6 +12613,7 @@ window.PG = window.PG || {};
       selfId: NET.selfId, mySlot: NET.role === 'host' ? 0 : NET.slots.get(NET.selfId), ctl: NET.ctl,
       stats, snap: { count: NET.snapN, bytes: NET.snapBytes, max: NET.snapMax, trims: NET.snapTrim, refused: NET.snapFail },
       claims: { sent: NET.claimsSent | 0, refused: NET.claimNo | 0, why: Object.assign({}, NET.claimWhy || {}) },
+      drops: { sent: NET.drops | 0, seen: NET.dropSeen | 0 }, // (내려가기: my own as a guest; others' shown as dust here)
       renderTick: NET.rt, newestTick: NET.buf ? NET.buf.last : -1, viewFrames: NET.viewFrames, starvedFrames: NET.starveFrames, evQ: NET.evQ.length, pred: NET.pred.length, games: NET.games.slice(),
       predSplit: NET.predSplit | 0, predGiveUp: NET.predGiveUp | 0, // (v4: predictions handed to the host row by the 6 px rule / given up)
     };
@@ -12813,7 +12873,7 @@ window.PG = window.PG || {};
     // the joystick and the phone layout (src/tests/touch.js)
     stick() {
       const a = dom.app ? dom.app.classList : null, st = dom.app ? dom.app.style : null;
-      return { id: STICK.id, dir: STICK.dir, nx: +STICK.nx.toFixed(3), dx: +STICK.dx.toFixed(1), dy: +STICK.dy.toFixed(1), R: STICK.R, on: Object.assign({}, touchIn),
+      return { id: STICK.id, dir: STICK.dir, nx: +STICK.nx.toFixed(3), ny: +STICK.ny.toFixed(3), dn: STICK.dn, dx: +STICK.dx.toFixed(1), dy: +STICK.dy.toFixed(1), R: STICK.R, on: Object.assign({}, touchIn),
         land: !!(a && a.contains('pg-land')), col: !!(a && a.contains('pg-land-col')), side: st ? st.getPropertyValue('--pg-side') : '', tb: st ? st.getPropertyValue('--pg-tb') : '',
         sr: st ? st.getPropertyValue('--pg-sr') : '', rotate: dom.rotate ? !dom.rotate.hidden : null, scale: +screenScale.toFixed(3), mode: G.mode };
     },
