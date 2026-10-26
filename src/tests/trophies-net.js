@@ -75,7 +75,9 @@
   const NICKS = ['방장', '까삐', '펭펭', '냥냥'], CHARS = ['duck', 'capy', 'penguin', 'cat'];
   let code = null;
   async function host(H, opts) {
-    code = await H.mp.host(Object.assign({ mode: 'battle', nick: NICKS[0], char: CHARS[0], arena: 0, time: 2, perks: true, intrusion: false, bet: 10 }, opts || {}));
+    // (연사 on: the real-match test blows 5 bubbles in 2.5 s - the battle magazine of PR #13 would stop that; a real match
+    // lasts minutes and blows far more. The magazine itself is tested in kits / battle-net)
+    code = await H.mp.host(Object.assign({ mode: 'battle', nick: NICKS[0], char: CHARS[0], arena: 0, time: 2, perks: true, intrusion: false, rapid: true, bet: 10 }, opts || {}));
     return code;
   }
   // (joined = the host's room info arrived: only then does the guest know the stake it readies for - a ready sent
