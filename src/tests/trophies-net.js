@@ -161,7 +161,7 @@
     await sleep(300);
     ok('consent: an rd for the old stake (b 5) arriving after the switch is refused', !N(H).roster[1].ready);
     ok('stake: the room shows the stake badge and the rules line for 3 players at 10', !doc(H, 'pg-room-bet').hidden && doc(H, 'pg-room-bet').textContent === '10개씩' &&
-      /모두 10개씩 걸고 1등이 다 가져요: 1등 \+35 · 2등 -5 · 3등 -16/.test(doc(H, 'pg-room-rules').textContent) && /끝까지 한 판마다 오늘 트로피 보너스 \+5 \(하루 40개까지\)/.test(doc(H, 'pg-room-rules').textContent), doc(H, 'pg-room-rules').textContent);
+      /모두 10개씩 걸고 1등이 다 가져요: 1등 \+35 · 2등 -5 · 3등 -16/.test(doc(H, 'pg-room-rules').textContent) && /끝까지 한 판마다 오늘 트로피 보너스 \+5 \(꼴등 빼고 · 하루 40개까지\)/.test(doc(H, 'pg-room-rules').textContent), doc(H, 'pg-room-rules').textContent);
     // ---- 4. 시작: nothing during 3-2-1, s + 6 at "시작!"
     if (!ok('ready at 10', await readyAll(F))) return;
     H.mp.start();
@@ -189,11 +189,11 @@
     if (!ok('finish: the battle ends (host 1st, A 2nd, B 3rd)', await finish(F, [[0, 300], [1, 200], [2, 100]]))) return;
     await until(() => F.every((f) => TS(f).esc.length === 0) && A.tros.length && B.tros.length, 4000);
     ok('result: one tro per guest', A.tros.length === 1 && B.tros.length === 1 && A.tros[0].m === mid1, [A.tros.length, B.tros.length]);
-    ok('result: counts as troTable says, + 5 each (a real match): +35 / -5 / -16 -> 140 / 100 / 89', same(counts(F), [140, 100, 89]), counts(F));
-    ok('result: the +5 came from today\'s trophy bonus pool on every page (de 5)', F.every((f) => TS(f).de === 5 && TS(f).pod && TS(f).pod.bonus === 5), F.map((f) => [TS(f).de, TS(f).pod && TS(f).pod.bonus]));
+    ok('result: counts as troTable says, + 5 each but the last (꼴등 빼고): +35 / -5 / -16 -> 140 / 100 / 84', same(counts(F), [140, 100, 84]), counts(F));
+    ok('result: the +5 came from today\'s trophy bonus pool on every page (de 5)', F.every((f) => TS(f).de === (f === B ? 0 : 5) && TS(f).pod && TS(f).pod.bonus === (f === B ? 0 : 5)), F.map((f) => [TS(f).de, TS(f).pod && TS(f).pod.bonus]));
     ok('result: games / wins counted (host 1 win)', TS(H).w === 1 && TS(H).g === 1 && TS(A).w === 0 && TS(A).g === 1 && TS(B).g === 1);
     await until(() => N(H).roster.filter((r) => !r.host).every((r) => r.cupM === mid1), 3000);
-    ok('result: every guest answered with its count for this match (cup + m)', N(H).roster[1].cup === 100 && N(H).roster[2].cup === 89 && N(H).roster.filter((r) => !r.host).every((r) => r.cupM === mid1), N(H).roster);
+    ok('result: every guest answered with its count for this match (cup + m)', N(H).roster[1].cup === 100 && N(H).roster[2].cup === 84 && N(H).roster.filter((r) => !r.host).every((r) => r.cupM === mid1), N(H).roster);
     A.T.apply(A.tros[0]);
     ok('result: a replayed tro changes nothing (no second +5 either)', TS(A).t === 100 && TS(A).g === 1 && TS(A).de === 5);
     const pods = F.map((f) => TS(f).pod);
@@ -202,9 +202,9 @@
     ok('podium: cups fly from the losers (1 for -5, 2 for -16)', await until(() => TS(H).pod.cups === 3 && TS(B).pod.cups === 3, 3000), [TS(H).pod, TS(B).pod]);
     await until(() => F.every((f) => f.G.podium && f.G.podium.t > TS(f).pod.flipAt + 25 && TS(f).pod.flipAt > 0), 6000);
     ok('podium: every cup landed, then the lines flipped (and counted up)', F.every((f) => TS(f).pod.landed === 3 && TS(f).pod.flipAt >= TS(f).pod.t0 + 40), F.map((f) => TS(f).pod));
-    ok('podium: the sr summary says my change and the bonus apart', /내 트로피 \+35개, 오늘 트로피 보너스 \+5개, 지금 140개/.test(doc(H, 'pg-podium-sum').textContent) && /내 트로피 -16개, 오늘 트로피 보너스 \+5개, 지금 89개/.test(doc(B, 'pg-podium-sum').textContent), [doc(H, 'pg-podium-sum').textContent, doc(B, 'pg-podium-sum').textContent]);
-    await until(() => F.every((f) => !doc(f, 'pg-podium-bonus').hidden), 3000);
-    ok('podium: every page shows its own "오늘 트로피 보너스 +5" line once the lines flipped', F.every((f) => !doc(f, 'pg-podium-bonus').hidden && doc(f, 'pg-podium-bonus').textContent === '오늘 트로피 보너스 +5'), F.map((f) => [doc(f, 'pg-podium-bonus').hidden, doc(f, 'pg-podium-bonus').textContent]));
+    ok('podium: the sr summary says my change and the bonus apart (the last: no bonus)', /내 트로피 \+35개, 오늘 트로피 보너스 \+5개, 지금 140개/.test(doc(H, 'pg-podium-sum').textContent) && /내 트로피 -16개, 지금 84개/.test(doc(B, 'pg-podium-sum').textContent), [doc(H, 'pg-podium-sum').textContent, doc(B, 'pg-podium-sum').textContent]);
+    await until(() => [H, A].every((f) => !doc(f, 'pg-podium-bonus').hidden), 3000);
+    ok('podium: the 1st and 2nd show their own "오늘 트로피 보너스 +5" line once the lines flipped; the last (B) shows none', [H, A].every((f) => !doc(f, 'pg-podium-bonus').hidden && doc(f, 'pg-podium-bonus').textContent === '오늘 트로피 보너스 +5') && doc(B, 'pg-podium-bonus').hidden && TS(B).pod.flipAt > 0, F.map((f) => [doc(f, 'pg-podium-bonus').hidden, doc(f, 'pg-podium-bonus').textContent]));
     ok('podium: the guest\'s wait line keeps the stake ("다음 판도 10개씩")', /다음 판도 10개씩/.test(doc(A, 'pg-podium').querySelector('[data-net-wait]').textContent));
     // ---- 6. 한 판 더 gate
     ok('rematch: open once every guest reported', N(H).canStart !== undefined && !doc(H, 'pg-podium-again').disabled && H.T.canRematch());
@@ -237,12 +237,12 @@
     H.mp.session().send(idOfSlot(H, 2), { t: 'tro', m: mid2, n: 3, s: 10, r: [[2, 1, 14, 30, 0]] });
     await until(() => TS(A).esc.length === 0, 3000); await sleep(200);
     ok('hostile: a result with base -999 costs exactly s + 6 (100 -> 84), and pays no +5 (one row: never a real match)', TS(A).t === 84 && TS(A).de === 5, [TS(A).t, TS(A).de]);
-    ok('early: a result before the battle clock could run is not applied (the hold stays open)', TS(B).esc.length === 1 && TS(B).esc[0].st === 'open' && TS(B).t === 73, TS(B));
+    ok('early: a result before the battle clock could run is not applied (the hold stays open)', TS(B).esc.length === 1 && TS(B).esc[0].st === 'open' && TS(B).t === 68, TS(B));
     await finish(F, [[0, 300], [1, 200], [2, 100]]);
     await until(() => TS(H).esc.length === 0 && TS(B).esc.length === 1 && TS(B).esc[0].st === 'wait', 4000);
     ok('early: the real (still early) result is not applied either -> the hold waits at the podium', TS(B).esc[0] && TS(B).esc[0].st === 'wait' && TS(H).t === 175, [TS(B).esc, TS(H).t]);
     B.T.expire();
-    ok('early: ... and is refunded when the wait runs out (73 -> 89)', TS(B).t === 89 && TS(B).esc.length === 0 && TS(B).g === 1, TS(B));
+    ok('early: ... and is refunded when the wait runs out (68 -> 84)', TS(B).t === 84 && TS(B).esc.length === 0 && TS(B).g === 1, TS(B));
     B.T.fast(true);
     // ---- 7. leavers: 나가기 (gg) vs a cut link
     if (!ok('room again (방으로)', await toRoom(F))) return;
@@ -412,13 +412,13 @@
     await until(() => F4.every((f) => TS(f).esc.length === 0) && C.tros.length && A.tros.length && B.tros.length, 5000);
     const r5 = C.tros.length ? C.tros[C.tros.length - 1].r : null;
     ok('4p: the rows say whose stake is in (r[5] 1 1 1 0); the shares are the 3 stakes (30), all to the host - the best with a stake in', !!r5 && [0, 1, 2, 3].map((sl) => rowOf(r5, sl)[5]).join() === '1,1,1,0' && r5.reduce((a, x) => a + x[3], 0) === 30 && rowOf(r5, 0)[3] === 30 && rowOf(r5, 3)[3] === 0, r5);
-    ok('4p: counts on every page: host +8 + 30 - 10 = +28, A +2 - 10 = -8, B -6 - 10 = -16, the short one +16 (no stake in, none out); + 5 each -> 133 / 97 / 89 / 28', same(counts(F4), [133, 97, 89, 28]), counts(F4));
-    ok('4p: the +5 on every page, the one without the stake too (de 5)', F4.every((f) => TS(f).de === 5 && TS(f).pod && TS(f).pod.bonus === 5), F4.map((f) => [TS(f).de, TS(f).pod && TS(f).pod.bonus]));
+    ok('4p: counts on every page: host +8 + 30 - 10 = +28, A +2 - 10 = -8, B -6 - 10 = -16, the short one +16 (no stake in, none out); + 5 each but the last (B) -> 133 / 97 / 84 / 28', same(counts(F4), [133, 97, 84, 28]), counts(F4));
+    ok('4p: the +5 on every page but the last (B: de 0), the one without the stake too (de 5)', F4.every((f) => TS(f).de === (f === B ? 0 : 5) && TS(f).pod && TS(f).pod.bonus === (f === B ? 0 : 5)), F4.map((f) => [TS(f).de, TS(f).pod && TS(f).pod.bonus]));
     const pods4 = F4.map((f) => TS(f).pod), want4 = [28, -8, -16, 16];
     ok('4p: the podium rows agree on every page (slot -> change; the short one\'s has no stake in it)', pods4.every((p) => p && p.kind === 'win' && [0, 1, 2, 3].every((sl) => netOf(p, sl) === want4[sl])), pods4);
     ok('4p: cups fly to the host, who took the pot - not to the 1st (no stake in)', await until(() => F4.every((f) => TS(f).pod && TS(f).pod.cups === 3 && same(TS(f).pod.to, [0])), 4000), F4.map((f) => TS(f).pod));
-    await until(() => F4.every((f) => !doc(f, 'pg-podium-bonus').hidden), 6000);
-    ok('4p: the short one\'s podium line says it played without the stake, with its +5; the others show just the +5', doc(C, 'pg-podium-bonus').textContent === '안 걸고 참여 · 오늘 트로피 보너스 +5' && [H, A, B].every((f) => doc(f, 'pg-podium-bonus').textContent === '오늘 트로피 보너스 +5'), F4.map((f) => doc(f, 'pg-podium-bonus').textContent));
+    await until(() => [H, A, C].every((f) => !doc(f, 'pg-podium-bonus').hidden), 6000);
+    ok('4p: the short one\'s podium line says it played without the stake, with its +5; the others show just the +5', doc(C, 'pg-podium-bonus').textContent === '안 걸고 참여 · 오늘 트로피 보너스 +5' && [H, A].every((f) => doc(f, 'pg-podium-bonus').textContent === '오늘 트로피 보너스 +5') && doc(B, 'pg-podium-bonus').hidden, F4.map((f) => doc(f, 'pg-podium-bonus').textContent));
     ok('4p: ... and its sr summary', /내 트로피 \+16개 \(안 걸고 참여\), 오늘 트로피 보너스 \+5개, 지금 28개/.test(doc(C, 'pg-podium-sum').textContent), doc(C, 'pg-podium-sum').textContent);
     // ---- 13b. 한 판 더: the one who readied without the stake stays without it (28 covers 10 now: its ready said so), and a
     // staker now short plays without it too (B at 5 - the host still has 89 from its cup): the pot is the 2 stakes put in
@@ -434,7 +434,7 @@
     for (const f of F4) f.D.setInvincible(true);
     H.G.enemies.length = 0; H.G.battle.enemyT = 1e9; H.G.battle.powerT = 1e9;
     ok('4p rematch: host and A hold 16; B (5: short now) and the other (28 covers 10, but it readied without the stake) hold without it', [H, A].every((f) => TS(f).esc[0].s === 10 && TS(f).esc[0].h === 16) && TS(B).esc[0].s === 0 && TS(C).esc[0].s === 0 && TS(C).free === true, F4.map((f) => TS(f).esc));
-    ok('4p rematch: the host goes by what each guest said it put in (st {0:1, 1:1, 2:0, 3:0}), not its own count of B (89)', await until(() => TS(H).match && same(TS(H).match.st, { 0: 1, 1: 1, 2: 0, 3: 0 }), 3000) && N(H).roster[2].cup === 89, [TS(H).match, N(H).roster[2].cup]);
+    ok('4p rematch: the host goes by what each guest said it put in (st {0:1, 1:1, 2:0, 3:0}), not its own count of B (84)', await until(() => TS(H).match && same(TS(H).match.st, { 0: 1, 1: 1, 2: 0, 3: 0 }), 3000) && N(H).roster[2].cup === 84, [TS(H).match, N(H).roster[2].cup]);
     await finish(F4, [[2, 400], [3, 300], [1, 200], [0, 100]]);
     await until(() => F4.every((f) => TS(f).esc.length === 0) && A.tros.length && B.tros.length && C.tros.length, 5000);
     const r6 = B.tros.length ? B.tros[B.tros.length - 1].r : null;

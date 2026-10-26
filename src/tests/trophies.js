@@ -244,7 +244,8 @@
     const two = (a, b) => [[0, 1, a, 0, 0], [1, 2, b, 0, 0]];
     T.hold(MID(50), 0, 2, 0);
     r = T.result(MID(50), two(12, -6), 1, true, true);
-    ok('play bonus: a real match lost: net -6, + 5 apart (now 99), today 5/40', r && r.net === -6 && r.bonus === 5 && r.now === 99 && S().t === 99 && S().de === 5 && S().day === 20261030, [r, S().de, S().day]);
+    ok('play bonus (꼴등 빼고): a 2-player real match lost: net -6 and no +5 (now 94), today still 0/40', r && r.net === -6 && r.bonus === 0 && r.now === 94 && S().t === 94 && S().de === 0, [r, S().de, S().day]);
+    T.set({ t: 99, de: 5, day: 20261030 });
     T.hold(MID(51), 0, 2, 0);
     r = T.result(MID(51), two(12, -6), 0, true, false);
     ok('play bonus: not a real match (too short / under 5 bubbles): no bonus', r && r.net === 12 && r.bonus === 0 && S().t === 111 && S().de === 5, [r, S().de]);
@@ -269,6 +270,24 @@
     T.hold(MID(58), 10, 2, 0, 1);
     r = T.result(MID(58), [[0, 1, 12, 0, 0, 0], [1, 2, -6, 20, 0, 1]], 0, true, true);
     ok('play bonus: 안 걸고 참여 (no stake in) gets its place points and the +5 like everyone: 7 + 12 + 5', r && r.net === 12 && r.bonus === 5 && r.put === 0 && S().t === 24 && S().de === 10, [r, S().t, S().de]);
+    // 꼴등 빼고 (the user's pick, 2026-10): the last place of 2+ finishers gets no +5 - ties for it too; a 무승부 has no last
+    const four = [[0, 1, 16, 0, 0], [1, 2, 8, 0, 0], [2, 3, 2, 0, 0], [3, 4, -6, 0, 0]];
+    const lastOf = (rows, slot, mid) => { fresh(100); T.hold(mid, 0, rows.length, 0); return T.result(mid, rows, slot, true, true); };
+    r = lastOf(four, 3, MID(160));
+    ok('play bonus (꼴등 빼고): 4 players, the 4th: -6 and no +5 (now 94, today 0/40)', r && r.net === -6 && r.bonus === 0 && S().t === 94 && S().de === 0, [r, S().t, S().de]);
+    r = lastOf(four, 2, MID(161));
+    ok('play bonus (꼴등 빼고): 4 players, the 3rd still gets it: +2 + 5', r && r.net === 2 && r.bonus === 5 && S().t === 107, [r, S().t]);
+    const tie = [[0, 1, 16, 0, 0], [1, 2, 8, 0, 0], [2, 3, -2, 0, 0], [3, 3, -2, 0, 0]];
+    r = lastOf(tie, 2, MID(162)); const r2 = lastOf(tie, 3, MID(163));
+    ok('play bonus (꼴등 빼고): a tie for last (3rd = 3rd of 4): neither gets it', r && r.bonus === 0 && r2 && r2.bonus === 0 && r.net === -2, [r, r2]);
+    r = lastOf([[0, 1, 0, 0, 0], [1, 1, 0, 0, 0]], 1, MID(164));
+    ok('play bonus (꼴등 빼고): a 무승부 has no last place: everyone keeps the +5', r && r.net === 0 && r.bonus === 5 && S().t === 105, [r, S().t]);
+    r = lastOf([[0, 1, 15, 0, 0], [1, 2, 5, 0, 0], [2, 3, -6, 0, 0]], 1, MID(165));
+    ok('play bonus (꼴등 빼고): 3 players, the 2nd gets it (+5 + 5)', r && r.net === 5 && r.bonus === 5, r);
+    // the 8-trophy floor of the bug report: 견습 at 8 covering stake 5 used to lose 5 and get the 5 back (8 again); now it drops
+    fresh(8); T.hold(MID(166), 5, 2, 0, 1);
+    r = T.result(MID(166), [[0, 1, 12, 10, 0, 1], [1, 2, -6, 0, 0, 1]], 1, true, true);
+    ok('play bonus (꼴등 빼고): 견습 at 8 losing a 5 stake now drops to 3 (was 8: -5 +5)', r && r.net === -5 && r.bonus === 0 && S().t === 3, [r, S().t]);
     T.today(null);
   }
 
@@ -468,7 +487,7 @@
     const L = T.leagues().map((l) => l.name);
     const strs = ['내 트로피', '내 기록', '최고 트로피', '배틀', '뽀득 KO', '혼자 최고 점수', '다음 리그까지 30개', '최고 리그예요!', '0승 / 0판', '닫기',
       '이 브라우저에서는 기록이 저장되지 않아요', '처음 선물로 트로피 100개를 받았어요! 친구와 배틀할 때 걸어 봐요', '오늘 트로피 보너스 6/40개 · 목욕도 배틀도 받아요',
-      '끝까지 한 판마다 오늘 트로피 보너스 +5 (하루 40개까지)', '오늘 트로피 보너스 +5', '내 트로피 -1개, 오늘 트로피 보너스 +5개, 지금 104개',
+      '끝까지 한 판마다 오늘 트로피 보너스 +5 (꼴등 빼고 · 하루 40개까지)', '오늘 트로피 보너스 +5', '내 트로피 -1개, 오늘 트로피 보너스 +5개, 지금 104개',
       '트로피 걸기', '안 걸기', '트로피 부족', '연습 경기', '10개씩', '트로피 10개씩', '트로피 안 걸기',
       '트로피가 모자라요 · 방장에게 걸기를 낮춰 달라고 해요', '트로피가 모자란 친구가 있어요 · 걸기를 낮춰 주세요', '내 트로피가 모자라요 · 걸기를 낮춰 주세요',
       '걸기를 낮췄어요: 10개씩', '걸기를 낮췄어요: 안 걸기', '걸기가 바뀌었어요: 10개씩 · 다시 준비해 주세요',

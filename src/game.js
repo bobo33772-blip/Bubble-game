@@ -236,7 +236,7 @@ window.PG = window.PG || {};
   const TRO_TEXT = LEAGUES.map((l) => l.name).join(' ') +
     ' 내 트로피 내 기록 트로피 개 개씩 개부터 최고 트로피 배틀 승 판 뽀득 KO 혼자 최고 점수 리그 다음 리그까지 최고 리그예요! 닫기' +
     ' 오늘 트로피 보너스 목욕도 배틀도 받아요 이 브라우저에서는 기록이 저장되지 않아요 처음 선물로 트로피 100개를 받았어요! 친구와 배틀할 때 걸어 봐요' +
-    ' 끝까지 한 판마다 하루 개까지' +
+    ' 끝까지 한 판마다 꼴등 빼고 하루 개까지' +
     ' 트로피 걸기 안 걸기 트로피 부족 연습 경기 트로피가 모자라요 방장에게 걸기를 낮춰 달라고 해요 트로피가 모자란 친구가 있어요 걸기를 낮춰 주세요 내 트로피가 모자라요' +
     ' 걸기를 낮췄어요: 걸기가 바뀌었어요: 다시 준비해 주세요 트로피 경기: 모두 개씩 걸고 1등이 다 가져요: 1등 2등 3등 4등' +
     ' 견습 리그는 등수로 잃지 않아요 판 중간에 나가면 꼴찌로 쳐요 연습 경기예요: 이 브라우저의 탭끼리는 트로피가 바뀌지 않아요 같은 기기에서 들어온 친구가 있어요' +
@@ -4275,9 +4275,12 @@ window.PG = window.PG || {};
       const share = nInt(row[3], 0, s * n, 0), kos = nInt(row[4], 0, 99, 0);
       // (a win: 1st with points, or a 기권승 - my row alone, base 0, the pot only; a 무승부 is 1st with 0 among several)
       const walk = rows.filter(Array.isArray).length === 1;
+      // (the last place of 2+ finishers - every member of a tie for it - gets no +5: a 무승부 has every row 1st, so no
+      // last; the leavers have no row. My own page decides from the table; an older page still pays itself the +5)
+      const lastP = Math.max(...rows.filter(Array.isArray).map((r) => nInt(r[1], 1, n, n))), last = !walk && lastP > 1 && place === lastP;
       const before = S.t + e.h, after = clamp(before + base + share - s, 0, TRO_MAX), win = place === 1 && (base > 0 || (walk && base === 0));
       let bonus = 0;
-      if (real && !walk) { const day = troToday(); if (S.day !== day) { S.day = day; S.de = 0; } bonus = clamp(Math.min(TRO_PLAY, DAY_CAP - S.de), 0, TRO_MAX - after); S.de += bonus; }
+      if (real && !walk && !last) { const day = troToday(); if (S.day !== day) { S.day = day; S.de = 0; } bonus = clamp(Math.min(TRO_PLAY, DAY_CAP - S.de), 0, TRO_MAX - after); S.de += bonus; }
       S.t = after + bonus; S.g = Math.min(1e6, S.g + 1); if (win) S.w = Math.min(1e6, S.w + 1);
       S.ko = Math.min(1e6, S.ko + kos); S.best = Math.max(S.best, S.t);
       S.esc = S.esc.filter((q) => q !== e);
@@ -12447,7 +12450,7 @@ window.PG = window.PG || {};
     if (dom.roomRules) {
       // (trophies first: what each place gets - or why nothing changes; co-op: the 목욕 보너스)
       const tro = q === 1 ? ['연습 경기예요: 이 브라우저의 탭끼리는 트로피가 바뀌지 않아요'] : q === 2 ? ['연습 경기예요: 같은 기기에서 들어온 친구가 있어요']
-        : NET.mode === 'battle' ? [troRulesLine(), troFreeLine(), '끝까지 한 판마다 오늘 트로피 보너스 +' + TRO_PLAY + ' (하루 ' + DAY_CAP + '개까지)', '견습 리그는 등수로 잃지 않아요 · 판 중간에 나가면 꼴찌로 쳐요'].filter(Boolean) : ['끝까지 갈수록 모두 트로피를 받아요 (잃지 않아요)'];
+        : NET.mode === 'battle' ? [troRulesLine(), troFreeLine(), '끝까지 한 판마다 오늘 트로피 보너스 +' + TRO_PLAY + ' (꼴등 빼고 · 하루 ' + DAY_CAP + '개까지)', '견습 리그는 등수로 잃지 않아요 · 판 중간에 나가면 꼴찌로 쳐요'].filter(Boolean) : ['끝까지 갈수록 모두 트로피를 받아요 (잃지 않아요)'];
       const rules = tro.concat([coinRule(q)], NET.mode === 'battle'
         ? (NET.opts.monsters === false ? ['몬스터 없이 친구끼리만 겨뤄요'] : []).concat([NET.opts.rapid ? RAPID_RULE : AMMO_RULE, '갇히면 점프·거품 연타로 빨리 빠져나와요', '갇힌 친구를 터뜨리면 뽀득 KO +500'])
         : ['쓰러진 친구는 거품이 돼요. 거품에 닿으면 바로 살아나요', '목숨은 다 함께 써요']);
