@@ -135,7 +135,7 @@
     const F = [await frame(0), await frame(1), await frame(2)];
     const [H, A, B] = F;
     // ---- 1. the room: hi.lk, R index 5, every page's roster and cards
-    code = await H.mp.host({ mode: 'battle', nick: NICKS[0], char: CHARS[0], arena: 0, time: 2, perks: true, monsters: false, intrusion: false, bet: 0 });
+    code = await H.mp.host({ mode: 'battle', nick: NICKS[0], char: CHARS[0], arena: 0, time: 2, perks: true, monsters: false, intrusion: false, rapid: true, bet: 0 });
     watchState(H);
     for (const g of [A, B]) await join(g);
     const inRoom = await until(() => N(H).roster.length === 3 && F.every((f) => N(f).screen === 'room' && N(f).roster.length === 3), 8000);
