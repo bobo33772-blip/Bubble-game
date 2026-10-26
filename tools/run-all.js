@@ -237,6 +237,8 @@ const LIST = [
   V('ui-kit-phone', 'test-ui-kit-preview.html#touch,frog', 20000, doneZero('KIT'), { done: 'KIT DONE', runner: 'cdp', mobile: true, shot: 'runall-kit-phone.png', w: 390, h: 844 }),
   // phone (360x640): the room's sticky ready / start / leave row is opaque; the header keeps its buttons with the chip on
   V('ux-roomrow', HTTP + 'test-ux-roomrow.html?net=bc', 'rt30000', doneZero('ROOMROW'), { done: 'ROOMROW DONE', shot: 'runall-ux-roomrow.png', w: 360, h: 640 }),
+  // (파티's 3-button mode segment and 판 수 row on the narrowest phone too)
+  V('ux-roomrow-320', HTTP + 'test-ux-roomrow.html?net=bc', 'rt30000', doneZero('ROOMROW'), { done: 'ROOMROW DONE', shot: 'runall-ux-roomrow-320.png', w: 320, h: 568 }),
   // ---- the standalone deploy as an installable app (tools/pwa-check.js: its own server on :8766 and its own Chrome):
   // manifest / icons / installability, the service worker (precache by build, offline start with fonts + PeerJS from
   // the cache, the 3.5 s slow-network fallback, background updates that never reload a game, a stale page refused), the

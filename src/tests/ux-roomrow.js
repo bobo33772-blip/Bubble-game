@@ -48,6 +48,14 @@
     const cb = chip.getBoundingClientRect();
     ok('the chip is readable (not squeezed under 60 px)', cb.width >= 60, Math.round(cb.width));
     chip.hidden = true; chip.textContent = ''; head.classList.remove('pg-has-chip');
+    // 파티 (design/party.md 9.7): the mode segment's 3 buttons and the 판 수 row on one line each, no sideways scroll
+    D.mp.setOpts({ mode: 'party' }); await sleep(250);
+    const btns = [...panel.querySelectorAll('[data-modes] [data-mode]')].filter((b) => b.offsetParent), tops = new Set(btns.map((b) => Math.round(b.getBoundingClientRect().top)));
+    ok('party: the mode segment holds its 3 buttons (같이 하기 · 배틀 · 파티) on one row', btns.length === 3 && tops.size === 1, [btns.length, [...tops]]);
+    const rb = [...panel.querySelectorAll('#pg-room-opts [data-rounds]')], rt = new Set(rb.map((b) => Math.round(b.getBoundingClientRect().top)));
+    ok('party: the 판 수 row (3판 / 5판) on one line; the battle-only rows hidden', rb.length === 2 && rt.size === 1 && rb.every((b) => !!b.offsetParent) && [...panel.querySelectorAll('#pg-room-opts [data-for="b"]')].every((e) => e.hidden), [rb.length, [...rt]]);
+    ok('party: no sideways scroll at this width (' + innerWidth + ' px)', panel.scrollWidth <= panel.clientWidth + 1 && document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1, [panel.scrollWidth, panel.clientWidth]);
+    D.mp.setOpts({ mode: 'battle' }); await sleep(100);
     // (the room stays open for the screenshot)
     log('ROOMROW DONE pass=' + pass + ' fail=' + fail);
   }

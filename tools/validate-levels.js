@@ -6,6 +6,7 @@
  *   node tools/validate-levels.js --quiet     problems + summary only (fairness tables still printed)
  *   node tools/validate-levels.js --round 7   a single entry (1-based index into PG.LEVELS)
  *   node tools/validate-levels.js --arena 2   a single battle arena (1-based index into PG.ARENAS)
+ *   node tools/validate-levels.js --party 1   a single party arena (1-based index into PG.PARTY_ARENAS)
  *   node tools/validate-levels.js --file x.js validate another file instead of src/levels.js
  *
  * Layout (v2): 24 entries — normal rounds 1-5, BOSS, 6-10, BOSS, 11-15, BOSS, 16-20, FINAL BOSS
@@ -77,6 +78,16 @@
  * '2'/'3'/'4' the other co-op spawns, enemies G/M/F/S (upper case faces right, lower case faces left), boss
  * body K/Q/Z/T (kingGrime, moldQueen, megaSponge, towelKing). Arenas: '1'-'4' player spawns, 'E' enemy
  * spawns, ':' the intruder boss box, '+' the centre cell(s) used for the fairness times.
+ *
+ * 파티 (design/party.md 5.4) - PG.PARTY_ARENAS { key, name, theme, closed: true, map, players: [4], gather, rise? }:
+ * the same cell, shape and spawn rules as the battle arenas, except: a closed ceiling and floor are required (rows 0
+ * and 25 all '#', no wrap gap) and the intruder box / enemy spawn / spread / fairness rules do not apply; the map is
+ * mirror symmetric exactly (col c <-> 31 - c, no gap exception) and dry (the rising water is a layer, not tile water);
+ * the four spawns are standable and mutually reachable (the BFS has no wrap edge here) and every surface is reachable
+ * from them. 물 (key 'water', rise): every tier is reachable from the floor, and for every rise step the tiers it drowns
+ * (a tier is out once its top is more than WATER_SLACK = 3 px under the surface) are exactly the k + 1 lowest, with one
+ * more dry tier above (each step drowns one tier, the top shelves stay dry to the end); the floor is dry at y0; the steps
+ * do not overlap and end before the game's 75 s.
  */
 'use strict';
 const fs = require('fs');
@@ -140,8 +151,10 @@ const argv = process.argv.slice(2);
 const QUIET = argv.includes('--quiet');
 const ri = argv.indexOf('--round');
 const ai = argv.indexOf('--arena');
+const pi = argv.indexOf('--party');
 const ONLY = ri >= 0 ? parseInt(argv[ri + 1], 10) : 0;
 const ONLY_ARENA = ai >= 0 ? parseInt(argv[ai + 1], 10) : 0;
+const ONLY_PARTY = pi >= 0 ? parseInt(argv[pi + 1], 10) : 0;
 const fi = argv.indexOf('--file'); // alternate levels file (used to self-test the validator)
 
 // ── load src/levels.js in a fake browser global ────────────────────────────
@@ -160,6 +173,10 @@ try {
 const LEVELS = ctx.PG && ctx.PG.LEVELS;
 if (!Array.isArray(LEVELS)) fatal('PG.LEVELS is not an array');
 const ARENAS = ctx.PG && ctx.PG.ARENAS;
+const PARTY_ARENAS = ctx.PG && ctx.PG.PARTY_ARENAS;
+const PARTY_KEYS = ['water'];   // (파티: 물 차는 대욕장; 거품 축구장 comes with its minigame)
+const PARTY_NAMES = ['물 차는 대욕장'];
+const WATER_SLACK = 3, WATER_SECS = 75; // (game.js MINI.water / WATER_SLACK)
 
 const isWaterCh = (ch) => ch === '~' || ch === '=';
 const isCell = (p) => !!p && typeof p === 'object' && Number.isInteger(p.col) && Number.isInteger(p.row);
@@ -193,17 +210,23 @@ function analyse(L, idx, kind) {
   const err = (m) => E.push(m);
   const warn = (m) => W.push(m);
   const res = { E, W, lines: [], info: '', water: { hot: 0, cold: 0, pools: 0 }, fair: null };
+  const party = kind === 'party';
   const arena = kind === 'arena';
+  const spawns4 = arena || party;   // (both list players: [4 spawns], P1 first)
 
   if (!L || typeof L !== 'object') { err(`${arena ? 'arena' : 'round'} is not an object`); return res; }
-  const isBoss = !arena && L.boss !== undefined;
+  const isBoss = !arena && !party && L.boss !== undefined;
   if (typeof L.name !== 'string' || !L.name.trim()) err('name missing');
   if (!Number.isInteger(L.theme) || L.theme < 0 || L.theme > 4) err('theme must be an integer 0..4');
-  const known = arena
-    ? new Set(['name', 'theme', 'map', 'players', 'enemySpawns', 'gather', 'water'])
-    : new Set(['name', 'theme', 'map', 'player', 'players', 'enemies', 'gather', 'special', 'boss', 'bossSpawn']);
+  const known = party ? new Set(['key', 'name', 'theme', 'closed', 'map', 'players', 'gather', 'rise'])
+    : arena ? new Set(['name', 'theme', 'map', 'players', 'enemySpawns', 'gather', 'water'])
+      : new Set(['name', 'theme', 'map', 'player', 'players', 'enemies', 'gather', 'special', 'boss', 'bossSpawn']);
   for (const k of Object.keys(L)) if (!known.has(k)) warn(`unknown field "${k}"`);
-  if (!arena) {
+  if (party) {
+    if (L.closed !== true) err('party arenas must say closed: true (no wrap gap)');
+    if (typeof L.key !== 'string' || !L.key) err('key missing');
+  }
+  if (!arena && !party) {
     if (L.special !== undefined && L.special !== 'steam') err("special must be 'steam' or absent");
     if (isBoss && L.special !== undefined) err('boss rounds cannot have a special');
     if (!isBoss && L.bossSpawn !== undefined) err('bossSpawn without boss');
@@ -243,9 +266,14 @@ function analyse(L, idx, kind) {
     return cols;
   };
   const g0 = openCols(0);
-  const gap = openCols(ROWS - 1);
-  if (g0.join() !== gap.join()) err(`ceiling gap [${g0}] differs from floor gap [${gap}]`);
-  if (gap.length < 2 || gap.length > 6) err(`wrap gap must be 2-6 columns wide (is ${gap.length})`);
+  const gap = party ? [] : openCols(ROWS - 1);
+  if (party) {
+    if (g0.length || openCols(ROWS - 1).length) err(`a party arena is closed: the ceiling and floor rows are all blocks (open: [${g0}] / [${openCols(ROWS - 1)}])`);
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (map[r][c] !== map[r][COLS - 1 - c]) { err(`not mirror symmetric: (${c},${r}) '${map[r][c]}' vs (${COLS - 1 - c},${r}) '${map[r][COLS - 1 - c]}'`); r = ROWS; break; }
+  } else {
+    if (g0.join() !== gap.join()) err(`ceiling gap [${g0}] differs from floor gap [${gap}]`);
+    if (gap.length < 2 || gap.length > 6) err(`wrap gap must be 2-6 columns wide (is ${gap.length})`);
+  }
   if (arena && gap.length !== ARENA_GAP) err(`battle arenas need a ${ARENA_GAP}-column wrap gap (is ${gap.length}): the intruder boss may be a 4-column walker`);
   for (let i = 1; i < gap.length; i++) {
     if (gap[i] !== gap[i - 1] + 1) { err('wrap gap columns must be consecutive'); break; }
@@ -260,7 +288,7 @@ function analyse(L, idx, kind) {
   }
 
   // ── player spawns: P1 (`player`, rounds) and `players` (rounds: P1..P4 co-op, arenas: battle) ──
-  const P = arena ? (Array.isArray(L.players) ? L.players[0] : null) : L.player;
+  const P = spawns4 ? (Array.isArray(L.players) ? L.players[0] : null) : L.player;
   const spawnOk = isCell(P);
   const pc = spawnOk ? P.col : -99;
   const pr = spawnOk ? P.row : -99;
@@ -269,7 +297,7 @@ function analyse(L, idx, kind) {
   if (!Array.isArray(L.players)) err(`players missing (needs ${N_PLAYERS} spawns {col,row}, P1 first)`);
   else if (PL.length !== N_PLAYERS) err(`players must list exactly ${N_PLAYERS} spawns (has ${PL.length})`);
   else PL.forEach((s, i) => { if (!isCell(s)) err(`players[${i}] is not an integer {col,row}`); });
-  if (!arena && plOk && spawnOk && (PL[0].col !== pc || PL[0].row !== pr)) {
+  if (!spawns4 && plOk && spawnOk && (PL[0].col !== pc || PL[0].row !== pr)) {
     err(`players[0] (${PL[0].col},${PL[0].row}) must equal player (${pc},${pr})`);
   }
   // every spawn the water / enemy distance rules apply to
@@ -338,6 +366,7 @@ function analyse(L, idx, kind) {
     if (open) warn(`${tag}: ${open} water cell(s) have open air beside them (unwalled edge)`);
     if (coldLow) warn(`${tag}: ${coldLow} cold surface cell(s) lack 2 open rows above (ice blocks are 2 cells tall)`);
   }
+  if (party && pools.length) err('party arenas are dry (the rising water is a layer of the minigame, not tile water)');
   if (arena) {
     if (L.water !== undefined && typeof L.water !== 'boolean') err('water must be true or absent');
     if (pools.length && L.water !== true) err('the map has pools: set water: true');
@@ -554,9 +583,9 @@ function analyse(L, idx, kind) {
   let reach = new Set();
   let start = -1;
   if (!spawnOk) {
-    err(arena ? 'players[0] missing' : 'player spawn missing or not integer {col,row}');
+    err(spawns4 ? 'players[0] missing' : 'player spawn missing or not integer {col,row}');
   } else {
-    const id = standCheck(P, arena ? 'P1 spawn' : 'player spawn', true);
+    const id = standCheck(P, spawns4 ? 'P1 spawn' : 'player spawn', true);
     if (id >= 0) {
       start = id;
       reach = bfs(start);
@@ -583,7 +612,7 @@ function analyse(L, idx, kind) {
         if (arena && cheb(a, b) < ARENA_SPREAD) err(`P${i + 1} and P${j + 1} spawns are only ${cheb(a, b)} tiles apart (battle spawns need ${ARENA_SPREAD}+)`);
         if (arena && Math.abs(a.row - b.row) <= 1 && Math.abs(a.col - b.col) <= SHOT_RANGE) err(`P${i + 1} and P${j + 1} spawns face each other within bubble range (${Math.abs(a.col - b.col)} tiles on the same row; needs > ${SHOT_RANGE})`);
       }
-      if (!arena && i > 0 && spawnOk && cheb(PL[i], P) > NEAR) err(`P${i + 1} spawn (${PL[i].col},${PL[i].row}) is ${cheb(PL[i], P)} tiles from P1 (co-op spawns stay within ${NEAR})`);
+      if (!spawns4 && i > 0 && spawnOk && cheb(PL[i], P) > NEAR) err(`P${i + 1} spawn (${PL[i].col},${PL[i].row}) is ${cheb(PL[i], P)} tiles from P1 (co-op spawns stay within ${NEAR})`);
     }
     // every spawn can get to every other spawn and back
     if (spawnRun.every((id) => id >= 0)) {
@@ -609,7 +638,7 @@ function analyse(L, idx, kind) {
   // enemies (rounds)
   const counts = {};
   const en = L.enemies;
-  if (!arena) {
+  if (!arena && !party) {
     if (!Array.isArray(en)) err('enemies must be an array');
     else {
       if (isBoss) {
@@ -739,7 +768,7 @@ function analyse(L, idx, kind) {
 
   // ── travel times: co-op spawns (info), battle fairness (rules) ──
   const centreNodes = [];
-  if (plOk && spawnRun.every((id) => id >= 0)) {
+  if (plOk && !party && spawnRun.every((id) => id >= 0)) {
     const T = PL.map((s) => travel(s));
     const tAt = (i, s) => { const k = nodeOf(s); return k === undefined ? Infinity : T[i][k]; };
     if (!arena) {
@@ -803,14 +832,36 @@ function analyse(L, idx, kind) {
     }
   }
   for (const e of ES) if (isCell(e)) put(e.row, e.col, 'E');
-  PL.forEach((s, i) => { if (isCell(s)) put(s.row, s.col, i === 0 && !arena ? 'P' : String(i + 1)); });
-  if (!arena && spawnOk) put(pr, pc, 'P');
+  PL.forEach((s, i) => { if (isCell(s)) put(s.row, s.col, i === 0 && !spawns4 ? 'P' : String(i + 1)); });
+  if (!spawns4 && spawnOk) put(pr, pc, 'P');
+  // 물 (5.4): each rise step drowns exactly the next tier, one dry tier above; dry at y0; steps apart, before 75 s
+  if (party && L.key === 'water') {
+    const R = L.rise, top = (r) => 16 + r * TS;
+    const tiers = [...new Set(runs.filter((q) => !q.water).map((q) => q.r))].sort((a, b) => b - a);   // (the floor first)
+    if (!R || typeof R !== 'object' || !Array.isArray(R.steps) || !R.steps.length) err('the water arena needs rise: { y0, warn, steps: [[from s, to s, level y] ...] }');
+    else {
+      const out = (level) => tiers.filter((r) => top(r) > level + WATER_SLACK).length;
+      if (!(Number.isFinite(R.y0) && out(R.y0) === 0)) err(`rise.y0 ${R.y0} must leave the floor dry (its top ${top(tiers[0])} within ${WATER_SLACK} px)`);
+      if (!(Number.isFinite(R.warn) && R.warn >= 0 && R.warn <= 10)) err('rise.warn must be 0..10 s');
+      let last = -1;
+      R.steps.forEach((q, k) => {
+        if (!Array.isArray(q) || q.length !== 3 || !q.every(Number.isFinite)) { err(`rise.steps[${k}] must be [from s, to s, level y]`); return; }
+        if (!(q[1] > q[0]) || q[0] < last) err(`rise.steps[${k}] [${q}] overlaps the step before or runs backwards`);
+        if (q[1] >= WATER_SECS) err(`rise.steps[${k}] ends at ${q[1]} s, not before the game's ${WATER_SECS} s`);
+        last = q[1];
+        const n = out(q[2]);
+        if (n !== k + 1) err(`rise.steps[${k}] (level ${q[2]}) drowns ${n} tier(s), not exactly the ${k + 1} lowest`);
+        else if (k + 1 >= tiers.length) err(`rise.steps[${k}] (level ${q[2]}) leaves no dry tier above`);
+      });
+      res.rise = R.steps.map((q, k) => `${q[0]}-${q[1]} s -> ${q[2]} (row ${tiers[k]} under, row ${tiers[k + 1]} dry)`).join(' · ');
+    }
+  }
   const tens = '    ' + Array.from({ length: COLS }, (_, c) => (c >= 10 ? String(Math.floor(c / 10)) : ' ')).join('');
   const ones = '    ' + Array.from({ length: COLS }, (_, c) => String(c % 10)).join('');
   res.lines = [tens, ones, ...grid.map((row, r) => `${String(r).padStart(2)}  ${row.join('')}`)];
   res.counts = counts;
   const wtxt = res.water.pools ? ` · water ${res.water.hot ? `hot ${res.water.hot}` : ''}${res.water.hot && res.water.cold ? ' ' : ''}${res.water.cold ? `cold ${res.water.cold}` : ''} (${res.water.pools} pool${res.water.pools > 1 ? 's' : ''})` : '';
-  res.info = `gap ${gap[0]}-${gap[gap.length - 1]} · ${runs.length} surfaces, ${reach.size} reachable` +
+  res.info = `${party ? 'closed' : `gap ${gap[0]}-${gap[gap.length - 1]}`} · ${runs.length} surfaces, ${reach.size} reachable` +
     `${lostCells ? `, ${lostCells} unreachable cells` : ''}${wtxt} · density ${Math.round(density * 100)}%`;
   return res;
 }
@@ -843,7 +894,7 @@ if (steam.length < 3) globalW.push(`only ${steam.length} steam rounds`);
 const wet = [];
 let hotRounds = 0;
 let coldRounds = 0;
-const showLevels = !ONLY_ARENA;
+const showLevels = !ONLY_ARENA && !ONLY_PARTY;
 LEVELS.forEach((L, i) => {
   const res = analyse(L, i, 'level');
   if (L && !L.boss && res.water.pools) {
@@ -879,7 +930,7 @@ if (!hotRounds) globalW.push('no normal round has hot water');
 if (!coldRounds) globalW.push('no normal round has cold water');
 
 // ── run: battle arenas ─────────────────────────────────────────────────────
-const showArenas = !ONLY || ONLY_ARENA;
+const showArenas = (!ONLY || ONLY_ARENA) && !ONLY_PARTY;
 if (!Array.isArray(ARENAS)) globalE.push('PG.ARENAS is not an array');
 else {
   if (ARENAS.length !== ARENA_NAMES.length) globalE.push(`PG.ARENAS needs exactly ${ARENA_NAMES.length} arenas (has ${ARENAS.length})`);
@@ -910,6 +961,27 @@ else {
   }
 }
 
+// ── run: party arenas (파티) ──────────────────────────────────────────────────
+const showParty = (!ONLY && !ONLY_ARENA) || ONLY_PARTY;
+if (!Array.isArray(PARTY_ARENAS)) globalE.push('PG.PARTY_ARENAS is not an array');
+else {
+  if (PARTY_ARENAS.length !== PARTY_KEYS.length) globalE.push(`PG.PARTY_ARENAS needs exactly ${PARTY_KEYS.length} arena(s) (has ${PARTY_ARENAS.length})`);
+  PARTY_KEYS.forEach((k, i) => { const A = PARTY_ARENAS[i]; if (!A || A.key !== k || A.name !== PARTY_NAMES[i]) globalE.push(`party arena ${i + 1} must be 「${PARTY_NAMES[i]}」 key '${k}' (has ${A ? `「${A.name}」 '${A.key}'` : 'none'})`); });
+  if (showParty) {
+    PARTY_ARENAS.forEach((A, i) => {
+      if (ONLY_PARTY && ONLY_PARTY !== i + 1) return;
+      const res = analyse(A, i, 'party');
+      errors += res.E.length;
+      warnings += res.W.length;
+      console.log(`\n#P${i + 1} PARTY 「${A && A.name}」 key ${A && A.key} theme ${A && A.theme} · ${res.info}`);
+      if (!QUIET) for (const l of res.lines) console.log(l);
+      if (res.rise) console.log('    rise: ' + res.rise);
+      for (const m of res.E) console.log(`  ERROR: ${m}`);
+      for (const m of res.W) console.log(`  warn:  ${m}`);
+    });
+  }
+}
+
 console.log('');
 for (const m of globalE) console.log(`ERROR: ${m}`);
 for (const m of globalW) console.log(`warn:  ${m}`);
@@ -918,6 +990,7 @@ warnings += globalW.length;
 console.log(`entries: ${LEVELS.length} · bosses at ${LEVELS.map((L, i) => (L && L.boss ? i + 1 : 0)).filter(Boolean).join(', ') || 'none'}` +
   ` · steam: ${steam.join(', ') || 'none'} · water: ${wet.join(', ') || 'none'} (hot ${hotRounds}, cold ${coldRounds})` +
   ` · themes used: ${[...themes].sort().join(',')}` +
-  ` · arenas: ${Array.isArray(ARENAS) ? ARENAS.map((A) => A && A.name).join(' / ') : 'none'}`);
+  ` · arenas: ${Array.isArray(ARENAS) ? ARENAS.map((A) => A && A.name).join(' / ') : 'none'}` +
+  ` · party: ${Array.isArray(PARTY_ARENAS) ? PARTY_ARENAS.map((A) => A && A.name).join(' / ') : 'none'}`);
 console.log(errors ? `FAILED: ${errors} error(s), ${warnings} warning(s)` : `ALL OK (${warnings} warning(s))`);
 process.exit(errors ? 1 : 0);

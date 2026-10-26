@@ -198,6 +198,9 @@
       $('pg-head').textContent.indexOf('뽀득뽀득 목욕탕') >= 0 && document.querySelector('.pg-logo').textContent.indexOf('뽀득뽀득 목욕탕') >= 0, document.title);
     const html = document.documentElement.innerHTML;
     ok('the retired v1 title appears nowhere in the page', html.indexOf(OLD_NAME) < 0);
+    // (파티, design/party.md 9.2 / 11: its card hidden at boot; every party string warmed, none with the retired syllables)
+    ok('the 파티 card is hidden at boot; its texts are warmed and free of the retired title', $('pg-party') && $('pg-party').hidden && PG.debug.party.text().indexOf(OLD_NAME) < 0 &&
+      [...PG.debug.party.text()].every((ch) => !/[가-힣]/.test(ch) || $('pg-fontwarm').textContent.indexOf(ch) >= 0));
     ok('no external scripts / only Google Fonts links', !document.querySelector('script[src]') &&
       [...document.querySelectorAll('link[href]')].every((l) => /^https:\/\/fonts\.(googleapis|gstatic)\.com/.test(l.href)));
     ok('24 entries, bosses at 5/11/17/23 with soap 8/10/12/14', LV.length === 24 && LV.filter((L) => L.boss).length === 4 &&
