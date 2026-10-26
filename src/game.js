@@ -4112,11 +4112,11 @@ window.PG = window.PG || {};
   // miniLoad / miniStart / miniTick / miniOver / miniPlaces / miniSnap / miniView / miniDrop / miniDraw / miniHud, which
   // dispatch to each game's MINI_FN entry (거품 축구 slots in as one more entry). Guests mirror G.party / G.mini from the
   // snapshot (g.pa, g.mg); no new message type in either direction
-  // (debug only: fast - every game 12 s, card 60 f, result 40 f, the coin's play-time gate waived; force - every party
+  // (debug only: fast - every game 12 s, card 90 f, result 40 f, the coin's play-time gate waived; force - every party
   // from now on plays exactly this list of game ids, until cleared)
   let PARTY_FAST = false, PARTY_FORCE = null, partySn = 0;
   const partySecs = (id) => (PARTY_FAST ? 12 : MINI[id].secs);
-  const partyCardF = () => (PARTY_FAST ? 60 : PARTY_F.card);
+  const partyCardF = () => (PARTY_FAST ? 90 : PARTY_F.card);
   const partyResultF = () => (PARTY_FAST ? 40 : PARTY_F.result);
   // competition ranking: rows [{slot, k}] (bigger k is better) -> Map slot -> place; equal k share the best place
   function rankBy(rows) {
@@ -4392,7 +4392,8 @@ window.PG = window.PG || {};
     const gn = last && last.pa && g.pa && last.pa.i === g.pa.i && Array.isArray(last.mg) && last.mg[0] === 'w' ? last : g;
     const ft = nInt(gn.pa && gn.pa.ft, 1, 1e6, MINI.water.secs * 60), tl = nInt(gn.tl, 0, 1e6, ft);
     const lead = gn.ph === 'p' && B && B.off !== null ? clamp(nowTicks() + B.off - nInt(gn.k, 0, 1e12, 0), 0, WATER_LEAD) : 0;
-    M.wl = R ? waterAt(Math.max(0, ft - tl) + lead, R, ft / (MINI.water.secs * 60)) : nNum(mg[1], 0, 3000, PF_BOT * 10) / 10;
+    M.tt = Math.max(0, ft - tl) + lead; // (the host's playing frame as this screen estimates it now)
+    M.wl = R ? waterAt(M.tt, R, ft / (MINI.water.secs * 60)) : nNum(mg[1], 0, 3000, PF_BOT * 10) / 10;
     const outs = [], seen = new Set(M.outs.map((o) => o[0]));
     for (const o of Array.isArray(mg[2]) ? mg[2].slice(0, MAX_PLAYERS) : []) {
       if (!Array.isArray(o)) continue;
@@ -12495,7 +12496,9 @@ window.PG = window.PG || {};
         const main = nStr(bn[1], 40), cls = nStr(bn[4], 24).replace(/[^a-z ]/g, '');
         // (the countdown's "3" names MY animal's move, not the host's)
         const sub = cls === 'count' && main === '3' ? countSub() : nStr(bn[2], 90);
-        if (left > 0) G.banner = { main, sub, end: G.frame + left, cls, id: 'h' + id };
+        // (a live line of my own - 파티's 탈락! N등 - keeps its time: the host's banner that came meanwhile is skipped)
+        const mine = G.banner && String(G.banner.id).charAt(0) === 'l' && G.frame < G.banner.end;
+        if (left > 0 && !mine) G.banner = { main, sub, end: G.frame + left, cls, id: 'h' + id };
       }
     } else if (NET.bnId && G.banner && String(G.banner.id).charAt(0) === 'h') { G.banner.end = Math.min(G.banner.end, G.frame); NET.bnId = 0; }
   }
@@ -13694,7 +13697,7 @@ window.PG = window.PG || {};
   }
 
   function partyDebugApi() {
-    const miniOut = (M) => (M ? { id: M.id, t: M.t | 0, n0: M.n0 | 0, endAt: M.endAt, wl: M.wl === undefined ? null : M.wl, outs: M.outs ? M.outs.map((o) => o.slice()) : [],
+    const miniOut = (M) => (M ? { id: M.id, t: M.t | 0, tt: M.tt === undefined ? null : M.tt, n0: M.n0 | 0, endAt: M.endAt, wl: M.wl === undefined ? null : M.wl, outs: M.outs ? M.outs.map((o) => o.slice()) : [],
       cr: M.cr ? Object.assign({}, M.cr) : null, held: M.held ? Object.assign({}, M.held) : {} } : null);
     const api = {
       // the 판 list for n players, rounds 3 / 5, from a seeded draw (pure: the page's own draws are put back)
