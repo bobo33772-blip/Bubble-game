@@ -1,8 +1,8 @@
 # 뽀득뽀득 목욕탕: 파티 (Mario Party style minigames) v1 — design spec
 
-Status: design, ready to implement as ONE PR on `feat/party`. Code is referenced by function name and section, never
-by line number (`src/game.js` is edited by other passes all the time). Every function named here exists today unless
-it is marked **new**.
+Status: design, ready to implement as ONE PR on `feat/party`; checked against the code on 2026-10-26 (section 17
+lists what that changed). Code is referenced by function name and section, never by line number (`src/game.js` is
+edited by other passes all the time). Every function named here exists today unless it is marked **new**.
 
 The user asked for "마리오파티게임 처럼". This PR is the minigame party: 2-4 friends play 3 or 5 short minigames (판)
 in a row on one fixed screen each, collect placement points, and finish on the podium. A later PR adds a Mario Party
@@ -19,15 +19,15 @@ built as a self-contained "round with a placement result" that a board can drive
 | Engine mode | `G.gameMode` stays **`'battle'`** during a party, with `G.party` (the sequencer) and `G.mini` (the minigame now) set. All 39 `G.gameMode === 'battle'` sites (rival capture, `tp` claims, the magazine, `EMPTY_RULE.battle`, `SHOT_CAP`, blink-ends-on-blow, snapshots' `lc` / `am`) then work for the party for free; the few things a party does differently check `G.mini` / `G.party` (section 7). |
 | Length | Host option **판 수: 3판 / 5판**, default 3. One 판 = one minigame. |
 | Rotation | A shuffled bag of the games that fit the player count, refilled when empty; never the same game twice in a row; for 3판 with 3 eligible games each plays once. 3 players have 2 eligible games (no 거품 축구), so their 3판 is A B A and 5판 A B A B A (3.2). |
-| Before each 판 | A card (5 s, DOM overlay `#pg-party`, over the closed bath doors): `1판 / 3판`, the game name, one how-to line, the win line, the controls (keyboard or touch), the team line (축구), the running scoreboard. Then the usual 3-2-1. |
+| Before each 판 | A card (5 s, DOM overlay `#pg-party`, over the closed bath doors): `1판 / 3판`, the game name, a **one-line** how-to (it says how to win), the controls (keyboard or touch), the team line (축구), the running scoreboard; one rule line more where the screen is tall enough (9.2). Then the usual 3-2-1. |
 | Placement points | 1st is always 4 and last always 0: 2 players **4 / 0**, 3 players **4 / 2 / 0**, 4 players **4 / 2 / 1 / 0**. Ties share the best place of the group and its points, the next place is skipped (1, 1, 3, 4: 4, 4, 1, 0). Teams (2v2 축구) are a tie by construction: winners 4 + 4, losers 1 + 1; a draw gives everyone 4. |
 | Final standing | Total points; tie-break 1: more 1등 (shared 1등 counts); tie-break 2: the better place in the last 판; still tied: a shared place (공동 N등) on the podium. |
 | Minigames | **물 차오르기** (75 s, last one dry wins; survivors at time-up share 1st), **왕관 뺏기** (60 s, most crown time), **거품 축구** (60 s, 1v1 or 2v2, most goals; not for 3 players). Normal move / jump / shoot / drop-through controls, every animal's kit as in battle (with the room's 능력 끄기 and 연사), on one fixed screen. |
-| Bubbles on rivals | One rule for all three: a capture is a **short no-KO trap** (`MINI_TRAP` 90 f, mash out faster as in battle); touching a rival's prison only frees them (no 뽀득 KO, no points). 물: the prison sinks toward the water. 왕관: the holder drops the crown. 축구: the shot also pushes the ball. |
+| Bubbles on rivals | One rule for all three: a capture is a **short no-KO trap** (`MINI_TRAP` 90 f, mash out faster as in battle); touching a rival's prison only frees them (no 뽀득 KO, no points). 물: the prison sinks, and a prison carried into the water puts its animal out. 왕관: the holder drops the crown. 축구: the shot also pushes the ball. |
 | Arenas | Two new closed arenas in `PG.PARTY_ARENAS` (`levels.js`): **물 차는 대욕장** (5 one-way tiers) and **거품 축구장** (open field, a goal under a crossbar on each side). 왕관 뺏기 reuses the 4 battle arenas. |
 | Reward | **비누 코인 only**, by final rank, **no trophies** (no stake, no holds, no `tro`). Battle's anti-farm ideas: practice (`NET.q !== 0`: tabs of one browser, one device's store) pays nothing; a 판 pays only if I blew >= 2 bubbles in it; the rank bonus only for a finished party of >= 2 (a walkover pays participation only); >= 5 bubbles and >= 60 s played overall; every award through `coinGive` (the day's soft cap 400 then half, the day bonus). Per minute it pays less than a battle. |
 | Network | Host-authoritative as battle. **No new message type.** Guests keep sending bodies, `shot`, `tp`, `mash`; the host's snapshot gains `g.pa` (party), `g.mg` (minigame), `g.pl` (podium places), `g.ak` (arena list) and two phases (`a` card, `r` result). `hi` gains `pa: 1`; `R.m` gains `'p'`; `R.o` gains `o[7]` (판 수). |
-| Old pages | `NET_V` stays 4. An older page cannot enter a party: the host only counts a guest ready in a party room when its `hi` said `pa`, and the room says why (`새로고침 필요`). An older page as host never sends `'p'`. Lobby and invites list a party room only on new pages (6.2). |
+| Old pages | `NET_V` stays 4. An older page cannot enter a party: in a party room the host counts a seat ready only when its `hi` said `pa` (`seatReady`, 6.1: its own ready flag is kept, so a switch back to 같이 하기 / 배틀 needs no re-ready), and the room says why (`새로고침 필요`). An older page as host never sends `'p'`. Lobby and invites list a party room only on new pages (6.2). |
 | Out of scope | The board, offline / one-screen party UI, trophies or 내 기록 stats for parties, new sprites / sounds / music, bots, a 3-player 축구, mid-party joins (section 14). |
 
 ---
@@ -36,20 +36,20 @@ built as a self-contained "round with a placement result" that a board can drive
 
 | Thing | Code | Consequence for the party |
 |---|---|---|
-| Battle start | `netStart` → `netAgain(fn, true)` → `newBattle(list, opts, matchNo)` → `resetGame('battle', list)` + `startArena(idx)` + `beginCountdown()`. `netAgain` bumps `NET.gid`, freezes `NET.q = troPractice()`, sets `G.online`, `showOverlay(null)`, `netSnapshot(true)`. | A party is **one game id**: `netStart` calls `newParty` inside `netAgain`. All 판 of one party share `NET.gid`; 한 판 더 at the final podium is a new gid (a new party). |
+| Battle start | `netStart` → `netAgain(fn, true)` → `newBattle(list, opts, matchNo)` → `resetGame('battle', list)` + `startArena(idx)` + `beginCountdown()`. `netAgain` bumps `NET.gid`, runs `fn()`, and only **then** freezes `NET.q = troPractice()`, sets `G.online = true` / `G.role`, calls `showOverlay(null)` and `netSnapshot(true)`. | A party is **one game id**: `netStart` calls `newParty` inside `netAgain`. All 판 of one party share `NET.gid`; 한 판 더 at the final podium is a new gid (a new party). Two traps (3.1): `netAgain`'s `showOverlay(null)` would hide the first card, and inside `fn()` on the first start `G.online` is still false, so `coinGid()` is -1 and `isMe()` is false there. |
 | The world step | `update()` switches on `G.mode` (`title`, `playing`, `dying`, `transition`, `countdown`, `podium`). `updateWorld(ins)` runs players, enemies, bubbles, `lagTrapCheck` / `lagClaims` (battle online), then `updateBattle()`, and ends a battle when `G.battle.left <= 0`. | Two new modes `'card'` and `'result'` (new `update()` cases). The minigame tick goes at the top of `updateBattle` (after the timer lines), its end check where `endBattle` is called. |
 | Timer | `G.battle = {arena, total, left, intruded, enemyT, powerT}`; `updateBattle` counts `left`, ticks `countdown` in the last 3 s and shows `10초 남았어요!`; the snapshot carries `g.tl`; `applyView` rebuilds `G.battle` from it when `g.m === 'b'`; `drawHUDBattle` prints `m:ss`. | Each 판 sets `G.battle` with its own `total` (`intruded: true`, `enemyT` / `powerT` 1e9): timer, warnings and the HUD clock are reused as is. |
-| Capture / KO | `playerTrapCheck` / `lagClaims` → `catchPlayer` → `trapPlayer(v, b)`; `updateTrapped` frees after `PTRAP_FRAMES` (240) with `PTRAP_MASH` per press; `popBubble` on a `'player'` bubble calls `knockOut(v, by, b)` for a touch by someone else. Prisons drift with `floatMove` toward `G.gather`. | Party: trap length `MINI_TRAP`, `popBubble` releases instead of `knockOut`, `floatMove` sinks prisons in 물 차오르기, `trapPlayer` drops the crown in 왕관 뺏기. |
+| Capture / KO | `playerTrapCheck` / `lagClaims` → `catchPlayer` → `trapPlayer(v, b)`; `updateTrapped` (host, local **and** remote victims: it runs before `updateBody`'s remote early-out) moves the victim with its prison and frees it after `PTRAP_FRAMES` (240) with `PTRAP_MASH` per press (`mashTrap` and `drawBubble`'s about-to-escape wobble read `PTRAP_FRAMES` too); `popBubble` on a `'player'` bubble calls `knockOut(v, by, b)` for a touch by someone else, `releasePlayer` otherwise (hop `vy -1.6`, 60 f blink, `bumpEp`). Prisons drift with `floatMove` toward `G.gather`. | Party: trap length `MINI_TRAP` (all three readers), `popBubble` releases instead of `knockOut`, `floatMove` sinks prisons in 물 차오르기, `trapPlayer` drops the crown in 왕관 뺏기. |
 | Out of play | `p.out` exists (co-op "sits out"), `alive()` / `free()` / `canTouch` / `drawPlayer` / name tags honour it, `snapPlayers` sends it as flag 16 and `guestPlayers` reads it. `takeOver` hands a guest its animal back only when flag 64 (free) is set. | 물 차오르기's elimination is `p.out = true` + `bumpEp(p)`: the guest's control goes remote by itself and the animal disappears on every screen with no new wire field. `bodyAt` (via `placePlayer`) clears it for the next 판. |
 | Scores | `addScore` adds to `p.score`; battle keeps only personal scores; empty pops pay 10, stuns cost 100. The `P` rows carry `score` (index 8); `fillPodium` and `drawPodium` print `p.score`. | In a party **`p.score` is the party points total** (set only by the sequencer; `addScore` returns at once while `G.party`). Guests get the points through the existing rows; the podium and its screen-reader line show them unchanged. |
 | Levels | `normLevel(L, idx)` **opens a 4-column wrap gap (cols 14-17) when the floor row has none**, returns only its own fields, and computes `gapX` from the gap. `loadArenas` wraps `normLevel` for `PG.ARENAS`. `physBody` / `landTile` land on a closed floor row; `wrapY` never fires there. | Party arenas need `closed: true` honoured by `normLevel` (no gap, `gapX: W / 2`), and their own fields (`rise`, `goals`, `sides`, `ball`) carried past it by a new `loadPartyArenas`. The validator rejects a closed map today (wrap gap 2-6) and needs a party branch. |
-| Guest view | `guestBegin` builds the players and calls `resetGame(g.m === 'b' ? 'battle' : 'coop')` and `loadView(idx, g.m === 'b')`; `applyView` reloads the view when `g.r` or "arena?" changes; `guestPhase` shows overlays for `gameover` / `ending` / `podium`. `guestHostIn` runs trophies when `g.m === 'b'` and **co-op coins (`coinGuestIdx`) whenever `g.m !== 'b'`**. | Every `g.m` test must learn `'p'`: `'p'` means battle rules + party; `coinGuestIdx` must become `g.m === 'c'` only, or a party guest would pay co-op 탕 coins. `loadView` gets a list kind (`'l' | 'b' | 'p'`). |
+| Guest view | `guestBegin` builds the players, calls `resetGame(g.m === 'b' ? 'battle' : 'coop')` and `loadView(idx, g.m === 'b')`, **sets `G.mode` from that first snapshot's phase and ends with `showOverlay(null)`**; `applyView` reloads the view when `g.r` or "arena?" changes and calls `guestPhase` only when the phase **differs** from `G.mode`; `guestPhase` shows overlays for `gameover` / `ending` / `podium`. `guestHostIn` runs trophies when `g.m === 'b'` and **co-op coins (`coinGuestIdx`) whenever `g.m !== 'b'`**. | Every `g.m` test must learn `'p'`: `'p'` means battle rules + party; `coinGuestIdx` must become `g.m === 'c'` only, or a party guest would pay co-op 탕 coins. `loadView` gets a list kind (`'l' \| 'b' \| 'p'`). A party's first snapshot is phase `'a'` (the card): `guestBegin` must show the card itself, or no guest ever sees the first card (6.5). |
 | Trophies | `troHostGo` (from `updateCountdown`'s 시작! frame), `troHostResult` (from `endBattle`), `troGuestGo` / `troWait` (guest, `g.m === 'b'` only), `stakeNow()` is 0 unless `NET.mode === 'battle'`, `troCountSub` / `troCountCls` write the 2 / 1 countdown lines, `troPodiumUI` writes the podium tag / note. | `stakeNow()` is already 0 in a party room. `troHostGo` gets a `G.party` guard (it tests `gameMode`, which is battle); party never calls `endBattle`; guests never run trophies for `'p'`; the two countdown lines and the podium UI get party branches. |
 | Coins | `coinShot` counts my blows in `CO.bshots` (battle); `coinGo()` at 시작! resets it; `coinBattle` is the pure battle table, `coinBattleNow` pays once per gid into `CO.pod` which `coinPodLine` / `coinPodSr` show; `coinGive(a, day)` is the only writer (soft cap `COIN.soft` 400 a local day then half, the day bonus `COIN.day`). `coinPrac()` is `NET.q !== 0` online. | The party reuses `CO.bshots` as the per-판 blow count (reset at each 판's 시작! by the existing `coinGo`), a new pure `coinParty`, and `CO.pod` so the podium's coin line works unchanged. |
 | Room | `roomInfo()` sends `o: [arena, time, perks, intrusion, stake, monsters, rapid]` (o[5], o[6] were appended the same way: "an older guest just ignores it"); `guestRoom` reads with defaults that keep an older host's behaviour. `netSetOpts`, `buildOpts` / `syncOpts`, `renderRoom`, `renderFriends`, `renderGames` and 17 `NET.mode === 'battle'` tests decide what is shown. | `o[7]` = 판 수, `R.m = 'p'`, a `NET.mode === 'party'` branch at each of the 17 sites (7.6 lists them), a helper `pvp()` for "battle or party" (the kit options). |
 | Lobby / invites | `net.js` `MODES = ['coop', 'battle']`: a lobby entry with another mode is skipped, an advertise with another mode becomes `'coop'`. Invites `invites/{to}/in/{from} {code, mode, nick, at}`: `ivInvite` writes `NET.mode === 'battle' ? 'battle' : 'coop'`, `ivTake` drops a mode other than coop / battle, `firestore.rules` checks `d.mode in ['coop', 'battle']` (and `src/tests/cloud.js` models that rule). | `MODES` gains `'party'` (old pages keep skipping it: they could not play it anyway); invites carry `'party'`, the rules and their model accept it. |
 | Korean text | The canvas font (`FONT_SRC`) has digits, A-Z and `- x ! : . + /` only; Korean is DOM (banners, `wordPop`, tags, cards). Strings are warmed in `#pg-fontwarm` from `setupDOM`; constants read at load must live in the top constants block (a later `const` is a TDZ error that stops the engine booting, design/trophies.md 1). | The HUD shows digits and sprites only; every party string is in a new `PARTY_TEXT` in the top constants block, warmed next to `TRO_TEXT`. |
-| Screen | 256x224, HUD strip 0-16 (`PF_TOP`), seat panels at x 1 / 53 / 153 / 205, the timer between. On a 320 px phone the stage is about 24em x 21em; in-screen overlays must fit 20em tall (trophies.md 1). | The card is a compact `.pg-card` that fits 20em; the HUD keeps battle's layout. |
+| Screen | 256x224, HUD strip 0-16 (`PF_TOP`), seat panels at x 1 / 53 / 153 / 205, the timer between. `fit()`: `--fs = clamp(6s, 11 or 12.5 on touch, 22)` px. During play a phone is always landscape (`rotSync` covers an upright phone under 600 px with the rotate screen and pauses), so the in-game boxes are: **1x desktop window** 256x224 at 11 px = **23.3em x 20.4em** (the tightest; a window under 1x is smaller still, like the title card's 16.5em step); **568x320 landscape phone** (2 thumb columns of >= 104 px) about 345x301 px at 12.5 px = **27.6em x 24.1em**; 2x desktop 42.7em x 37.3em. (trophies.md's "320 px phone, 24em x 21em" is the upright phone: room / title only.) | The card is a compact `.pg-card` budgeted for the 1x window (9.2); the HUD keeps battle's layout. |
 
 ---
 
@@ -67,22 +67,22 @@ scoreboard, the card, coins or the podium.
   const PARTY_PTS = { 2: [4, 0], 3: [4, 2, 0], 4: [4, 2, 1, 0] };   // by place; n = players at that 판's 시작!
   const PARTY_F = { card: 300, result: 180, early: 60 };             // frames: the card, the result beat, last one standing
   // each minigame: c its wire code, secs, ar the arena (['p', i] PG.PARTY_ARENAS[i], ['b'] a battle arena), fits(n),
-  // team (축구), and the card texts (name, how, win, bub: what a bubble does in it)
+  // team (축구), and the card texts: name; how - the user's ONE-LINE how-to, which also says how to win (<= 17 syllables:
+  // one line at 0.9em in the 1x window's 17.4em, 9.2); rule - the one extra line, hidden on short screens (9.2)
   const MINI = {
     water: { c: 'w', secs: 75, ar: ['p', 0], fits: (n) => n >= 2, name: '물 차오르기',
-      how: '물이 차올라요! 높이높이 올라가요 · 물에 닿으면 탈락', win: '마지막까지 남으면 1등 · 끝까지 남은 친구는 모두 1등',
-      bub: '거품: 친구를 잠깐 가둬요 (가둔 거품은 물로 가라앉아요)' },
+      how: '물이 차올라요! 끝까지 안 젖으면 1등', rule: '물에 닿으면 탈락 · 거품에 갇히면 물로 가라앉아요 · 끝까지 남은 친구는 모두 1등' },
     crown: { c: 'c', secs: 60, ar: ['b'], fits: (n) => n >= 2, name: '왕관 뺏기',
-      how: '왕관을 쓰고 오래오래 버텨요 · 왕관을 쓰면 조금 느려요', win: '왕관을 가장 오래 쓴 친구가 1등',
-      bub: '거품: 왕관 쓴 친구를 가두면 왕관이 떨어져요' },
+      how: '왕관을 쓰고 가장 오래 버티면 1등', rule: '왕관을 쓰면 조금 느려요 · 거품에 갇히면 왕관이 떨어져요' },
     ball: { c: 'b', secs: 60, ar: ['p', 1], fits: (n) => n === 2 || n === 4, team: true, name: '거품 축구',
-      how: '큰 거품 공을 몸이나 거품으로 밀어서 골대에 넣어요', win: '골을 더 많이 넣은 팀이 이겨요',
-      bub: '거품: 공을 밀어요 · 상대를 잠깐 가둬요' },
+      how: '큰 거품 공을 상대 골대에 넣어요', rule: '몸이나 거품으로 공을 밀어요 · 골을 더 많이 넣은 팀이 이겨요' },
   };
   const MINI_IDS = ['water', 'crown', 'ball'];
-  const MINI_TRAP = 90, MINI_SINK = 0.3, WATER_SLACK = 3, CROWN_SLOW = 0.85, CROWN_NOPICK = 90, CROWN_SLACK = 4;
+  const MINI_TRAP = 90, MINI_SINK = 0.3, WATER_SLACK = 3, WATER_LEAD = 30, CROWN_SLOW = 0.85, CROWN_NOPICK = 90, CROWN_SLACK = 4;
   const BALL = { r: 11, g: 0.12, maxFall: 3, drag: 0.995, roll: 0.985, wall: 0.7, floor: 0.55, maxV: 5,
     body: 1.2, nudge: 0.4, shot: 1.8, drop: 1.0, float: 0.5, slam: -3.4, slack: 3, goalF: 120, kickF: 45, sfxGap: 8 };
+  // (WATER_LEAD: a guest draws the water at its estimate of the host's NOW, at most this many frames past the newest
+  // snapshot - 4.1)
 ```
 
 ### 2.2 State
@@ -93,7 +93,8 @@ scoreboard, the card, coins or the podium.
     endAt,                       // frame it ends early (-1: no; 물: the last one standing)
     // 물:  wl (surface y, px), outs: [[slot, frame]]
     // 왕관: cr {x, y, vx, vy, onGround, holder (-1), noPick (-1), noUntil}, held {slot: frames}
-    // 축구: ball {x, y, vx, vy, kick (frames until it drops)}, goals [L, R], team {slot: 0 | 1}, goalT, kickBy {slot: frame}
+    // 축구: ball {x, y, vx, vy, kick (frames until it drops)}, goals [L, R], team {slot: 0 | 1}, goalT, kickBy {slot: frame},
+    //       kn (pushes so far: a guest plays its 'bounce' when kn rises - 'bounce' is in NO_ECHO, section 10)
   };
 ```
 
@@ -104,7 +105,7 @@ scoreboard, the card, coins or the podium.
 
 | Function (**new**, own section "party" after `rematch`, before "word pops") | Does |
 |---|---|
-| `miniLoad(id)` | Picks the arena (`['p', i]`, or for `['b']` a random battle arena that is not the last one a crown 판 used), loads it with the shared body of `startArena` (refactor that body into **new** `loadArenaLV(L, i, kind)`: `LV`, `MAP`, `G.rid++`, `buildWater`, `buildRoundCanvas`, `G.gather`, every list cleared, `G.shotLog = []`), places the players (2.4), sets `G.battle = { arena: i, total: secs * 60, left: total, intruded: true, enemyT: 1e9, powerT: 1e9 }`, `G.mini = { id, c, n0: G.players.length, t: 0, endAt: -1, ...init }`. No enemies, no power-ups, no boss. |
+| `miniLoad(id)` | Picks the arena (`['p', i]`, or for `['b']` a random battle arena that is not the last one a crown 판 used), loads it with the shared body of `startArena` (refactor that body into **new** `loadArenaLV(L, i, kind)`: `LV`, `MAP`, `G.rid++`, `buildWater`, `buildRoundCanvas`, `G.gather`, every list cleared, `G.shotLog = []`; **not** `startArena`'s spawns, enemy wave, `G.battle`, `G.mode = 'playing'`, arena banner or `setMusic('battle')`, which stay in `startArena`), places the players (2.4), **refills every magazine** (`p.amN = p.amT = undefined`: `ammoTick` only runs while playing, so a magazine emptied at the end of one 판 would otherwise start the next one short; the guest does the same for itself at a new 판 index, 6.5), sets `G.battle = { arena: i, total: secs * 60, left: total, intruded: true, enemyT: 1e9, powerT: 1e9 }`, `G.mini = { id, c, n0: G.players.length, t: 0, endAt: -1, ...init }` (`n0` is set again on the 시작! frame: a leaver during the card / countdown is not counted). No enemies, no power-ups, no boss. |
 | `miniTick()` | One playing frame of the game (4.1-4.3), called at the top of `updateBattle` right after the timer / `10초 남았어요!` lines, then `return` (no enemies, power-ups or intrusion). It does not run while `G.mode !== 'playing'`. |
 | `miniOver()` | `G.battle.left <= 0 \|\| (G.mini.endAt >= 0 && G.frame >= G.mini.endAt)`. `updateWorld`'s battle end line becomes `if (G.party) { if (G.mode === 'playing' && miniOver()) partyResult(); return; }` before the battle one. |
 | `miniPlaces()` | `Map(slot -> place)` for the players present, 1-based, competition ranking (ties share the best place): `rankBy(rows)` over a key per game (4.x). |
@@ -154,7 +155,9 @@ A 3판 party is about 3 x (5 + 3 + 60..75 + 3) s = about 3.8 minutes, 5판 about
 ```
 
 - `newParty(list, opts)`: `G.opts = { arena: -1, time: 3, perks: opts.perks !== false, monsters: false, intrusion: false, rapid: opts.rapid === true, rounds }`, then `resetGame('battle', list)` (it sets `G.perksOff` from `G.opts.perks`), `G.lives = 0`, `G.party = {...}`, `plan = partyPlan(n, rounds)`, every `p.score = 0`, `coinPartyStart()`, `partyNext()`.
-- `updateCard()` / `updateResult()` (**new** `update()` cases `'card'` / `'result'`): `G.party.t++`, `updateFx()`; nothing moves.
+  - `coinPartyStart()` stamps `CO.pa.gid` with **`NET.gid` online, -1 offline** (`G.online ? ...` is not usable here: on the first start `netAgain` sets `G.online` only after `fn()` returns, so `coinGid()` would be -1 and the final would never pay).
+  - **The first card**: `netAgain` calls `showOverlay(null)` after `fn()`. It becomes `showOverlay(G.mode === 'card' ? 'party' : null)` followed by `fillParty()` when it is the card (the board's `+N`, the `나` chip and the keys line need `G.online` / `isMe`, which are only right after `netAgain` has set them). `partyNext` itself calls `showOverlay(G.menuOpen ? 'pause' : 'party')` too (offline `local.party`, and the 2nd card on; an open online menu is never replaced).
+- `updateCard()` / `updateResult()` (**new** `update()` cases `'card'` / `'result'`; without them `update()`'s `default:` would only run `updateFx()`): `G.party.t++`, `updateFx()`; nothing moves. `updateCard` at `PARTY_F.card`: `if (!G.menuOpen) showOverlay(null)` (an open online menu stays open), `beginCountdown()`.
 - `partyResult()`: `places = miniPlaces()`; for each present player `gain = PARTY_PTS[clamp(n0, 2, 4)][place - 1] || 0`, `pts += gain`, `p.score = pts`, `wins += place === 1`, `last = place`; `coinPartyRound()`; `G.mode = 'result'`; release every trap; banner (9.5); `wordPop(p.x + 8, p.y - 6, place + '등 +' + gain, p.color)` over each present animal (an out animal's at its last spot). Sound `'win'`.
 - `rematch()` gains `if (G.party) { newParty(list from G.players, G.party.opts); return; }` so `netAgain(rematch)` from the podium button / `primaryAction` / `PG.debug.mp.again` starts a new party.
 
@@ -184,7 +187,10 @@ A 3판 party is about 3 x (5 + 3 + 60..75 + 3) s = about 3.8 minutes, 5판 about
   goal, a keeper rule) that kids cannot read off the screen, and its placement would be "two share 1st" whenever the pair
   wins. Leaving it out keeps every 판 a fair free-for-all.
 - `partyReplan()` when the player count changes (a leaver, 3.4): `plan = partyPlan(nNow, n, plan.slice(0, i + 1))`
-  (played 판 kept, the rest re-drawn for the new count, the next still not equal to the current).
+  (played 판 kept, the rest re-drawn for the new count, the next still not equal to the current). A leaver **during the
+  card or the 3-2-1** of a 판 that no longer fits (4 → 3 before a 축구): that 판 is re-drawn too
+  (`plan = partyPlan(nNow, n, plan.slice(0, i))`, then `miniLoad(plan[i])` again and the card restarts at `t = 0`); once
+  it is `'playing'` it plays on short-handed (3.4).
 
 ### 3.3 Final standing
 
@@ -199,14 +205,20 @@ A 3판 party is about 3 x (5 + 3 + 60..75 + 3) s = about 3.8 minutes, 5판 about
 
 `partyFinal(walk)`: `G.podium = { order, t: 0, te: 0, pl: places }` (pl **new**: the place per podium block, shared
 places repeat), `G.mode = 'podium'`, `G.party.done = !walk`, `G.party.walk = walk`, clear bubbles / traps as
-`endBattle` does (and `bumpEp` everyone), `setMusic('podium')`, `Snd.sfx('win')`, `coinPartyNow()`, `showOverlay('podium')`.
-`drawPodium` prints `pd.pl ? pd.pl[i] : i + 1` on the blocks; `updatePodium` is unchanged.
+`endBattle` does (and `bumpEp` everyone; `p.out = false` matters here: `drawPlayer` draws nothing for an out animal, so a
+player out in the last 물 would be missing from the podium), `G.mini = null`, `setMusic('podium')`, `Snd.sfx('win')`,
+`coinPartyNow()`, `showOverlay('podium')`.
+`drawPodium` prints `pd.pl ? pd.pl[i] : i + 1` on the blocks, and takes the block colour (`MEDALS`) and the crown (k < 3,
+its tint) by **place** (`pl[i] - 1`), not by index, so a shared 1st has two gold blocks; the block heights stay by
+index. `fillPodium`'s screen-reader line says `pl[i] + '위'` (today `(i + 1) + '위'`). `updatePodium` is unchanged.
 
 ### 3.4 Leavers and the host
 
-- `hostDropPlayer(r)` gets `if (G.party) { partyDrop(pl); return; }` before its battle line (the animal is removed first,
-  as today). `partyDrop`: `miniDrop(pl)`; fewer than 2 players left (any mode but `'podium'`) → `partyFinal(true)`
-  (a walkover: the one left is 1등, participation coins only); else `partyReplan()` when the next game no longer fits.
+- `hostDropPlayer(r)` gets `if (G.party) { partyDrop(slot); return; }` before its battle line (the animal is removed
+  first, as today, so `partyDrop` takes the slot, not the player). `partyDrop`: `miniDrop(slot)`; fewer than 2 players
+  left (any mode but `'podium'`) → `partyFinal(true)` (a walkover: the one left is 1등, participation coins only; only
+  the host can be that one, since the session ends when the host goes); else `partyReplan()` when the next game (or,
+  during the card / 3-2-1, this one: 3.2) no longer fits.
 - A leaver's points go with it: standings, the card and the podium list present players only. Its places in later 판
   are simply missing (the points table stays the one for `n0`, so in a 4-player 판 with a leaver the others get 4 / 2 / 1).
 - 2v2 축구 with a leaver: the team plays the rest of that 판 short-handed (`team` keeps its member).
@@ -235,27 +247,52 @@ places repeat), `G.mode = 'podium'`, `G.party.done = !walk`, `G.party.walk = wal
 - `warn` s before each step: banner `물이 차올라요!` / `더 높이!` (class `hurry`), sfx `'hurry'`; the last step says
   `마지막 물결!`. From the 4th step the music is `'hurry'`.
 
-**Out**: every playing frame, for each present player not out and not KO'd: `p.y + 16 > wl + WATER_SLACK` (the feet are
-3 px under the surface) → `waterOut(p)`: release its trap, `p.out = true`, `bumpEp(p)`, `outs.push([slot, G.frame])`,
-`splash(p.x + 8, wl, 2, 12)`, `Snd.sfx('splash')`, `wordPop(p.x + 8, wl - 10, '탈락!', p.color)`. A remote player is judged
-by its latest reported body (`hostInputs` copies it into the host's player each frame), so what counts is the guest's own
-physics; the surface the guest sees runs at most a few frames behind the host's (well under 1 px at 8 px/s), and the
-3 px slack is in the guest's favour.
+**Out**: every playing frame, for each present player not out (invuln does not protect: water is not a hit):
+`p.y + 16 > wl + WATER_SLACK` (the feet are 3 px under the surface) → `waterOut(p)`: release its trap (its prison bursts),
+`p.out = true`, `bumpEp(p)`, `outs.push([slot, G.frame])`, `splash(p.x + 8, wl, 2, 12)`, `wordPop(p.x + 8, wl - 10, '탈락!',
+p.color)`, and the out sound (`Snd.sfx('splash')` is in `NO_ECHO`, so it never reaches a guest: each guest plays its own
+`'splash'` when a slot appears in the mirrored `outs`, section 10).
+
+- **Which body is judged.** A trapped animal: its prison's (`updateTrapped` keeps `p.y = b.y` on the host for local and
+  remote victims alike). A free host-local animal: exact. A free remote animal: its latest reported body
+  (`hostInputs` copies `rem.st` into the host's player each playing frame), but **only while that state's `ep` equals
+  the player's** - right after a release (`bumpEp`) the host's copy sits frozen where the host let go (`updateBody`
+  never moves a remote body) until the guest's first state of the new epoch arrives, a round trip later; judging that
+  frozen copy would drown a guest that, on its own screen, already hopped clear. A remote player whose state stays
+  stale longer than `REWIND` (30 f) is judged anyway (a stalled link drowns like a frozen animal would).
+- **Latency, honestly.** The guest's own body is its own physics, but it draws the host's world from snapshots that run
+  `bufDelay` (`SNAP_DELAY` 8 ticks, adaptive up to 24) behind, plus the one-way latency; its body then reaches the host
+  another one-way latency later. Drawn from the delayed view, the surface a guest sees would lag the host's by RTT +
+  view delay = about 230 ms (1.9 px at 8 px/s) on a good link and up to 600 ms (4.8 px, past the 3 px slack) on a bad
+  one. So **a guest draws the water at the host's current clock, not its view's**: the schedule is pure data
+  (`waterAt`), so `wl = waterAt(t)` with `t = (total - g.tl) + clamp(nowTicks() + NET.buf.off - g.k, 0, WATER_LEAD)` from
+  the newest snapshot `g` (`NET.buf.off` is the buffer's sender-minus-mine clock offset; `nowTicks() + off` is the host's
+  tick minus the fastest one-way latency). What is left is about one round trip (100 ms = 0.8 px, 300 ms = 2.4 px), inside
+  the 3 px slack; only while a step rises (between steps nothing moves). The host draws its own `wl`.
 
 - **Every animal is out on touch, the duck too**: tile water floats the duck (`floatBody`) and lets the otter swim; this
   layer is not tile water (no `WATER` cells), so nobody floats. Otherwise the duck could never lose. Every other kit
   is unchanged (glide, double jump, dash and slide all help climbing; the frog's hanging eggs are traps on the shelves).
 - **Prisons sink**: `floatMove(b)` for `b.kind === 'player'` while `G.mini.id === 'water'`: `b.vx *= 0.9; b.vy = MINI_SINK;`
-  (no drift to `G.gather`), then `clampBubble`. 90 f x 0.3 = 27 px: about one tier. A prison whose bottom reaches the water
-  (`b.y + 16 > wl`) pops (`popBubble(b, null, 'self')`); the freed animal is then in the water: out. This is the
-  "knock them down" move. A rival touching a prison only frees it (no KO).
+  (no drift to `G.gather`), then `clampBubble`. 90 f x 0.3 = 27 px: most of a tier (tiers are 32 px apart), so a trap
+  drowns only an animal standing on the tier just above the water. **There is no "pop at the water" rule**: the trapped
+  animal is judged by the out line above like everyone (its feet are its prison's bottom), so a prison carried
+  `WATER_SLACK` under the surface puts its animal out on the host directly. (A pop when the prison's bottom touches the
+  surface, as an earlier draft had it, would release the animal 3 px *above* the out line with `releasePlayer`'s hop,
+  60 f blink and a fresh epoch: a cat's 2단 점프 or the duck's glide would carry it away, and the guest's own physics would
+  decide it.) This is the "knock them down" move; mashing still gets out first unless the water is right there. A rival
+  touching a prison only frees it (no KO).
 - **Last one standing**: when at most one present player is not out (and `n0 >= 2`), `endAt = G.frame + PARTY_F.early`.
 - **Places**: `k = 1e12` for everyone not out (they share 1st), else the frame they went out (later is better; the same
   frame shares).
-- My own out on a guest: `miniView` sees my `p.out` turn on → a local banner `탈락! N등` / `친구들을 구경해요` (N from
-  `outs`), `NET.ctl` is already remote (`takeOver`). While waiting for the host's verdict, `guestSelf` freezes my input
-  (`NO_INPUT`) for at most 30 frames once my feet are `WATER_SLACK` under the surface I draw ("가라앉는 중"), so the animal
-  never walks on under the water; if the host does not call it out, input comes back.
+- My own out: `miniView` (guest) / `waterOut` (host, for its own animal) sees my `p.out` turn on → a **local-only** line
+  `탈락! N등` / `친구들을 구경해요` (N from `outs`). Not `showBanner`: the host's `G.banner` rides in every snapshot (`g.bn`),
+  so the host's personal line would show on every guest; use a local banner on a guest (guests own `G.banner` between host
+  banner ids) and, on the host, a word pop with `NET.rec` off (as `coinPop` does) or the tag hint chip. On a guest
+  `NET.ctl` is already remote (`takeOver`). While waiting for the host's verdict, `guestSelf` freezes my input
+  (`NO_INPUT`) for at most 30 frames once my feet are `WATER_SLACK` under the surface I draw ("가라앉는 중": that surface is
+  the host's clock, above, so the host will agree), and the animal never walks on under the water; if the host does not
+  call it out, input comes back.
 
 ### 4.2 왕관 뺏기 (crown grab)
 
@@ -263,14 +300,16 @@ physics; the surface the guest sees runs at most a few frames behind the host's 
 Kits as in battle (the 냉온탕 hot tub still gives the capy its shield, which blocks one capture).
 
 - **The crown** `cr` is a 16x16 body in the player convention (`physBody(cr)` with gravity, one-way landings, `wrapY`
-  through the drain). At 시작! it appears at `G.gather` (centre, under the lid) with `왕관이 나타났어요!` and sfx
-  `'powerup'`, and falls onto the centre stage, equally far from every spawn.
+  through the drain). At 시작! it appears at `G.gather` with `왕관이 나타났어요!` and sfx `'powerup'`, and falls onto the
+  centre stage, equally far from every spawn (every battle arena's gather is col 15, row 11 or 12, mid-screen right above
+  its centre stage: cols 12-19 on row 14 / 13 / 13, and 때밀이 링's ring floor on row 17 - checked in `levels.js`).
 - **Pick up**: a free crown (`holder < 0`) is taken by the first free player (`canTouch`) whose body touches
   `cr.x + 2, cr.y + 4, 12 x 12` (host-local exact, remote with `CROWN_SLACK` 4 px); several in one frame: the nearest
   centre. `noPick` (the player who just dropped it) cannot take it before `noUntil`. `wordPop('왕관!')`, sfx `'stamp'`.
 - **Holding**: the crown rides on the holder's head (`crown` sprite 8x8 at `headTop(p) - 9`); `held[slot]++` every playing
-  frame; the holder walks at `CROWN_SLOW` (0.85, `updatePlayer`'s walk factor; a guest knows the holder from `g.mg`), jumps
-  and blows as usual.
+  frame; the holder walks at `CROWN_SLOW` (0.85, `updatePlayer`'s walk factor), jumps and blows as usual. The host never
+  simulates a remote body, so for a guest holder the slowdown is that guest's own physics, from the holder field of
+  `g.mg` (it starts a view delay after the pickup; self-reported like every guest body, no stakes ride on it).
 - **Drop**: `trapPlayer(v, b)` on the holder (a capture, an otter droplet, a frog egg) → the crown flies out:
   `cr = {x: v.x, y: v.y - 8, vx: v.x + 8 < b.x + 8 ? -1.2 : 1.2, vy: -2.6}`, `holder = -1`, `noPick = v.slot`,
   `noUntil = G.frame + CROWN_NOPICK`. `wordPop('떨어졌다!')`, sfx `'pop'`. The holder leaving: the crown drops where it was.
@@ -296,16 +335,22 @@ players and bubbles (`ballStep`, **new**):
 3. **Bodies**: each player that can touch (`canTouch`) whose body box `x + 2, y + 2, 12 x 14` (grown by `BALL.slack` 3 px
    for a remote body) overlaps the ball: push the ball out along the normal n, then `v += n * (max(0, (pv - v) . n) * BALL.body
    + BALL.nudge)`; speed capped at `BALL.maxV`. Bodies are never pushed back by the ball, so nobody's own physics changes
-   and a guest's prediction stays exact. A sfx `'bounce'` at most every `sfxGap` frames per player. Fast kits kick
+   and a guest's prediction stays exact. A sfx `'bounce'` at most every `sfxGap` frames per player, and `kn++` (the
+   host's `'bounce'` is not echoed: the guests play theirs off `kn`). Fast kits kick
    hard by themselves (penguin slide, otter dash), with no special code.
-4. **Bubbles**: any of a player's own `'empty'` bubbles touching the ball (`dist < r + 7`) pops (`popBubble(b, null,
-   'self')`, its kit colours) and pushes: in flight along its velocity (`BALL.shot`, an otter droplet or a hanging frog egg
+4. **Bubbles**: any player's `'empty'` bubble touching the ball (`dist < r + 7`) pops (`popBubble(b, null, 'self')`, its
+   kit colours) and pushes: in flight along its velocity (`BALL.shot`, an otter droplet or a hanging frog egg
    `BALL.drop`, a floating one along the centre line `BALL.float`). A capture-phase bubble that meets the ball first is
-   spent on it.
+   spent on it: for that, the in-flight test goes into `shotHits` **before** `playerTrapCheck` (`updateBubbles` runs
+   before `ballStep`, so a test only in `ballStep` would let the same frame's rival catch win). The pop is a `spend`, so a
+   guest's later `tp` claim for that shot gets `'spent'` (its own predicted copy flew on through the ball: a guest does not
+   predict the ball).
 5. **The capy's slam**: `quake(pl, x, y)` gains: the ball inside its box → `vy = min(vy, BALL.slam)` (a header for free).
 6. **Goal**: centre x < 34 and centre y > 184 (left goal: a point for the right team), centre x > 222 and y > 184 (right
    goal). Then `goals[t]++`, `goalT = BALL.goalF`, the ball bursts (`burst`, `shake(3)`, sfx `'clear'`), banner `골!` /
-   `왼쪽 팀 1 : 0`, the clock stops while `goalT > 0`; then everyone is placed at their team's spawns (`placePlayer`) and
+   `왼쪽 팀 1 : 0`, the clock stops while `goalT > 0`; then every trap is released (`releasePlayer`) and every prison and
+   empty bubble cleared, everyone is placed at their team's spawns (`placePlayer`: `bodyAt` nulls `p.trap` without
+   touching the bubble, so a prison left behind would float on as an orphan `'player'` bubble with a stale `victim`), and
    the ball drops from the centre top (128, 64) after `BALL.kickF` frames.
 7. Safety: after the step the centre is clamped inside the field (an impossible state is never sent).
 
@@ -411,18 +456,29 @@ crossbar is a warning (`x`), not an error, for party arenas.
   // phase of a party room, u: the seats whose page cannot play the party (no pa in their hi) - an older guest ignores it
   const R = { gid, ph, m: NET.mode === 'battle' ? 'b' : NET.mode === 'party' ? 'p' : 'c',
     o: [arena, time, perks, intrusion, stakeNow(), monsters, rapid, NET.opts.rounds === 5 ? 5 : 3], p: [...] };
-  if (room && NET.mode === 'party') { const u = NET.roster.filter((r) => r.id !== NET.selfId && !(r.pa >= PARTY_V)).map((r) => r.slot); if (u.length) R.u = u; }
+  if (room && NET.mode === 'party') { const u = NET.roster.filter((r) => r.id !== NET.selfId && r.hi && !(r.pa >= PARTY_V)).map((r) => r.slot); if (u.length) R.u = u; }
+  // (R.p's ready flag, e[3], becomes seatReady(r): an older seat in a party room shows "not ready" on every screen)
 ```
 
-- `guestRoom(R)`: `NET.mode = R.m === 'b' ? 'battle' : R.m === 'p' ? 'party' : 'coop'`; `NET.opts.rounds = R.o[7] === 5 ? 5 : 3`
-  (missing, junk: 3); `NET.partyU = Array.isArray(R.u) ? slots : []` (room line, 9.1). The battle-only fields keep
-  their current reads, so a party room's `o[0..6]` are simply the host's battle settings, shown again if it switches back.
+- `guestRoom(R)`: `NET.mode = R.m === 'b' ? 'battle' : R.m === 'p' ? 'party' : 'coop'`; `rounds: R.o[7] === 5 ? 5 : 3`
+  (missing, junk: 3) goes **inside** the `NET.opts = {...}` literal there (it replaces the whole object, so a field set
+  beside it would be lost on the next R); `NET.partyU = Array.isArray(R.u) ? slots : []` (room line, 9.1). The
+  battle-only fields keep their current reads, so a party room's `o[0..6]` are simply the host's battle settings, shown
+  again if it switches back.
 - `NET.opts` gains `rounds: 3`. `netSetOpts`: `'rounds' in o` → `+o.rounds === 5 ? 5 : 3` (room phase or before hosting);
-  `mode` accepts `'party'`; switching **to** party un-readies every guest without `pa` (`r.ready = false`). A switch
-  from party to battle with a stake already un-readies through `stakeNow()` changing (the existing `s0` check).
-- `hi` (sent in `netAttach`) gains `pa: PARTY_V`. Host `'hi'`: `r.pa = nInt(m.pa, 0, 9, 0)`; new roster entries in
-  `netPeers` start with `pa: 0`. Host `'rd'`: `r.ready = ... && (NET.mode !== 'party' || r.pa >= PARTY_V)`.
-- `canStart` gains `&& (NET.mode !== 'party' || NET.roster.every((r) => r.id === NET.selfId || r.pa >= PARTY_V))`.
+  `mode` accepts `'party'`. A switch from party to battle with a stake already un-readies through `stakeNow()` changing
+  (the existing `s0` check).
+- `hi` (sent in `netAttach`) gains `pa: PARTY_V`. Host `'hi'`: `r.hi = true; r.pa = nInt(m.pa, 0, 9, 0)`; new roster
+  entries in `netPeers` start with `hi: false, pa: 0` (until a guest's `hi` lands, about a round trip after it joins,
+  its seat is neither ready nor flagged: no `새로고침 필요` flicker on every new-page joiner; `net.js` already holds a
+  newcomer's messages until its membership is in, so the `hi` is never dropped).
+- **Ready in a party room**: **new**
+  `seatReady(r) = r.ready && (NET.mode !== 'party' || r.id === NET.selfId || r.pa >= PARTY_V)` (host side; the host's
+  own entry has no `pa` and is always ready), used by `canStart` (instead of `r.ready`), by `R.p`'s ready flag, by the
+  seat tag and by `renderRoom`'s `allReady` (its 모두 준비됐어요! line). The `'rd'` handler is **unchanged** and the mode
+  switch un-readies nobody: an older page keeps its own `NET.ready` (it cannot read why it is not counted), so
+  un-readying it on the host would leave the two flags apart and, after a switch back to 같이 하기 / 배틀, cost that friend
+  two taps (its `netReady` toggles: the first sends `on: 0`). With the gate, a switch back makes it ready again by itself.
 - `netStart`: `NET.mode === 'party' ? newParty(list, Object.assign({}, NET.opts)) : NET.mode === 'battle' ? newBattle(...) : newCoop(...)`.
 - Bytes: `o[7]` adds 2 bytes; `R.u` appears only in a party room phase with an older page in it.
 
@@ -431,7 +487,7 @@ crossbar is a warning (`x`), not an error, for party arenas.
 | Host | Guest | What happens |
 |---|---|---|
 | new, coop / battle | old | Unchanged: `o[7]` is ignored, `R.m` is `b` / `c`. |
-| new, party | old | The old page reads `R.m 'p'` as co-op (its `guestRoom` default) and shows 같이 하기 in its room. It may press 준비, but the host never counts it ready (no `pa`), shows `새로고침 필요` on its seat, keeps 시작 off and says why; new guests see the same line from `R.u`. The party cannot start with it, and the session is locked from 시작 on, so it never receives `g.pa`, `g.mg`, phases `a` / `r` or `g.m 'p'`. |
+| new, party | old | The old page reads `R.m 'p'` as co-op (today's `guestRoom`: `R.m === 'b' ? 'battle' : 'coop'`) and shows 같이 하기 and co-op rules in its room. It may press 준비, but the host never counts it ready (`seatReady`: no `pa`), shows `새로고침 필요` on its seat, keeps 시작 off and says why; new guests see the same line from `R.u`. **The old page itself is told nothing** (it has no field it would read for it; its own message line says it waits for the host): the friends see the tag and tell it to refresh. The party cannot start with it (`canStart`; only the debug `start(true)` bypasses it), and the session is locked from 시작 on, so it never receives `g.pa`, `g.mg`, phases `a` / `r` or `g.m 'p'`. |
 | old | new | The new guest never sees `'p'` or `o[7]` (its default 3 is unused); the old host ignores `pa`. Battle and co-op as before. |
 | new | new | The party. |
 
@@ -452,8 +508,8 @@ crossbar is a warning (`x`), not an error, for party arenas.
 | Rotation, card, points, standings | host (`G.party`) | `g.pa` |
 | Bodies (every kit) | each player's own engine, as battle | body states (unchanged) |
 | Blows, captures | host, shooter-judged (`tp` claims), as battle | `shot`, `tp`, `mash` (unchanged); prisons in `U` |
-| Water level | host clock (`waterAt`) | `g.mg` |
-| Out (물) | host, against each player's latest reported body + 3 px | `P` flag 16 + `ep`; `g.mg` outs |
+| Water level | host clock (`waterAt`); a guest draws `waterAt` at its estimate of the host's now (4.1) | `g.tl` + `g.k` (the schedule is arena data); `g.mg` carries `wl` as a check |
+| Out (물) | host, against each player's latest reported body of the current epoch (a trapped one: its prison) + 3 px | `P` flag 16 + `ep`; `g.mg` outs |
 | Crown pickup / holder / drop / held time | host (remote bodies with 4 px slack) | `g.mg` |
 | Ball position / velocity, pushes, goals | host (remote bodies + 3 px; the host's bubbles) | `g.mg`, banner, events |
 | Placements, party points | host (`miniPlaces`, `partyResult`) | `g.pa`, `P` score (index 8) |
@@ -479,7 +535,8 @@ counts.
   //               t: frames into the card / result, F: 1 (final reached), W: 1 (walkover) }
   // miniSnap():  물   ['w', round(wl * 10), [[slot, place], ...]]                 (outs, with the place each one got)
   //              왕관 ['c', holder, round(x), round(y), f0, f1, f2, f3, noPick]   (f: frames held by seat)
-  //              축구 ['b', round(x * 10), round(y * 10), round(vx * 100), round(vy * 100), goalsL, goalsR, goalT, kick]
+  //              축구 ['b', round(x * 10), round(y * 10), round(vx * 100), round(vy * 100), goalsL, goalsR, goalT, kick, kn]
+  //              (kn: the push count - a guest plays 'bounce' when it rises, at most every sfxGap frames)
 ```
 
 - `PH_CODE` gains `card: 'a', result: 'r'`, `PH_NAME` `a: 'card', r: 'result'` (only party pages ever get them).
@@ -493,16 +550,27 @@ counts.
   (on the network event, so a hidden tab still counts). The trophy line stays `g.m === 'b'` only.
 - `guestBegin`: `resetGame(g.m === 'c' ? 'coop' : 'battle', list)`; `G.opts` gains `rounds`; for `'p'`: `G.party = partyMirror()`,
   `coinPartyStart()`; `TRO.run = g.m === 'c' ? {...} : null`; `loadView(idx, kind)`.
+  **The first card**: `guestBegin` sets `G.mode` from the first snapshot (`'card'` for every party: `netAgain`'s forced
+  snapshot follows `partyNext`) and ends with `showOverlay(null)`; `applyView` then sees no phase change, so
+  `guestPhase('card')` never runs and the guest never sees the first card. `guestBegin` ends with
+  `showOverlay(G.mode === 'card' && !G.menuOpen ? 'party' : null)` instead, and the first `partyView` calls `fillParty()`
+  (the mirror is empty until then).
 - `loadView(idx, kind)`: `kind` `'l'` (LEVELS), `'b'` (ARENAS) or `'p'` (PARTY_ARENAS) instead of the boolean; `NET.viewKind`
   replaces `NET.viewArena`. `applyView`: `kind = g.m === 'c' ? 'l' : g.m === 'p' && g.ak === 1 ? 'p' : 'b'`; reload when
   `idx`, `kind` or (party) `g.pa.i` changed; `G.battle` is rebuilt for `g.m !== 'c'`; then `if (g.m === 'p') partyView(g, g1, t)`
-  (mirror `G.party` and `G.mini`; the ball's x / y interpolated with `lx` / `ly` between `g` and `g1`; the water level the
-  same way).
-- `guestPhase`: `'card'` → `showOverlay('party')` + `fillParty()`; `'result'` → no overlay (banner and word pops come from
-  the snapshot); leaving `'card'` hides the card. `G.podium` gets `pl` from `g.pl` (`applyView`'s podium line).
+  (mirror `G.party` and `G.mini`; the ball's and the free crown's x / y interpolated with `lx` / `ly` between `g` and
+  `g1`; the water level from the host's clock, 4.1, not interpolated). `partyView` runs **before** `applyView`'s closing
+  `guestPhase` call, so the card is filled from this snapshot. A new 판 index (`g.pa.i` changed) also clears `NET.pred`
+  / `NET.bounces` (predicted shots of the last 판; today they are cleared per game id only) and refills my own magazine
+  (`me.amN = me.amT = undefined`, as the host's `miniLoad` does for everyone).
+- `guestPhase`: `'card'` → `showOverlay(G.menuOpen ? 'pause' : 'party')` + `fillParty()` (an open menu stays open, as
+  `guestPhase` keeps it for the other phases); `'result'` → no overlay (banner and word pops come from the snapshot);
+  leaving `'card'` hides the card. `G.podium` gets `pl` from `g.pl` (`applyView`'s podium line).
 - `guestSelf`: the 물 "가라앉는 중" freeze (4.1); `updatePlayer`'s walk factor reads `G.mini` (the crown holder).
-- `ptrapMax()` (**new**) = `G.mini ? MINI_TRAP : PTRAP_FRAMES`, used by `updateTrapped` and wherever a guest draws trap
-  progress from `P` index 19.
+- `ptrapMax()` (**new**) = `G.mini ? MINI_TRAP : PTRAP_FRAMES`, used by `updateTrapped`, `mashTrap` (the host's handler
+  of a guest's `'mash'`) and `drawBubble`'s about-to-escape wobble of a prison (`PTRAP_FRAMES - t.prog < 60` today;
+  with 90 f it would wobble from the 30th frame on: use `< ptrapMax() / 4`, which is 60 for a battle), on the host and on
+  a guest (which draws trap progress from `P` index 19).
 
 ---
 
@@ -511,23 +579,30 @@ counts.
 ### 7.1 Top constants block
 `PARTY_V`, `PARTY_ROUNDS`, `PARTY_PTS`, `PARTY_F`, `MINI`, `MINI_IDS`, the `MINI_*` / `WATER_*` / `CROWN_*` numbers,
 `BALL`, `PARTY_TX` and `PARTY_TEXT` (section 11), all before `V3_TEXT`. `COIN` gains the party entries (8.1).
-`MODE_DESC.party`, `NET_TEXT` unchanged.
+Not in the top block (they are read at run time, where they live today): `MODE_DESC` (net section, beside `NET_TEXT`)
+gains `party`; `IV_TX` (친구 초대 section) gains `party: '파티'`; `NG_TX.head` (the guest gate, `ngBuild`) becomes
+`온라인 같이 하기·배틀·파티는 Google 로그인하고 할 수 있어요` (`netGated` itself is unchanged: it gates every mode).
+`NET_TEXT` unchanged.
 
 ### 7.2 Game state and flow
 - `G`: `party: null, mini: null, arenaKind: 'b'`. `resetGame`, `toTitle`, `idleWorld`: clear `G.party` / `G.mini`.
 - `addScore`: `if (G.party) return;` first.
-- `updateCountdown`: the 시작! banner's sub is `MINI[id].name` in a party (not `몬스터 없음`); `troHostGo` returns for `G.party`.
+- `updateCountdown`: the 시작! banner's sub is `MINI[id].name` in a party (not `몬스터 없음`); `troHostGo` returns for `G.party`;
+  `G.mini.n0 = G.players.length` on that frame (2.3).
 - `troCountSub` / `troCountCls`: `G.party` → `(i + 1) + '판 / ' + n + '판' + (last ? ' · 마지막 판!' : '')`, class `''`.
 - `update()`: `case 'card': updateCard(); break; case 'result': updateResult(); break;`.
 - `updateWorld`: the party end line (2.3) before the battle one. `updateBattle`: `if (G.mini) { miniTick(); return; }`
   after the timer / warning lines (no enemies, power-ups or intrusion); the 축구 clock does not count while `goalT > 0`.
 - `startArena` → shared body in `loadArenaLV`; `miniLoad` uses it with `PG.PARTY_ARENAS` or `ARENAS`.
-- `rematch`: the party branch (3.1). `endBattle` is never called in a party.
+- `rematch`: the party branch (3.1). `endBattle` is never called in a party (also guard `PG.debug.endBattle`, which calls
+  it for any `gameMode === 'battle'`).
 - `hostDropPlayer`: `partyDrop` (3.4).
+- `netAgain`: its `showOverlay(null)` becomes `showOverlay(G.mode === 'card' ? 'party' : null)` + `fillParty()` (3.1).
 
 ### 7.3 Battle mechanics, party overrides
 - `trapPlayer(v, b)`: `if (G.mini && G.mini.id === 'crown') crownDrop(v, b);` at the end.
-- `updateTrapped`: `ptrapMax()` instead of `PTRAP_FRAMES`.
+- `updateTrapped`, `mashTrap`, `drawBubble`'s prison wobble: `ptrapMax()` instead of `PTRAP_FRAMES` (6.5).
+- `shotHits`: the 축구 ball test before `playerTrapCheck` (4.3).
 - `popBubble`, `'player'` branch: `if (by && by !== v && !G.party) knockOut(v, by, b); else releasePlayer(v);`.
 - `floatMove`: the 물 sink (4.1). `quake`: the 축구 header (4.3).
 - `updatePlayer`: its `let walk = WALK * k.walk * ...` line gains `* (crownHolder(p) ? CROWN_SLOW : 1)` (`crownHolder`:
@@ -546,13 +621,18 @@ counts.
   `drawWater()` (the water band over the animals, the ball and the free crown in front), and during `'card'` the doors
   shut (`drawDoors(1)`) over the new arena.
 - `drawHUD`: `if (G.gameMode === 'battle') { (G.party ? drawHUDParty : drawHUDBattle)(); return; }`.
-- `drawPodium`: `pd.pl` for the block digits (3.3).
+- `drawPodium`: `pd.pl` for the block digits, the `MEDALS` colour and the crowns (3.3); `fillPodium`: `pl[i] + '위'`.
 - `drawPlayer`: the worn crown (4.2) after the body, before the tag (the podium crown code is the model).
 - `OVERLAYS` += `'party'`; `dom.party = $('pg-party')` in `setupDOM`; `fillParty()` (**new**) fills the card from `G.party`.
 - `syncDOM`: banners live in `'result'` too; `syncTags`: tags in `'result'` too.
-- `pauseGame`: also in `'card'` / `'result'` (online it only opens the menu). `resumeGame`: `showOverlay(G.mode === 'card' ? 'party' : null)`.
-- `primaryAction`: nothing in `'card'` / `'result'` (nobody skips the card).
-- `fillPodium` / `troPodiumUI`: `if (G.party) { partyPodiumUI(); return; }` in `troPodiumUI` (title, tag, note: 9.6).
+- `pauseGame`: also in `'card'` / `'result'` (online it only opens the menu). `resumeGame`'s menu branch:
+  `showOverlay(G.mode === 'card' ? 'party' : null)` (today `null`).
+- `primaryAction`: nothing in `'card'` / `'result'` (nobody skips the card) - already true, it has no branch for them.
+- `fillPodium` / `troPodiumUI`: `if (G.party) { partyPodiumUI(); return; }` at the top of `troPodiumUI`, **before** it
+  creates its `kind: 'prac'` `TRO.pod` for a practice room (else `fillPodium` would add `연습 경기라 트로피는 그대로예요` to
+  a party that has no trophies). `page.html`: the podium title's text goes into its own
+  `<span id="pg-podium-h">결과 발표!</span>` so `파티 결과!` can be set without wiping the `#pg-podium-tag` span inside the
+  same `<h2>`; the section's `aria-label` follows.
 - `netCardLabels('podium')`: the button reads `파티 한 번 더` in a party.
 
 ### 7.6 Room UI (the 17 `NET.mode === 'battle'` sites)
@@ -562,8 +642,10 @@ A helper `const pvp = () => NET.mode !== 'coop';` for "a mode with the kit optio
 - `roomInfo`: `R.m` (6.1). `netStart`: the three-way start.
 - `renderFriends`: `hostOpts.hidden = NET.mode === 'coop'`; the host button `파티 방 만들기`; `MODE_DESC[NET.mode]`.
 - `renderRoom`: the badge `파티` (class `is-battle` kept for both pvp modes); `roomOpts.hidden = !host || NET.mode === 'coop'`;
-  the guest summary and the rules (9.1); the seat tag `새로고침 필요` for a seat without `pa` in a party room (host: `r.pa`;
-  guest: `NET.partyU`); the room message.
+  the guest summary and the rules (9.1); the seat tag `새로고침 필요` for a seat whose `hi` came without `pa` in a party
+  room (host: `r.hi && !(r.pa >= PARTY_V)`; guest: `NET.partyU`), and `seatReady(r)` for its 준비 완료 tag; the room message.
+  `renderRoom`'s seat-card `_key` must include `NET.mode` and the `pa` flags (today it lists slot, nick, char, ready,
+  count, twin, look, free: a mode switch alone would not repaint the tags).
 - `palRowEl` / `ivInvite` / `ivPaint` / `renderGames`: the party label (6.2).
 - `buildOpts(box)`: every label / control gets `data-for="b"` (battle only: 경기장, 시간, 몬스터 출현, 보스 난입, 트로피 걸기),
   `"bp"` (능력 끄기, 연사) or `"p"` (판 수: a `.pg-seg` of `3판` / `5판`, `data-rounds`, aria `판 수`); `syncOpts(box, editable)`
@@ -617,17 +699,29 @@ party's award is at most 32 + 40 after minutes of play.
 - `CO.bshots` is already my blow count in battle mode (`coinShot`), reset at each 판's 시작! by `coinGo()` (host:
   `updateCountdown`; guest: `coinPartyGuest` on the first `'p'` snapshot of each 판 index).
 - At each 판's end (host: `partyResult` → `coinPartyRound()`; guest: the first snapshot with phase `'r'` for index i, or any
-  later index if that one was missed): `act[i] = CO.bshots >= COIN.roundShots`, `shots += CO.bshots`, once per index.
-- `playF`: frames in `'playing'` (host: `miniTick`; guest: `guestUpdate` while `G.mode === 'playing'`).
+  later index if that one was missed, **or the final `'d'` snapshot**: the host goes from the last 판's result straight
+  to the podium, so a missed last `'r'` has no later index to close it): `act[i] = CO.bshots >= COIN.roundShots`,
+  `shots += CO.bshots`, once per index.
+- `playF`: host: `miniTick` frames (a hidden host tab freezes everyone anyway). Guest: **from the snapshots, on the network
+  event** like the rest (the battle takes its played time from the host's clock for the same reason: a hidden guest tab
+  stops `guestUpdate`'s rAF, and a brief tab switch must not cost the coins): per 판 index the largest `total - g.tl`
+  seen in a `'p'` snapshot (`total = MINI[id].secs * 60` from `g.pa.L`), summed.
 - At the final (host: `partyFinal`; guest: the first `'d'` snapshot with `g.pa.F`): `coinPartyNow()` once per gid into
   `CO.pod = { gid, give, bonus, prac, rang }`, so `coinPodLine` alternates my block's line and `coinPodSr` speaks it
   unchanged. `done` on a guest is `F && !W && act.length === n` (it saw every 판 end, so a host cannot shorten the party
   and still pay a rank bonus). My place and its tie size come from `g.pl` / `g.pd`.
+- The trailing frames: a guest's view runs `bufDelay` behind the network events, so after the `'r'` event closed 판 i it
+  may still show `'playing'` for a few frames; blows there land in `CO.bshots` and are reset by the next 판's `coinGo`
+  (lost, never counted twice).
 - Nothing is paid when: practice (`coinPrac()`, `NET.q !== 0`), `coinOk()` false, I left, the host left or went 방으로
   before the podium, or I blew fewer than 5 bubbles.
 - **Two accounts**: tabs of one browser and two players from one device's store are practice already (`troPractice`). Two
   devices, one idling: the idle one blows nothing, so it gets 0; the active one wins every 판 and gets at most 24 for
-  4 minutes (1v1 3판: 20), below a real battle's rate, and the soft cap halves it after 400 a day.
+  4 minutes (1v1 3판: 20). The alt can mash 거품 to pass the activity gates (that is cheap, and the battle has the same
+  gap): it then takes the participation part only, 2 + 4 a 판 (last place earns no rank bonus), 14 for a 3판 - the same as
+  a battle's last place (14 for 3 minutes) over a longer time. The pair (1v1 3판: 20 + 14) earns 34 per 3.8 minutes
+  against a 1v1 battle's 34..40 (20..26 + 14, KOs included) per 3 minutes, so the party is never the better farm, and the
+  soft cap halves both after 400 a day.
 
 ### 8.4 No trophies
 `stakeNow()` is 0 in a party room (the 트로피 걸기 row is hidden), `troHostGo` returns for a party, guests never run
@@ -649,8 +743,12 @@ battle counts do not move. The room rules say `트로피는 걸지 않아요`.
   - `미니게임 3판! 판마다 1등 4점 · 2등 2점 · 3등 1점 · 4등 0점` (3 players: `1등 4점 · 2등 2점 · 3등 0점`; 2: `1등 4점 · 2등 0점`)
   - `같은 기록이면 같은 등수 · 동점이면 1등을 더 많이 한 친구가 위예요`
   - `물 차오르기 · 왕관 뺏기 · 거품 축구` (3 players: `물 차오르기 · 왕관 뺏기 (거품 축구는 2명이나 4명일 때)`)
-  - `coinRule(q)` for the practice case, else `끝까지 하면 등수대로 비누 코인을 받아요`
+  - coins, by `q` (the party branch replaces renderRoom's `tro` lines **and** its `coinRule(q)` line, which both name
+    trophies or lean on them - `코인도`): q 0 `끝까지 하면 등수대로 비누 코인을 받아요`; q 1
+    `연습 경기예요: 이 브라우저의 탭끼리는 비누 코인이 없어요` (unless `CO.allowBc`, as `coinRule`); q 2
+    `연습 경기예요: 같은 기기에서 들어온 친구가 있어요 · 비누 코인 없음`
   - `트로피는 걸지 않아요`
+  - `RAPID_RULE` with 연사, else `AMMO_RULE` (the magazine is on in a party, as in battle)
   - `거품에 갇히면 잠깐 꼼짝 못 해요 · 연타로 빨리 빠져나와요`
   - `판 중간에 나가면 비누 코인이 없어요`
 - Seat tag: `새로고침 필요` (class `is-short`). Message (host, or a guest with `R.u`): `새로고침이 필요한 친구가 있어요 · 파티는 새 버전에서만 해요`.
@@ -663,7 +761,7 @@ battle counts do not move. The room rules say `트로피는 걸지 않아요`.
             <p id="pg-party-round" class="pg-party-round">1판 / 3판</p>
             <h2 id="pg-party-name" class="pg-h2">물 차오르기</h2>
             <p id="pg-party-how" class="pg-party-how"></p>
-            <p id="pg-party-win" class="pg-party-win"></p>
+            <p id="pg-party-rule" class="pg-party-rule"></p>
             <p id="pg-party-keys" class="pg-party-keys"></p>
             <p id="pg-party-team" class="pg-party-team" hidden></p>
             <ol id="pg-party-board" class="pg-party-board" aria-label="점수판"></ol>
@@ -673,27 +771,43 @@ battle counts do not move. The room rules say `트로피는 걸지 않아요`.
 ```
 
 - Round line: `1판 / 3판`, the last one `마지막 판! 3판 / 3판`.
-- `how` = `MINI[id].how`, `win` = `MINI[id].win`.
-- Keys: keyboard `←→ 이동 · ↑/Z 점프 · ↓ 내려가기 · X 거품`, touch `조이스틱으로 이동 (아래로 당기면 내려가기) · 점프 · 거품`; then
-  a second line `MINI[id].bub`.
+- `how` = `MINI[id].how`: the user's one-line how-to, always shown, one line (it also says how to win). `rule` =
+  `MINI[id].rule`: the one optional line (what a bubble does, the tie rule), hidden on short screens (Fit below).
+- Keys, one line: keyboard `←→ 이동 · ↑/Z 점프 · ↓ 내려가기 · X 거품` (the title card's words), touch
+  `조이스틱 이동 · 아래로 당기면 내려가기 · 점프 · 거품`. Touch mode shows the touch line (`touchMode`, as `.pg-keys-touch`).
 - Team (축구): `왼쪽 팀: 방장 · 냥냥 / 오른쪽 팀: 까삐 · 펭펭` (1v1: `왼쪽: 방장 / 오른쪽: 까삐`) and mine
   `나는 왼쪽 팀 · 오른쪽 골대에 넣어요!` (the side I score on, which is what a kid needs).
 - Board: one row per present player, best first: place digit, a 16 px bust (`portraitCanvas`, the seat's look and twin
-  colour, as the room cards), nick, `9점`, and `+4` (the last 판's gain, hidden before the first result). Shared places
-  show the same digit. My row has the `나` chip.
+  colour, as the room cards), nick (ellipsis: a nick is up to 12 syllables), `9점`, and `+4` (the last 판's gain, hidden
+  before the first result). Shared places show the same digit. My row has the `나` chip.
 - The bar fills over the 5 s (CSS transform, `reducedMotion` aware). No input skips it.
-- Fit: like the 목욕 끝 card it must fit 20em tall at a 320 px phone (about 24em x 21em): round 0.9em, name 1.6em, how /
-  win / keys 0.85em, 4 board rows of 1.3em, bar 0.4em: about 15em with padding. `@container` steps: under 17em tall hide
-  `#pg-party-win`; under 15em the board goes to 2 columns. Touch mode uses the touch keys line.
+- **Fit (the budget, from `fit()`'s numbers, section 1 "Screen")**. The tightest in-game box is the **1x desktop window**,
+  23.3em x 20.4em: `.pg-ov` pads 0.8em, `.pg-card` is at most 94% wide and pads 1em 1.5em 1.15em, so the card's content is
+  about **17.4em wide x 16.6em tall**. The 568x320 landscape phone (27.6em x 24.1em) leaves about 21.4em x 20.3em. Line
+  heights (font size x 1.25-1.3): round 0.85em → 1.1; name 1.6em sign font → 2.0 with its margin; how 0.9em → 1.2; keys
+  0.8em → 1.05; team (축구 only) 0.82em, 2 lines → 2.2; board 4 rows x 1.3 + 0.3 → 5.5; bar 0.4 + margins → 0.9. Without
+  the rule line that is **12.0em (14.2em with the team line)**, which fits the 1x window with about 2.4em to spare; the
+  rule line (0.82em, up to 2 lines → 2.2) fits only from about 22em of screen height. So: `@container (max-height: 22em)`
+  hides `#pg-party-rule` (the 1x window has no rule line; the 568x320 phone and every bigger screen have it);
+  `@container (max-height: 17em)` (a window under 1x) also hides the round line and the bar, and the board goes to 2
+  columns; `@container (max-width: 19em)` sets the board in 2 columns. Line widths at 1x: `how` is at most 17 syllables
+  (about 15.8em at 0.9em: one line); the keyboard keys line is about 17em at 0.8em, right at the 17.4em edge - the fit test
+  checks it is one line at 1x, and if it is not the fallback is `←→ 이동 · Z 점프 · ↓ 내려가기 · X 거품`; the touch line
+  (about 20em at 0.8em) only has to fit the phone's 21.4em. (An earlier draft budgeted "20em at a 320 px phone, about
+  15em": that is the upright phone, which never shows the card, and its 4 two-line texts came to about 18.5em, past the
+  1x window's 16.6em.)
 
 ### 9.3 Countdown and in-game banners and word pops
 
 - 3-2-1: "3" keeps my move (`countSub`); "2" / "1": `1판 / 3판` (last: `3판 / 3판 · 마지막 판!`); 시작!: sub = the game's name.
 - 물: `물이 차올라요!` / `더 높이!`, last step `마지막 물결!` / `더 높이!` (class `hurry`); others' out: `탈락!` (word pop);
-  my out: banner `탈락! 3등` / `친구들을 구경해요`.
+  my out: `탈락! 3등` / `친구들을 구경해요`, **on my screen only** (4.1).
 - 왕관: `왕관이 나타났어요!` (class `round`); word pops `왕관!`, `떨어졌다!`.
 - 축구: banner `골!` / `왼쪽 팀 1 : 0` (class `victory`); at each kickoff a word pop over my animal `오른쪽으로!` / `왼쪽으로!`
-  (where I score).
+  (where I score), **made by each screen for its own animal** with `NET.rec` off on the host (as `coinPop`): a host
+  `wordPop` is recorded as event `'w'` and would put the host's direction over the host's animal on every screen.
+- Who makes what: a host `showBanner` reaches every guest (`g.bn`), a host `wordPop` too (event `'w'`) - right for the
+  shared lines (`탈락!` over an animal, `1등 +4`, `골!`), wrong for anything that says "I / my".
 - All: `10초 남았어요!` (existing).
 
 ### 9.4 HUD (`drawHUDParty`, canvas: digits and sprites only)
@@ -724,9 +838,11 @@ battle counts do not move. The room rules say `트로피는 걸지 않아요`.
 ### 9.7 Mobile
 
 Landscape, the floating joystick (down = drop through), 점프 and 거품 as everywhere: the party adds no control. The touch
-JUMP sub-label (`syncJumpSub`) follows the kit as in battle. The card shows the touch keys line and fits 20em. A
-spectator (물, out) keeps the pads; they do nothing. The room's mode segment holds three buttons and the 판 수 row two:
-check them at 320 px in `ux-roomrow`. The 축구 ball and the crown are big (24 / 16 px) on purpose for small screens.
+JUMP sub-label (`syncJumpSub`) follows the kit as in battle. The card shows the touch keys line and fits the 568x320
+landscape box with its rule line (9.2). A spectator (물, out) keeps the pads; they do nothing. The room's mode segment
+holds three buttons and the 판 수 row two: `ux-roomrow` runs at 360x640 (upright: the room panel scrolls, the game is not
+shown); add a 320-wide check there and look at the room panel in the 568x320 landscape layout (`.pg-panel-open`). The
+축구 ball and the crown are big (24 / 16 px) on purpose for small screens.
 
 ---
 
@@ -742,13 +858,19 @@ check them at 320 px in `ux-roomrow`. The 축구 ball and the crown are big (24 
 | Sounds | 물: `hurry` (warning), `splash` (out); 왕관: `powerup` (appears), `stamp` (pick up), `pop` (drop), `trap_player` / `escape` (as battle); 축구: `bounce` (pushes, rate-limited), `clear` + `shake(3)` (goal), `go` (kickoff); card `door`; result `win`; final `win` + music `podium`. |
 | Music | `lobby` on the card, `battle` in play, `hurry` from 물's 4th step, `podium` at the end. |
 
-`REQUIRED` / `SPR_SIZE` do not change. The host's sfx reach the guests as events as today (none of them is in `NO_ECHO`).
+`REQUIRED` / `SPR_SIZE` do not change. The host's sfx reach the guests as events (`Snd.sfx` records `'s'` while
+`NET.rec`) **except the `NO_ECHO` ones, and two of the party's are in it: `'bounce'` and `'splash'`** (they are a body's
+own sounds, each engine plays its own). So: the 물 out's `'splash'` is played by each guest when a slot appears in its
+mirrored `outs` (plus its own out); the 축구 push `'bounce'` by each guest when the ball's `kn` rises (at most every
+`sfxGap` frames). Do not take them out of `NO_ECHO`: every guest jump and bubble bounce would then be heard twice. The
+other sounds above (`hurry`, `powerup`, `stamp`, `pop`, `trap_player`, `escape`, `clear`, `go`, `door`, `win`) echo as
+today; all of them exist in `audio.js`.
 
 ---
 
 ## 11. Korean strings (`PARTY_TX`, `PARTY_TEXT`)
 
-`PARTY_TX` holds every fixed line of sections 9.1-9.6 by key; `PARTY_TEXT` = the `MINI` names / how / win / bub +
+`PARTY_TX` holds every fixed line of sections 9.1-9.6 by key; `PARTY_TEXT` = the `MINI` names / how / rule +
 `Object.values(PARTY_TX)` + `' 판 등 점 공동 승리 무승부 팀 왼쪽 오른쪽 0123456789+/:·!'`, appended to both `#pg-fontwarm`
 spans in `setupDOM` next to `TRO_TEXT` / `SHOP_TEXT`. Both live in the top constants block (TDZ, section 1). No string may
 contain the retired v1 title's syllables (`final-e2e2` checks the page).
@@ -765,10 +887,12 @@ contain the retired v1 title's syllables (`final-e2e2` checks the page).
 | `party.state()` | `{ph, i, n, plan, pts, wins, last, mini: {id, t, wl, outs, cr, held, ball, goals, team}}` as this page shows it. |
 | `party.fast(on)` | Debug only: every game 12 s (water steps scaled), card 60 f, result 40 f, and `coinParty`'s `playF` gate waived (like `tro.fast`). |
 | `party.skip()` | Host: end the current 판 now (`partyResult`). |
+| `party.force(plan)` | Host, debug only: the next party (online or offline) plays exactly this list of game ids (1-5 long, each must fit the players; `null` clears it). The room option stays 3 / 5 for real players; `netSetOpts` never takes a plan. The online tests need it (13.2 #5: `['ball']`). |
 | `party.level(y)`, `party.crown(slot)`, `party.ball(x, y, vx, vy)`, `party.goal(t)` | Set a game's state (host). |
 
 `netDebugApi().host({mode: 'party', rounds, ...})` works through `netSetOpts`. `netState()` gains `party: {mode, rounds,
-pa (my roster entry's / guests'), u}`.
+pa (my roster entry's / guests'), hi, u}`. `mp.guestRoom(R)` (the reader probe) returns `NET.opts` only and puts
+`NET.mode` back afterwards: give it a `mode` field in its result so 13.2 #1 can read the mode it decoded.
 
 ---
 
@@ -777,6 +901,9 @@ pa (my roster entry's / guests'), u}`.
 ### 13.1 New `src/tests/party.js` (virtual time, offline engine, like `trophies.js`)
 
 Prints `PARTY PASS|FAIL <name>`, `PARTY INFO ...`, `PARTY DONE pass=N fail=M`. `#fit` runs only the fit part (a phone).
+Drive the engine with `PG.debug.step(n)` (synchronous `update()` frames, as `trophies.js` does), never by waiting: a
+whole 3판 at real lengths is about 14,000 frames (228 s), past the job's 120 s virtual-time budget if it were waited
+out; stepped it is a second or two of CPU. `party.fast` is for the real-time net test only.
 
 1. **Rotation**: `plan(n, r, seed)` for n 2 / 3 / 4, r 3 / 5, 300 seeds: never the same game twice in a row; 3판 with n 2
    or 4 plays each game once; n 3 never plans 축구 and 3판 is A B A; `partyReplan` after 4 → 3 drops a planned 축구 and keeps
@@ -785,39 +912,56 @@ Prints `PARTY PASS|FAIL <name>`, `PARTY INFO ...`, `PARTY DONE pass=N fail=M`. `
    standings tie-breaks (points, then 1등 count, then the last 판, then shared).
 3. **물**: `waterAt` at step edges; the arena: each step drowns exactly one tier (players parked on every tier, out in the
    expected order); `WATER_SLACK` (feet 2 px under: dry, 4 px: out); the duck does not float; a trapped rival's prison sinks
-   `MINI_SINK` and pops at the water → out; same-frame outs share; survivors share 1st; the last one standing ends it after
+   `MINI_SINK` and, carried `WATER_SLACK` under the surface, puts its animal out with no release first (no hop, no blink:
+   it never gets a frame of its own physics); a prison on the tier two above the water lets go dry; a remote animal is
+   not judged in the frames between a `bumpEp` and its first state of the new epoch (fake `rem.st` with the old `ep`),
+   and is judged again after `REWIND`; same-frame outs share; survivors share 1st; the last one standing ends it after
    `PARTY_F.early`; an out player is hidden, cannot blow or be caught, and is back for the next 판.
 4. **왕관**: appears at the gather and lands on the centre stage; first touch takes it; held frames count only while
    holding; a capture of the holder drops it, the dropper cannot re-take it for `CROWN_NOPICK`; a capy shield keeps it;
    the holder walks at `CROWN_SLOW`; places by held time; a leaver holding it drops it.
 5. **축구**: body pushes (a still body nudges, a sliding penguin kicks hard), a shot bubble pushes along its flight and
-   pops, a capy slam lifts it; goals on both sides counted once, the clock stops during `goalT`, the kickoff resets bodies
-   and ball; teams by standing; 60 s of random kicks (seeded) never leave the field, never wrap, never NaN.
+   pops, a capy slam lifts it; a shot touching the ball and a rival in the same frame is spent on the ball (no trap);
+   goals on both sides counted once, the clock stops during `goalT`, the kickoff releases traps (no orphan `'player'`
+   bubble left), resets bodies and ball, and `kn` counts pushes; teams by standing; 60 s of random kicks (seeded) never
+   leave the field, never wrap, never NaN.
 6. **No KO**: popping a prison frees (kos 0, `p.score` unchanged); `addScore` does nothing in a party.
 7. **Flow**: modes card → countdown → playing → result → ... → podium with the right timings; `p.score` = points; the
-   podium order / `pl`; `removePlayer` mid-party → replan, < 2 → walkover podium; `rematch()` starts a new party.
+   podium order / `pl` (a shared 1st: two gold blocks, two `1`s, `1위` twice in the screen-reader line); an animal out in
+   the last 물 stands on the podium; `removePlayer` mid-party → replan, during the card of a 축구 (4 → 3) → that 판 is
+   re-drawn, < 2 → walkover podium; every magazine is full at each 시작! even if emptied at the end of the 판 before;
+   `rematch()` starts a new party.
 8. **Rewards**: `coinParty` every branch (AFK 0, participation only, walkover, shared place average, 2 / 3 / 4 tables);
    through `coinGive` the day bonus and the soft cap; the trophy store byte-identical after a whole party.
-9. **UI**: the card fills (round, name, keys by touch mode, team line, board order and `+N`), fits at 1x, 2x and a 320 px
-   phone (`#fit` under `cdp-run` mobile); `PARTY_TEXT` is warmed; the podium title / tag / note switch and switch back
-   for a battle afterwards; the HUD draws without errors for each game.
+9. **UI**: the card fills (round, name, keys by touch mode, team line, board order and `+N`); it fits (`scrollHeight <=
+   clientHeight`, inside `#pg-screen`, the `trophies.js` `measure` helper) for each game, 축구 with its team line, 4
+   players with 12-syllable nicks: at **1x** (`setScale(1)`: no rule line, the `how` and keyboard keys lines one line
+   each), at **2x** (rule line shown) and on the **568x320 landscape phone** (`#fit` under `cdp` mobile, touch keys line,
+   rule line shown); `PARTY_TEXT` is warmed; the podium title / tag / note switch and switch back for a battle
+   afterwards (and a practice party adds no `연습 경기라 트로피는 그대로예요`); the HUD draws without errors for each game.
 10. **Arenas**: `normLevel` keeps a closed map closed; `PG.PARTY_ARENAS` loads with its fields; a broken entry falls back.
 
 ### 13.2 New `src/tests/party-net.js` (4 same-origin iframes on bc, real time, like `trophies-net.js`)
 
 Every frame: `tro.ns('f' + i)`, `tro.allowBc(true)`, `party.fast(true)`. Host = slot 0. Prints `PARTYNET ... DONE`.
 
-1. `hi` carries `pa: 1`; a party room's `R.m` is `'p'`, `o[7]` the 판 수; a crafted older guest (a `hi` without `pa`,
-   sent from a frame through its session) cannot be ready: tag `새로고침 필요` on the host, `R.u` and the line on the other
-   guests, 시작 off; switching battle → party un-readies it; `mp.guestRoom` of a party `R` on an older-shaped reader keeps
-   co-op (the backward read).
-2. A 3판 party with 4 frames: every frame shows the same card order, round lines and scoreboard; phases a / c / p / r
-   arrive everywhere; snapshots under 3400 bytes.
-3. 물: the guests' drawn level within 1 px of the host's at the same tick (trace); an out decided by the host is out on
-   every screen within 0.5 s, the guest's control goes remote, its banner says the place.
+1. `hi` carries `pa: 1`; a party room's `R.m` is `'p'`, `o[7]` the 판 수; a new-page joiner never shows `새로고침 필요`
+   (sample its seat every frame from the join on: the `r.hi` gate); a crafted older guest (a second `hi` without `pa`,
+   sent from a frame through its session, which zeroes its `r.pa`) cannot be ready: tag `새로고침 필요` on the host, `R.u`
+   and the line on the other guests, its `R.p` ready flag 0, 시작 off; switched back to battle it is ready again with no
+   new `rd`. The backward read itself cannot run in this build (the old reader is gone); the test pins the bytes it
+   relies on instead: the party `R` keeps `R.m === 'p'` and `R.o[0..6]` exactly as a battle room's, and
+   `mp.guestRoom` reads `o[7]` 5 / missing / junk as 5 / 3 / 3.
+2. A 3판 party with 4 frames: **the first card is shown on the host and on every guest** (`netAgain` / `guestBegin`,
+   3.1 / 6.5), every frame shows the same card order, round lines and scoreboard; phases a / c / p / r arrive everywhere;
+   snapshots under 3400 bytes; a guest that opens its menu during a card keeps the menu.
+3. 물: the guests' drawn level within 1 px of the host's level at the same host tick (trace; a guest draws the host's
+   clock, 4.1); an out decided by the host is out on every screen within 0.5 s, the guest's control goes remote, its own
+   line says the place on its screen only, and every guest played `'splash'` for it.
 4. 왕관: a guest's claim (`tp`) on the holder drops the crown on every screen; held seconds agree at the result.
-5. 축구 (`plan: ['ball']`, 4 frames → 2v2 and 2 frames → 1v1): a guest's body and a guest's bubble each move the ball on the
-   host; a goal is counted once and shown everywhere; teams agree.
+5. 축구 (`party.force(['ball'])`, 4 frames → 2v2 and 2 frames → 1v1): a guest's body and a guest's bubble each move the
+   ball on the host (and the guests hear `'bounce'` off `kn`); a goal is counted once and shown everywhere; teams agree;
+   each screen's kickoff word pop is over its own animal only.
 6. The final podium order, places and points agree on every frame; each frame's coins match `coinParty` with its own
    counters (q 0 through `allowBc`); without `allowBc` (q 1) nobody gets coins; trophies unchanged everywhere.
 7. A guest leaves mid-판 2 of 3 (4 → 3): a planned 축구 is replaced, the party finishes, the leaver gets nothing; the host
@@ -828,23 +972,26 @@ Every frame: `tro.ns('f' + i)`, `tro.allowBc(true)`, `party.fast(true)`. Host = 
 ### 13.3 Existing tests and tools to update in the same PR
 
 - `tools/validate-levels.js` (5.4), `tools/net-node-test.js` (a lobby entry with mode `'party'` is listed),
-  `src/tests/cloud.js` (its rules model: invite mode `'party'`), `ux-roomrow` (the 3-button mode segment and the 판 수 row at
-  320 px), `check-pages` / `final-e2e2` (the new overlay and strings). `trophies.js` / `trophies-net.js` / `kits*.js` need no
-  change; run them once (one suite run, `node tools/run-all.js`, every Chrome run keeps `--mute-audio`).
+  `src/tests/cloud.js` (its rules model: invite mode `'party'`), `ux-roomrow` (the 3-button mode segment and the 판 수 row;
+  it runs at 360x640 today - add a 320-wide pass), `check-pages` / `final-e2e2` (the new overlay and strings).
+  `trophies.js` / `trophies-net.js` / `kits*.js` need no change; run them once (one suite run, `node tools/run-all.js`,
+  every Chrome run keeps `--mute-audio`). `battle-net` / `mp-net` exercise the `netAgain`, `guestBegin`, `applyView` and
+  `renderRoom` paths this PR touches: a battle and a co-op start must look exactly as before (first frame, overlays).
 
 ### 13.4 `tools/run-all.js` and CI (`.github/workflows/pr.yml`)
 
 ```js
   // ---- 파티 (design/party.md §13): the rules, the three games, the flow, the coins, the card fit - offline, virtual time
   V('party', 'test-party.html', 120000, doneZero('PARTY'), { shot: 'runall-party.png' }),
-  V('party-fit-320', 'test-party.html#fit', 30000, doneZero('PARTY'), { w: 568, h: 320, runner: 'cdp', mobile: true, done: 'PARTY DONE' }),
+  V('party-fit-568', 'test-party.html#fit&touch=1', 30000, doneZero('PARTY'), { w: 568, h: 320, runner: 'cdp', mobile: true, done: 'PARTY DONE' }),
   // 파티 online: capability gate, cards, the three games' authority, podium, coins, leavers (bc, real time)
   V('party-net', HTTP + 'test-party-net.html', 'rt420000', doneZero('PARTYNET'), { done: 'PARTYNET DONE', w: 1200, h: 900 }),
 ```
 
 CI subset: add **`party`** to `JOBS` in `pr.yml` (virtual time, one engine: stable like `trophies` / `kits`). `validate-levels`
-is already in it and now covers the party arenas. `party-fit-320` and `party-net` stay in the full local run: the
-workflow's own note keeps real-time multi-window tests off the shared runners.
+is already in it and now covers the party arenas. `party-fit-568` (a landscape phone, the size the card meets on a
+phone: `rotSync` covers an upright one; `&touch=1` as the gacha / shop fit jobs) and `party-net` stay in the full local
+run: the workflow's own note keeps real-time multi-window tests off the shared runners.
 
 ---
 
@@ -855,7 +1002,7 @@ workflow's own note keeps real-time multi-window tests off the shared runners.
 - Trophies, 내 기록 or 친구 순위 stats for parties; a party trophy league.
 - New sprites, sounds or music; bots for the party in `review-mpbal.js`.
 - A 3-player 축구 variant; more minigames; per-minigame options; changing options mid-party; joining a party in progress.
-- Guest-side prediction of the ball (pushes show after the round trip; 16.1).
+- Guest-side prediction of the ball (pushes show after the round trip; section 16, risk 1).
 - Lobby list fields beyond the mode label.
 
 ---
@@ -876,7 +1023,8 @@ workflow's own note keeps real-time multi-window tests off the shared runners.
 
 ## 16. Risks
 
-1. **Ball feel over the network**: a guest's push shows after about one round trip plus the view delay (150-250 ms).
+1. **Ball feel over the network**: a guest's push shows after about one round trip plus the view delay (`bufDelay`: 8
+   ticks, adaptive up to 24): about 230 ms on a good link, up to half a second on a poor one.
    Kept simple (host-only ball, bodies never pushed back). If friends find it laggy, a guest-side cosmetic prediction of
    its own pushes is the follow-up.
 2. **The `g.m` split**: every `g.m === 'b'` / `!== 'b'` test must be reviewed; the co-op coin line (`coinGuestIdx` ran
@@ -887,3 +1035,58 @@ workflow's own note keeps real-time multi-window tests off the shared runners.
    deployed with this.
 5. **A hidden host tab** freezes the party for everyone (the rAF loop stops), as it freezes a battle today.
 6. **Snapshot budget**: smaller than battle by construction; the net test asserts it.
+7. **Overlays at a start**: the first card is the first screen of every party on every page, and both start paths hide
+   it today (`netAgain`'s `showOverlay(null)` on the host, `guestBegin` + "no phase change" on a guest). The fix touches
+   the battle / co-op start paths too: `battle-net` / `mp-net` must stay green.
+8. **Water fairness on a bad link**: with the guest drawing the host's clock (4.1) what is left is one round trip at
+   8 px/s against a 3 px slack: fine up to about 350 ms RTT. Past that a guest can be called out about a pixel before its
+   own screen shows its feet under; between steps (most of the game) nothing moves and nothing is unfair.
+
+---
+
+## 17. Review against the code (2026-10-26)
+
+Every hook above was opened in `src/game.js` / `src/net.js` / `src/levels.js` / `firebase/firestore.rules` /
+`tools/` on `feat/party` (base `0432432`). Confirmed as written: the 39 `gameMode === 'battle'` sites and what each does
+in a party; the 17 `NET.mode` battle tests (14 `===` + 3 `!==`); `normLevel`'s forced gap (rows 0 and 25) and the
+validator's 2-6 / 3-column rule; `p.out` through `alive` / `free` / `canTouch` / `drawPlayer` / flag 16 / `takeOver`'s
+flag 64; `bodyAt` clearing `out`; `hostInputs` copying `rem.st` only for a free, same-epoch player while playing;
+`hostClaim` / `claimCheck` (stale claims die on `ep`, the shot log is per arena); `magOf` / `capMine` / `SHOT_CAP`;
+`stakeNow()` 0 outside battle; `troHostGo` testing `gameMode` (so it needs the guard); `coinGuestIdx` firing for every
+non-`'b'` snapshot; the coin numbers in 8.1 (battle 28 / 9.3 a minute, party 24 / 6.3) and the cloud's earn-rate rule
+(`rise <= 150`, `rise * 2000 <= 60000 + dt`); `net.js` `MODES`, the invite rule and its `cloud.js` model; `net.js`
+holding a newcomer's messages until its membership is in; both party maps (32 wide, mirror-exact, every tier reachable
+within 2-3 columns, each rise step drowning exactly one tier); every sprite and sound named in section 10.
+
+Corrected in this pass (the implementer's watch list):
+
+1. The first card was hidden on every screen: `netAgain` hides overlays after `fn()`; `guestBegin` sets the phase
+   itself so `guestPhase` never fires (3.1, 6.5). Also `G.online` is false inside `fn()` on the first start, so
+   `coinPartyStart` must stamp `NET.gid` (3.1).
+2. 물: the "pop the prison at the water" rule released the animal 3 px above the out line with a hop, a blink and a new
+   epoch (it could escape, and its guest's physics decided it); a trapped animal is now judged by its prison like
+   everyone. A remote animal is judged only on a same-epoch state (the frozen copy after a release would drown honest
+   guests). The water lag was "well under 1 px": it is about 2 px on a good link and past the slack on a bad one, so a
+   guest draws the water at the host's clock (4.1).
+3. `'splash'` and `'bounce'` are in `NO_ECHO`: guests would never hear the out or the ball (section 10, `kn`).
+4. The host's personal lines (`탈락! N등`, the kickoff `오른쪽으로!`) would have gone to every guest through `g.bn` /
+   event `'w'` (4.1, 9.3).
+5. Old pages: un-readying a seat on the host left it apart from the old page's own `NET.ready`; now `seatReady` gates
+   readiness and `r.hi` stops a `새로고침 필요` flicker on every new joiner; the seat card's `_key` must include the mode
+   (6.1, 7.6).
+6. Magazines carried over between 판 half-empty (`ammoTick` only runs while playing): refilled at each `miniLoad` and on
+   the guest at each new 판 index (2.3, 6.5).
+7. 축구: a kickoff `placePlayer` would orphan prisons; the ball test must run before rival catches (`shotHits`) (4.3).
+8. Coins: a guest's `playF` from its own rAF frames would cost a hidden-tab guest its coins (the battle uses the host's
+   clock): now from `g.tl` on the network event; a missed last `'r'` is closed by the `'d'` snapshot (8.3). The
+   two-account paragraph assumed an idle alt blows nothing; the numbers now cover an alt that mashes (8.3).
+9. The card fit was budgeted for the upright 320 px phone (which never shows it) at "about 15em"; measured against
+   `fit()` the tightest box is the 1x desktop window (16.6em of content) and the texts came to about 18.5em. The how-to
+   is now the user's one line, `win` + `bub` merged into one `rule` line hidden under 22em of screen height, and the fit
+   test covers 1x, 2x and 568x320 landscape (9.2, 13.1, 13.4).
+10. Smaller: `MODE_DESC` / `IV_TX` / `NG_TX` are not in the top constants block (7.1); `ptrapMax` has three readers
+    (6.5); `drawPodium` colours / crowns and `fillPodium`'s `위` by place, out animals back on the podium (3.3);
+    `troPodiumUI`'s practice `TRO.pod` must not run for a party (7.5); the podium title needs its own span (7.5); room
+    rules: the magazine line, no trophy practice lines (9.1); a leaver during a card that no longer fits re-draws that
+    판 (3.2); `n0` is taken at 시작! (2.3); online tests need `party.force(plan)` (12); virtual-time tests must step the
+    engine, not wait (13.1); `ux-roomrow` runs at 360 px, not 320 (9.7, 13.3).
