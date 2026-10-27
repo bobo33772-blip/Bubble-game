@@ -1,8 +1,11 @@
 # 뽀득뽀득 목욕탕: 파티 (Mario Party style minigames) v1 — design spec
 
-Status: design, ready to implement as ONE PR on `feat/party`; checked against the code on 2026-10-26 (section 17
-lists what that changed). Code is referenced by function name and section, never by line number (`src/game.js` is
-edited by other passes all the time). Every function named here exists today unless it is marked **new**.
+Status: **PR A built** on `feat/party` (2026-10-26): the party layer + 물 차오르기 + 왕관 뺏기. The user split the work:
+거품 축구 is the next PR (PR B) - everything about the ball, the goals, 거품 축구장 and the teams below is its spec, not
+built yet. Section 18 lists what was built and where it differs from this spec. Checked against the code on
+2026-10-26 (section 17 lists what that changed). Code is referenced by function name and section, never by line number
+(`src/game.js` is edited by other passes all the time). Every function named here exists today unless it is marked
+**new** (or is 축구's, section 18).
 
 The user asked for "마리오파티게임 처럼". This PR is the minigame party: 2-4 friends play 3 or 5 short minigames (판)
 in a row on one fixed screen each, collect placement points, and finish on the podium. A later PR adds a Mario Party
@@ -1090,3 +1093,82 @@ Corrected in this pass (the implementer's watch list):
     rules: the magazine line, no trophy practice lines (9.1); a leaver during a card that no longer fits re-draws that
     판 (3.2); `n0` is taken at 시작! (2.3); online tests need `party.force(plan)` (12); virtual-time tests must step the
     engine, not wait (13.1); `ux-roomrow` runs at 360 px, not 320 (9.7, 13.3).
+
+---
+
+## 18. As built (PR A, 2026-10-26)
+
+PR A is the party layer, 물 차오르기 and 왕관 뺏기; 거품 축구 is PR B. Lead decisions applied: survivors of 물 at time-up
+share 1st; 물 75 s, 왕관 60 s, the card 5 s; 왕관 뺏기 plays on the **dry** battle arenas only (not 냉온탕 대결: the
+capy's hot-tub shield would keep the crown). Where the build differs from sections 0-16 above:
+
+**Scope and the minigame contract**
+- `MINI` / `MINI_IDS` hold `water` and `crown` only; `PG.PARTY_ARENAS` holds 물 차는 대욕장 only. Each game's code sits
+  behind one `MINI_FN[id]` entry - `spawns` (the k-th player's spawn), `init` (its `G.mini` fields), `start` (시작!),
+  `tick`, `key` (the place key: bigger is better), `snap` / `view` (its `g.mg` array), `drop` (a leaver), `draw`, `hud` -
+  and the sequencer calls only `miniLoad` / `miniStart` / `miniTick` / `miniOver` / `miniPlaces` / `miniSnap` /
+  `miniView` / `miniDraw` / `miniHud` (+ `MINI_FN[id].drop` from `partyDrop`). 거품 축구 slots in as a `MINI` entry, a
+  `MINI_FN` entry, its arena in `PG.PARTY_ARENAS` (+ `loadPartyArenas` keeping `goals` / `sides` / `ball`, the validator's
+  축구 rules, `PARTY_KEYS` / `PARTY_NAMES` in `tools/validate-levels.js`) and the hooks of 4.3 (`shotHits`, `quake`, the
+  card's team line - `#pg-party-team` exists and stays hidden).
+- Rotation: with two games that fit every player count, every party alternates - A B A (3판), A B A B A (5판) - for 2,
+  3 and 4 players. `partyReplan` is built and called from `partyDrop` but has nothing to replace yet (both games fit any
+  n >= 2); it matters again with 축구.
+- 왕관's arena: `dryArenas()` (no `~` / `=` cell: 대중탕 한판, 사우나 계단, 때밀이 링), never the arena of the crown 판
+  before (`G.party.crownAr`).
+
+**Engine details**
+- `normLevel` with `closed` also forces rows 0 and 25 to all `#` (a broken entry cannot open a drain). `riseOf` clamps
+  and sorts the schedule; an entry without a usable map, or the water arena without a usable `rise`, is replaced by
+  `fallbackPartyArena()`. `startArena`'s body is `loadArenaLV(L, i, kind)`; `G.arenaKind` says which list `G.arena` is in.
+- 물: `waterAt(f, R, k)` takes a time scale k (the debug fast party runs the schedule in 12 s, k = 0.16). Warnings fire on
+  the exact frame `round((from - warn) * 60 * k)`; the 4th step's warning switches the music to `hurry`. A sinking prison
+  stops at the floor's top (`PF_BOT - TS - 16`: an animal trapped on the floor before the first step is not out).
+  `waterBody` tests `p.local !== false` (offline and host-local bodies are exact), a remote one only on a state of its
+  own epoch, judged anyway once stale for more than `REWIND`.
+- "My own" 탈락 line: a **local banner**, not a word pop - on the host `showBanner` marked `loc` (snapOf leaves it out
+  of `g.bn`), on a guest a `G.banner` with an `'l…'` id that `guestBanner` does not replace while it lasts (2 s; a host
+  banner arriving meanwhile is skipped). Offline (one screen) any local player's out shows it.
+- 왕관: `cr.holder` is -2 until 시작! (hidden), -1 free. `왕관이 나타났어요!` is queued behind the 시작! banner
+  (`queueBanner`). The worn crown is drawn by `drawPlayer` (`crownOn`, 8 px at `headTop - 9`); the name tag and its
+  pointer lift 8 px over it. A leaver holding it drops it where its last held frame put it (`crownTick` keeps `cr.x / y`
+  on the holder).
+- The result beat: every prison is opened and every bubble bursts away (the world is frozen; nothing would move them);
+  the `N등 +N` word pops sit above the name tag.
+- The card: the doors stay shut (`drawDoors(1)`) during `'card'` and open at once with the 3-2-1 (no door animation);
+  the HUD's minigame line is hidden on the card. The 판 수 row is the LAST row of the options box (after 트로피 걸기, hidden
+  for battle) so the battle rows keep their order; rows carry `data-for` `b` / `bp` / `p`.
+- `pauseGame` works in `'card'` / `'result'` (offline: paused; online: the menu), the header's pause button stays on over
+  the card, `resumeGame` returns to the card.
+
+**Wire (6.4) as built**
+- `g.pa = { n, i, L, t, ft, cl, P: [[slot, pts, wins, last, gain]], F?, W? }`: `ft` is this 판's playing frames in all
+  (the guest's `G.battle.total` and its water time scale), `cl` the card's frames (the guest's bar); `gain` is -1 before
+  the first result (the card hides `+N`); `F` is 1 for any final (a walkover too), `W` 1 for a walkover.
+- `g.mg`: 물 `['w', wl * 10, [[slot, place]]]`, 왕관 `['c', holder, x, y, f0, f1, f2, f3, noPick]` (holder -2: not out yet).
+  A guest's 물 mirror keeps `tt`, its estimate of the host's playing frame (the water clock, 4.1).
+- `R.u` only in a party room's room phase; `NET.partyU` is a guest's copy. Helpers: `pvp()`, `seatReady(r)`, `seatOld(r)`.
+- Measured: party snapshots stay well under the 3400-byte budget (party-net asserts it every run).
+
+**Coins (8.3) as built**
+- `coinPartyStart` stamps `NET.gid` when `NET.sess && NET.screen === 'game'` (netAgain sets the screen before `fn()`).
+- `coinPartyClose(i)` marks any index it never saw end as `act false`; a guest's `done` is `!W && act.length === n &&
+  seen === n - 1`. The host closes each 판 in `partyResult` (`coinPartyRound`), its `playF` from `G.mini.t`.
+
+**Debug / tests**
+- `PG.debug.party`: `plan rank points standings coin waterAt arenas dry mini consts text tx state card fast force skip
+  level crown drop result next final places` and the unit hooks `catch` (a capture through `catchPlayer`), `fakeRemote`
+  / `judge` (what `waterBody` judges), `payNow` (my podium coins as an online non-practice screen would pay them, through
+  `coinGive`), `reload` (`loadPartyArenas` on a given list); `PG.debug.local.party(chars, opts)`; `local.removePlayer`
+  calls `partyDrop` in a party. `fast`: every game 12 s, **card 90 f** (60 in the spec: too short for the four-frame
+  checks), result 40 f. `force(plan)` is sticky until `force(null)`. `netState().party`; `mp.guestRoom` returns `mode`.
+- `src/tests/party.js` (virtual time, stepped; `#fit`, `#shot=card|water|crown|result|podium[&s=1|2]`), `src/tests/
+  party-net.js` (4 bc frames, real time); run-all jobs `party`, `party-fit-568`, `party-net`, `ux-roomrow-320`; `party` is
+  in the CI `JOBS`. Updated: `net-node` (a party lobby entry), `validate-levels` (the party branch, `--party N`),
+  `cloud.js` (the invite rule model, the gate's text), `check-pages` / `final-e2e2` (the card, the mode buttons, the
+  podium span, the warm-up), `ux-roomrow` (3 mode buttons and the 판 수 row on one line, also at 320 px), `monsters` (the
+  option labels it lists are the shown ones: the 판 수 row is hidden outside a party room) and `monsters-net` (`R.o` has 8
+  entries, `o[7]` = 3).
+- Not covered by a test (PR B or later): 13.1 #5 and 13.2 #5 (축구), the "축구 re-drawn during a 4 -> 3 card" replan.
+- `firebase/firestore.rules` accepts `mode: 'party'` invites: **publish the rules with the deploy that ships this**
+  (until then a party invite gets the usual "초대를 보내지 못했어요").
