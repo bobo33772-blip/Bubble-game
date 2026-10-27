@@ -249,6 +249,8 @@
     const pod3 = await until(() => D3.every((f) => PS(f).ph === 'podium'), 30000);
     await sleep(300);
     ok('practice (q 1, this browser\'s tabs): the party reaches the podium and pays nobody (연습 경기)', pod3 && D3.every((f, k) => coinsOf(f) === ce3[k] && PS(f).pod && PS(f).pod.prac && !PS(f).pod.give), D3.map((f) => PS(f).pod));
+    ok('practice: the podium screen-reader line says no coins, and nothing about trophies (a party has none)', D3.every((f) => /연습 경기라 비누 코인은 없어요/.test(doc(f, 'pg-podium-sum').textContent) && !/트로피/.test(doc(f, 'pg-podium-sum').textContent) && doc(f, 'pg-podium-note').textContent.indexOf('트로피') < 0),
+      D3.map((f) => doc(f, 'pg-podium-sum').textContent));
     for (const f of D3) f.T.allowBc(true);
 
     // ---- the host's 방으로 mid-party: everyone in the room, nobody paid
