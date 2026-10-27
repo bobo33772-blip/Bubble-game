@@ -79,7 +79,7 @@
  * body K/Q/Z/T (kingGrime, moldQueen, megaSponge, towelKing). Arenas: '1'-'4' player spawns, 'E' enemy
  * spawns, ':' the intruder boss box, '+' the centre cell(s) used for the fairness times.
  *
- * 파티 (design/party.md 5.4) - PG.PARTY_ARENAS { key, name, theme, closed: true, map, players: [4], gather, rise? }:
+ * 파티 (design/party.md 5.4) - PG.PARTY_ARENAS { key, name, theme, closed: true, map, players: [4], gather, rise? | goals?, sides?, ball? }:
  * the same cell, shape and spawn rules as the battle arenas, except: a closed ceiling and floor are required (rows 0
  * and 25 all '#', no wrap gap) and the intruder box / enemy spawn / spread / fairness rules do not apply; the map is
  * mirror symmetric exactly (col c <-> 31 - c, no gap exception) and dry (the rising water is a layer, not tile water);
@@ -87,7 +87,11 @@
  * from them. 물 (key 'water', rise): every tier is reachable from the floor, and for every rise step the tiers it drowns
  * (a tier is out once its top is more than WATER_SLACK = 3 px under the surface) are exactly the k + 1 lowest, with one
  * more dry tier above (each step drowns one tier, the top shelves stay dry to the end); the floor is dry at y0; the steps
- * do not overlap and end before the game's 75 s.
+ * do not overlap and end before the game's 75 s. 축구 (key 'ball', goals / sides / ball): each goal mouth (rows r0-r1,
+ * cols c0-c1) is open air on the floor under a solid bar (row r0 - 1), the left one at the left wall, the right one its
+ * mirror, and line is the mouth's inner edge; the sides are two standable kickoff spots per team, mirrored; the ball's
+ * kickoff spot is open air for the whole 22 px ball. Its crossbars are out of a normal jump's reach on purpose (a cat's
+ * 2단 점프 keeps goal on one): an unreachable crossbar is a note (the 'x' in the preview), not an error or a warning.
  */
 'use strict';
 const fs = require('fs');
@@ -174,8 +178,9 @@ const LEVELS = ctx.PG && ctx.PG.LEVELS;
 if (!Array.isArray(LEVELS)) fatal('PG.LEVELS is not an array');
 const ARENAS = ctx.PG && ctx.PG.ARENAS;
 const PARTY_ARENAS = ctx.PG && ctx.PG.PARTY_ARENAS;
-const PARTY_KEYS = ['water'];   // (파티: 물 차는 대욕장; 거품 축구장 comes with its minigame)
-const PARTY_NAMES = ['물 차는 대욕장'];
+const PARTY_KEYS = ['water', 'ball'];   // (파티: 물 차는 대욕장, 거품 축구장)
+const PARTY_NAMES = ['물 차는 대욕장', '거품 축구장'];
+const BALL_R = 11; // (game.js BALL.r: the 축구 ball's radius, px)
 const WATER_SLACK = 3, WATER_SECS = 75; // (game.js MINI.water / WATER_SLACK)
 
 const isWaterCh = (ch) => ch === '~' || ch === '=';
@@ -209,7 +214,7 @@ function analyse(L, idx, kind) {
   const W = [];
   const err = (m) => E.push(m);
   const warn = (m) => W.push(m);
-  const res = { E, W, lines: [], info: '', water: { hot: 0, cold: 0, pools: 0 }, fair: null };
+  const res = { E, W, N: [], lines: [], info: '', water: { hot: 0, cold: 0, pools: 0 }, fair: null };
   const party = kind === 'party';
   const arena = kind === 'arena';
   const spawns4 = arena || party;   // (both list players: [4 spawns], P1 first)
@@ -218,7 +223,7 @@ function analyse(L, idx, kind) {
   const isBoss = !arena && !party && L.boss !== undefined;
   if (typeof L.name !== 'string' || !L.name.trim()) err('name missing');
   if (!Number.isInteger(L.theme) || L.theme < 0 || L.theme > 4) err('theme must be an integer 0..4');
-  const known = party ? new Set(['key', 'name', 'theme', 'closed', 'map', 'players', 'gather', 'rise'])
+  const known = party ? new Set(['key', 'name', 'theme', 'closed', 'map', 'players', 'gather', 'rise', 'goals', 'sides', 'ball'])
     : arena ? new Set(['name', 'theme', 'map', 'players', 'enemySpawns', 'gather', 'water'])
       : new Set(['name', 'theme', 'map', 'player', 'players', 'enemies', 'gather', 'special', 'boss', 'bossSpawn']);
   for (const k of Object.keys(L)) if (!known.has(k)) warn(`unknown field "${k}"`);
@@ -631,7 +636,10 @@ function analyse(L, idx, kind) {
     if (reach.has(R.id)) continue;
     lostCells += R.stand.length;
     const m = `${R.water ? 'water surface' : 'surface'} row ${R.r} cols ${R.a}-${R.b} (${R.stand.length} standable) is unreachable from the spawn`;
-    if (R.stand.length >= 3) err(m);
+    // (축구: a crossbar is out of a normal jump's reach on purpose - only a cat's 2단 점프 keeps goal on it)
+    const bar = party && L.key === 'ball' && Array.isArray(L.goals) && L.goals.some((q) => q && R.r === q.r0 - 1 && R.b >= q.c0 && R.a <= q.c1);
+    if (bar) res.N.push(`the crossbar (${m.replace(' is unreachable from the spawn', '')}) is out of a normal jump's reach: a cat's 2단 점프 keeps goal on it`);
+    else if (R.stand.length >= 3) err(m);
     else warn(m);
   }
 
@@ -856,6 +864,44 @@ function analyse(L, idx, kind) {
       res.rise = R.steps.map((q, k) => `${q[0]}-${q[1]} s -> ${q[2]} (row ${tiers[k]} under, row ${tiers[k + 1]} dry)`).join(' · ');
     }
   }
+  // 축구 (5.4): each goal mouth open air on the floor under a solid bar (the left one at the left wall, the right one
+  // its mirror), line its inner edge; two standable, mirrored kickoff spots per team; the ball's spot open air
+  if (party && L.key === 'ball') {
+    const Gs = L.goals, int = Number.isInteger;
+    if (!Array.isArray(Gs) || Gs.length !== 2 || !Gs.every((q) => q && ['c0', 'c1', 'r0', 'r1', 'line'].every((k) => int(q[k])))) err('the ball arena needs goals: [left, right] { c0, c1, r0, r1, line } (integers)');
+    else {
+      Gs.forEach((q, k) => {
+        const tag = `goals[${k}] (cols ${q.c0}-${q.c1}, rows ${q.r0}-${q.r1})`;
+        if (!(q.c0 >= IN_L && q.c1 <= IN_R && q.c0 <= q.c1 && q.r0 >= 2 && q.r1 <= ROWS - 2 && q.r0 <= q.r1)) { err(`${tag} is outside the field or empty`); return; }
+        for (let r = q.r0; r <= q.r1; r++) for (let c = q.c0; c <= q.c1; c++) if (!O(r, c)) err(`${tag}: the mouth is not open air at (${c},${r})`);
+        for (let c = q.c0; c <= q.c1; c++) { if (!B(q.r0 - 1, c)) err(`${tag}: no crossbar over the mouth at (${c},${q.r0 - 1})`); if (!B(q.r1 + 1, c)) err(`${tag}: the mouth is not on the floor at (${c},${q.r1 + 1})`); }
+        if ((q.r1 - q.r0 + 1) * TS < 2 * BALL_R + 2) err(`${tag}: the mouth is ${(q.r1 - q.r0 + 1) * TS} px tall - the ${2 * BALL_R} px ball does not fit under the bar`);
+        const line = k ? q.c0 * TS : (q.c1 + 1) * TS;
+        if (q.line !== line) err(`${tag}: line ${q.line} must be the mouth's inner edge (${line})`);
+      });
+      const [a, b] = Gs;
+      if (a.c0 !== IN_L) err(`goals[0] must open at the left wall (c0 ${IN_L}, has ${a.c0})`);
+      if (b.c0 !== COLS - 1 - a.c1 || b.c1 !== COLS - 1 - a.c0 || b.r0 !== a.r0 || b.r1 !== a.r1 || b.line !== COLS * TS - a.line) err('goals[1] must mirror goals[0]');
+    }
+    const S = L.sides;
+    if (!Array.isArray(S) || S.length !== 2 || !S.every((t) => Array.isArray(t) && t.length === 2 && t.every(isCell))) err('the ball arena needs sides: [[left x2], [right x2]] {col,row}');
+    else {
+      S.forEach((t, k) => t.forEach((s, j) => standCheck(s, `sides[${k}][${j}]`, true)));
+      S[0].forEach((s, j) => { const m = S[1][j]; if (m.row !== s.row || m.col !== COLS - 1 - s.col) err(`sides[1][${j}] (${m.col},${m.row}) must mirror sides[0][${j}] (${s.col},${s.row}) -> (${COLS - 1 - s.col},${s.row})`); });
+      S.forEach((t, k) => t.forEach((s, j) => { if ((k ? s.col < 16 : s.col > 15)) err(`sides[${k}][${j}] (${s.col},${s.row}) is on the other team's half`); }));
+    }
+    const Bl = L.ball;
+    if (!Bl || !Number.isFinite(Bl.x) || !Number.isFinite(Bl.y)) err('the ball arena needs ball: {x, y} (px)');
+    else {
+      if (Bl.x - BALL_R < TS * IN_L || Bl.x + BALL_R > TS * (IN_R + 1) || Bl.y - BALL_R < 16 + TS || Bl.y + BALL_R > 16 + (ROWS - 1) * TS) err(`ball (${Bl.x},${Bl.y}) is not inside the field`);
+      for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+        if (!B(r, c)) continue;
+        const nx = Math.max(c * TS, Math.min(Bl.x, c * TS + TS)), ny = Math.max(16 + r * TS, Math.min(Bl.y, 16 + r * TS + TS));
+        if (Math.hypot(Bl.x - nx, Bl.y - ny) < BALL_R) { err(`ball (${Bl.x},${Bl.y}) overlaps the block at (${c},${r})`); r = ROWS; break; }
+      }
+    }
+    if (Array.isArray(Gs) && Gs.length === 2) res.ball = Gs.map((q, k) => `${k ? 'right' : 'left'} goal cols ${q.c0}-${q.c1} rows ${q.r0}-${q.r1} line ${q.line}`).join(' · ') + (Bl ? ` · kickoff (${Bl.x}, ${Bl.y})` : '');
+  }
   const tens = '    ' + Array.from({ length: COLS }, (_, c) => (c >= 10 ? String(Math.floor(c / 10)) : ' ')).join('');
   const ones = '    ' + Array.from({ length: COLS }, (_, c) => String(c % 10)).join('');
   res.lines = [tens, ones, ...grid.map((row, r) => `${String(r).padStart(2)}  ${row.join('')}`)];
@@ -976,6 +1022,8 @@ else {
       console.log(`\n#P${i + 1} PARTY 「${A && A.name}」 key ${A && A.key} theme ${A && A.theme} · ${res.info}`);
       if (!QUIET) for (const l of res.lines) console.log(l);
       if (res.rise) console.log('    rise: ' + res.rise);
+      if (res.ball) console.log('    goals: ' + res.ball);
+      for (const m of res.N) console.log(`  note:  ${m}`);
       for (const m of res.E) console.log(`  ERROR: ${m}`);
       for (const m of res.W) console.log(`  warn:  ${m}`);
     });
