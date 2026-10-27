@@ -3,8 +3,9 @@
 //   node tools/run-chrome.js http://localhost:8765/test-party-net.html - 1200 900 rt420000 "PARTYNET DONE"
 // Every frame: tro.ns('f' + i), tro.allowBc(true) (bc is practice otherwise), party.fast(true) (every game 12 s, a card
 // 1.5 s, a result 40 f). host = slot 0 (꽥꽥이), A = slot 1 (까삐), B = slot 2 (펭펭), C = slot 3 (냥냥).
-//   1  the room: hi carries pa: 1; a party room's R says m 'p' and o[7] = the 판 수, its o[0..6] as a battle room's; a new
-//      page joining never shows 새로고침 필요 (sampled from the join on); a crafted older guest (a hi without pa) is never
+//   1  the room: hi carries pa: 2 (PARTY_V); a party room's R says m 'p' and o[7] = the 판 수, its o[0..6] as a battle
+//      room's; a new page joining never shows 새로고침 필요 (sampled from the join on); a crafted older guest (PR A's hi,
+//      pa 1) is never
 //      ready - its seat says 새로고침 필요 on the host and on the other guests (R.u), its R.p ready flag is 0, 시작 is off,
 //      the room line says why; switched to 배틀 it is ready again with no new 준비; mp.guestRoom reads o[7] 5 / missing /
 //      junk as 5 / 3 / 3
@@ -91,7 +92,8 @@
     ok('room: a party room is hosted (mode party, 3판)', !!code && N(H).mode === 'party' && N(H).party.rounds === 3, N(H).party);
     for (const g of [A, B]) await join(g);
     await until(() => N(H).roster.length === 3 && N(H).party.seats.every((s) => s.slot === 0 || s.hi), 4000);
-    ok('hi: every new page says pa: 1 (the host records hi and pa)', N(H).party.seats.filter((s) => s.slot).every((s) => s.hi && s.pa === 1), N(H).party.seats);
+    const PV = H.P.consts().PARTY_V;
+    ok('hi: every new page says pa: ' + PV + ' (2: 물, 왕관 and 거품 축구; the host records hi and pa)', PV === 2 && N(H).party.seats.filter((s) => s.slot).every((s) => s.hi && s.pa === PV), N(H).party.seats);
     const R0 = N(H).tro.R;
     ok('R: m \'p\', o[7] = 3 (the 판 수), the seats\' ready flags', R0 && R0.m === 'p' && R0.o.length === 8 && R0.o[7] === 3, R0);
     ok('guests read the party room (mode party, 3판)', [A, B].every((g) => N(g).mode === 'party' && N(g).opts.rounds === 3 && N(g).party.u.length === 0), [A, B].map((g) => N(g).party));
@@ -102,10 +104,11 @@
     await join(C);
     await until(() => N(H).roster.length === 4 && N(H).party.seats.find((s) => s.slot === 3 && s.hi), 4000);
     await sleep(300); clearInterval(sampler);
-    ok('a new page joining never shows 새로고침 필요 (the r.hi gate: not before its hi, not after)', !flicker && N(H).party.seats.find((s) => s.slot === 3).pa === 1, N(H).party.seats);
-    // a crafted older guest: C says hi again without pa (an older page's hi)
+    ok('a new page joining never shows 새로고침 필요 (the r.hi gate: not before its hi, not after)', !flicker && N(H).party.seats.find((s) => s.slot === 3).pa === PV, N(H).party.seats);
+    // a crafted older guest: C says hi again with pa 1 (PR A's page: 물 and 왕관 only - it would read a 축구 판 as 물; a
+    // page older still sends no pa: the same gate)
     C.mp.ready(true); await until(() => N(H).party.seats.find((s) => s.slot === 3).ready, 3000);
-    C.mp.session().send(hostIdOf(C), { t: 'hi', n: NICKS[3], c: CHARS[3], cu: 100, d: N(H).roster[3].d || 'abcdef', z: 1 });
+    C.mp.session().send(hostIdOf(C), { t: 'hi', n: NICKS[3], c: CHARS[3], cu: 100, d: N(H).roster[3].d || 'abcdef', z: 1, pa: 1 });
     await until(() => N(H).party.seats.find((s) => s.slot === 3).old, 3000);
     A.mp.ready(true); B.mp.ready(true);
     await until(() => N(B).party.u.includes(3) && N(H).tro.R.p.find((e) => e[0] === 1)[3] === 1, 3000);
@@ -125,7 +128,7 @@
     const g5 = rd(5), gm = rd(undefined), gj = rd('x');
     ok('mp.guestRoom: R.m \'p\' reads as party; o[7] 5 / missing / junk -> 5 / 3 / 3', g5.mode === 'party' && g5.rounds === 5 && gm.rounds === 3 && gj.rounds === 3, [g5, gm, gj]);
     // C refreshed (a hi with pa again); back to party
-    C.mp.session().send(hostIdOf(C), { t: 'hi', n: NICKS[3], c: CHARS[3], cu: 100, d: N(H).roster[3].d || 'abcdef', z: 1, pa: 1 });
+    C.mp.session().send(hostIdOf(C), { t: 'hi', n: NICKS[3], c: CHARS[3], cu: 100, d: N(H).roster[3].d || 'abcdef', z: 1, pa: PV });
     H.mp.setOpts({ mode: 'party' });
     await until(() => N(H).canStart && N(H).mode === 'party' && F.every((f) => N(f).mode === 'party'), 4000);
     ok('room: every seat ready in the party room again', N(H).canStart, N(H).party.seats);

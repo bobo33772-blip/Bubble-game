@@ -1220,8 +1220,9 @@ line", which 4.3 spelled 34 / 222)
   after a push: the snapshot never carries more than `maxV`), the goals. Bodies and bars both go through one circle-out-of-
   a-box helper (`ballOut`: along the normal, the centre inside a box along the shallow axis with "up" first - a ball
   wedged between a body and a wall pops up over the body instead of jittering).
-- Every interior `'#'` run of the map is a solid box for the ball (`ballBars`: the two crossbars); it rests on a bar's top
-  as on the floor (no goal from up there: the goal test is "below the mouth's top").
+- Every interior `'#'` run of the map is a solid box for the ball (`ballBars`: the two crossbars); it lands on a bar's top
+  as on the floor and rolls off toward the field (`BALL.tilt`, audit below; no goal from up there: the goal test is
+  "below the mouth's top").
 - Pushes: `kn` counts the **sounded** ones - one per player at most every `sfxGap` frames (a bubble's push counts for its
   owner), the host plays `'bounce'` for each, and a guest plays its own when `kn` rises (at most every `sfxGap` of its own
   frames). `'bounce'` / `'splash'` stay in `NO_ECHO`. A bubble on the ball pops with `cause 'self'` (no pop sound - the
@@ -1247,8 +1248,9 @@ line", which 4.3 spelled 34 / 222)
 - The card's team line (`partyTeamLine`): one row with both teams (`왼쪽 팀: 방장 · 냥냥 / 오른쪽 팀: 까삐 · 펭펭`, 1v1
   `왼쪽: 방장 / 오른쪽: 까삐`), each half its team's colour and cut with an ellipsis (12-syllable nicks do not fit a 1x
   window otherwise); on an online screen a second line with my side (`나는 왼쪽 팀 · 오른쪽 골대에 넣어요!`). An offline
-  (one screen) party has no "my" line. Fit: the 1x window's 축구 card is 174 / 174 px (no scroll, the rule line hidden as
-  for every card), the 568x320 phone's 230 / 230 with the rule line.
+  (one screen) party has no "my" line. Fit (4 players, 12-syllable nicks, my side line on): the 1x window's 축구 card is
+  178 px tall in the 224 px screen (no scroll, the rule line hidden as for every card; 물 / 왕관's are 152), the 568x320
+  phone's 234 px in 302 with the rule line.
 - In play: the goal nets (9.4, 10), the HUD's team bar along the panel's top + a small ball + the team's goals; **added**: a
   10 x 1 px line in the team's colour under each free animal's feet (who plays with whom, at a glance). The result banner
   is `왼쪽 팀 승리!` / `오른쪽 팀 승리!` / `무승부!`, also for a 1v1.
@@ -1257,7 +1259,7 @@ line", which 4.3 spelled 34 / 222)
 
 **Debug / tests**
 - `PG.debug.party`: `ball(x, y, vx, vy)` (the ball by hand, in play), `goal(t)`, `quake(slot)`, `shot(slot, x, y, dir)`
-  (a capture-phase bubble of that kit), `fill(slot)` (the card as that seat's screen shows it; -1 back); `state().mini` has
+  (a capture-phase bubble of that kit), `fill(slot)` (the card as that seat's screen shows it; -1 back), `view(mg)` (a `g.mg` row as a guest reads it); `state().mini` has
   `ball`, `goals`, `team`, `goalT`, `kn`, `ko`; `card()` has `teams` / `mine`; `consts()` has `BALL` / `BALL_TEAM`;
   `reload()` reports `goals` / `sides` / `ball` / the bar row.
 - `src/tests/party.js` 5 (축구, as 13.1 #5) and the updated rotation / flow / fit / arena checks; `#shot=ball|ballcard`.
@@ -1268,6 +1270,25 @@ line", which 4.3 spelled 34 / 222)
   last sample before it stops (it could miss the podium by one tick).
 - Not covered online: a 1v1 축구 over the network (2 frames) - virtual time covers 1v1.
 
-**Left open**
-- `PARTY_V` stays 1: PR A and PR B ship together. If PR A ever reaches players first, a PR-A page would read a `'b'` 판
-  as 물 (its `MINI_IDS` has no `'b'`) - then raise `PARTY_V` to 2 and plan 축구 only when every seat's `pa` is >= 2 (6.2).
+**Audit before the PR (2026-10-27)**, against 4.3, 13.1 #5 / 13.2 #5, 3.2 and the diff:
+- **`PARTY_V` is 2** (it said 1): PR A (#20) merges and deploys first, so PR-A pages (`pa: 1`, a PWA keeps them a while)
+  will meet PR-B hosts, and a PR-A page reads a `'b'` 판 as 물 (its `MINI_IDS` has no `'b'`) on an arena list without
+  the 축구장. With 2 the existing gate covers it: in a party room a `pa: 1` seat is never ready, shows `새로고침 필요` and
+  the room says why (6.1, 6.2) - a refresh fixes it. Simpler than planning around old seats; the board PR takes 3.
+  party-net 1 now crafts PR A's `hi` (`pa: 1`) as the older page.
+- **A ball parked on a crossbar against the wall** was out of play for good: only a cat's 2단 점프 reaches it there (a
+  shot pushes it into the wall, a floating bubble rarely gets under it). A bar's top now sheds a resting ball toward the
+  middle of the field (`BALL.tilt` 0.03 px/f a frame: it leaves the bar in about 0.7 s); a cat standing on the bar
+  still keeps goal. Still no goal from up there. party.js: it rolls off both bars.
+- **A team with nobody left** (2v2, both of one team gone, 4 -> 3 -> 2): the 판 played on for nothing, and the result
+  line named the team with more goals while the places (present players only, 3.4) put the team left 1st. Now
+  `MINI_FN.ball.drop` ends it early (`PARTY_F.early`, as 물's last one standing) and `win` names the team left.
+- **The guest's ball is clamped** to the field and to `BALL.maxV` as the host's own (a junk `g.mg` row drew it in a wall
+  or over the HUD). `PG.debug.party.view(mg)` reads a row as a guest would.
+- Checked and unchanged: a goal is counted once (the cheer returns before any test, the kickoff is the only way out of
+  it) and never missed at the frame edge (the ball moves at most 5 px a frame; the goal zone is the 7 px between the
+  wall and the line - 6 past it; a goal on the last frame counts before `partyResult`); the ball never wraps (clamped,
+  closed map) or sits jammed (a ball between a body and a wall pops up over the body; one in the goal's corner is a
+  goal); teams after a leaver (the short team's spot, places by the `n0` table); team points 4 / 4 / 1 / 1, a draw 4 for
+  all, `wins` +1 for every 1st, coins per 판 by my own blows as for every game; the card team line at 1x and 568x320;
+  guests' `'bounce'` off `kn`, `'clear'` / `'go'` / the shake echoed, `'bounce'` / `'splash'` still in `NO_ECHO`.

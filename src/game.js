@@ -248,7 +248,9 @@ window.PG = window.PG || {};
     ' 트로피가 모자라면 안 걸고 참여해요 (등수 점수만 받아요) 내 트로피가 모자라서 다음 판은 안 걸고 해요 다음 판은 안 걸고 하는 친구가 있어요 나는 안 걸고 해요';
   // ---- 파티 (design/party.md): constants up here - PARTY_TEXT and the font warm-up read them at load (the sequencer and
   // the minigames are their own section after rematch)
-  const PARTY_V = 1;                          // hi's pa: the minigames this page plays (the board PR needs 2)
+  // hi's pa: the minigames this page plays - 1 물 + 왕관, 2 + 거품 축구 (a seat under it is never ready in a party room: a
+  // page with pa 1 would read a 축구 판 as 물, so it is told to refresh; the board PR needs 3)
+  const PARTY_V = 2;
   const PARTY_ROUNDS = [3, 5];
   const PARTY_PTS = { 2: [4, 0], 3: [4, 2, 0], 4: [4, 2, 1, 0] };   // by place; n = players at that 판's 시작!
   const PARTY_F = { card: 300, result: 180, early: 60 };             // frames: the card, the result beat, last one standing
@@ -276,9 +278,10 @@ window.PG = window.PG || {};
   // along the contact normal (a remote body grown by slack px); a bubble shot (along its flight), drop (an otter droplet
   // / a hanging egg) or float (a floating one, along the centre line); a capy's slam sets vy to slam. A goal: the centre
   // deep px past the goal line, under the crossbar; the clock stops goalF frames, then the kickoff: the ball hangs kickF
-  // frames at the centre top and drops. sfxGap: frames between one player's push sounds (the guests' too, off kn)
+  // frames at the centre top and drops. sfxGap: frames between one player's push sounds (the guests' too, off kn). tilt:
+  // a ball resting on a crossbar's top rolls off toward the field (px/f a frame: next to the wall only a cat could reach it)
   const BALL = { r: 11, g: 0.12, maxFall: 3, drag: 0.995, roll: 0.985, wall: 0.7, floor: 0.55, maxV: 5,
-    body: 1.2, nudge: 0.4, shot: 1.8, drop: 1.0, float: 0.5, slam: -3.4, slack: 3, deep: 6, goalF: 120, kickF: 45, sfxGap: 8 };
+    body: 1.2, nudge: 0.4, shot: 1.8, drop: 1.0, float: 0.5, slam: -3.4, slack: 3, deep: 6, goalF: 120, kickF: 45, sfxGap: 8, tilt: 0.03 };
   const BALL_TEAM = ['#ffb24a', '#c9a8ff'];   // (the left / right team's colour: the HUD bar, the nets, the card, the feet marks)
   // every fixed Korean line of the party (9.1 - 9.6), by key
   const PARTY_TX = {
@@ -4589,8 +4592,9 @@ window.PG = window.PG || {};
     B.x = x + w + r; return [1, 0];
   }
   // the field: the walls (x 16..240), the ceiling, the floor and every block (the crossbars), solid from all sides; into
-  // the floor (or a bar's top) under 0.6 px/f: it rests there (and rolls). again: the second pass of a frame (after the
-  // pushes, which clear rest themselves) keeps what the first one found
+  // the floor (or a bar's top) under 0.6 px/f: it rests there (and rolls; a bar's top sheds it toward the middle of the
+  // field, BALL.tilt - a ball parked on a crossbar against the wall would be out of play for good). again: the second
+  // pass of a frame (after the pushes, which clear rest themselves) keeps what the first one found
   function ballField(M, again) {
     const B = M.ball, r = BALL.r, floor = PF_BOT - TS;
     if (!again) B.rest = false;
@@ -4600,7 +4604,7 @@ window.PG = window.PG || {};
     for (const q of M.bars) {
       const n = ballOut(B, q.x, q.y, q.w, q.h); if (!n) continue;
       const vn = ballHit(B, n[0], n[1], BALL.wall);
-      if (n[1] < -0.7 && vn <= 0 && Math.abs(B.vy) < 0.6) { B.vy = 0; B.rest = true; }
+      if (n[1] < -0.7 && vn <= 0 && Math.abs(B.vy) < 0.6) { B.vy = 0; B.rest = true; if (!again) B.vx += (B.x < W / 2 ? 1 : -1) * BALL.tilt; }
     }
   }
   // one player's push sound (at most every sfxGap frames each); kn counts them - a guest plays its 'bounce' off it
@@ -4673,6 +4677,16 @@ window.PG = window.PG || {};
     shake(3); Snd.sfx('clear');
     showBanner(PARTY_TX.goal, (t ? PARTY_TX.teamR : PARTY_TX.teamL) + ' ' + M.goals[0] + ' : ' + M.goals[1], BALL.goalF, 'victory');
   }
+  // the teams with somebody still here (a leaver stays in team: 2v2 plays on short-handed)
+  const ballSides = (M) => [0, 1].filter((t) => G.players.some((p) => M.team[p.slot] === t));
+  // a leaver (its animal is gone already): a team with nobody left ends the 판 early (PARTY_F.early, as 물's last one
+  // standing) - the ones left are one team, they share 1st either way
+  function ballDrop(slot, M) { if (G.mode === 'playing' && M.endAt < 0 && ballSides(M).length < 2) M.endAt = G.frame + PARTY_F.early; }
+  // the result's line: the team with more goals (the only team left wins: its players are the ones placed 1st), else 무승부!
+  function ballWin(M) {
+    const s = ballSides(M), t = s.length === 1 ? s[0] : M.goals[0] > M.goals[1] ? 0 : M.goals[1] > M.goals[0] ? 1 : -1;
+    return t < 0 ? PARTY_TX.draw : t ? PARTY_TX.winR : PARTY_TX.winL;
+  }
   // the kickoff (시작!, and after each goal): every prison opens and every bubble goes (bodyAt nulls p.trap without the
   // bubble - a prison left behind would float on as an orphan), everyone back on their team's side, the ball at the
   // centre top for BALL.kickF frames; my own "오른쪽으로!" / "왼쪽으로!"
@@ -4703,9 +4717,10 @@ window.PG = window.PG || {};
   function ballView(mg, mg1, t, g, M) {
     const B = M.ball || (M.ball = { x: W / 2, y: 64, vx: 0, vy: 0, kick: -1, rest: false });
     const live = (q) => nInt(q[7], 0, 999, 0) === 0 && nInt(q[8], -1, 999, -1) === 0, q = mg1 && live(mg) && live(mg1) ? mg1 : null;
-    const px = (a, i, d) => nNum(a[i], -400, 3000, d) / 10;
-    B.x = lx(px(mg, 1, 1280), q ? px(q, 1, 1280) : null, t); B.y = ly(px(mg, 2, 640), q ? px(q, 2, 640) : null, t);
-    B.vx = nNum(mg[3], -1000, 1000, 0) / 100; B.vy = nNum(mg[4], -1000, 1000, 0) / 100; B.kick = nInt(mg[8], -1, 999, -1);
+    // (clamped to the field and to BALL.maxV as the host's own ball is: a junk row never draws it in a wall or the HUD)
+    const r = BALL.r, px = (a, i, d) => nNum(a[i], -400, 3000, d) / 10, vv = (a, i) => clamp(nNum(a[i], -1000, 1000, 0) / 100, -BALL.maxV, BALL.maxV);
+    B.x = clamp(lx(px(mg, 1, 1280), q ? px(q, 1, 1280) : null, t), WALL_L + r, WALL_R - r); B.y = clamp(ly(px(mg, 2, 640), q ? px(q, 2, 640) : null, t), CEIL_Y + r, PF_BOT - TS - r);
+    B.vx = vv(mg, 3); B.vy = vv(mg, 4); B.kick = nInt(mg[8], -1, 999, -1);
     const goals = [nInt(mg[5], 0, 99, 0), nInt(mg[6], 0, 99, 0)], kn = nInt(mg[9], 0, 1e9, 0), T = g.pa && Array.isArray(g.pa.T) ? g.pa.T : [];
     M.team = {}; for (let s = 0; s < MAX_PLAYERS; s++) { const v = nInt(T[s], -1, 1, -1); if (v >= 0) M.team[s] = v; }
     if (M.seeded) {
@@ -4792,11 +4807,11 @@ window.PG = window.PG || {};
       hold: (M) => M.goalT > 0,
       held: (mg) => nInt(mg[7], 0, 999, 0) > 0,
       key: (p, M) => M.goals[M.team[p.slot] | 0] | 0,
-      win: (M) => (M.goals[0] > M.goals[1] ? PARTY_TX.winL : M.goals[1] > M.goals[0] ? PARTY_TX.winR : PARTY_TX.draw),
+      win: ballWin,
       // (['b', x x10, y x10, vx x100, vy x100, goals left, goals right, goalT, kick (-1: before 시작!), kn])
       snap: (M) => { const B = M.ball; return ['b', R0(B.x * 10), R0(B.y * 10), R0(B.vx * 100), R0(B.vy * 100), M.goals[0], M.goals[1], M.goalT, B.kick, M.kn]; },
       view: ballView,
-      drop() {},             // (2v2 with a leaver: its team plays on short-handed)
+      drop: ballDrop,
       draw: ballDraw,
       hud: ballHud,
     },
@@ -14070,6 +14085,8 @@ window.PG = window.PG || {};
         G.bubbles.push(b); return b;
       },
       fill(slot) { fillParty(slot); return api.card(); },
+      // (unit) a guest's ball as ballView reads it off a g.mg row (clamped to the field and BALL.maxV)
+      view: (mg) => Object.assign({}, ballView(mg, null, 0, { pa: {} }, { id: 'ball' }).ball),
       // (unit tests) a capture through catchPlayer (a capy's shield takes it); a seat made remote with a reported state st
       // (null: none) - what waterBody judges; my coins for a podium as an online, non-practice screen would pay them
       catch(slot, bySlot) { const v = G.players.find((q) => q.slot === slot); if (!v || !free(v)) return false; const b = makeBubble('empty', clamp(v.x, WALL_L, WALL_R - 16), clamp(v.y, CEIL_Y, PF_BOT - 16), bySlot | 0); G.bubbles.push(b); catchPlayer(v, b); return !!v.trap; },

@@ -269,6 +269,11 @@
     const A = P.arenas()[1];
     ok('ball: 거품 축구장 is closed with a crossbar over each goal (row 20), goal mouths, two kickoff spots a team, the ball\'s spot', A && A.key === 'ball' && A.closed && /^#{32}$/.test(A.map[25]) && A.map[20] === '######....................######' && A.goals.length === 2 && A.goals[0].line === 40 && A.goals[1].line === 216 && A.sides.length === 2 && A.ball.x === 128 && A.ball.y === 64, A && [A.map[20], A.goals]);
 
+    // a guest reads the ball off the snapshot clamped as the host's own: inside the field, never past BALL.maxV
+    const vj = P.view(['b', -4000, 30000, 99999, -99999, 0, 0, 0, 0, 0]), vk = P.view(['b', 1280, 640, 120, -80, 0, 0, 0, 0, 0]);
+    ok('ball: a guest\'s view of a junk ball row stays in the field (27..229 x 35..205) and under BALL.maxV; a sane row reads as sent',
+      vj.x === 27 && vj.y === 205 && vj.vx === K.maxV && vj.vy === -K.maxV && vk.x === 128 && vk.y === 64 && vk.vx === 1.2 && vk.vy === -0.8, [vj, vk]);
+
     // 2v2 before any points: slots 0 + 3 left, 1 + 2 right, each on its team's side; the card's team line
     party(withNicks(['duck', 'cat', 'frog', 'capy']), { plan: ['ball'] });
     const s0 = PS();
@@ -351,6 +356,11 @@
     until(() => PS().mini.goalT === 0, 200); kicked(); park(-1, true); P.ball(30, 150, 0, 1);
     const onBar = until(() => BL().rest, 200);
     ok('ball: a ball resting on the crossbar is no goal (only under the bar counts)', onBar >= 0 && Math.abs(BL().y - (176 - 11)) < 0.01 && BL().x < 34 && same(PS().mini.goals, [1, 1]), [BL(), PS().mini.goals]);
+    // (against the wall only a cat could reach it there: a bar's top sheds it toward the field, BALL.tilt)
+    const offL = until(() => BL().x > 48 + 11, 150);
+    P.ball(226, 150, 0, 1); until(() => BL().rest, 200);
+    const offR = until(() => BL().x < 208 - 11, 150);
+    ok('ball: ... and it rolls off the crossbar toward the field (left and right, within 2.5 s), still no goal', offL >= 0 && offR >= 0 && same(PS().mini.goals, [1, 1]), [offL, offR, BL(), PS().mini.goals]);
 
     // places by the team's goals: the winners share 1st (4 + 4), the losers the next place (1 + 1); 1v1 4 / 0; a draw: 4 for all
     P.goal(0); until(() => PS().mini.goalT === 0, 200); P.skip();
@@ -419,6 +429,16 @@
     ok('leavers: ... the kickoff puts the short-handed team on its first spot', pl(1).x === sx(20) && pl(0).x === sx(11) && pl(3).x === sx(7));
     P.skip();
     ok('leavers: ... places by the team\'s goals (n0 4: the lone winner 4, the losers 2 + 2)', PS().pts[1] === 4 && PS().pts[0] === 2 && PS().pts[3] === 2, PS().pts);
+    // a whole team gone (4 -> 3 -> 2, both of the right team): nobody to play against - the 판 ends early (PARTY_F.early),
+    // the team left wins it even from behind (the line agrees with the places: both 1st, 4 each)
+    party(withNicks(['duck', 'cat', 'frog', 'capy']), { plan: ['ball', 'crown'] });
+    toPlaying(); kicked(); P.goal(1); until(() => PS().mini.goalT === 0, 200);
+    P.drop(2); step(5);
+    ok('leavers: (setup) one of the right team gone - still playing', G.mode === 'playing' && PS().mini.endAt < 0, [G.mode, PS().mini.endAt]);
+    P.drop(1);
+    const endIn = until(() => G.mode === 'result', 120);
+    ok('leavers: the right team all gone -> the 판 ends early (PARTY_F.early), 왼쪽 팀 승리! from 0 : 1, the two left 1st with 4 each', endIn >= P.consts().PARTY_F.early - 2 && endIn <= P.consts().PARTY_F.early + 2 && G.banner && G.banner.main === P.tx().winL && PS().pts[0] === 4 && PS().pts[3] === 4 && PS().last[0] === 1 && PS().last[3] === 1,
+      [endIn, G.banner && G.banner.main, PS().pts, PS().last]);
   }
 
   // ---------------------------------------------------------------- 6. no KO
