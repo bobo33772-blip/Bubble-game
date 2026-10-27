@@ -1170,5 +1170,20 @@ capy's hot-tub shield would keep the crown). Where the build differs from sectio
   option labels it lists are the shown ones: the 판 수 row is hidden outside a party room) and `monsters-net` (`R.o` has 8
   entries, `o[7]` = 3).
 - Not covered by a test (PR B or later): 13.1 #5 and 13.2 #5 (축구), the "축구 re-drawn during a 4 -> 3 card" replan.
+
+**Audit before the PR (2026-10-27)**, against sections 7 and 17 and the diff:
+- `idleWorld` now clears `G.party` / `G.mini` / `G.arenaKind` too (2.2 named it; the build had only `resetGame` and
+  `toTitle`). Every way out of a party mid-way goes through it: the host's 방으로, 나가기, a guest's 로비로, 방장이
+  나갔어요. A stale `G.party` stopped the title demo's rounds (`updateWorld` returns at the party line, `addScore` is
+  off) and `miniDraw` drew the old water band or a worn crown behind the panels. party-net checks that no page keeps the
+  party after a leaver, after 방으로 and after the host leaves.
+- My own 탈락 line on the host (`partyMyLine`, `loc`) keeps the shared banner it covers as `under`, and `snapOf` sends that
+  one. Before this, the host's own out cut the shared banner on every guest (no `g.bn` ends a guest's host banner). On a
+  guest, a host banner that comes while my own line runs now waits and shows for what is left of it (it was dropped for
+  good). party.js checks the host side (`party.myLine` / `party.snapBn`).
+- `miniLoad` resets `waterBody`'s stale-state stamp (`wsAt`), so a stamp left by a 판 that ended mid-stale is not reused.
+- Checked and unchanged: all 17 `NET.mode` sites and every `g.m` test (co-op coins only for `'c'`, trophies only for
+  `'b'`); every magazine full at each 판 (host `miniLoad`, guest at a new `g.pa.i`); out animals back on the podium;
+  `seatReady` / `seatOld` for an older page; no co-op or battle coin path reachable in a party.
 - `firebase/firestore.rules` accepts `mode: 'party'` invites: **publish the rules with the deploy that ships this**
   (until then a party invite gets the usual "초대를 보내지 못했어요").

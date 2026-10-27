@@ -160,6 +160,18 @@
     until(() => G.mode === 'result', 100);
     until(() => G.mode === 'card', 300);
     ok('water: the out animals are back (not out, at their spawns) for the next 판', G.mode === 'card' && G.players.every((p) => !p.out) && PS().mini.id === 'crown', [G.mode, G.players.map((p) => p.out)]);
+
+    // my own 탈락 line is this screen's only: the snapshot leaves it out and keeps sending the shared banner it covers
+    // here (else the host's own out would cut that banner on every guest); once that one ends, nothing
+    party(['duck', 'cat'], { plan: ['water'] });
+    toPlaying();
+    put(0, ...T.r5L); put(1, ...T.r5R);
+    const warnAt = until(() => G.banner && G.banner.main === '물이 차올라요!', 400);
+    const shared = P.snapBn(), mine = P.myLine('탈락! 2등', '친구들을 구경해요'), under = P.snapBn();
+    ok('my line: shown here, marked local; the snapshot still carries the shared warning under it', warnAt >= 0 && !!shared && mine && mine.loc && G.banner.main === '탈락! 2등'
+      && !!under && under[0] === shared[0] && under[1] === '물이 차올라요!', [warnAt, shared, mine, under]);
+    step(110);
+    ok('my line: ... and once the shared one is over, the snapshot sends no banner (never mine)', G.banner && G.banner.loc && G.frame < G.banner.end && P.snapBn() === null, [G.banner, P.snapBn()]);
   }
 
   // ---------------------------------------------------------------- 4. 왕관 뺏기 (4.2)

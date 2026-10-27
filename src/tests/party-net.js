@@ -232,6 +232,8 @@
     C.mp.leave();
     await until(() => N(H).roster.length === 3 && H.G.players.length === 3, 4000);
     ok('leaver: a guest leaving mid-판 2 - the party goes on with 3', PS(H).on && PS(H).i === 1 && H.G.players.length === 3 && !PS(H).walk, PS(H));
+    // (the leaver's page keeps no party: its lobby's demo world runs its rounds, no water / crown drawn behind the panel)
+    ok('leaver: its own page has no party left (G.party / G.mini cleared, the arena list back to the battle one)', !PS(C).on && PS(C).mini === null && PS(C).kind === 'b', [PS(C).on, PS(C).mini, PS(C).kind]);
     const D3 = [H, A, B];
     const pod2 = await until(() => D3.every((f) => PS(f).ph === 'podium'), 45000);
     await sleep(300);
@@ -265,6 +267,7 @@
     const back = await until(() => D3.every((f) => N(f).screen === 'room' && f.G.mode === 'title'), 6000);
     await sleep(300);
     ok('방으로 mid-party: everyone back in the room, nobody paid', back && D3.every((f, k) => coinsOf(f) === ce4[k]), D3.map((f) => [N(f).screen, coinsOf(f)]));
+    ok('방으로 mid-party: no page keeps the party (G.party / G.mini cleared behind the room panel)', D3.every((f) => !PS(f).on && PS(f).mini === null), D3.map((f) => [PS(f).on, PS(f).mini && PS(f).mini.id]));
 
     // ---- the host leaving mid-party: the guests in the lobby with 방장이 나갔어요, nobody paid
     await readyAll(D3);
@@ -275,6 +278,7 @@
     const lob = await until(() => [A, B].every((g) => N(g).screen === 'friends' && /방장이 나갔어요/.test(N(g).error)), 8000);
     await sleep(200);
     ok('host left mid-party: the guests are in the lobby with 방장이 나갔어요, nobody paid', lob && [A, B].every((g, k) => coinsOf(g) === ce5[k + 1]), [A, B].map((g) => [N(g).screen, N(g).error]));
+    ok('host left mid-party: no page keeps the party (the host\'s own, the guests\' mirrors)', D3.every((f) => !PS(f).on && PS(f).mini === null), D3.map((f) => [PS(f).on, PS(f).mini && PS(f).mini.id]));
     ok('no page error in any frame', F.every((f) => !f.errors.length), F.map((f) => f.errors));
   }
   main().catch((e) => { fail++; log('PARTYNET FAIL main threw: ' + (e && e.stack ? e.stack.split('\n').slice(0, 4).join(' | ') : e)); }).then(() => log('PARTYNET DONE pass=' + pass + ' fail=' + fail));

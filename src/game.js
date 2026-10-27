@@ -284,7 +284,7 @@ window.PG = window.PG || {};
   };
   const PARTY_TEXT = MINI_IDS.map((id) => MINI[id].name + ' ' + MINI[id].how + ' ' + MINI[id].rule).join(' ') + ' ' +
     Object.keys(PARTY_TX).map((k) => PARTY_TX[k]).join(' ') + ' 판 등 점 공동 승리 무승부 팀 왼쪽 오른쪽 1등 2등 3등 4등 0123456789+/:·!';
-  const V3_TEXT =CHAR_IDS.map((c) => { const d = CHARS[c]; return [d.name, d.animal, d.role, d.tag, d.badge, d.move.name, d.move.how, d.move.touch, d.bub.name, d.bub.desc].join(' '); }).join(' ') +
+  const V3_TEXT = CHAR_IDS.map((c) => { const d = CHARS[c]; return [d.name, d.animal, d.role, d.tag, d.badge, d.move.name, d.move.how, d.move.touch, d.bub.name, d.bub.desc].join(' '); }).join(' ') +
     // (v4 kit cards, hints, the countdown line; the pips' aria text)
     ' ' + STAT_NAMES.join(' ') + ' 특기: 거품: ' + OFF_LINE + ' 내 특기: 5점 중 3점' +
     // (AMMO: the battle room's magazine line, its rule; the kit card's aria text)
@@ -4300,7 +4300,8 @@ window.PG = window.PG || {};
     // spawns: the game's own rule (2.4); everyone blinks START_INV as in battle. A magazine emptied at the end of the last
     // 판 is full again (ammoTick only runs while playing)
     const sp = F.spawns();
-    G.players.forEach((pl, k) => { placePlayer(pl, sp[k] || spawnOf(pl.slot)); pl.invuln = START_INV; pl.amN = undefined; pl.amT = undefined; });
+    // (wsAt: waterBody's stale-state stamp starts again - one left from a 판 that ended mid-stale would judge at once)
+    G.players.forEach((pl, k) => { placePlayer(pl, sp[k] || spawnOf(pl.slot)); pl.invuln = START_INV; pl.amN = undefined; pl.amT = undefined; pl.wsAt = -1; });
     const total = partySecs(id) * 60;
     G.battle = { arena: i, total, left: total, intruded: true, enemyT: 1e9, powerT: 1e9 };
     G.mini = Object.assign({ id, c: D.c, n0: G.players.length, t: 0, endAt: -1 }, F.init());
@@ -4328,10 +4329,12 @@ window.PG = window.PG || {};
   function miniDraw(front) { const M = G.mini; if (M && MINI_FN[M.id] && G.mode !== 'card') MINI_FN[M.id].draw(M, front); }
   function miniHud(p, x) { const M = G.mini; if (M && MINI_FN[M.id]) MINI_FN[M.id].hud(M, p, x); }
   // a line only this screen shows (my own 탈락): the host's G.banner rides in every snapshot (g.bn) - this one is marked
-  // local and left out; a guest owns its G.banner between host banner ids
+  // local and left out (under: the shared banner it covers here, which the guests keep getting); a guest owns its
+  // G.banner between host banner ids
   function partyMyLine(main, sub) {
     if (G.online && G.role === 'guest') { G.banner = { main, sub, end: G.frame + 120, cls: 'hurry', id: 'l' + (++G.seq) }; return; }
-    showBanner(main, sub, 120, 'hurry'); if (G.banner) G.banner.loc = true;
+    const sh = G.banner && G.frame < G.banner.end ? (G.banner.loc ? G.banner.under : G.banner) : null;
+    showBanner(main, sub, 120, 'hurry'); if (G.banner) { G.banner.loc = true; G.banner.under = sh || null; }
   }
   const mineHere = (p) => !!p && p.local !== false && (!G.online || isMe(p));
 
@@ -11700,6 +11703,9 @@ window.PG = window.PG || {};
   // the world behind the panels: the title's attract demo (no game running)
   function idleWorld() {
     G.gameMode = 'solo'; G.online = false; G.role = 'host'; G.perksOff = false; G.battle = null; G.podium = null; G.words = []; G.menuOpen = false;
+    // (파티: a party left mid-way - 방으로, 나가기, 로비로, the host gone - must not linger: updateWorld's party line would
+    // stop the demo's rounds and miniDraw would draw its water / crown behind the panels)
+    G.party = null; G.mini = null; G.arenaKind = 'b';
     G.localSlot = 0; TRO.run = null; TRO.pod = null; CO.run = null; CO.pod = null;
     setupPlayers([{ char: G.sel, look: myLook(G.sel) }]);
     G.attract = true; G.score = 0; G.lives = SOLO_LIVES; G.stamps = 0; G.loop = 0; G.banner = null; G.bannerQ = []; G.stampT = 0; G.power = null;
@@ -12298,8 +12304,9 @@ window.PG = window.PG || {};
       if (G.mini) g.mg = miniSnap();
       if (G.mode === 'podium' && G.podium && G.podium.pl) g.pl = G.podium.pl.slice();
     }
-    const bn = G.banner;
-    if (bn && G.frame < bn.end && !bn.loc) g.bn = [bn.id, bn.main, bn.sub, bn.end - G.frame, bn.cls]; // (loc: a line for this screen only)
+    // (loc: a line for this screen only - the guests get the shared banner it covers, if that one still runs)
+    const bn = G.banner && G.banner.loc ? G.banner.under : G.banner;
+    if (bn && G.frame < bn.end && !bn.loc) g.bn = [bn.id, bn.main, bn.sub, bn.end - G.frame, bn.cls];
     g.P = snapPlayers();
     g.E = snapEnemies();
     g.U = snapBubbles(level >= 2 ? 18 : 0);
@@ -12491,14 +12498,15 @@ window.PG = window.PG || {};
   function guestBanner(bn, el) {
     if (Array.isArray(bn) && bn.length >= 5) {
       const id = nInt(bn[0], 0, 1e12, 0), left = nInt(bn[3], 0, 3600, 0) - el;
-      if (id && id !== NET.bnId) {
+      // (a live line of my own - 파티's 탈락! N등 - keeps its time: a host banner that comes meanwhile waits, and shows
+      // for what is left of it once mine is over)
+      const mine = G.banner && String(G.banner.id).charAt(0) === 'l' && G.frame < G.banner.end;
+      if (id && id !== NET.bnId && !mine) {
         NET.bnId = id;
         const main = nStr(bn[1], 40), cls = nStr(bn[4], 24).replace(/[^a-z ]/g, '');
         // (the countdown's "3" names MY animal's move, not the host's)
         const sub = cls === 'count' && main === '3' ? countSub() : nStr(bn[2], 90);
-        // (a live line of my own - 파티's 탈락! N등 - keeps its time: the host's banner that came meanwhile is skipped)
-        const mine = G.banner && String(G.banner.id).charAt(0) === 'l' && G.frame < G.banner.end;
-        if (left > 0 && !mine) G.banner = { main, sub, end: G.frame + left, cls, id: 'h' + id };
+        if (left > 0) G.banner = { main, sub, end: G.frame + left, cls, id: 'h' + id };
       }
     } else if (NET.bnId && G.banner && String(G.banner.id).charAt(0) === 'h') { G.banner.end = Math.min(G.banner.end, G.frame); NET.bnId = 0; }
   }
@@ -13746,6 +13754,9 @@ window.PG = window.PG || {};
       catch(slot, bySlot) { const v = G.players.find((q) => q.slot === slot); if (!v || !free(v)) return false; const b = makeBubble('empty', clamp(v.x, WALL_L, WALL_R - 16), clamp(v.y, CEIL_Y, PF_BOT - 16), bySlot | 0); G.bubbles.push(b); catchPlayer(v, b); return !!v.trap; },
       fakeRemote(slot, st) { const p = G.players.find((q) => q.slot === slot); if (!p) return false; p.local = false; p.id = p.id || 'fake' + slot; if (st) NET.remote.set(p.id, { st: Object.assign({ ep: p.ep }, st), buf: mkBuf(), shots: [], mash: [] }); else NET.remote.delete(p.id); return true; },
       judge(slot) { const p = G.players.find((q) => q.slot === slot); return p ? waterBody(p) : null; },
+      // (unit tests) my own line on this screen (partyMyLine); the banner a snapshot of this world would send (g.bn)
+      myLine(main, sub) { partyMyLine(main, sub); return G.banner ? { main: G.banner.main, sub: G.banner.sub, loc: !!G.banner.loc } : null; },
+      snapBn() { const g = snapOf(0); return g.bn ? g.bn.slice() : null; },
       payNow(o) {
         o = o || {}; const keep = { online: G.online, q: NET.q, gid: NET.gid, tr: NET.tr, pod: CO.pod };
         try { G.online = true; NET.q = 0; NET.gid = 4242; NET.tr = null; CO.pod = null; CO.pa = { gid: 4242, act: (o.act || []).slice(), pf: (o.pf || []).slice(), shots: o.shots | 0, seen: (o.act || []).length - 1, go: -1 };
