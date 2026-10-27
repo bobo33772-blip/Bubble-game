@@ -1,8 +1,8 @@
 # 뽀득뽀득 목욕탕: 파티 (Mario Party style minigames) v1 — design spec
 
-Status: **PR A built** on `feat/party` (2026-10-26): the party layer + 물 차오르기 + 왕관 뺏기. The user split the work:
-거품 축구 is the next PR (PR B) - everything about the ball, the goals, 거품 축구장 and the teams below is its spec, not
-built yet. Section 18 lists what was built and where it differs from this spec. Checked against the code on
+Status: **PR A built** on `feat/party` (2026-10-26): the party layer + 물 차오르기 + 왕관 뺏기. **PR B built** on
+`feat/party-soccer` (2026-10-27): 거품 축구 - the ball, the goals, 거품 축구장 and the teams below (the user split the work
+in two). Section 18 lists what was built and where it differs from this spec. Checked against the code on
 2026-10-26 (section 17 lists what that changed). Code is referenced by function name and section, never by line number
 (`src/game.js` is edited by other passes all the time). Every function named here exists today unless it is marked
 **new** (or is 축구's, section 18).
@@ -1169,7 +1169,8 @@ capy's hot-tub shield would keep the crown). Where the build differs from sectio
   podium span, the warm-up), `ux-roomrow` (3 mode buttons and the 판 수 row on one line, also at 320 px), `monsters` (the
   option labels it lists are the shown ones: the 판 수 row is hidden outside a party room) and `monsters-net` (`R.o` has 8
   entries, `o[7]` = 3).
-- Not covered by a test (PR B or later): 13.1 #5 and 13.2 #5 (축구), the "축구 re-drawn during a 4 -> 3 card" replan.
+- Not covered by a test in PR A: 13.1 #5 and 13.2 #5 (축구), the "축구 re-drawn during a 4 -> 3 card" replan (PR B
+  covers them, below).
 
 **Audit before the PR (2026-10-27)**, against sections 7 and 17 and the diff:
 - `idleWorld` now clears `G.party` / `G.mini` / `G.arenaKind` too (2.2 named it; the build had only `resetGame` and
@@ -1187,3 +1188,86 @@ capy's hot-tub shield would keep the crown). Where the build differs from sectio
   `seatReady` / `seatOld` for an older page; no co-op or battle coin path reachable in a party.
 - `firebase/firestore.rules` accepts `mode: 'party'` invites: **publish the rules with the deploy that ships this**
   (until then a party invite gets the usual "초대를 보내지 못했어요").
+
+### 18.1 As built (PR B, 거품 축구, 2026-10-27)
+
+PR B is 거품 축구 on top of PR A (`feat/party-soccer` from `feat/party`), through the minigame contract and nothing
+else in the sequencer. Where it differs from sections 2-16 or adds to them:
+
+**The contract grew three optional hooks** (`MINI_FN[id]`): `hold(M)` (the clock stands still this playing frame:
+`updateBattle` skips its decrement, its countdown beeps and its `10초 남았어요!` for it - `miniHold`), `held(mg)` (the
+same, read off a snapshot's `g.mg`: `applyView` then does not run the guest's clock on by the snapshot's age -
+`miniHeldWire`), and `win(M)` (`partyResult`'s banner line instead of `1등 …` / `공동 1등!`). `miniLoad` now builds the
+game's state first and hands it to `spawns(ini)` (축구 places by team). `water` / `crown` are unchanged.
+
+**Arena**
+- `PG.PARTY_ARENAS[1]` 거품 축구장 exactly as 5.2 (row by row in `levels.js`, its header has the `goals` / `sides` /
+  `ball` fields). The engine knows the order as `PARTY_KEYS = ['water', 'ball']`: `loadPartyArenas` gives every index its
+  own game - a missing entry, one with another key, a 축구장 whose `goals` / `sides` / `ball` do not parse (`soccerOf`,
+  numbers clamped) or a 물 arena without a `rise` gets the built-in closed arena of that key (`fallbackPartyArena(key)`:
+  the field with its crossbars, or the water tiers).
+- `tools/validate-levels.js` (`PARTY_KEYS` / `PARTY_NAMES` with 거품 축구장): each mouth open air on the floor under a
+  solid bar, the left one at the left wall and the right one its mirror, `line` the mouth's inner edge, the mouth tall
+  enough for the 22 px ball; two standable, mirrored `sides` a team, each on its own half; the `ball` spot open air for the
+  whole ball. **An unreachable crossbar is a `note:` line**, not a warning (the run-all job wants `ALL OK (0 warning`): the
+  preview still marks it `x`.
+
+**The ball (4.3) as built** (`ballTick`, the host's world; `BALL` gained `deep: 6`, the goal's "centre this far past the
+line", which 4.3 spelled 34 / 222)
+- A frame: the 골! cheer counts down (then the kickoff), the hanging ball counts down, else gravity / drag (x `roll` on the
+  floor), the move, `ballField`, the bodies, the floating bubbles, `ballField` again (it keeps the "resting" the first
+  pass found: the pushes clear it themselves), the NaN guard, the field clamp, the speed cap (**every frame**, not only
+  after a push: the snapshot never carries more than `maxV`), the goals. Bodies and bars both go through one circle-out-of-
+  a-box helper (`ballOut`: along the normal, the centre inside a box along the shallow axis with "up" first - a ball
+  wedged between a body and a wall pops up over the body instead of jittering).
+- Every interior `'#'` run of the map is a solid box for the ball (`ballBars`: the two crossbars); it rests on a bar's top
+  as on the floor (no goal from up there: the goal test is "below the mouth's top").
+- Pushes: `kn` counts the **sounded** ones - one per player at most every `sfxGap` frames (a bubble's push counts for its
+  owner), the host plays `'bounce'` for each, and a guest plays its own when `kn` rises (at most every `sfxGap` of its own
+  frames). `'bounce'` / `'splash'` stay in `NO_ECHO`. A bubble on the ball pops with `cause 'self'` (no pop sound - the
+  push sound is the one).
+- The kickoff (`ballKickoff`): at 시작! only the ball (the players stand where `miniLoad` put them, and the countdown's own
+  `'go'` plays); after a goal every trap is released, every empty bubble and prison is spent (`spend`, `hist` dropped: no
+  late claim or lag catch can come from it) and removed, everyone is `placePlayer`d on its team's side with the
+  `START_INV` blink, `'go'`. The ball hangs blinking for `kickF` (it is not in play: bodies and bubbles pass through it).
+  `ko` counts the kickoffs.
+- Teams (`ballTeams`, at `miniLoad`): by points, then slot - not `partyStandings`' tie-breaks (4.3 says "points, then
+  slot"). The first 판 of a party is therefore 0 + 3 vs 1 + 2. A 2v2 with a leaver keeps the leaver in `team` (its team
+  plays short-handed, the kickoff puts the one left on the team's first spot); places stay by the team's goals against the
+  `n0` table (a lone winner 4, two losers 2 + 2 in a 4-player 판).
+- Wire: `g.mg = ['b', x*10, y*10, vx*100, vy*100, goalsL, goalsR, goalT, kick (-1 before 시작!), kn]` and `g.pa.T` (the
+  team by seat, -1 none) as 6.4. A guest tweens the ball only while it is in play in both snapshots, bursts the ball
+  itself when the goals rise (the host's particles are its own), and calls its own kickoff side once per kickoff (its
+  number: the goals so far).
+- Measured (party-net, bc at 8 ms latency): a guest's drawn ball is a median 0.2 px off the host's path, about 150 ms
+  behind it. **Prediction stays out of scope** (14, 16 risk 1): a guest's own push or bubble shows on its ball after that
+  delay; its predicted bubble flies on through the ball until the host's row for it is gone.
+
+**UI**
+- The card's team line (`partyTeamLine`): one row with both teams (`왼쪽 팀: 방장 · 냥냥 / 오른쪽 팀: 까삐 · 펭펭`, 1v1
+  `왼쪽: 방장 / 오른쪽: 까삐`), each half its team's colour and cut with an ellipsis (12-syllable nicks do not fit a 1x
+  window otherwise); on an online screen a second line with my side (`나는 왼쪽 팀 · 오른쪽 골대에 넣어요!`). An offline
+  (one screen) party has no "my" line. Fit: the 1x window's 축구 card is 174 / 174 px (no scroll, the rule line hidden as
+  for every card), the 568x320 phone's 230 / 230 with the rule line.
+- In play: the goal nets (9.4, 10), the HUD's team bar along the panel's top + a small ball + the team's goals; **added**: a
+  10 x 1 px line in the team's colour under each free animal's feet (who plays with whom, at a glance). The result banner
+  is `왼쪽 팀 승리!` / `오른쪽 팀 승리!` / `무승부!`, also for a 1v1.
+- Rotation: 2 or 4 players play each of the three once in 3판 (a 5판 adds two of a fresh bag); 3 players never get 축구
+  (A B A / A B A B A), and the room's rules line says `물 차오르기 · 왕관 뺏기 (거품 축구는 2명이나 4명일 때)` for 3.
+
+**Debug / tests**
+- `PG.debug.party`: `ball(x, y, vx, vy)` (the ball by hand, in play), `goal(t)`, `quake(slot)`, `shot(slot, x, y, dir)`
+  (a capture-phase bubble of that kit), `fill(slot)` (the card as that seat's screen shows it; -1 back); `state().mini` has
+  `ball`, `goals`, `team`, `goalT`, `kn`, `ko`; `card()` has `teams` / `mine`; `consts()` has `BALL` / `BALL_TEAM`;
+  `reload()` reports `goals` / `sides` / `ball` / the bar row.
+- `src/tests/party.js` 5 (축구, as 13.1 #5) and the updated rotation / flow / fit / arena checks; `#shot=ball|ballcard`.
+  `src/tests/party-net.js` 5 (a 2v2 축구 판: the teams and own side lines on every card, each page's kickoff call over its
+  own animal only, a guest's body and a guest's bubble moving the host's ball, every guest hearing `'bounce'` off `kn`, a
+  goal shown and counted once everywhere with the clock stopped, the ball in step on each guest, the team places) and 7 now
+  makes the leaver leave during a 축구 card (4 -> 3: that 판 is drawn again on every page). The phase watcher takes one
+  last sample before it stops (it could miss the podium by one tick).
+- Not covered online: a 1v1 축구 over the network (2 frames) - virtual time covers 1v1.
+
+**Left open**
+- `PARTY_V` stays 1: PR A and PR B ship together. If PR A ever reaches players first, a PR-A page would read a `'b'` 판
+  as 물 (its `MINI_IDS` has no `'b'`) - then raise `PARTY_V` to 2 and plan 축구 only when every seat's `pa` is >= 2 (6.2).
