@@ -253,25 +253,39 @@ window.PG = window.PG || {};
   const PARTY_PTS = { 2: [4, 0], 3: [4, 2, 0], 4: [4, 2, 1, 0] };   // by place; n = players at that 판's 시작!
   const PARTY_F = { card: 300, result: 180, early: 60 };             // frames: the card, the result beat, last one standing
   // each minigame: c its wire code, secs, ar the arena (['p', i] PG.PARTY_ARENAS[i], ['b'] a dry battle arena), fits(n),
-  // and the card texts: name; how - the ONE-LINE how-to, which also says how to win (<= 17 syllables: one line at 0.9em in
-  // the 1x window's 17.4em, 9.2); rule - the one extra line, hidden on short screens (9.2). (거품 축구 comes with the next
-  // PR: an entry here, its arena in PG.PARTY_ARENAS and its MINI_FN hooks, nothing else)
+  // team (two sides: the card's team line), and the card texts: name; how - the ONE-LINE how-to, which also says how to
+  // win (<= 17 syllables: one line at 0.9em in the 1x window's 17.4em, 9.2); rule - the one extra line, hidden on short
+  // screens (9.2). A minigame is an entry here, its arena (PG.PARTY_ARENAS or the battle ones) and its MINI_FN hooks
   const MINI = {
     water: { c: 'w', secs: 75, ar: ['p', 0], fits: (n) => n >= 2, name: '물 차오르기',
       how: '물이 차올라요! 끝까지 안 젖으면 1등', rule: '물에 닿으면 탈락 · 거품에 갇히면 물로 가라앉아요 · 끝까지 남은 친구는 모두 1등' },
     crown: { c: 'c', secs: 60, ar: ['b'], fits: (n) => n >= 2, name: '왕관 뺏기',
       how: '왕관을 쓰고 가장 오래 버티면 1등', rule: '왕관을 쓰면 조금 느려요 · 거품에 갇히면 왕관이 떨어져요' },
+    // (not for 3 players: the screen has two sides - a third goal would sit in the ceiling or the floor, and 2v1 needs a
+    // handicap kids cannot read off the screen; 3.2)
+    ball: { c: 'b', secs: 60, ar: ['p', 1], fits: (n) => n === 2 || n === 4, team: true, name: '거품 축구',
+      how: '큰 거품 공을 상대 골대에 넣어요', rule: '몸이나 거품으로 공을 밀어요 · 골을 더 많이 넣은 팀이 이겨요' },
   };
-  const MINI_IDS = ['water', 'crown'];
+  const MINI_IDS = ['water', 'crown', 'ball'];
   // (a short no-KO capture in every minigame; prisons sink in 물 0.3 px/f; out once the feet are 3 px under the surface; a
   // guest draws the water at its estimate of the host's NOW, at most WATER_LEAD frames past the newest snapshot - 4.1;
   // the crown holder walks at 0.85x, its dropper waits 1.5 s to take it again, a remote body touches it with 4 px slack)
   const MINI_TRAP = 90, MINI_SINK = 0.3, WATER_SLACK = 3, WATER_LEAD = 30, CROWN_SLOW = 0.85, CROWN_NOPICK = 90, CROWN_SLACK = 4;
+  // 거품 축구 (4.3): the ball (centre x / y, radius r px): gravity g up to maxFall, drag a frame (x roll more on the floor);
+  // bounces wall / floor (under 0.6 px/f it rests); speed capped at maxV. A body adds its closing speed x body + nudge
+  // along the contact normal (a remote body grown by slack px); a bubble shot (along its flight), drop (an otter droplet
+  // / a hanging egg) or float (a floating one, along the centre line); a capy's slam sets vy to slam. A goal: the centre
+  // deep px past the goal line, under the crossbar; the clock stops goalF frames, then the kickoff: the ball hangs kickF
+  // frames at the centre top and drops. sfxGap: frames between one player's push sounds (the guests' too, off kn)
+  const BALL = { r: 11, g: 0.12, maxFall: 3, drag: 0.995, roll: 0.985, wall: 0.7, floor: 0.55, maxV: 5,
+    body: 1.2, nudge: 0.4, shot: 1.8, drop: 1.0, float: 0.5, slam: -3.4, slack: 3, deep: 6, goalF: 120, kickF: 45, sfxGap: 8 };
+  const BALL_TEAM = ['#ffb24a', '#c9a8ff'];   // (the left / right team's colour: the HUD bar, the nets, the card, the feet marks)
   // every fixed Korean line of the party (9.1 - 9.6), by key
   const PARTY_TX = {
     mode: '파티', host: '파티 방 만들기', desc: '2~4명이 미니게임 여러 판으로 겨뤄요', rounds: '판 수', r3: '3판', r5: '5판',
     refresh: '새로고침 필요', refreshMsg: '새로고침이 필요한 친구가 있어요 · 파티는 새 버전에서만 해요',
-    tie: '같은 기록이면 같은 등수 · 동점이면 1등을 더 많이 한 친구가 위예요', games: '물 차오르기 · 왕관 뺏기',
+    tie: '같은 기록이면 같은 등수 · 동점이면 1등을 더 많이 한 친구가 위예요', games: '물 차오르기 · 왕관 뺏기 · 거품 축구',
+    games3: '물 차오르기 · 왕관 뺏기 (거품 축구는 2명이나 4명일 때)',
     coin0: '끝까지 하면 등수대로 비누 코인을 받아요', coin1: '연습 경기예요: 이 브라우저의 탭끼리는 비누 코인이 없어요',
     coin2: '연습 경기예요: 같은 기기에서 들어온 친구가 있어요 · 비누 코인 없음', noTro: '트로피는 걸지 않아요',
     trap: '거품에 갇히면 잠깐 꼼짝 못 해요 · 연타로 빨리 빠져나와요', leave: '판 중간에 나가면 비누 코인이 없어요',
@@ -281,6 +295,8 @@ window.PG = window.PG || {};
     next: '끝 · 다음 판으로', lastEnd: '마지막 판 끝!', title: '파티 결과!', titleB: '결과 발표!', again: '파티 한 번 더',
     noteWins: '동점은 1등을 더 많이 한 친구가 위예요', noteLast: '동점은 마지막 판 등수로 정했어요', noteWalk: '친구가 나가서 일찍 끝났어요',
     shared: '공동', board: '점수판', me: '나', practice: '연습 경기', minis: '미니게임', perksOn: '능력 있음', perksOff: '능력 없음',
+    teamL: '왼쪽 팀', teamR: '오른쪽 팀', sideL: '왼쪽', sideR: '오른쪽', mineL: '나는 왼쪽 팀 · 오른쪽 골대에 넣어요!', mineR: '나는 오른쪽 팀 · 왼쪽 골대에 넣어요!',
+    goal: '골!', toR: '오른쪽으로!', toL: '왼쪽으로!', winL: '왼쪽 팀 승리!', winR: '오른쪽 팀 승리!', draw: '무승부!',
   };
   const PARTY_TEXT = MINI_IDS.map((id) => MINI[id].name + ' ' + MINI[id].how + ' ' + MINI[id].rule).join(' ') + ' ' +
     Object.keys(PARTY_TX).map((k) => PARTY_TX[k]).join(' ') + ' 판 등 점 공동 승리 무승부 팀 왼쪽 오른쪽 1등 2등 3등 4등 0123456789+/:·!';
@@ -1181,19 +1197,28 @@ window.PG = window.PG || {};
     });
     loadPartyArenas();
   }
-  // ---- party arenas (PG.PARTY_ARENAS, design/party.md 5): closed maps with their minigame's own fields; a missing or
-  // broken entry gets a built-in closed one (the water tiers), like fallbackArena
-  function fallbackPartyArena() {
-    const map = [];
+  // ---- party arenas (PG.PARTY_ARENAS, design/party.md 5): closed maps with their minigame's own fields, in the order
+  // PARTY_KEYS (MINI[id].ar names the index); a missing or broken entry gets a built-in closed one of its key (the water
+  // tiers / the field with its crossbars), like fallbackArena
+  const PARTY_KEYS = ['water', 'ball'];
+  function fallbackPartyArena(key) {
+    const map = [], ball = key === 'ball';
     for (let r = 0; r < ROWS; r++) {
       let s = '##' + '.'.repeat(28) + '##';
       if (r === 0 || r === ROWS - 1) s = '#'.repeat(COLS);
+      if (ball) { if (r === 20) s = '######' + '.'.repeat(20) + '######'; map.push(s); continue; }
       if (r === 21) s = '##....######........######....##';
       if (r === 17) s = '##..####.....######.....####..##';
       if (r === 13) s = '##......####........####......##';
       if (r === 9) s = '##..###......######......###..##';
       if (r === 5) s = '##.....####..........####.....##';
       map.push(s);
+    }
+    if (ball) {
+      return { key: 'ball', name: '거품 축구장', theme: 0, closed: true, map, gather: { col: 15, row: 3 },
+        players: [{ col: 11, row: 24 }, { col: 20, row: 24 }, { col: 7, row: 24 }, { col: 24, row: 24 }],
+        sides: [[{ col: 11, row: 24 }, { col: 7, row: 24 }], [{ col: 20, row: 24 }, { col: 24, row: 24 }]],
+        goals: [{ c0: 2, c1: 4, r0: 21, r1: 24, line: 40 }, { c0: 27, c1: 29, r0: 21, r1: 24, line: 216 }], ball: { x: 128, y: 64 } };
     }
     return { key: 'water', name: '물 차는 대욕장', theme: 1, closed: true, map, gather: { col: 15, row: 2 },
       players: [{ col: 4, row: 24 }, { col: 27, row: 24 }, { col: 10, row: 24 }, { col: 21, row: 24 }],
@@ -1207,15 +1232,29 @@ window.PG = window.PG || {};
       .sort((a, b) => a[0] - b[0]).slice(0, 8);
     return steps.length ? { y0: clamp(isFinite(+R.y0) ? +R.y0 : PF_BOT - 2, CEIL_Y, PF_BOT), warn: clamp(isFinite(+R.warn) ? +R.warn : 2, 0, 10), steps } : null;
   }
+  // 축구's fields as the engine runs them (numbers clamped), null when unusable: goals [left, right] {c0, c1, r0, r1, line},
+  // sides [[left x2], [right x2]] spawn cells, ball {x, y} (the kickoff spot)
+  function soccerOf(B) {
+    const cell = (q) => (q && isFinite(+q.col) && isFinite(+q.row) ? { col: clamp(+q.col | 0, 2, COLS - 4), row: clamp(+q.row | 0, 1, ROWS - 2) } : null);
+    const goal = (q) => (q && ['c0', 'c1', 'r0', 'r1', 'line'].every((k) => isFinite(+q[k])) ? { c0: clamp(+q.c0 | 0, 2, COLS - 3), c1: clamp(+q.c1 | 0, 2, COLS - 3), r0: clamp(+q.r0 | 0, 2, ROWS - 2), r1: clamp(+q.r1 | 0, 2, ROWS - 2), line: clamp(+q.line, WALL_L, WALL_R) } : null);
+    if (!B || !Array.isArray(B.goals) || !Array.isArray(B.sides) || !B.ball) return null;
+    const goals = B.goals.slice(0, 2).map(goal), sides = B.sides.slice(0, 2).map((t) => (Array.isArray(t) ? t.slice(0, 2).map(cell) : []));
+    const x = +B.ball.x, y = +B.ball.y;
+    if (goals.length < 2 || goals.some((q) => !q) || sides.length < 2 || sides.some((t) => t.length < 2 || t.some((q) => !q)) || !isFinite(x) || !isFinite(y)) return null;
+    return { goals, sides, ball: { x: clamp(x, WALL_L + BALL.r, WALL_R - BALL.r), y: clamp(y, CEIL_Y + BALL.r, PF_BOT - TS - BALL.r) } };
+  }
   let PARTY_ARENAS = [];
   function loadPartyArenas() {
-    const src = Array.isArray(PG.PARTY_ARENAS) && PG.PARTY_ARENAS.length ? PG.PARTY_ARENAS : [fallbackPartyArena()];
+    const src = Array.isArray(PG.PARTY_ARENAS) ? PG.PARTY_ARENAS.slice() : [];
+    while (src.length < PARTY_KEYS.length) src.push(null);
     PARTY_ARENAS = src.map((A, i) => {
-      let base = A && typeof A === 'object' && Array.isArray(A.map) ? A : fallbackPartyArena();
-      if (base.key === 'water' && !riseOf(base.rise)) base = fallbackPartyArena();
+      // (each index's own game - past the known ones, an entry's own key)
+      const key = PARTY_KEYS[i] || (A && A.key === 'ball' ? 'ball' : 'water');
+      let base = A && typeof A === 'object' && Array.isArray(A.map) && (!PARTY_KEYS[i] || A.key === key) ? A : fallbackPartyArena(key);
+      if ((key === 'water' && !riseOf(base.rise)) || (key === 'ball' && !soccerOf(base))) base = fallbackPartyArena(key);
       const mk1 = (B) => Object.assign(normLevel(Object.assign({}, B, { arena: true, closed: true, enemies: [], boss: null, special: undefined }), i),
-        { key: typeof B.key === 'string' ? B.key : '', closed: true, rise: riseOf(B.rise) });
-      try { return mk1(base); } catch (e) { return mk1(fallbackPartyArena()); }
+        { key, closed: true }, key === 'ball' ? soccerOf(B) : { rise: riseOf(B.rise) });
+      try { return mk1(base); } catch (e) { return mk1(fallbackPartyArena(key)); }
     });
   }
 
@@ -2017,8 +2056,8 @@ window.PG = window.PG || {};
     } else { const who = NET.who; NET.who = p.slot; quake(p, p.x, p.y); NET.who = who; }
   }
   // the quake (host world): grime / mold / sponge in the box get soaked (불은 때: slow, trapped longer, double points) and
-  // hop, a sponge forgets its charge, floating empties jiggle, a ground boss gets soap (once per bossCd per capy).
-  // Rivals never (no host-to-guest body impulse exists)
+  // hop, a sponge forgets its charge, floating empties jiggle, a ground boss gets soap (once per bossCd per capy), the
+  // 축구 ball flies up. Rivals never (no host-to-guest body impulse exists)
   function quake(pl, x, y) {
     const s = KIT.capy.slam, cx = x + 8, feet = y + 16, inBox = (ex, ey) => Math.abs(ex - cx) <= s.dx && ey >= feet - s.up && ey <= feet + s.dn;
     for (const e of G.enemies) {
@@ -2033,6 +2072,7 @@ window.PG = window.PG || {};
       pl.qkBoss = G.frame;
       bossSoap(B.type === 'megaSponge' && B.act === 'dizzy' ? 2 : 1, B.x + 16, B.y + 16);
     }
+    ballSlam(pl, inBox); // (거품 축구: the ball in the box flies up)
     Snd.sfx('quake');
   }
   // ---- the six bubbles (v4 kits)
@@ -3111,7 +3151,8 @@ window.PG = window.PG || {};
   }
   // (battle: a capture-phase bubble also traps an opponent)
   // (noPlayers: the bubble was just blown - rivals are caught in the bubble pass of this frame, see fire)
-  function shotHits(bb, noPlayers) { return captureCheck(bb) || (!noPlayers && G.gameMode === 'battle' && playerTrapCheck(bb)) || bossShotCheck(bb) || (G.hazards.length > 0 && sporeShotCheck(bb)); }
+  // (거품 축구: the ball first - a capture-phase bubble that meets it is spent on it, the same frame's rival catch never wins)
+  function shotHits(bb, noPlayers) { return captureCheck(bb) || ballShot(bb) || (!noPlayers && G.gameMode === 'battle' && playerTrapCheck(bb)) || bossShotCheck(bb) || (G.hazards.length > 0 && sporeShotCheck(bb)); }
   function sealBoss(b) {
     b.state = 'stun'; b.t = 0; b.act = 'idle'; b.vx = 0; b.vy = 0; b.soap = b.soapMax; b.stunT = STUN_FRAMES; b.dropRow = -1;
     // a flying boss is heavy in its bubble: it sinks a little first (down to where the duck can reach it),
@@ -4028,9 +4069,12 @@ window.PG = window.PG || {};
   }
   function updateBattle() {
     const bt = G.battle; if (!bt) return;
-    if (bt.left > 0) bt.left--;
-    if (bt.left > 0 && bt.left <= 180 && bt.left % 60 === 0) Snd.sfx('countdown');
-    if (bt.left === 600) showBanner('10초 남았어요!', '', 60, 'hurry');
+    // (파티: a minigame may stop the clock - 거품 축구 while a goal is cheered)
+    if (!miniHold()) {
+      if (bt.left > 0) bt.left--;
+      if (bt.left > 0 && bt.left <= 180 && bt.left % 60 === 0) Snd.sfx('countdown');
+      if (bt.left === 600) showBanner('10초 남았어요!', '', 60, 'hurry');
+    }
     if (G.mini) { miniTick(); return; } // (파티: the minigame's own frame - no enemies, power-ups or intruder)
     if (!bt.intruded && G.opts.intrusion !== false && bt.left <= INTRUDE_LEFT && bt.left > 0) intrude();
     const up = G.enemies.filter((e) => e.state !== 'dead' && !e.minion).length;
@@ -4124,8 +4168,9 @@ window.PG = window.PG || {};
     s.forEach((r, i) => out.set(r.slot, i && s[i - 1].k === r.k ? out.get(s[i - 1].slot) : i + 1));
     return out;
   }
-  // the 판 list: a shuffled bag of the games that fit n, refilled when empty, never the same game twice in a row (two
-  // games: A B A / A B A B A). from: the 판 already decided (kept)
+  // the 판 list: a shuffled bag of the games that fit n, refilled when empty, never the same game twice in a row (2 or 4
+  // players: 3판 plays each of the three once; 3 players have two - no 거품 축구 - so A B A / A B A B A). from: the 판
+  // already decided (kept)
   function partyPlan(n, rounds, from) {
     const ok = MINI_IDS.filter((id) => MINI[id].fits(n)), out = (from || []).slice();
     let bag = [];
@@ -4197,8 +4242,8 @@ window.PG = window.PG || {};
     for (const p of G.players) if (p.trap) releasePlayer(p);
     for (const b of G.bubbles) if (!b.dead && b.state !== 'pop') burst(b.x + 8, b.y + 8, 5, BUBBLE_COLS, 1.1, 12);
     G.bubbles = []; G.bannerQ = [];
-    const firsts = G.players.filter((p) => places.get(p.slot) === 1);
-    showBanner(firsts.length === 1 ? '1등 ' + nameOf(firsts[0]) + '!' : PARTY_TX.winShared, P.i + 1 >= P.n ? PARTY_TX.lastEnd : MINI[M.id].name + ' ' + PARTY_TX.next, partyResultF(), 'clear');
+    const firsts = G.players.filter((p) => places.get(p.slot) === 1), F = MINI_FN[M.id], won = F.win ? F.win(M) : '';
+    showBanner(won || (firsts.length === 1 ? '1등 ' + nameOf(firsts[0]) + '!' : PARTY_TX.winShared), P.i + 1 >= P.n ? PARTY_TX.lastEnd : MINI[M.id].name + ' ' + PARTY_TX.next, partyResultF(), 'clear');
     for (const p of G.players) wordPop(p.x + 8, headTop(p) - (crownHolder(p) ? 24 : 16), places.get(p.slot) + '등 +' + P.gain[p.slot], p.color); // (above the name tag)
     Snd.sfx('win');
   }
@@ -4253,13 +4298,15 @@ window.PG = window.PG || {};
     if (pre && P.plan[P.i] !== cur) { miniLoad(P.plan[P.i]); G.mode = 'card'; P.t = 0; G.countNext = null; showOverlay(G.menuOpen ? 'pause' : 'party'); fillParty(); }
   }
   // the host's snapshot part (6.4): n, i, the plan's codes, [slot, points, 1등 count, last place, last gain (-1: none)],
-  // t (frames into the card / result), ft (this 판's playing frames in all), cl (the card's frames), F (final), W (walkover)
+  // t (frames into the card / result), ft (this 판's playing frames in all), cl (the card's frames), F (final), W (walkover),
+  // T (a team game: the team by seat, -1 none)
   function partySnap() {
     const P = G.party;
     const o = { n: P.n, i: P.i, L: P.plan.map((id) => MINI[id].c).join(''), t: P.t | 0, ft: G.battle ? G.battle.total | 0 : 0, cl: partyCardF(),
       P: G.players.map((p) => [p.slot, P.pts[p.slot] | 0, P.wins[p.slot] | 0, P.last[p.slot] | 0, P.gain[p.slot] === undefined ? -1 : P.gain[p.slot]]) };
     if (P.fin) o.F = 1;
     if (P.walk) o.W = 1;
+    if (G.mini && G.mini.team) { const T = G.mini.team; o.T = [0, 1, 2, 3].map((s) => (T[s] === 0 || T[s] === 1 ? T[s] : -1)); }
     return o;
   }
   // guest: G.party / G.mini as the host's snapshot says (before guestPhase: the card is filled from this snapshot)
@@ -4297,14 +4344,14 @@ window.PG = window.PG || {};
     }
     loadArenaLV(L, i, kind);
     G.matchNo = P ? Math.max(0, P.i) : 0;
-    // spawns: the game's own rule (2.4); everyone blinks START_INV as in battle. A magazine emptied at the end of the last
-    // 판 is full again (ammoTick only runs while playing)
-    const sp = F.spawns();
+    // spawns: the game's own rule (2.4), from its fresh state (축구: by team); everyone blinks START_INV as in battle. A
+    // magazine emptied at the end of the last 판 is full again (ammoTick only runs while playing)
+    const ini = F.init(), sp = F.spawns(ini);
     // (wsAt: waterBody's stale-state stamp starts again - one left from a 판 that ended mid-stale would judge at once)
     G.players.forEach((pl, k) => { placePlayer(pl, sp[k] || spawnOf(pl.slot)); pl.invuln = START_INV; pl.amN = undefined; pl.amT = undefined; pl.wsAt = -1; });
     const total = partySecs(id) * 60;
     G.battle = { arena: i, total, left: total, intruded: true, enemyT: 1e9, powerT: 1e9 };
-    G.mini = Object.assign({ id, c: D.c, n0: G.players.length, t: 0, endAt: -1 }, F.init());
+    G.mini = Object.assign({ id, c: D.c, n0: G.players.length, t: 0, endAt: -1 }, ini);
   }
   // 시작! (updateCountdown): its players count from now; the game's own start
   function miniStart() {
@@ -4319,6 +4366,9 @@ window.PG = window.PG || {};
     MINI_FN[M.id].tick(M);
   }
   const miniOver = () => !!G.mini && !!G.battle && (G.battle.left <= 0 || (G.mini.endAt >= 0 && G.frame >= G.mini.endAt));
+  // the clock stands still (the host's world: a playing frame the game holds; a guest: the snapshot's g.mg says so)
+  const miniHold = () => { const M = G.mini, F = M && MINI_FN[M.id]; return !!F && !!F.hold && G.mode === 'playing' && F.hold(M); };
+  function miniHeldWire(g) { const id = g.m === 'p' && Array.isArray(g.mg) ? MINI_IDS.find((q) => MINI[q].c === g.mg[0]) : null; return !!id && !!MINI_FN[id].held && MINI_FN[id].held(g.mg); }
   function miniPlaces() { const M = G.mini, F = MINI_FN[M.id]; return rankBy(G.players.map((p) => ({ slot: p.slot, k: F.key(p, M) }))); }
   const miniSnap = () => MINI_FN[G.mini.id].snap(G.mini);
   function miniView(mg, mg1, t, g) {
@@ -4482,8 +4532,232 @@ window.PG = window.PG || {};
     text(String(Math.floor((M.held[p.slot] | 0) / 60)), x + 27, 9, on ? '#ffd447' : '#9fb8b4');
   }
 
-  // each minigame's hooks: spawns (the k-th player's spawn), init (its state), start (시작!), tick (a playing frame),
-  // key (the place key, bigger is better), snap / view (its wire array, 6.4), drop (a leaver), draw, hud (a seat's 2nd line)
+  // ---- 거품 축구 (4.3): a big bubble ball (centre x / y, radius BALL.r) on a closed field, a goal under a crossbar on
+  // each side. The host runs it (ballTick, after the players and the bubbles). Bodies push it and are never pushed back
+  // (nobody's own physics changes: a guest's body stays its own), a bubble pops on it and pushes it (one in flight from
+  // shotHits - before the rival catch - a floating one here), a capy's slam lifts it (quake). A goal stops the clock
+  // BALL.goalF frames; then every prison opens, every bubble goes, everyone is back on their team's side and the ball
+  // hangs BALL.kickF frames at the centre top before it drops. Teams: 1v1, or 2v2 by the standing before the 판; places
+  // by the team's goals (a draw: everyone 1st). Guests draw the ball from the snapshot (host-only: no prediction - a push
+  // shows after the round trip, design/party.md 16) and play their own 'bounce' off kn ('bounce' is NO_ECHO)
+  // the teams at miniLoad: 1v1 one each; 2v2 by the standing (points, then slot): 1st + 4th left, 2nd + 3rd right
+  // (before any points: slots 0 + 3 vs 1 + 2)
+  function ballTeams() {
+    const P = G.party, pts = (s) => (P && P.pts[s]) | 0, team = {};
+    const order = G.players.map((p) => p.slot).sort((a, b) => pts(b) - pts(a) || a - b);
+    order.forEach((s, k) => { team[s] = order.length >= 4 ? (k === 0 || k === 3 ? 0 : 1) : k % 2; });
+    return team;
+  }
+  // each present player's kickoff spot: its team's sides, in slot order within the team
+  function ballSpawns(team) {
+    const S = (LV && LV.sides) || [[], []];
+    return G.players.map((p) => {
+      const t = team[p.slot] | 0, mates = G.players.filter((q) => (team[q.slot] | 0) === t);
+      return (S[t] && (S[t][mates.indexOf(p)] || S[t][0])) || spawnOf(p.slot);
+    });
+  }
+  // the map's interior blocks as boxes (a run of '#' per row): the ball bounces off them from all sides (the crossbars)
+  function ballBars() {
+    const out = [];
+    for (let r = 1; r < ROWS - 1; r++) for (let c = 2; c < COLS - 2; c++) {
+      if (MAP[r][c] !== '#') continue;
+      let e = c; while (e + 1 < COLS - 2 && MAP[r][e + 1] === '#') e++;
+      out.push({ x: c * TS, y: PF_TOP + r * TS, w: (e - c + 1) * TS, h: TS }); c = e;
+    }
+    return out;
+  }
+  const ballLive = (M) => !!M && !!M.ball && M.goalT <= 0 && M.ball.kick === 0;
+  const ballCap = (B) => { const v = Math.hypot(B.vx, B.vy); if (v > BALL.maxV) { B.vx *= BALL.maxV / v; B.vy *= BALL.maxV / v; } };
+  // a bounce off a surface with the outward normal n (e: what is kept of the speed into it) -> that speed (< 0: it hit)
+  function ballHit(B, nx, ny, e) {
+    const vn = B.vx * nx + B.vy * ny;
+    if (vn < 0) { B.vx -= (1 + e) * vn * nx; B.vy -= (1 + e) * vn * ny; }
+    return vn;
+  }
+  // the circle out of a box (x, y, w, h), along the normal (the centre inside: along the shallow axis, up first) ->
+  // that outward normal [nx, ny], or null when they do not touch
+  function ballOut(B, x, y, w, h) {
+    const r = BALL.r, cx = clamp(B.x, x, x + w), cy = clamp(B.y, y, y + h);
+    let nx = B.x - cx, ny = B.y - cy;
+    const d = Math.hypot(nx, ny);
+    if (d >= r) return null;
+    if (d > 1e-6) { nx /= d; ny /= d; B.x = cx + nx * r; B.y = cy + ny * r; return [nx, ny]; }
+    const l = B.x - x, rt = x + w - B.x, t = B.y - y, bt = y + h - B.y, m = Math.min(l, rt, t, bt);
+    if (m === t) { B.y = y - r; return [0, -1]; }
+    if (m === bt) { B.y = y + h + r; return [0, 1]; }
+    if (m === l) { B.x = x - r; return [-1, 0]; }
+    B.x = x + w + r; return [1, 0];
+  }
+  // the field: the walls (x 16..240), the ceiling, the floor and every block (the crossbars), solid from all sides; into
+  // the floor (or a bar's top) under 0.6 px/f: it rests there (and rolls). again: the second pass of a frame (after the
+  // pushes, which clear rest themselves) keeps what the first one found
+  function ballField(M, again) {
+    const B = M.ball, r = BALL.r, floor = PF_BOT - TS;
+    if (!again) B.rest = false;
+    if (B.x < WALL_L + r) { B.x = WALL_L + r; ballHit(B, 1, 0, BALL.wall); } else if (B.x > WALL_R - r) { B.x = WALL_R - r; ballHit(B, -1, 0, BALL.wall); }
+    if (B.y < CEIL_Y + r) { B.y = CEIL_Y + r; ballHit(B, 0, 1, BALL.wall); }
+    else if (B.y >= floor - r - 0.01) { B.y = Math.min(B.y, floor - r); if (ballHit(B, 0, -1, BALL.floor) <= 0 && Math.abs(B.vy) < 0.6) { B.vy = 0; B.rest = true; } }
+    for (const q of M.bars) {
+      const n = ballOut(B, q.x, q.y, q.w, q.h); if (!n) continue;
+      const vn = ballHit(B, n[0], n[1], BALL.wall);
+      if (n[1] < -0.7 && vn <= 0 && Math.abs(B.vy) < 0.6) { B.vy = 0; B.rest = true; }
+    }
+  }
+  // one player's push sound (at most every sfxGap frames each); kn counts them - a guest plays its 'bounce' off it
+  function ballPush(M, slot) {
+    if (G.frame - (M.kickBy[slot] ?? -1e9) < BALL.sfxGap) return;
+    M.kickBy[slot] = G.frame; M.kn++;
+    Snd.sfx('bounce'); // (NO_ECHO: the guests hear theirs off kn)
+  }
+  // a body on the ball (x + 2, y + 2, 12 x 14; a remote one BALL.slack px bigger): the ball out along the normal, then
+  // its closing speed x BALL.body + BALL.nudge along it. Fast kits kick hard by themselves (a sliding penguin, a dash)
+  function ballBody(M, p) {
+    const B = M.ball, s = p.local === false ? BALL.slack : 0;
+    const n = ballOut(B, p.x + 2 - s, p.y + 2 - s, 12 + 2 * s, 14 + 2 * s); if (!n) return;
+    const k = Math.max(0, (p.vx - B.vx) * n[0] + (p.vy - B.vy) * n[1]) * BALL.body + BALL.nudge;
+    B.vx += n[0] * k; B.vy += n[1] * k; B.rest = false;
+    ballCap(B);
+    ballPush(M, p.slot);
+  }
+  // a bubble on the ball (dist < r + 7): it pops in its kit colours (a spend: a guest's later claim for it gets 'spent')
+  // and pushes - in flight along its flight (an otter droplet / a hanging egg softer), a floating one along the centre line
+  function ballBubble(M, b) {
+    if (!ballLive(M) || b.kind !== 'empty' || b.dead || b.state === 'pop') return false;
+    const B = M.ball, dx = B.x - (b.x + 8), dy = B.y - (b.y + 8), d = Math.hypot(dx, dy);
+    if (d >= BALL.r + 7) return false;
+    const v = Math.hypot(b.vx || 0, b.vy || 0), fly = b.state === 'shot' && v > 0.05;
+    const ux = fly ? b.vx / v : d > 1e-6 ? dx / d : 0, uy = fly ? b.vy / v : d > 1e-6 ? dy / d : -1;
+    const k = b.state !== 'shot' ? BALL.float : fly && !b.drop ? BALL.shot : BALL.drop;
+    B.vx += ux * k; B.vy += uy * k; B.rest = false;
+    ballCap(B);
+    popBubble(b, null, 'self');
+    if (b.owner >= 0) ballPush(M, b.owner);
+    return true;
+  }
+  // shotHits: a capture-phase bubble of the host's world meets the ball first -> spent on it
+  const ballShot = (bb) => !!G.mini && G.mini.id === 'ball' && !(G.online && G.role === 'guest') && ballBubble(G.mini, bb);
+  // quake (a capy's slam, host world): the ball in its box gets a header for free
+  function ballSlam(pl, inBox) {
+    const M = G.mini; if (!M || M.id !== 'ball' || !ballLive(M) || !inBox(M.ball.x, M.ball.y + BALL.r)) return;
+    M.ball.vy = Math.min(M.ball.vy, BALL.slam); M.ball.rest = false;
+    ballPush(M, pl.slot);
+  }
+  // one playing frame: the goal's cheer (then the kickoff), the hanging ball, else gravity / drag, the field, the
+  // bodies, the floating bubbles, the field again, the goals; never outside the field, never NaN, never past BALL.maxV
+  function ballTick(M) {
+    const B = M.ball, A = LV.ball || { x: W / 2, y: 64 }, r = BALL.r;
+    if (M.goalT > 0) { if (--M.goalT <= 0) ballKickoff(M, false); return; }
+    if (B.kick < 0) return;                              // (before 시작!)
+    if (B.kick > 0) { if (--B.kick > 0) return; B.vx = 0; B.vy = 0; }
+    B.vy = Math.min(B.vy + BALL.g, BALL.maxFall);
+    B.vx *= B.rest ? BALL.drag * BALL.roll : BALL.drag;
+    B.x += B.vx; B.y += B.vy;
+    ballField(M);
+    for (const p of G.players) if (canTouch(p)) ballBody(M, p);
+    for (const b of G.bubbles) if (b.state === 'float') ballBubble(M, b);
+    ballField(M, true);
+    if (!Number.isFinite(B.x + B.y + B.vx + B.vy)) Object.assign(B, { x: A.x, y: A.y, vx: 0, vy: 0 });
+    ballCap(B);
+    B.x = clamp(B.x, WALL_L + r, WALL_R - r); B.y = clamp(B.y, CEIL_Y + r, PF_BOT - TS - r);
+    const Gs = LV.goals;
+    if (Gs && B.y > PF_TOP + Gs[0].r0 * TS) {
+      if (B.x < Gs[0].line - BALL.deep) ballGoal(M, 1);        // (the left goal: a point for the right team)
+      else if (B.x > Gs[1].line + BALL.deep) ballGoal(M, 0);
+    }
+  }
+  // a goal for team t: the ball bursts, the clock stops while 골! shows, then the kickoff
+  function ballGoal(M, t) {
+    const B = M.ball;
+    M.goals[t]++; M.goalT = BALL.goalF; B.vx = 0; B.vy = 0;
+    burst(B.x, B.y, 18, ['#ffffff', '#c8f4ff', BALL_TEAM[t]], 2, 18); burst(B.x, B.y, 8, STAR_COLS, 1.4, 16);
+    shake(3); Snd.sfx('clear');
+    showBanner(PARTY_TX.goal, (t ? PARTY_TX.teamR : PARTY_TX.teamL) + ' ' + M.goals[0] + ' : ' + M.goals[1], BALL.goalF, 'victory');
+  }
+  // the kickoff (시작!, and after each goal): every prison opens and every bubble goes (bodyAt nulls p.trap without the
+  // bubble - a prison left behind would float on as an orphan), everyone back on their team's side, the ball at the
+  // centre top for BALL.kickF frames; my own "오른쪽으로!" / "왼쪽으로!"
+  function ballKickoff(M, first) {
+    const B = M.ball, A = LV.ball || { x: W / 2, y: 64 };
+    if (!first) {
+      for (const p of G.players) if (p.trap) releasePlayer(p);
+      for (const b of G.bubbles) {
+        if (b.kind !== 'empty' && b.kind !== 'player') continue;
+        spend(b); b.hist = null;
+        if (!b.dead && b.state !== 'pop') burst(b.x + 8, b.y + 8, 5, BUBBLE_COLS, 1.1, 12);
+      }
+      G.bubbles = G.bubbles.filter((b) => b.kind !== 'empty' && b.kind !== 'player');
+      const sp = ballSpawns(M.team);
+      G.players.forEach((p, k) => { placePlayer(p, sp[k]); p.invuln = START_INV; });
+      Snd.sfx('go');
+    }
+    Object.assign(B, { x: A.x, y: A.y, vx: 0, vy: 0, kick: BALL.kickF, rest: false });
+    M.ko++;
+    for (const p of G.players) if (mineHere(p) && M.team[p.slot] !== undefined) ballCall(p, M.team[p.slot]);
+  }
+  // where I score, over MY animal on this screen only (the host's NET.rec off: a recorded word pop would put the host's
+  // direction over the host's animal on every screen)
+  function ballCall(p, t) { const rec = NET.rec; NET.rec = false; wordPop(p.x + 8, p.y - 10, t ? PARTY_TX.toL : PARTY_TX.toR, BALL_TEAM[t]); NET.rec = rec; }
+  // guest: the ball as the snapshot says (tweened between two snapshots while it is in play in both), the teams from
+  // g.pa.T; a rising kn plays my 'bounce' (at most every sfxGap frames), a new goal bursts here, a new kickoff calls my
+  // direction once
+  function ballView(mg, mg1, t, g, M) {
+    const B = M.ball || (M.ball = { x: W / 2, y: 64, vx: 0, vy: 0, kick: -1, rest: false });
+    const live = (q) => nInt(q[7], 0, 999, 0) === 0 && nInt(q[8], -1, 999, -1) === 0, q = mg1 && live(mg) && live(mg1) ? mg1 : null;
+    const px = (a, i, d) => nNum(a[i], -400, 3000, d) / 10;
+    B.x = lx(px(mg, 1, 1280), q ? px(q, 1, 1280) : null, t); B.y = ly(px(mg, 2, 640), q ? px(q, 2, 640) : null, t);
+    B.vx = nNum(mg[3], -1000, 1000, 0) / 100; B.vy = nNum(mg[4], -1000, 1000, 0) / 100; B.kick = nInt(mg[8], -1, 999, -1);
+    const goals = [nInt(mg[5], 0, 99, 0), nInt(mg[6], 0, 99, 0)], kn = nInt(mg[9], 0, 1e9, 0), T = g.pa && Array.isArray(g.pa.T) ? g.pa.T : [];
+    M.team = {}; for (let s = 0; s < MAX_PLAYERS; s++) { const v = nInt(T[s], -1, 1, -1); if (v >= 0) M.team[s] = v; }
+    if (M.seeded) {
+      if (kn > M.kn && G.frame - (M.knAt ?? -1e9) >= BALL.sfxGap) { M.knAt = G.frame; Snd.sfx('bounce'); }
+      if (goals[0] + goals[1] > M.goals[0] + M.goals[1]) { const k = goals[1] > M.goals[1] ? 1 : 0; burst(B.x, B.y, 18, ['#ffffff', '#c8f4ff', BALL_TEAM[k]], 2, 18); burst(B.x, B.y, 8, STAR_COLS, 1.4, 16); }
+    }
+    M.goals = goals; M.goalT = nInt(mg[7], 0, 999, 0); M.kn = kn; M.kickBy = M.kickBy || {}; M.seeded = true;
+    const ko = goals[0] + goals[1], me = myPlayer();
+    if (B.kick > 0 && M.koSeen !== ko && me && M.team[me.slot] !== undefined) { M.koSeen = ko; ballCall(me, M.team[me.slot]); }
+    return M;
+  }
+  // behind the animals: the goal nets (the mouth's back, a grid in the defending team's colour, the goal line dashed) and
+  // each animal's team colour under its feet; in front: the ball (it hangs blinking before a kickoff; gone during 골!)
+  function ballDraw(M, front) {
+    if (!front) {
+      (LV.goals || []).forEach((q, k) => {
+        const x0 = q.c0 * TS, x1 = (q.c1 + 1) * TS, y0 = PF_TOP + q.r0 * TS, y1 = PF_TOP + (q.r1 + 1) * TS;
+        ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+        ctx.globalAlpha = 0.5; ctx.fillStyle = BALL_TEAM[k];
+        for (let x = x0 + 3; x < x1; x += 4) ctx.fillRect(x, y0, 1, y1 - y0);
+        for (let y = y0 + 3; y < y1; y += 4) ctx.fillRect(x0, y, x1 - x0, 1);
+        ctx.globalAlpha = 1; ctx.fillStyle = '#ffffff';
+        for (let y = y0; y < y1; y += 4) ctx.fillRect(Math.round(q.line) - (k ? 0 : 1), y, 1, 2);
+      });
+      for (const p of G.players) {
+        const t = M.team ? M.team[p.slot] : undefined; if (t === undefined || !canTouch(p)) continue;
+        ctx.fillStyle = BALL_TEAM[t]; ctx.fillRect(Math.round(p.x + 3), Math.round(p.y + 16), 10, 1);
+      }
+      return;
+    }
+    const B = M.ball; if (!B || M.goalT > 0) return;
+    const x = Math.round(B.x), y = Math.round(B.y), dim = B.kick > 0 && ((G.frame >> 2) & 1);
+    ctx.globalAlpha = dim ? 0.08 : 0.16; ctx.fillStyle = '#c8f4ff';
+    ctx.beginPath(); ctx.arc(x, y, BALL.r, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = dim ? 0.55 : 1;
+    const f = frameOf('giant_bubble', (G.frame / 10) | 0);
+    if (f) ctx.drawImage(f.c, x - 12, y - 12, 24, 24);
+    else { ctx.strokeStyle = '#bdf0ff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, BALL.r - 1, 0, Math.PI * 2); ctx.stroke(); }
+    ctx.globalAlpha = 1;
+  }
+  // a seat's 2nd line: the team's goals (in its colour, after a small ball) and the team's bar along the panel's top
+  function ballHud(M, p, x) {
+    const t = M.team ? M.team[p.slot] : undefined; if (t === undefined) return;
+    ctx.fillStyle = BALL_TEAM[t]; ctx.fillRect(x + 1, 0, 48, 2);
+    const f = frameOf('giant_bubble', 0); if (f) ctx.drawImage(f.c, x + 17, 8, 8, 8);
+    text(String((M.goals && M.goals[t]) | 0), x + 27, 9, BALL_TEAM[t]);
+  }
+
+  // each minigame's hooks: spawns (the k-th player's spawn, from its fresh state), init (its state), start (시작!), tick (a
+  // playing frame), key (the place key, bigger is better), snap / view (its wire array, 6.4), drop (a leaver), draw, hud
+  // (a seat's 2nd line); optional: hold (the clock stands still this frame) / held (a snapshot's g.mg says so), win (the
+  // result's winner line instead of 1등 ...)
   const MINI_FN = {
     water: {
       spawns: () => (LV.players || []).slice(0, MAX_PLAYERS),               // (the k-th present player in slot order)
@@ -4510,6 +4784,22 @@ window.PG = window.PG || {};
       draw: crownDraw,
       hud: crownHud,
     },
+    ball: {
+      spawns: (ini) => ballSpawns(ini.team),
+      init: () => ({ ball: { x: (LV.ball || {}).x || W / 2, y: (LV.ball || {}).y || 64, vx: 0, vy: 0, kick: -1, rest: false }, goals: [0, 0], team: ballTeams(), goalT: 0, kickBy: {}, kn: 0, ko: 0, bars: ballBars() }),
+      start: (M) => ballKickoff(M, true),
+      tick: ballTick,
+      hold: (M) => M.goalT > 0,
+      held: (mg) => nInt(mg[7], 0, 999, 0) > 0,
+      key: (p, M) => M.goals[M.team[p.slot] | 0] | 0,
+      win: (M) => (M.goals[0] > M.goals[1] ? PARTY_TX.winL : M.goals[1] > M.goals[0] ? PARTY_TX.winR : PARTY_TX.draw),
+      // (['b', x x10, y x10, vx x100, vy x100, goals left, goals right, goalT, kick (-1: before 시작!), kn])
+      snap: (M) => { const B = M.ball; return ['b', R0(B.x * 10), R0(B.y * 10), R0(B.vx * 100), R0(B.vy * 100), M.goals[0], M.goals[1], M.goalT, B.kick, M.kn]; },
+      view: ballView,
+      drop() {},             // (2v2 with a leaver: its team plays on short-handed)
+      draw: ballDraw,
+      hud: ballHud,
+    },
   };
 
   // ---- the party's HUD (9.4): the clock as in battle; per seat the party points and the minigame's 2nd line (no leader
@@ -4531,15 +4821,17 @@ window.PG = window.PG || {};
     }
   }
   // ---- the card (9.2, #pg-party): the 판 line, the game's name, its one-line how-to (and its rule line where the screen
-  // is tall enough: CSS), the keys, the running scoreboard (best first, +N of the last 판), the bar over the 5 s
-  function fillParty() {
+  // is tall enough: CSS), the keys, a team game's team line, the running scoreboard (best first, +N of the last 판), the
+  // bar over the 5 s. (asMe: debug only - the card as that seat's screen shows it)
+  function fillParty(asMe) {
     const P = G.party, el = dom.party; if (!el || !P) return;
-    const D = MINI[P.plan[clamp(P.i, 0, P.plan.length - 1)]] || MINI.water;
+    const id = P.plan[clamp(P.i, 0, P.plan.length - 1)], D = MINI[id] || MINI.water;
     setTxt($('pg-party-round'), partyRoundTx(false)); setTxt($('pg-party-name'), D.name);
     setTxt($('pg-party-how'), D.how); setTxt($('pg-party-rule'), D.rule);
     setTxt($('pg-party-keys'), touchMode ? PARTY_TX.keysT : PARTY_TX.keys);
-    const team = $('pg-party-team'); if (team && !team.hidden) team.hidden = true;   // (거품 축구's team line: the next PR)
-    const box = $('pg-party-board'), st = partyStandings(P, G.players.map((p) => p.slot)), me = G.online ? G.localSlot : -1;
+    const box = $('pg-party-board'), st = partyStandings(P, G.players.map((p) => p.slot)), me = asMe >= 0 ? asMe : G.online ? G.localSlot : -1;
+    const team = $('pg-party-team'), M = G.mini, teams = !!D.team && !!M && M.id === id && !!M.team;
+    if (team) { if (teams) partyTeamLine(team, M.team, me); if (team.hidden === teams) team.hidden = !teams; }
     const key = JSON.stringify([st, st.map((r) => [P.pts[r.slot] | 0, P.gain[r.slot]]), G.players.map((p) => [p.slot, p.nick, p.char, p.look, p.twin]), me]);
     if (box && box._key !== key) {
       box._key = key; box.textContent = '';
@@ -4564,6 +4856,19 @@ window.PG = window.PG || {};
       fill.style.transition = 'none'; fill.style.transform = 'scaleX(' + (reducedMotion() ? 1 : u).toFixed(3) + ')';
       if (!reducedMotion()) { void fill.offsetWidth; fill.style.transition = 'transform ' + Math.round((cl - P.t) * STEP_MS) + 'ms linear'; fill.style.transform = 'scaleX(1)'; }
     }
+  }
+  // a team game's line on the card: 왼쪽 팀: 방장 · 냥냥 / 오른쪽 팀: 까삐 · 펭펭 (1v1: 왼쪽: 방장 / 오른쪽: 까삐), each half
+  // cut with an ellipsis; and on my screen the side I score on (나는 왼쪽 팀 · 오른쪽 골대에 넣어요!)
+  function partyTeamLine(el, team, me) {
+    const names = [0, 1].map((t) => G.players.filter((p) => team[p.slot] === t).map(nameOf));
+    const lab = names.some((n) => n.length > 1) ? [PARTY_TX.teamL, PARTY_TX.teamR] : [PARTY_TX.sideL, PARTY_TX.sideR], mine = me >= 0 ? team[me] : undefined;
+    const key = JSON.stringify([names, lab, mine === undefined ? -1 : mine]);
+    if (el._key === key) return;
+    el._key = key; el.textContent = '';
+    const row = h('span', 'pg-party-teams');
+    names.forEach((n, t) => { if (t) row.appendChild(h('span', 'pg-party-vs', '/')); row.appendChild(h('b', 'pg-party-side is-' + (t ? 'r' : 'l'), lab[t] + ': ' + n.join(' · '))); });
+    el.appendChild(row);
+    if (mine === 0 || mine === 1) el.appendChild(h('span', 'pg-party-mine', mine ? PARTY_TX.mineR : PARTY_TX.mineL));
   }
   // ---- the podium (9.6): 파티 결과! (결과 발표! again for a battle), the 판 count tag, the tie / walkover note
   function partyPodiumTitle() {
@@ -12470,7 +12775,7 @@ window.PG = window.PG || {};
     G.hurry = !!g.hu; G.stampFlash = nInt(g.sf, 0, 300, 0); G.ticketFlash = nInt(g.tf, 0, 300, 0);
     NET.el = nInt(g.el, 60, 2000, EMPTY_LIFE); // (the host's floating-empty life: emptyLife, the blink)
     NET.hostLc = g.lc === 1; NET.hostAm = g.am === 1; NET.shotCap = nInt(g.sc, 0, 9, 0); // (no lc: an older host - no claims; g.sc: only an older host's in-flight cap)
-    G.battle = arena ? { left: Math.max(0, nInt(g.tl, 0, 1e7, 0) - (ph === 'playing' ? el : 0)), total: g.m === 'p' && g.pa ? nInt(g.pa.ft, 0, 1e6, 0) : 0, intruded: true, enemyT: 1e9, powerT: 1e9 } : null;
+    G.battle = arena ? { left: Math.max(0, nInt(g.tl, 0, 1e7, 0) - (ph === 'playing' && !miniHeldWire(g) ? el : 0)), total: g.m === 'p' && g.pa ? nInt(g.pa.ft, 0, 1e6, 0) : 0, intruded: true, enemyT: 1e9, powerT: 1e9 } : null;
     const mu = MUSICS[nInt(g.mu, 0, MUSICS.length - 1, 0)];
     if (mu !== G.music && !(mu === null && G.music === undefined)) setMusic(mu);
     G.trans = ph === 'transition' && Array.isArray(g.tr) ? { door: doorAt(nInt(g.tr[0], 0, 999, 0) + el), next: nInt(g.tr[1], 0, 99, 0), swapped: true } : null;
@@ -13287,7 +13592,7 @@ window.PG = window.PG || {};
   function partyRules(q) {
     const n = clamp(NET.roster.length, 2, 4), pts = PARTY_PTS[n].map((v, i) => (i + 1) + '등 ' + v + '점').join(' · ');
     const coin = q === 1 && !(CO.allowBc && NET.tr === 'bc') ? PARTY_TX.coin1 : q === 2 ? PARTY_TX.coin2 : PARTY_TX.coin0;
-    return ['미니게임 ' + (NET.opts.rounds === 5 ? 5 : 3) + '판! 판마다 ' + pts, PARTY_TX.tie, PARTY_TX.games, coin, PARTY_TX.noTro,
+    return ['미니게임 ' + (NET.opts.rounds === 5 ? 5 : 3) + '판! 판마다 ' + pts, PARTY_TX.tie, n === 3 ? PARTY_TX.games3 : PARTY_TX.games, coin, PARTY_TX.noTro,
       NET.opts.rapid ? RAPID_RULE : AMMO_RULE, PARTY_TX.trap, PARTY_TX.leave];
   }
   // 코드 복사: an invite (the code, plus this page's link with ?join= on the standalone deploy); phones get the share sheet
@@ -13706,7 +14011,8 @@ window.PG = window.PG || {};
 
   function partyDebugApi() {
     const miniOut = (M) => (M ? { id: M.id, t: M.t | 0, tt: M.tt === undefined ? null : M.tt, n0: M.n0 | 0, endAt: M.endAt, wl: M.wl === undefined ? null : M.wl, outs: M.outs ? M.outs.map((o) => o.slice()) : [],
-      cr: M.cr ? Object.assign({}, M.cr) : null, held: M.held ? Object.assign({}, M.held) : {} } : null);
+      cr: M.cr ? Object.assign({}, M.cr) : null, held: M.held ? Object.assign({}, M.held) : {},
+      ball: M.ball ? Object.assign({}, M.ball) : null, goals: M.goals ? M.goals.slice() : null, team: M.team ? Object.assign({}, M.team) : null, goalT: M.goalT === undefined ? null : M.goalT, kn: M.kn | 0, ko: M.ko | 0 } : null);
     const api = {
       // the 판 list for n players, rounds 3 / 5, from a seeded draw (pure: the page's own draws are put back)
       plan(n, rounds, seed, from) { const keep = rng; rng = mulberry32((seed | 0) >>> 0); try { return partyPlan(n | 0, rounds | 0, from); } finally { rng = keep; } },
@@ -13716,7 +14022,7 @@ window.PG = window.PG || {};
       coin: (n, done, act, shots, playF, place, tie) => coinParty(n, done, act, shots, playF, place, tie),
       waterAt: (f, k) => waterAt(f, PARTY_ARENAS[0] && PARTY_ARENAS[0].rise, k || 1),
       arenas: () => PARTY_ARENAS, dry: () => dryArenas(), mini: () => JSON.parse(JSON.stringify(MINI, (k, v) => (typeof v === 'function' ? undefined : v))),
-      consts: () => ({ PARTY_V, PARTY_PTS, PARTY_F, MINI_IDS: MINI_IDS.slice(), MINI_TRAP, MINI_SINK, WATER_SLACK, WATER_LEAD, CROWN_SLOW, CROWN_NOPICK, CROWN_SLACK, pBase: COIN.pBase, pRound: COIN.pRound, pPlace: COIN.pPlace }),
+      consts: () => ({ PARTY_V, PARTY_PTS, PARTY_F, MINI_IDS: MINI_IDS.slice(), MINI_TRAP, MINI_SINK, WATER_SLACK, WATER_LEAD, CROWN_SLOW, CROWN_NOPICK, CROWN_SLACK, pBase: COIN.pBase, pRound: COIN.pRound, pPlace: COIN.pPlace, BALL: Object.assign({}, BALL), BALL_TEAM: BALL_TEAM.slice() }),
       text: () => PARTY_TEXT, tx: () => Object.assign({}, PARTY_TX),
       // this page's view: the phase, the sequencer and the minigame
       state() {
@@ -13733,6 +14039,8 @@ window.PG = window.PG || {};
         return { shown: shownOverlay === 'party' && !!dom.party && !dom.party.hidden, round: q('pg-party-round') ? q('pg-party-round').textContent : '', name: q('pg-party-name') ? q('pg-party-name').textContent : '',
           how: q('pg-party-how') ? q('pg-party-how').textContent : '', rule: q('pg-party-rule') ? q('pg-party-rule').textContent : '', ruleShown: vis(q('pg-party-rule')),
           keys: q('pg-party-keys') ? q('pg-party-keys').textContent : '', team: vis(q('pg-party-team')),
+          teams: q('pg-party-team') ? [...q('pg-party-team').querySelectorAll('.pg-party-side')].map((e) => e.textContent) : [],
+          mine: q('pg-party-team') && q('pg-party-team').querySelector('.pg-party-mine') ? q('pg-party-team').querySelector('.pg-party-mine').textContent : '',
           board: q('pg-party-board') ? [...q('pg-party-board').children].map((li) => ({ place: li.querySelector('.pg-party-pl').textContent, nick: li.querySelector('.pg-party-nick').textContent,
             pts: li.querySelector('.pg-party-pts').textContent, gain: vis(li.querySelector('.pg-party-gain')) ? li.querySelector('.pg-party-gain').textContent : '', me: li.classList.contains('is-me') })) : [] };
       },
@@ -13749,6 +14057,19 @@ window.PG = window.PG || {};
         return api.state().mini;
       },
       drop(slot) { const ok = removePlayer(slot); if (ok && G.party) partyDrop(slot); return ok; },
+      // host, 거품 축구: the ball by hand (in play: no kickoff wait), a goal for team t, a capy's quake at its spot, a
+      // capture-phase bubble of slot's kit blown at x, y (vx: its direction) - returns it
+      ball(x, y, vx, vy) { const M = G.mini; if (!M || M.id !== 'ball') return null; Object.assign(M.ball, { x: +x, y: +y, vx: +vx || 0, vy: +vy || 0, kick: 0, rest: false }); M.goalT = 0; return api.state().mini; },
+      goal(t) { const M = G.mini; if (!M || M.id !== 'ball') return null; ballGoal(M, t ? 1 : 0); return api.state().mini; },
+      quake(slot) { const p = G.players.find((q) => q.slot === slot); if (!p) return false; quake(p, p.x, p.y); return true; },
+      shot(slot, x, y, dir) {
+        const p = G.players.find((q) => q.slot === slot); if (!p) return null;
+        const f0 = p.facing; p.facing = dir < 0 ? -1 : 1; const sp = newShot(p, false)[0]; p.facing = f0;
+        Object.assign(sp, { x: +x, y: +y, float: false });
+        const b = shotFrom(makeBubble('empty', sp.x, sp.y, p.slot), sp); b.born = G.frame; b.vol = b.id; b.vi = 0;
+        G.bubbles.push(b); return b;
+      },
+      fill(slot) { fillParty(slot); return api.card(); },
       // (unit tests) a capture through catchPlayer (a capy's shield takes it); a seat made remote with a reported state st
       // (null: none) - what waterBody judges; my coins for a podium as an online, non-practice screen would pay them
       catch(slot, bySlot) { const v = G.players.find((q) => q.slot === slot); if (!v || !free(v)) return false; const b = makeBubble('empty', clamp(v.x, WALL_L, WALL_R - 16), clamp(v.y, CEIL_Y, PF_BOT - 16), bySlot | 0); G.bubbles.push(b); catchPlayer(v, b); return !!v.trap; },
@@ -13763,7 +14084,7 @@ window.PG = window.PG || {};
           coinPartyNow(o.n | 0, !!o.done, o.place | 0, o.tie | 0 || 1); return CO.pod ? Object.assign({}, CO.pod) : null;
         } finally { G.online = keep.online; NET.q = keep.q; NET.gid = keep.gid; NET.tr = keep.tr; CO.pod = keep.pod; }
       },
-      reload(list) { const keep = PG.PARTY_ARENAS; PG.PARTY_ARENAS = list; try { loadPartyArenas(); return PARTY_ARENAS.map((A) => ({ key: A.key, name: A.name, closed: A.closed, rise: A.rise, gapX: A.gapX, floor: A.map[ROWS - 1], ceil: A.map[0] })); } finally { PG.PARTY_ARENAS = keep; loadPartyArenas(); } },
+      reload(list) { const keep = PG.PARTY_ARENAS; PG.PARTY_ARENAS = list; try { loadPartyArenas(); return PARTY_ARENAS.map((A) => ({ key: A.key, name: A.name, closed: A.closed, rise: A.rise, goals: A.goals, sides: A.sides, ball: A.ball, gapX: A.gapX, floor: A.map[ROWS - 1], ceil: A.map[0], bar: A.map[20] })); } finally { PG.PARTY_ARENAS = keep; loadPartyArenas(); } },
       result: () => partyResult(), next: () => partyNext(), final: (walk) => partyFinal(!!walk), places: () => (G.mini ? Array.from(miniPlaces().entries()) : []),
     };
     return api;
