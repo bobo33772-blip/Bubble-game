@@ -87,7 +87,8 @@
    'ppodeuk-' + code ('unavailable-id' = code taken: a generated code is re-rolled); guests take a random id
    and connect to it with ONE reliable, ordered DataConnection carrying JSON. Star topology: the host relays
    guests' states and messages to the other guests. Optional host/join option {peerOptions} is passed to
-   new Peer(...) (custom signalling server / ICE config); the PeerJS defaults are used otherwise.
+   new Peer(...) (custom signalling server / ICE config); the PeerJS defaults are used otherwise. (game.js hands it
+   window.PG_PEER_OPTIONS - and, on a deploy built with a relay URL, window.PG_RELAY's fresh TURN servers: build.js)
 
    ---- 'bc' : BroadcastChannel, local multi-tab play and AUTOMATED TESTS ----------------------------------
    Same-origin tabs / iframes on one machine (needs a real http origin - run `node tools/serve.js`, then

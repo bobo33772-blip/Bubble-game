@@ -19,7 +19,10 @@
 // (checked: not even the word). Always written for the tests (C:/Temp only, never deploy/):
 //   C:/Temp/bogeul/deploy-cloud/  the deploy page with a made-up config (src/tests/cloud.js fakes the SDK in its frames)
 //   C:/Temp/bogeul/deploy-nocfg/  the deploy page without one
+//   C:/Temp/bogeul/deploy-relay/  the deploy page with a made-up relay URL (tools/relay-client-test.js)
 // and bogeul/.firebaserc gets the projectId while it still says YOUR-PROJECT-ID.
+// Online relays (CLOUDFLARE-SETUP.md): PG_RELAY_URL=<the relay Worker's URL> or bogeul/relay.config.json gives the deploy
+// page window.PG_RELAY (fresh TURN credentials per room, src/relay/ice.js); PG_RELAY_URL=none leaves it out.
 // Usage: node bogeul/build.js   (tools only: PG_FIREBASE_CONFIG=<file> reads another config file and leaves .firebaserc
 // alone; PG_BUILD_TEMP=<dir> writes the C:/Temp/bogeul outputs there - tools/check-cloud.js builds a copy that way)
 // PG_PREVIEW=<PR number> (CI: .github/workflows/pr.yml, a Firebase Hosting preview channel): deploy/ becomes a PREVIEW of
@@ -189,6 +192,32 @@ function readTurnConfig(file) {
 }
 const turnConf = readTurnConfig(process.env.PG_TURN_CONFIG || path.join(root, 'turn.config.json'));
 const peerTag = turnConf ? `<script>window.PG_PEER_OPTIONS={config:{iceServers:${JSON.stringify(turnConf).replace(/</g, '\\u003c')}}};</script>\n` : '';
+// the relay Worker (cloudflare/, CLOUDFLARE-SETUP.md): short-lived TURN credentials (Cloudflare Realtime TURN) minted per
+// request. Its base URL - not a secret - from PG_RELAY_URL (CI: the repository variable RELAY_URL) or the optional
+// bogeul/relay.config.json ({"url": "https://ppodeuk-relay.<account>.workers.dev"}); PG_RELAY_URL=none: no relay whatever
+// the file says (run-all's own build, the CI test job). With one, the deploy page (previews and the itch zip too) inlines
+// src/relay/ice.js - window.PG_RELAY, which game.js asks right before a 'peer' room is made; its fallback is the
+// PG_PEER_OPTIONS list above, else STUN only. Without one the deploy page is exactly what it was; the artifact never has it
+const RELAY_RE = /^(?:https:\/\/[a-z0-9.-]+\.[a-z]{2,}|http:\/\/(?:localhost|127\.0\.0\.1|\[::1\]))(?::\d{1,5})?(?:\/[A-Za-z0-9._~-]+)*$/i;
+function readRelayUrl() {
+  let u = process.env.PG_RELAY_URL;
+  if (u === 'none') return null;
+  if (!u) {
+    const f = path.join(root, 'relay.config.json');
+    if (!fs.existsSync(f)) return null;
+    try { u = JSON.parse(fs.readFileSync(f, 'utf8').replace(/^\uFEFF/, '')).url; } catch (e) { throw new Error('relay.config.json: 읽을 수 없어요 / cannot be parsed (it should be {"url": "https://..."})'); }
+    if (u === '' || u === null || u === undefined) return null;
+  }
+  u = String(u).trim().replace(/\/+$/, '');
+  if (!RELAY_RE.test(u)) throw new Error('중계 서버 주소가 이상해요 / bad relay URL (https://<name>.<account>.workers.dev): ' + JSON.stringify(u.slice(0, 80)));
+  return u;
+}
+const RELAY = readRelayUrl();
+const relaySrc = fs.readFileSync(path.join(src, 'relay', 'ice.js'), 'utf8').replace(/^(?:\/\/[^\n]*\n)+/, '');
+// (the placeholder is named once, in the file's last line)
+const RELAY_AT = "(window, '__PG_RELAY_URL__')";
+if (/<\/script/i.test(relaySrc) || relaySrc.split('__PG_RELAY_URL__').length !== 2 || !relaySrc.includes(RELAY_AT)) throw new Error(`src/relay/ice.js: no "</script" allowed, and it must end with ${RELAY_AT} - the only place naming the placeholder`);
+const relayTag = (u) => (u ? `<script id="pg-relay">${relaySrc.trim().replace(RELAY_AT, () => `(window, ${JSON.stringify(u).replace(/</g, '\\u003c')})`)}</script>\n` : '');
 // hosts that serve many people's pages from one origin (itch.io's games, its old CDN, Newgrounds' uploads): a page there
 // - or in any frame - never signs in, since every page of that origin could read the stored session (game.js clHere;
 // the itch zip is also marked `away` by tools/pack-itch.js). Never add these to Firebase's authorized domains
@@ -222,8 +251,9 @@ document.fonts.forEach(function(ff){var n=ff.family.replace(/['"]/g,''),i=k[n]=(
 }catch(e){}},{once:true});
 addEventListener('load',function(){sw.register('sw.js',{scope:'./'}).catch(no);});}catch(e){}})();`;
 
-// fb: the cloud config (null: none - the page has no PG_CLOUD at all); extra: more head markup (the test fixture's hook)
-const deployOf = (build, fb, extra) => `<!doctype html>
+// fb: the cloud config (null: none - the page has no PG_CLOUD at all); extra: more head markup (the test fixture's hook);
+// relay: the relay Worker's URL (null: none; the test fixtures name theirs)
+const deployOf = (build, fb, extra, relay) => `<!doctype html>
 <html lang="ko" class="pg-sa">
 <head>
 <meta charset="utf-8">
@@ -244,7 +274,7 @@ ${fbTag(fbData(fb))}${extra || ''}<link rel="manifest" href="manifest.webmanifes
 <meta name="twitter:card" content="summary">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,${encodeURIComponent(FAVICON_SVG)}">
 <link rel="apple-touch-icon" sizes="${appleIcon.size}x${appleIcon.size}" href="${appleIcon.src}">
-${peerTag}<script defer src="${PEERJS}" integrity="${PEERJS_SRI}" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+${peerTag}${relayTag(relay)}<script defer src="${PEERJS}" integrity="${PEERJS_SRI}" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script>${SW_REG}</script>
 <style>${RESET}</style>
 ${headRest}
@@ -258,7 +288,7 @@ const swSrc = fs.readFileSync(path.join(pwaDir, 'sw.js'), 'utf8');
 const swOf = (build) => swSrc.replace("'__PG_BUILD__'", () => JSON.stringify(build)).replace('__PG_SHELL__', () => JSON.stringify(SHELL)).replace('__PG_CDN__', () => JSON.stringify(CDN));
 // every file of the deploy, made for a build id. Anything new the deploy needs goes in this list (and into SHELL when
 // it must work offline): then it is part of the build hash, written, copied for the tests and zipped for itch.io
-const deployFilesOf = (build) => [['index.html', deployOf(build, fbConf)], ['manifest.webmanifest', manifestText], ['sw.js', swOf(build)], ...icons.map((i) => [i.src, i.buf])];
+const deployFilesOf = (build) => [['index.html', deployOf(build, fbConf, '', RELAY)], ['manifest.webmanifest', manifestText], ['sw.js', swOf(build)], ...icons.map((i) => [i.src, i.buf])];
 // the build hash: every byte of every file (made with a placeholder id) - any change makes a new worker, so installed
 // apps take the new deploy on their next online start
 const hash = crypto.createHash('sha256');
@@ -277,6 +307,9 @@ const cloudTags = (deploy.match(/window\.PG_CLOUD=/g) || []).length;
 if (fbConf ? cloudTags !== 1 || !FIREBASE_SDK.every(([f, sri]) => deploy.includes(sri) && deploy.includes(fbUrl(f)) && deploy.includes(fbAlt(f)))
   : cloudTags !== 0 || /firebase/i.test(deploy)) throw new Error('the deploy page must carry the cloud config exactly when firebase.config.json exists');
 if (fbConf ? !FIREBASE_SDK.every(([f]) => sw.includes(JSON.stringify(fbUrl(f))) && sw.includes(JSON.stringify(fbAlt(f)))) : /firebase-[a-z]+-compat\.js/.test(sw)) throw new Error('sw.js must list the SDK files exactly when firebase.config.json exists');
+// the relay: one inlined window.PG_RELAY exactly when the build has a relay URL (none: not a trace); never in the artifact
+if ((deploy.match(/<script id="pg-relay">/g) || []).length !== (RELAY ? 1 : 0) || (!RELAY && /PG_RELAY\s*=/.test(deploy))) throw new Error('the deploy page must carry window.PG_RELAY exactly when a relay URL is set');
+if (/PG_RELAY\s*=|pg-relay|__PG_RELAY_URL__|\.workers\.dev/.test(out) || (RELAY && out.includes(RELAY))) throw new Error('the artifact page must not contain the relay (game.js only reads window.PG_RELAY)');
 // ---- the PR preview (PG_PREVIEW, see the top): the deploy page above, changed only here
 // (n: the PR number; the test fixture deploy-preview/ below is built with a made-up one)
 const PV_KEY = (n) => '@pr' + n;
@@ -327,8 +360,12 @@ const FAKE_FB = fbCheck({ apiKey: 'AIza' + 'Test0'.repeat(7), authDomain: 'pg-cl
   appId: '1:1234567890:web:0123456789abcdef', home: 'https://pg-cloud-test.firebaseapp.com/' }, 'the test fixture');
 const FAKE_HOOK = '<script>(function(){var F=null;try{F=window.parent!==window?window.parent.__pgFake:null;}catch(e){F=null;}if(!F)return;' +
   'var ap=Node.prototype.appendChild;Node.prototype.appendChild=function(n){if(n&&n.tagName==="SCRIPT"&&n.src&&F.claims(n.src))return F.script(window,n);return ap.call(this,n);};})();</script>\n';
-// (deploy-preview/: a PR preview's page - PG_PREVIEW 999, its own save keys - for the login screen's preview look)
-for (const [dir, html] of [['deploy-cloud', deployOf('cloud-test', FAKE_FB, FAKE_HOOK)], ['deploy-nocfg', deployOf('nocfg-test', null)], ['deploy-preview', previewOf(deployOf('preview-test', null), '999')]]) {
+// (deploy-preview/: a PR preview's page - PG_PREVIEW 999, its own save keys - for the login screen's preview look;
+// deploy-relay/: the page with a relay whatever the build says, at a made-up address tools/relay-client-test.js
+// swaps for its stub's - every other fixture has none)
+const RELAY_TEST = 'http://127.0.0.1:9/relay-test';
+for (const [dir, html] of [['deploy-cloud', deployOf('cloud-test', FAKE_FB, FAKE_HOOK, null)], ['deploy-nocfg', deployOf('nocfg-test', null, '', null)],
+  ['deploy-preview', previewOf(deployOf('preview-test', null, '', null), '999')], ['deploy-relay', deployOf('relay-test', null, '', RELAY_TEST)]]) {
   for (const [f, data] of [['index.html', html], ['manifest.webmanifest', manifestText], ...icons.map((i) => [i.src, i.buf])]) {
     const p = path.join(T, dir, ...f.split('/')); fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, data);
   }
@@ -354,7 +391,7 @@ if (fs.existsSync(testsDir)) {
   }
 }
 const kb = (f) => (fs.statSync(f).size / 1024).toFixed(1);
-console.log(`built dist/ppogeul-bath.html (${kb(path.join(root, 'dist', 'ppogeul-bath.html'))} KB), deploy/index.html (${kb(path.join(root, 'deploy', 'index.html'))} KB, build ${BUILD}, ${fbConf ? 'Firebase: ' + fbConf.cfg.projectId : 'no Firebase'}; + manifest, sw.js, ${icons.length} icons) and ${T}/preview.html`);
+console.log(`built dist/ppogeul-bath.html (${kb(path.join(root, 'dist', 'ppogeul-bath.html'))} KB), deploy/index.html (${kb(path.join(root, 'deploy', 'index.html'))} KB, build ${BUILD}, ${fbConf ? 'Firebase: ' + fbConf.cfg.projectId : 'no Firebase'}, ${RELAY ? 'relay: ' + RELAY : 'no relay'}; + manifest, sw.js, ${icons.length} icons) and ${T}/preview.html`);
 // the itch.io upload, always in step with deploy/ (tools/pack-itch.js: index.html at the zip root, the rest beside it)
 if (PREVIEW) { console.log(`PREVIEW #${PREVIEW}: deploy/ holds the preview page (save keys +${PV_KEY(PREVIEW)}, no manifest / service worker / Firebase, no itch zip)`); process.exit(0); }
 const itch = require('./tools/pack-itch').pack(path.join(root, 'deploy', 'ppodeuk-bath-itch.zip'));

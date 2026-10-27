@@ -52,6 +52,7 @@ const FONT_HOST = /^https:\/\/fonts\.(googleapis|gstatic)\.com(\/|$)/;
   ok('artifact: reaches capabilities only through claude.use(...)', !/window\.claude\.(room|user|db|artifact)\b|claude\??\.(room|user)\??\./.test(js));
   ok('artifact: scripts in order sprites, levels, audio, net, game', /\/\* ---- sprites\.js ---- \*\/[\s\S]*\/\* ---- levels\.js ---- \*\/[\s\S]*\/\* ---- audio\.js ---- \*\/[\s\S]*\/\* ---- net\.js ---- \*\/[\s\S]*\/\* ---- game\.js ---- \*\//.test(art));
   ok('artifact: size under 16 MB', Buffer.byteLength(art) < 16 * 1024 * 1024, Buffer.byteLength(art));
+  ok('artifact: nothing of the relay (no PG_RELAY, no inlined client, no Worker address)', !/PG_RELAY\s*=|pg-relay|__PG_RELAY_URL__|workers\.dev|\/turn['"`]/.test(art));
   // (파티, design/party.md 9.2 / 7.5 / 7.6: the card overlay, hidden at boot; 파티 in both mode segments; the podium title's own span)
   ok('artifact: the 파티 card (#pg-party, hidden), 파티 in both mode segments, the podium title span', /<section id="pg-party" class="pg-ov pg-party"[^>]*hidden>/.test(art) && (art.match(/data-mode="party"/g) || []).length === 2 && art.includes('<span id="pg-podium-h">결과 발표!</span>'));
 }

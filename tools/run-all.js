@@ -1,6 +1,6 @@
 // Runs EVERY headless driver in src/tests (and the screenshot scenes) and prints one summary.
 // Usage: node bogeul/tools/run-all.js [name-filter ...] [--exact] [--jobs=4] [--no-build] [--list]
-//   - builds first (node build.js) unless --no-build
+//   - builds first (node build.js, PG_RELAY_URL=none unless set) unless --no-build
 //   - starts tools/serve.js on :8765 (PG_HTTP_PORT=<port> for another) for the multi-iframe drivers, or reuses one that
 //     is already running there - only when it serves this build (another worktree's server would test another build)
 //   - virtual-time drivers and the node checks (runner 'node': a tools/*.js script) run in parallel (--jobs), real-time
@@ -181,6 +181,12 @@ const LIST = [
   V('net-node', 'net-node-test.js', 0, has(/NET NODE OK/), { runner: 'node' }),
   // the two shipped pages' contracts (artifact / standalone) + the standalone page playing solo without PeerJS
   V('check-pages', 'check-pages.js', 0, has(/^PAGES OK: \d+ passed, 0 failed/m), { runner: 'node' }),
+  // the relay Worker (cloudflare/: origins, /turn against a fake Cloudflare API, errors, the abuse guard, no secret in any
+  // answer) and its client (src/relay/ice.js in a vm, build.js's relay URL on a copy of the sources, the deploy-relay
+  // fixture in Chrome against the real Worker code: the TURN servers reach new Peer, cache, fallbacks, the 3 s timeout -
+  // serial: it times that timeout). tools/ice-check.js (a deployed page / Worker, needs the internet) is manual
+  V('relay-worker', 'relay-worker-test.js', 0, has(/RELAY-WORKER OK: \d+ passed, 0 failed/), { runner: 'node' }),
+  V('relay-client', 'relay-client-test.js', 0, has(/RELAY-CLIENT OK: \d+ passed, 0 failed/), { runner: 'node', serial: true }),
   V('sprites-scene', 'test-sprites-scene.html', 6000, has(/SCENE mode/), { shot: 'runall-sprites-scene.png' }),
   // ---- real time (one at a time)
   V('realinput', 'test-realinput.html', 40000, doneZero('REAL'), { runner: 'cdp', done: 'REAL DONE' }),
@@ -321,7 +327,8 @@ function genPlatformPages() {
   fs.writeFileSync(`${T}/rrp-main.html`, `<!doctype html><html><head><meta charset="utf-8"><title>rrp</title><style>body{margin:0;background:#061518}</style></head><body>${SC}>\n${drv}\n${SE}</body></html>`);
   // (without the cloud config: this page plays online as a guest, which the deploy with the cloud does not allow -
   // design/friends.md "As built (invites)"; the cloud's own online gate is tested in src/tests/cloud.js)
-  const dep = fs.readFileSync(path.join(ROOT, 'deploy', 'index.html'), 'utf8').replace(/<script>window\.PG_CLOUD=[\s\S]*?<\/script>\n?/, '');
+  // (nor the relay client a build with a relay URL inlines: these rooms run through the fake PeerJS, never a Worker)
+  const dep = fs.readFileSync(path.join(ROOT, 'deploy', 'index.html'), 'utf8').replace(/<script>window\.PG_CLOUD=[\s\S]*?<\/script>\n?/, '').replace(/<script id="pg-relay">[\s\S]*?<\/script>\n?/, '');
   const tag = dep.match(/<script defer src="(https:\/\/[^"]*peerjs[^"]*)"[^>]*><\/script>/);
   if (!tag) throw new Error('no PeerJS tag in deploy/index.html');
   // (the deploy's login screen stays away: this browser chose to play as a guest - design/cloud-trophies.md "As built (login screen)")
@@ -375,7 +382,8 @@ function portOpen() {
   if (exact && list.length !== new Set(filters).size) { console.log('RUN-ALL: unknown job(s): ' + filters.filter((f) => !LIST.some((j) => j.name === f)).join(', ')); process.exit(1); }
   if (args.includes('--list')) { for (const j of list) console.log(j.name.padEnd(22) + j.page); return; }
   if (!args.includes('--no-build')) {
-    const b = spawnSync(process.execPath, [path.join(ROOT, 'build.js')], { encoding: 'utf8' });
+    // (no relay in the tested build unless PG_RELAY_URL says otherwise: the tests use their own fixture, deploy-relay/)
+    const b = spawnSync(process.execPath, [path.join(ROOT, 'build.js')], { encoding: 'utf8', env: Object.assign({}, process.env, process.env.PG_RELAY_URL === undefined ? { PG_RELAY_URL: 'none' } : {}) });
     process.stdout.write(b.stdout + b.stderr);
     if (b.status !== 0) { console.log('BUILD FAILED'); process.exit(1); }
   }

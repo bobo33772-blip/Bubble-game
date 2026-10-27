@@ -1,0 +1,6 @@
+{
+  "name": "ppodeuk-relay",
+  "private": true,
+  "type": "module",
+  "description": "뽀득뽀득 목욕탕 relay Worker: short-lived Cloudflare Realtime TURN credentials for online rooms (CLOUDFLARE-SETUP.md)"
+}

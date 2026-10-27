@@ -11867,7 +11867,7 @@ window.PG = window.PG || {};
     }
     // (a guest on the deploy: the sign-in card, no open rooms; the SDK warmed so the tap opens Google's window at once)
     if (netGated()) clWarm();
-    netTransport().then(() => { renderFriends(); if (!netGated()) netLobbyOpen(); });
+    netTransport().then(() => { renderFriends(); if (!netGated()) { netLobbyOpen(); relayWarm(); } });
     // the signed-in viewer's name as the default nickname (artifact 'user' capability), once
     if (NET.nickDefault && PG.Net && typeof PG.Net.profileName === 'function' && !NET.profAsked) {
       NET.profAsked = true;
@@ -11910,10 +11910,20 @@ window.PG = window.PG || {};
   }
 
   // a standalone deploy may set window.PG_PEER_OPTIONS (TURN servers, its own PeerServer): handed to PG.Net when it
-  // is a plain object
-  function peerOpts(o) {
+  // is a plain object. A deploy built with a relay URL also has window.PG_RELAY (build.js, src/relay/ice.js): for the
+  // 'peer' transport it answers with those options plus fresh TURN credentials (3 s at most, never rejects; its own
+  // fallback is the static list, else STUN only). Without it everything here is as before
+  const relayApi = () => { let r = null; try { r = window.PG_RELAY; } catch (e) { r = null; } return r && typeof r.peerOptions === 'function' ? r : null; };
+  // (친구와 하기 on the 'peer' transport: ask now, so a tap on 방 만들기 / 참여 finds the answer waiting)
+  function relayWarm() { const r = relayApi(); if (r && NET.tr === 'peer' && typeof r.warm === 'function') { try { r.warm(); } catch (e) { /* ignore */ } } }
+  async function peerOpts(o) {
     let po = null; try { po = window.PG_PEER_OPTIONS; } catch (e) { po = null; }
     if (po && typeof po === 'object' && Object.getPrototypeOf(po) === Object.prototype) o.peerOptions = po;
+    const r = o.transport === 'peer' ? relayApi() : null;
+    if (r) {
+      let p = null; try { p = await r.peerOptions(o.peerOptions || null); } catch (e) { p = null; }
+      if (p && typeof p === 'object' && Object.getPrototypeOf(p) === Object.prototype) o.peerOptions = p;
+    }
     return o;
   }
   async function netHost(net) {
@@ -11927,7 +11937,7 @@ window.PG = window.PG || {};
       // (only this browser's tabs - a public link, PeerJS missing: never a room nobody can enter. 방 만들기 is disabled
       // then; this answers a tap made while detection was still pending, and the test API)
       if (roomOffKind()) { netOffAnswer(false); return null; }
-      const o = peerOpts({ transport: tr });
+      const o = await peerOpts({ transport: tr });
       if (net) o.net = net;
       s = await PG.Net.host(o);
     } catch (e) { NET.err = errText(e); }
@@ -11951,7 +11961,7 @@ window.PG = window.PG || {};
       // (only this browser's tabs: the host's room cannot be reached from here - say why at once, with no bc search
       // that would end in a false 방을 찾을 수 없어요; also when 참여 was tapped while detection was pending)
       if (roomOffKind()) return { ok: false, code: 'room_off', text: netOffAnswer(true) };
-      const o = peerOpts({ transport: tr, code });
+      const o = await peerOpts({ transport: tr, code });
       if (net) o.net = net;
       s = await PG.Net.join(o);
     } catch (e) { err = e; NET.err = errText(e); }
