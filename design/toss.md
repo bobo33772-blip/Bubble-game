@@ -16,8 +16,12 @@ The owner's decisions (2026-10-27), which this spec builds on:
 
 Sources: the colleagues' research notes of 2026-10-27 (three agents: packaging, policy, WebView), summarised where
 they are used in 1.2, and the SDK's own type file `@apps-in-toss/web-framework@3.9.0/dist/index.d.ts` (its exports
-were checked on 2026-10-27). **UNCONFIRMED** marks anything no document or type file settles. Those items are listed
-again in 15.6 as things the QR test must answer.
+were checked on 2026-10-27). A second pass the same day (section 19) read the SDK's **code** (`dist/index.js`,
+`dist/config.d.ts`) and the official pages for every call used here (`.md` versions of developers-apps-in-toss.toss.im:
+hash-key, game-center, safe-area, screen/event, navigationbar, file-storage/storage, screen.setorientation,
+screen/properties, sdk-3.x, checklist/app-game, console-workspace, plus the docs' own question endpoint for two gaps),
+and corrected the spec where they disagreed. **UNCONFIRMED** marks anything no document, type file or SDK code
+settles. Those items are listed again in 15.6 as things the QR test must answer.
 
 ---
 
@@ -25,21 +29,21 @@ again in 15.6 as things the QR test must answer.
 
 | Question | Decision |
 |---|---|
-| Build target | `node build.js --toss` (also `PG_TOSS=1`) writes a **Toss variant of the deploy page** into the new Vite project `toss/`: `toss/index.html` plus the five engine files as `toss/public/pg/*.js`. In `toss/`, `npm run build` runs the page build, then `vite build`, the bundle check, `ait build` and the check again, and ends with `toss/ppodeuk-bath.ait` (2). |
+| Build target | `node build.js --toss` (also `PG_TOSS=1`) writes a **Toss variant of the deploy page** into the new Vite project `toss/`: `toss/index.html` plus the five engine files as `toss/public/pg/*.js`. With the flag it writes **only** the Toss outputs and the `TMP` fixtures: `dist/`, `deploy/`, the itch zip and `.firebaserc` are not touched, so a Toss build can never change what the web serves (2.1). In `toss/`, `npm run build` runs the page build, then `vite build`, the bundle check, `ait build` and the check again, and ends with `toss/ppodeuk-bath.ait` (2). |
 | SDK hand-off | `toss/src/main.js` imports the SDK, PeerJS and the fonts, then calls `PG.Ait.boot(SDK)` from the **new** plain file `src/ait.js`. That function reads native Storage into localStorage (at most 3 s), locks landscape, sets the Safe Area CSS variables, sets `window.PG_AIT` (a small bridge, 2.4) and only **then** loads the five engine files in order. The engine never imports anything. |
 | CDNs | None at run time. PeerJS comes from npm (`peerjs@1.5.4`, the same version as the deploy). The two Google Fonts come from npm `@fontsource/*` and are emitted into `dist/assets`. TURN uses the same `turn.config.json` the deploy uses, inlined as `window.PG_PEER_OPTIONS`. Firebase is not in the Toss build at all. |
 | Removed | Service worker and its registration, manifest and app metas, the 앱으로 설치 pill and the fullscreen button (both already disappear without a manifest link), the `FB_HOP` `location.replace`, `PG_CLOUD`, the Google Fonts links, the PeerJS CDN tag, the "open outside" links (`intent://`, `kakaotalk://`), and the Google sign-in calls (cut from the Toss copy of game.js, 2.2). |
 | Online gate | **손님은 온라인 불가** (Google sign-in) is replaced by a **game-key gate**: `netGated()` is true in Toss while `AIT.hash` is empty. The friends panel then shows a card without any login button (4.2). |
-| Identity uses | (1) the online gate; (2) the room's same-player check: `troDevHash` hashes the game key instead of the store's random `dev`, so the same Toss account in one room twice is a practice match (`NET.q === 2`, no coins); (3) through (2), the coin rules of friendly matches. The key is never shown, sent, logged or stored as it is (4.5). |
-| Trophies | **Off for online battles and parties**: no 트로피 걸기, no place points, no +5, no holds and no results. Every switch is `AIT.on` at one of nine named sites (5). The 목욕 보너스 (solo and co-op progress, nobody loses anything) stays, so leagues and the shop's league locks still work. |
+| Identity uses | (1) the online gate; (2) the room's same-player check: `troDevHash` hashes the game key instead of the store's random `dev`, so the same Toss account in one room twice is a practice match (`NET.q === 2`, no coins); (3) through (2), the coin rules of friendly matches; (4) a one-way tag of the key is saved (`ppogeul-ait-who`), which is what the checklist's "사용자 식별자 값을 확인하여 저장" asks. The key itself is never shown, sent, logged or stored (4.5). |
+| Trophies | **Off for online battles and parties**: no 트로피 걸기, no place points, no +5, no holds and no results. Every switch is `AIT.on`: two guards in the core (`troEscrow`, `troApply`), so no trophy can move whatever calls them, plus nine named UI / flow sites (5). The 목욕 보너스 (solo and co-op progress, nobody loses anything) stays, so leagues and the shop's league locks still work. No Toss line uses the verb 걸다 about trophies. |
 | Cloud, friends, invites | **Dropped for v1. The Toss build is Firestore-free.** No `PG_CLOUD`, so `CLOUD.on` is false and 친구 순위, 친구 초대 and cloud saves are inert as on a deploy without config. Firebase anonymous auth was considered and rejected (6). |
 | Leaderboard | Best **solo run score** (from 탕 1, offline solo, not the demo). It is submitted when the 목욕 끝 / ending card shows, only when it beats the last accepted score. Before the console approves the app info the call answers `LEADERBOARD_NOT_FOUND`, and the score is kept for the next run end. **토스 랭킹** in 내 기록 appears after the first success (7). |
-| Storage | localStorage stays the engine's synchronous working copy. A wrapper on `Storage.prototype` (the PR preview's technique) mirrors every `ppogeul-*` write to the native `Storage`. A write sequence number decides which side is newer at boot. Flushes happen 2 s after the last write and at once when the page hides (8). |
+| Storage | localStorage stays the engine's synchronous working copy. A wrapper on `Storage.prototype` (the PR preview's technique) mirrors every `ppogeul-*` write to the native `Storage`. A **lineage id** plus a write sequence number decide which side is newer at boot: sequence numbers are compared only inside one lineage, and a local copy of another lineage never overwrites a native one. A session that could not read native Storage never writes to it. Flushes happen 2 s after the last write (at most every 5 s, at the latest 20 s after the first mark) and at once when the page hides (8). |
 | Screen | `Screen.setOrientation({type:'landscape'})` at boot. The rotate screen stays as the fallback for old Toss apps. Portrait is restored on `pagehide`. The Safe Area comes from `SafeAreaInsets` into `--sa-t/r/b/l` (all of page.html's `env(safe-area-inset-*)` uses become these variables; elsewhere they still equal `env()`). The game's header buttons stay out of a box reserved for the nav bar's 더보기 / X (9). |
 | Sound | The existing sound button and M key. **New** `PG.Audio.hold(on)` silences at once (gain 0, then `suspend`) on `visibilitychange` hidden, `pagehide`, the SDK's overlay-visibility event and before the leaderboard opens. The iOS silent switch is respected (no `audioSession` change) (10). |
-| Exit | The game nav bar's X with its automatic exit modal (SDK >= 2.9.2; we ship 3.9.0). Android back goes back on every screen. At the bare title the listener is removed, so Toss's own back exits. iOS swipe back is off only while a game runs (11). |
+| Exit | The game nav bar's X with its automatic exit modal (SDK >= 2.9.2; we ship 3.9.0). Android back goes back on every screen. At the bare title the listener is removed, so Toss's own back applies (docs: without a listener the default is history back; what it does with an empty history is UNCONFIRMED). Fallback, if it does not exit: the game's own two-press confirm, then `Screen.close()`. Never a bare close without a confirmation (the checklist wants one). iOS swipe back is off and the screen stays awake only while a game runs; both are restored on `pagehide` (11). |
 | Analytics | No `init` export exists in 3.9.0. "Analytics init" is the bridge's first `Analytics.screen({log_name:'title'})`, and then one screen log per overlay change, with no personal data (12). |
-| Eval scanner | Today the five engine files contain 0 `eval(`, 0 `new Function` and 0 string timers (13). `tools/check-toss.js` (**new**) scans the built `dist/` for a list of banned patterns and for every external host; any match fails the build. |
+| Eval scanner | Today the five engine files contain 0 `eval(`, 0 `new Function` and 0 string timers, and so do the published files of every library the bundle pulls in (the SDK 3.9.0 and its bridge, valibot, semver, PeerJS 1.5.4 and its four dependencies: pre-scan of 2026-10-27, 13). `tools/check-toss.js` (**new**) scans the built `dist/` for a list of banned patterns and for every external host; any match fails the build. |
 | Rooms | The Toss build uses its **own PeerJS id prefix** (`ppodeuk-t-`), so Toss rooms and web rooms never meet: the web deploy has stakes and Google accounts, Toss has friendly matches and game keys. Joining is by code only (PeerJS has no 열린 방 lobby today either). 코드 복사 copies the code and a how-to line, never a URL (3). |
 | Out of scope | Toss login (`appLogin`, needs 사업자 + a server + mTLS), IAP, ads, Toss share links (`getTossShareLink` only works after launch), haptics, cloud saves, 친구 순위 and invites, the GRAC rating, the console listing and review (17). |
 
@@ -75,15 +79,37 @@ Confirmed (docs or the 3.9.0 type file):
   `package.json`. The SDK is an ES module with bare imports, so it needs a bundler.
 - `apps-in-toss.config.ts`: `defineConfig({ appName, brand: { primaryColor }, permissions, webBundleDir, webView,
   navigationBar })`. `appName` must equal the console's (`ppodeuk-bath`).
-- Exports used here: `getUserKeyForGame` (`.isSupported()`; resolves `{type:'HASH', hash}` | `'ERROR'` | `undefined`;
-  the docs add `'INVALID_CATEGORY'` outside the game category; Toss app 5.232.0+), `Storage` (`getItem` / `setItem` /
-  `removeItem` / `clearItems`, all async), `Screen` (`setOrientation`, `setAwakeMode`, `setIosSwipeBack`, `close`),
-  `SafeAreaInsets` (`get()`, `subscribe({onEvent})` → `{top,left,right,bottom}`), `graniteEvent.addEventListener`
-  (events `backEvent`, `homeEvent`), `Game` (`setLeaderboardScore({score: string})` → `statusCode` `SUCCESS` |
-  `LEADERBOARD_NOT_FOUND` | `PROFILE_NOT_FOUND` | `UNPARSABLE_SCORE`, `openLeaderboard`, `getUserProfile`,
-  `subscribeInfoOverlayHidden`), `Analytics` (`screen` / `impression` / `click` / `log`, with **no** `init`),
-  `onVisibilityChangedByTransparentServiceWeb` (`onEvent(isVisible)`), `closeView`, `getOperationalEnvironment()`
-  (`'toss'` or `'sandbox'`), `isMinVersionSupported({android, ios})`, `env.getDeploymentId()`.
+- Exports used here (checked in the 3.9.0 code, not only the types):
+  - `getUserKeyForGame()`: resolves `{type:'HASH', hash}` | `'ERROR'` | `undefined` (app older than 5.232.0). In 3.9.0
+    it is a deprecated v2 alias: `const getUserKeyForGame = getAnonymousKey`, one bridge call `getAnonymousKey`, and
+    **every** answer that is not a HASH becomes `'ERROR'`. So `'INVALID_CATEGORY'` never reaches the page. The docs
+    (hash-key) still name `getUserKeyForGame` for games: the hash is stable per user and mini-app, across reinstalls
+    and device changes, and needs no consent screen. Game mini-apps need Toss 5.232.0 **at entry** (Toss shows its own
+    update screen below it), so in a real game every version gate used here (5.215.0, 5.221.0, 5.232.0) is met.
+  - `Storage`: `getItem` / `setItem` / `removeItem` / `clearItems` (async, strings), plus `getItems` / `setItems`
+    (Toss 5.270.0+, each with `.isSupported()`). Wiped only with the Toss app.
+  - `Screen`: `setOrientation({type})` (with `.isSupported()`; throws `UNSUPPORTED_APP_VERSION` below 5.215.0),
+    `setAwakeMode({enabled})`, `setIosSwipeBack({isEnabled})`, `close()` (= `closeView`). Orientation and awake mode
+    apply to the whole Toss app; the docs say to restore both when leaving.
+  - `SafeAreaInsets` (= `SafeArea`): `get()` (synchronous, a constant Toss injects before the page loads),
+    `subscribe({onEvent})` → `{top,left,right,bottom}`. The X sits at `right + 10`, `top + 5` (iOS) / `top + 10`
+    (Android); game UI that overlaps it can be rejected.
+  - `graniteEvent.addEventListener('backEvent' | 'homeEvent', {onEvent, onError})` → unsubscribe. A `backEvent`
+    listener blocks the default back.
+  - `Game`: `setLeaderboardScore({score: string})` → `{statusCode: 'SUCCESS' | 'LEADERBOARD_NOT_FOUND' |
+    'PROFILE_NOT_FOUND' | 'UNPARSABLE_SCORE'}` or `undefined` (old app); `openLeaderboard()` (sends the mini-app to the
+    background); both with `.isSupported()`; `getUserProfile`, `subscribeInfoOverlayHidden`.
+  - `Analytics` (`screen` / `impression` / `click` / `log`, with **no** `init`), `Environment.environment`
+    (`'toss'` | `'sandbox'`; `getOperationalEnvironment()` is its deprecated twin), `isMinVersionSupported`,
+    `onVisibilityChangedByTransparentServiceWeb({options: {callbackId}, onEvent(isVisible), onError})` → unsubscribe.
+- How the SDK behaves (from `dist/index.js`): every call reads constants Toss injects
+  (`window.__appsInTossConstants`) or asserts `window.ReactNativeWebView`. **Outside the Toss WebView** (a desktop
+  browser without the devtools mock) every call, `isSupported()` included, **throws synchronously**; it does not
+  return a rejected promise. The bridge is created with `timeout: 0`: **a bridge call can stay pending forever**, so
+  every call this spec awaits has its own cap.
+- 3.x has no `webViewProps.type`. The game navigation bar (더보기 + X only) comes from the console's **앱 유형 = 게임**
+  (a field of its own, apart from the genre category; the docs' answer to that question). For a dark game the docs'
+  own example is `navigationBar: { theme: 'dark', transparentBackground: true, withTitle: false }`.
 - Live origin `https://ppodeuk-bath.apps.tossmini.com`, QR test origin `https://ppodeuk-bath.private-apps.tossmini.com`.
   Web storage is per origin, so test data never carries over to live. HTTPS-only and `wss://`-only. No iframes. No
   links that leave the Toss domain (`location.replace`, nested WebViews). No `eval` (the scanner also catches it inside
@@ -91,9 +117,12 @@ Confirmed (docs or the 3.9.0 type file):
 - The game checklist: the first screen within 10 s; a sound on/off toggle; sound stops at once in the background and
   comes back on return; the X works; nothing intrudes into the Safe Area (Dynamic Island on the side in landscape);
   no bottom sheet opens by itself on entry; every screen has a way out; Android back goes back or exits; fullscreen;
-  the chosen orientation works; responses within 2 s; an exit confirmation; records survive closing and reopening.
+  the chosen orientation works; responses within 2 s; an exit confirmation; records survive closing and reopening;
+  "사용자 식별자 값을 확인하여 저장하고, 게임이 정상적으로 시작돼요"; the bridge is not called excessively, not from
+  loops / timers / redraws, and failed calls retry a capped number of times at a controlled interval.
 - The leaderboard works only after 미니앱 정보 승인 (else `LEADERBOARD_NOT_FOUND`), one per mini-app, game category
-  only, Toss app 5.221.0+. It must not be called right at entry.
+  only, Toss app 5.221.0+. It must not be called right at entry. Its policy (score unit, sort order) is set in the
+  console's app info (리더보드 (게임 앱)).
 - QR testing: upload the .ait in 앱 번들, press 토스앱 테스트, scan. Testers must be logged into Toss, **workspace
   members** and **19 or older**. Every upload gets a new `deploymentId` (a new QR). On the phone, 더보기 → 웹 디버그
   툴즈 shows Log / Network / Element.
@@ -101,9 +130,10 @@ Confirmed (docs or the 3.9.0 type file):
 UNCONFIRMED (each one is a QR-test item in 15.6): whether WebRTC data channels, the PeerJS cloud signalling server and
 Metered TURN work inside the Toss WebView (staff only said "WebRTC is not blocked"); whether `env()` Safe Area values
 are right inside the WebView; the nav bar's exact size; whether the exit modal fires
-`onVisibilityChangedByTransparentServiceWeb`; whether Toss's default Android back at our title exits; the native
-`Storage` value size limit; whether the scanner treats
-an unused Google-named string as a problem (2.2 removes the API names, not every word).
+`onVisibilityChangedByTransparentServiceWeb`; what Toss's default Android back (history back) does at our title,
+where the page has no history; the native `Storage` value size limit and whether it is shared between the QR-test
+and live origins; whether the scanner treats an unused Google-named string as a problem (2.2 removes the API names,
+not every word).
 
 ---
 
@@ -120,8 +150,12 @@ toss/  npm run build:  node ../build.js --toss → vite build → node ../tools/
 ### 2.1 `build.js --toss`: `tossOf()` (**new**)
 - The flag: `process.argv.includes('--toss') || process.env.PG_TOSS === '1'`. A flag is needed because PowerShell has
   no `VAR=x cmd`. With it, `PG_PREVIEW` is refused ("--toss and PG_PREVIEW do not mix") and `firebase.config.json` is
-  **never read** (`fbConf` null). `dist/`, `deploy/` and the itch zip are written exactly as without it; the flag only
-  adds the Toss outputs.
+  **never read** (`fbConf` null). Because `fbConf` is null, the deploy page this run could make would lack `PG_CLOUD`,
+  so a `--toss` run **writes nothing outside `toss/` and `TMP`**: no `dist/`, no `deploy/` (and so no `TMP/deploy/`
+  copy), no itch zip, no `.firebaserc` (a guard around those four writes; the in-memory pages and their checks still
+  run, so a broken page still stops the build). Otherwise `npm run build` in `toss/` would silently strip the cloud
+  sign-in from `deploy/` the next time the owner runs `firebase deploy`. A plain `node build.js` is unchanged and
+  also writes the `TMP` Toss fixtures below (not `toss/`).
 - `tossOf(build)` builds the page from the same pieces as `deployOf`, in this order:
   `<!doctype html>`, `<html lang="ko" class="pg-sa pg-ait">`, charset, the same viewport (`viewport-fit=cover`,
   `user-scalable=no`), `<title>`, description, `<meta name="pg-build" content="BUILD">` (so 웹 디버그 툴즈 shows which
@@ -144,12 +178,18 @@ toss/  npm run build:  node ../build.js --toss → vite build → node ../tools/
   `<script src>`; none of `serviceWorker`, `rel="manifest"`, `PG_CLOUD`, `firebase`, `fonts.googleapis`,
   `fonts.gstatic`, `cdnjs`, `peerjs.min.js`, `location.replace`, `구글`, `Google` (case-sensitive: the lowercase STUN host
   `stun.l.google.com` in `PG_PEER_OPTIONS` is allowed); every pattern of 13's list absent
-  from `toss/public/pg/*.js`; the cut markers balanced (2.2). The **artifact and the deploy are checked for no Toss**:
-  no `pg-ait`, no `PG_AIT\s*=`, no `@apps-in-toss`.
+  from `toss/public/pg/*.js`; the cut markers balanced (2.2). The **artifact and the deploy are checked for no Toss**,
+  structurally, because page.html's own CSS names `.pg-ait` (9.3) and game.js reads `window.PG_AIT` in every build:
+  no `<html …pg-ait` class (`/<html\b[^>]*\bpg-ait\b/`), no assignment `/PG_AIT\s*=(?!=)/`, no `@apps-in-toss`, no
+  `<script` whose `src` ends in `ait.js`. Engine and page comments must not name `@apps-in-toss` (the same rule as
+  the word `firebase` today).
 - Always written (with or without `--toss`, for the tests, in `TMP` only, like `deploy-cloud/`): `TMP/toss/`
   (`index.html` + `pg/*.js`, byte-equal to what `--toss` writes) and `TMP/toss-fx/` (the same page with the module
   entry replaced by `../ait.js`, the fake SDK hook and a boot line, 15.3). It also copies `src/ait.js` to `TMP/ait.js`
-  and writes `test-toss.html` (15.2).
+  and writes `test-toss.html` (15.2). The generic loop that turns every `src/tests/*.js` into `test-<name>.html`
+  (artifact page + driver) must **skip `toss.js` and `toss-fake.js`**: otherwise it overwrites the special
+  `test-toss.html` and makes a meaningless `test-toss-fake.html`. `toss-net.js` stays a normal driver (its page only
+  hosts the two frames).
 - The build hash `BUILD` for the Toss page: sha256 over `tossOf('-')` and the five `pg/` files, 12 hex chars (as
   `deployFilesOf`).
 - The final log line gains: `toss/: index.html + pg/*.js (build X, TURN: yes|no)`.
@@ -199,18 +239,22 @@ toss/
   "dependencies": {
     "@apps-in-toss/web-framework": "3.9.0",
     "peerjs": "1.5.4",
-    "@fontsource/black-han-sans": "<exact>",
-    "@fontsource/gowun-dodum": "<exact>"
+    "@fontsource/black-han-sans": "5.3.0",
+    "@fontsource/gowun-dodum": "5.3.0"
   },
   "devDependencies": {
     "vite": "6.3.5",
-    "@apps-in-toss/devtools": "<exact>"
+    "@apps-in-toss/devtools": "3.9.0"
   }
 }
 ```
-Every version is exact (no `^` / `~`). `<exact>` = the version `npm view <pkg> version` gives on the day of
-implementation, written as is and frozen by the lock file. `ait init` is **not** run (it rewrites the build script,
-edits the Vite config and adds devtools with a version range). This spec writes its outputs by hand.
+Every version is exact (no `^` / `~`) and frozen by the lock file. Checked on npm on 2026-10-27: both fontsource
+packages are at 5.3.0 and ship `400.css` (families `'Black Han Sans'` / `'Gowun Dodum'`, woff2 + woff slices with
+`unicode-range`); `@apps-in-toss/devtools` 3.9.0 declares the peer `@apps-in-toss/web-framework >=3.0.1 <4`.
+(`peerjs` 1.5.5 exists; 1.5.4 stays, the deploy's version.) The SDK lists `@apps-in-toss/cli` as a runtime
+dependency: it is the `ait` command, installed by `npm ci`, and nothing in the page imports it. `ait init` is **not**
+run (it rewrites the build script, edits the Vite config and adds devtools with a version range). This spec writes
+its outputs by hand.
 
 `apps-in-toss.config.ts`:
 ```ts
@@ -221,12 +265,15 @@ export default defineConfig({
   permissions: [],                            // nothing: no camera, mic, clipboard permission, location
   webBundleDir: 'dist',
   webView: { bounces: false, pullToRefreshEnabled: false, overScrollMode: 'never', allowsBackForwardNavigationGestures: false },
-  navigationBar: { transparentBackground: true },   // the game draws under it (fullscreen); 더보기 / X float on top
+  // the game draws under it (fullscreen); 더보기 / X float on top. theme 'dark' = light icons for the dark --bg (the
+  // docs' example for a dark background): the X must be visible. withTitle false: no logo / name even if the bar
+  // were ever the non-game one
+  navigationBar: { transparentBackground: true, theme: 'dark', withTitle: false },
 });
 ```
 (`mediaPlaybackRequiresUserAction` stays at its default `true`; the engine already unlocks audio on the first tap.
-Whether the game nav bar, which shows only 더보기 and X, comes from the console's 게임 category in 3.x is UNCONFIRMED;
-`webViewProps.type` no longer exists.)
+`webViewProps.type` no longer exists in 3.x: the game nav bar (더보기 and X only) comes from the console's
+**앱 유형 = 게임** (1.2), which the owner checks in 16. `config.d.ts` 3.9.0 accepts exactly these keys.)
 
 `vite.config.js`:
 ```js
@@ -251,8 +298,11 @@ window.Peer = Peer;                               // what PG.Net's 'peer' transp
 window.PG.Ait.boot(SDK, { scripts: ['pg/sprites.js', 'pg/levels.js', 'pg/audio.js', 'pg/net.js', 'pg/game.js'] });
 ```
 The fontsource stylesheets carry Google's `unicode-range` slices, so the browser fetches only the slices a screen
-uses, from `dist/assets`. If a package's file name differs from `400.css`, the check (13) still requires the two
-family names and at least one `.woff2` in `dist/assets`.
+uses, from `dist/assets`. The check (13) still requires the two family names and at least one `.woff2` in
+`dist/assets`.
+`src/ait.js` is imported here as a module (strict mode, top-level `this` undefined) and inlined as a classic script
+in the test pages: it must name `window` explicitly, never `this`, and declare nothing at the top level outside its
+IIFE.
 
 ### 2.4 `src/ait.js` (**new**): the boot sequence and the bridge
 A plain IIFE like the engine files: no `import`, no build step. It defines `window.PG.Ait = { boot, make, store }`.
@@ -261,36 +311,45 @@ the artifact and the deploy never have it.
 
 `boot(sdk, opts)`:
 1. `T0 = performance.now()`; the storage wrapper is installed (8) before anything else. Every step is wrapped so that
-   a throwing or missing SDK function never stops the game.
-2. Orientation: if `sdk.Screen.setOrientation.isSupported?.()`, call `setOrientation({type:'landscape'})` and do not
-   wait more than 800 ms for it. Not supported → nothing; the rotate screen does the asking, as on the web.
+   a throwing or missing SDK function never stops the game. One helper does it: `call(fn, ms)` runs `fn` inside
+   `try` (SDK calls throw **synchronously** outside Toss, 1.2) and races the promise against `ms`; a throw, a
+   rejection and the cap all come back as one "failed" value. No SDK call in this spec is awaited without it.
+2. Orientation: if `sdk.Screen.setOrientation.isSupported()` (inside `try`: it throws outside Toss), call
+   `setOrientation({type:'landscape'})` and do not wait more than 800 ms for it. Not supported → nothing; the rotate
+   screen does the asking, as on the web.
 3. Safe Area: `apply(sdk.SafeAreaInsets.get())` sets `--sa-t/r/b/l` (px) on `document.documentElement.style`, plus
    `--ait-nav-w` / `--ait-nav-h` from its own `NAV = { w: 96, h: 44 }` (9.3).
    `SafeAreaInsets.subscribe({ onEvent: apply })` follows rotation and the Dynamic Island side; each change also
    dispatches a `resize` event, so `fit()` runs again.
 4. Storage: `await store(sdk.Storage, localStorage).load()` with a 3 s cap (section 8).
-5. The game key: start `sdk.getUserKeyForGame()` now, **only if** `.isSupported()` (an old app could otherwise show an
-   update screen at entry). Do not wait for it. `PG_AIT.key()` hands out the same promise.
+5. The game key: start `sdk.getUserKeyForGame()` now. The SDK checks the version itself (`undefined` below 5.232.0),
+   and Toss blocks a game below 5.232.0 at entry anyway, so `.isSupported()` is only a cheap first test (a throw
+   from it = not inside Toss = `err`). Do not wait for it. `PG_AIT.key()` hands out the same promise, capped at
+   **8 s**: no answer by then is `err` (the bridge never times out by itself, 1.2), and a HASH that still arrives
+   later upgrades the state to `ok`.
 6. `window.PG_AIT = make(sdk, store)`, then `Analytics.screen({ log_name: 'title' })` once (the "init").
 7. Load `opts.scripts` in order: `<script src>` with `async = false`, appended to `<body>`. `onerror` on any of them
    puts a plain line in the body: `게임을 불러오지 못했어요. 닫고 다시 열어 주세요`.
-8. Page lifecycle: `visibilitychange` hidden and `pagehide` → `store.flush()`. `pagehide` → also
-   `setOrientation({type:'portrait'})` (best effort, not awaited).
+8. Page lifecycle: `visibilitychange` hidden and `pagehide` → `store.flush()`. `pagehide` → also, best effort and
+   not awaited, everything the mini-app changed app-wide goes back: `setOrientation({type:'portrait'})`,
+   `setAwakeMode({enabled:false})` and `setIosSwipeBack({isEnabled:true})` when `play(true)` is in force, and the
+   back listener is removed.
 Steps 2 to 5 run in parallel. The engine starts at most about 3 s after `T0`, well inside the 10 s first-screen rule.
 
 `window.PG_AIT` (v 1), the only thing `game.js` ever sees of the SDK:
 
 | Member | Does |
 |---|---|
-| `v: 1`, `env` | `getOperationalEnvironment()` (`'toss'` / `'sandbox'`), `''` when it throws |
-| `key()` | → `Promise<{st:'ok', hash} \| {st:'old'} \| {st:'cat'} \| {st:'err'}>`. `old`: not supported, or `undefined`. `cat`: `'INVALID_CATEGORY'`. `err`: `'ERROR'`, a throw, or a hash that is not a string of 8..512 characters. An `ok` is cached for the page. After `err` a new SDK call is allowed at most every 5 s. One call in flight at a time. |
-| `lb.ok()` | `isMinVersionSupported({ android: '5.221.0', ios: '5.221.0' })` |
-| `lb.submit(n)` | `Game.setLeaderboardScore({ score: String(n) })` → `'ok'` \| `'nf'` (not found) \| `'np'` (no profile) \| `'bad'` \| `'err'` |
-| `lb.open()` | `Game.openLeaderboard()` → `true` / `false` |
+| `v: 1`, `env` | `Environment.environment` (`'toss'` / `'sandbox'`), `''` when it throws |
+| `key()` | → `Promise<{st:'ok', hash} \| {st:'old'} \| {st:'err'}>`. `old`: the SDK answered `undefined` (an app below 5.232.0: in a real game Toss already blocked it at entry, so in practice only the devtools mock can show it). `err`: `'ERROR'`, a throw (also: not inside Toss), the 8 s cap, or a hash that is not a string of 8..512 characters. There is **no** category state: 3.9.0 turns every non-HASH answer into `'ERROR'` (1.2). An `ok` is cached for the page, and the bridge then writes the tag (4.5). After `err` a new SDK call is allowed at most every 5 s. One call in flight at a time. |
+| `lb.ok()` | `Game.setLeaderboardScore.isSupported()` (in `try`; a throw = false) |
+| `lb.submit(n)` | `Game.setLeaderboardScore({ score: String(n) })`, capped at 8 s → `'ok'` \| `'nf'` (not found) \| `'np'` (no profile) \| `'bad'` (unparsable) \| `'err'` (`undefined`, a throw, the cap) |
+| `lb.open()` | `Game.openLeaderboard()` → `true` / `false` (a throw or a rejection, e.g. "LeaderBoard not found") |
 | `screen(name)` | `Analytics.screen({ log_name: name })`. The same name as the last one is not sent again. |
-| `back(fn)` | `fn` set: one `graniteEvent.addEventListener('backEvent', { onEvent: fn })`, kept until `back(null)` calls its unsubscribe. The same `fn` again: nothing. |
-| `play(on)` | Only on a change: `Screen.setAwakeMode({ enabled: on })` and `Screen.setIosSwipeBack({ isEnabled: !on })` (the option names are UNCONFIRMED; take them from the d.ts) |
-| `onShow(fn)` | `onVisibilityChangedByTransparentServiceWeb({ options: { callbackId: 'pg' }, onEvent: fn })`. Before calling `fn(false)` the bridge also flushes the store. |
+| `back(fn)` | `fn` set: one `graniteEvent.addEventListener('backEvent', { onEvent: fn, onError: noop })`, kept until `back(null)` calls its unsubscribe. The same `fn` again: nothing. |
+| `close()` | `Screen.close()` (11.2's fallback only) |
+| `play(on)` | Only on a change: `Screen.setAwakeMode({ enabled: on })` and `Screen.setIosSwipeBack({ isEnabled: !on })` (option names confirmed in the 3.9.0 d.ts and the screen/properties page) |
+| `onShow(fn)` | `onVisibilityChangedByTransparentServiceWeb({ options: { callbackId: 'pg' }, onEvent: fn, onError: noop })`. Before calling `fn(false)` the bridge also flushes the store. |
 | `insets()`, `nav` | the last `{t, r, b, l}`; `nav` = `NAV` (`{w, h}`, the box reserved for 더보기 / X) |
 
 `make` never exposes the SDK object, and the bridge has no "call anything" member.
@@ -309,6 +368,11 @@ Steps 2 to 5 run in parallel. The engine starts at most about 3 s after `T0`, we
 - **Firebase**: nothing. `PG_CLOUD` is never written into the Toss page, and the check fails on the word `firebase`.
 - **`domReady`** in `game.js`: `document.readyState === 'complete' || !!window.PG_AIT`. Under Toss the engine runs
   after `DOMContentLoaded`, and PeerJS is already there.
+- **`netTransport`** in Toss: the automatic choice is `'peer'` or nothing. Today it falls back to `'bc'` when
+  `window.Peer` is missing, which in a phone's single WebView would make a room nobody can join, under the line
+  `지금은 이 브라우저의 다른 탭끼리만 함께 할 수 있어요`. With `AIT.on` and no `Peer`, `NET.tr` is `null` and the panel
+  shows its existing `peerOff` card. `'bc'` stays reachable only when forced by `?net=bc` (`Net.fromQuery`, the
+  `toss-net` test's frames).
 
 ---
 
@@ -341,7 +405,7 @@ Steps 2 to 5 run in parallel. The engine starts at most about 3 s after `T0`, we
 ### 4.1 State (`AIT`, **new**, game.js section "v5 앱인토스")
 `const AIT = { on, br, st, hash, at, scr, back, play, lb }`:
 - `on = !!window.PG_AIT && typeof window.PG_AIT.key === 'function'` (read once at load, like `clInit`)
-- `st`: `'off'` (not Toss) | `'wait'` | `'ok'` | `'old'` | `'cat'` | `'err'`
+- `st`: `'off'` (not Toss) | `'wait'` | `'ok'` | `'old'` | `'err'` (no category state: 2.4)
 - `hash`: the key, only while `st === 'ok'`
 - `at`: the time of the last request; `scr`: the last screen name sent; `lb`: section 7
 
@@ -360,13 +424,14 @@ Steps 2 to 5 run in parallel. The engine starts at most about 3 s after `T0`, we
 | `st` | Heading | Line | Button |
 |---|---|---|---|
 | `wait` | `온라인 친구와 하기를 준비하고 있어요` | `토스 정보를 확인하는 중이에요…` | none |
-| `old` | `토스 앱을 업데이트하면 온라인으로 할 수 있어요` | `앱스토어나 플레이 스토어에서 토스를 최신 버전으로 바꿔 주세요` | none |
-| `cat` | `지금은 온라인 친구와 하기를 쓸 수 없어요` | `곧 열릴 거예요` | none |
+| `old` | `토스 앱을 업데이트하면 온라인으로 할 수 있어요` | `토스를 최신 버전으로 업데이트해 주세요` | none |
 | `err` | `토스 정보를 불러오지 못했어요` | `인터넷을 확인하고 다시 시도해 주세요` | `다시 시도` (aria-disabled while waiting, then for 5 s) |
 
-  All four end with a solo line. `NG_TX.solo` (`혼자 하기는 로그인 없이도 바로 할 수 있어요`) names a login that Toss
-  does not have, so Toss uses `AIT_TX.solo` = `혼자 하기는 지금 바로 할 수 있어요`. (`old` names stores but does
-  not link to them: no outside links.)
+  All three end with a solo line. `NG_TX.solo` (`혼자 하기는 로그인 없이도 바로 할 수 있어요`) names a login that Toss
+  does not have, so Toss uses `AIT_TX.solo` = `혼자 하기는 지금 바로 할 수 있어요`. (`old` names no store and links
+  nowhere. `wait` lasts at most 8 s: then `err`, 2.4.) The former `cat` row ("not the game category") is dropped: the
+  page cannot see that case in 3.9.0, and in an app whose 앱 유형 is not 게임 the call may even answer a non-game
+  HASH, so online would open. That is why the owner checks the 앱 유형 in the console (16), not the game.
 - 혼자 하기, the shop, 뽑기 and 내 기록 never wait for the key. The gate is per client: a modified page could skip it.
   There is no server to say otherwise (honest limit, the same as the cloud gate's).
 
@@ -388,19 +453,32 @@ Steps 2 to 5 run in parallel. The engine starts at most about 3 s after `T0`, we
   real-name, 19+ account; that is the anti-farm guarantee the Google gate gave on the web.
 - `coinRule(q)` keeps its lines (`이기든 지든 비누 코인을 받아요` / `연습 경기라 비누 코인도 없어요`).
 
-### 4.5 What the key is never used for
+### 4.5 What the key is never used for, and the saved tag
 It is never shown, never put in the DOM, never sent to a peer (only the 6-character FNV of `t:key:code` leaves),
-never logged (no console, no `Analytics` parameter), never written to storage, and never used as a nickname. Players
-type their own nick as today. `Game.getUserProfile()` (the Toss game nickname) is not used in v1.
+never logged (no console, no `Analytics` parameter), never written to storage as it is, and never used as a nickname.
+Players type their own nick as today. `Game.getUserProfile()` (the Toss game nickname) is not used in v1.
+
+The checklist asks that the user identifier is "확인하여 저장" (checked and saved) and that play records survive.
+So on the first `ok` of a page load the bridge writes a **one-way tag** of the key: `ppogeul-ait-who` = the first 16
+hex characters of SHA-256(`'ppodeuk-bath:' + hash`) (`crypto.subtle`; the bundle runs on https). It is a
+`ppogeul-*` key, so it is mirrored to native Storage (8). In v1 the tag only records which Toss account the
+progress on this device belongs to; a different tag at a later boot changes nothing yet (8's honest limit; the
+per-account split is v2, 17). `PG.debug.ait.state()` shows `who: true|false`, never the tag.
 
 ---
 
 ## 5. Trophies off: friendly matches only (친선 경기)
 
-One predicate: `AIT.on`. The switch sites, each one line:
+One predicate: `AIT.on`. Two guards in the core come first. Every trophy change of a match goes through exactly
+two functions, `troEscrow` (the hold at 시작!: it takes `stake + 6` place points, `S.t -= h`) and `troApply` (the
+result, the +5 included). They are reached from `troHostGo`, `troGuestGo`, `troHostResult`, `troResultIn`, and also
+from `PG.debug.tro.hold` / `.result` / `.apply`. With the guards, no caller that a site below misses (today or
+added later) can move a trophy:
 
 | # | Site | Change | Effect |
 |---|---|---|---|
+| 0a | `troEscrow(mid, …)` | `if (AIT.on) return false;` first | no hold, ever: nothing is taken at 시작!, so nothing can be refunded, forfeited or left stale (`troClose`, `troSessionEnd`, `troStale` find no `esc` entry) |
+| 0b | `troApply(mid, …)` | `if (AIT.on) return null;` first | no result, no +5, no `S.g` / `S.w` / `S.ko` count from a match |
 | 1 | `stakeNow()` | `NET.mode === 'battle' && !AIT.on ? NET.opts.bet \| 0 : 0` | The stake is 0 everywhere: `troCovers`, `troSeatFree`, `canAfford` and `troLowerStake` say "nothing at stake". No 트로피 부족 or 안 걸고 참여 marks. `'bet'` in `netSetOpts` stays 0. |
 | 2 | `troHostGo()` | `AIT.on \|\|` added to the early return (next to `G.party`) | no `TRO.match`, no hold, so `troHostResult` returns at its first line and no `'tro'` is ever sent |
 | 3 | `troGuestGo(id)` | `if (AIT.on) return;` first | no hold on guests |
@@ -408,15 +486,21 @@ One predicate: `AIT.on`. The switch sites, each one line:
 | 5 | `troResultIn(m)` | `if (AIT.on) return;` first | a `'tro'` from anyone (an older or a hostile page) changes nothing |
 | 6 | `buildOpts` | the `트로피 걸기` label and its `.pg-bets` row are not made when `AIT.on` (`syncOpts` skips missing rows already) | the host has no stake to choose |
 | 7 | `troCountSub` / `troCountCls` | battle, online, `AIT.on`: `NET.q ? '연습 경기 · 비누 코인 없음' : '친선 경기 · 트로피 없음'`, class `' prac'` for both | the countdown's 2 / 1 line |
-| 8 | `renderRoom` | rules: in Toss the battle's trophy lines (`troRulesLine`, `troFreeLine`, the +5 line, the 견습 line) become one line: q 0 `친선 경기예요: 트로피는 걸지도 바뀌지도 않아요`, q 2 `AIT_TX.same` (4.3). The coin line and the battle lines follow unchanged. The guest summary's `'트로피 ' + troStakeTxt(stake)` item becomes `친선 경기`. | the room says what happens |
+| 8 | `renderRoom` | rules: in Toss the battle's trophy lines (`troRulesLine`, `troFreeLine`, the +5 line, the 견습 line) become one line: q 0 `친선 경기예요: 트로피는 늘지도 줄지도 않아요` (`AIT_TX.friendly`), q 2 `AIT_TX.same` (4.3). The coin line and the battle lines follow unchanged. The guest summary's `'트로피 ' + troStakeTxt(stake)` item becomes `친선 경기`. A party room's `PARTY_TX.noTro` (`트로피는 걸지 않아요`) becomes `AIT_TX.friendly` too (`partyRules`). | the room says what happens |
 | 9 | `troPodiumTag` / `troPodiumUI` | battle, online, `AIT.on`, not practice: tag `친선 경기` (class `pg-podium-tag is-prac`). Practice keeps `연습`. The note lines about stakes cannot occur (no `TRO.lastRes`). The guest wait line drops its stake part through `stakeNow() === 0`. | the podium |
 
 Stays as it is: the 목욕 보너스 (`troBonus`: solo, and online co-op while `NET.q === 0`; progress only, `RUN_CAP` 30,
 `DAY_CAP` 40), the trophy count and leagues on the title badge and 내 기록, the seat chips in the room (a count, not
-a stake), and the shop's league locks. A party already holds no trophies (`PARTY_TX.noTro` `트로피는 걸지 않아요`),
-so nothing changes there except 4.3's coin line.
-Wording rule (사행성): nothing in the Toss build may say 걸기 / 판돈 / 가져요 about trophies. Sites 6 to 9 remove
-every such line from what a Toss player can see. The strings stay in `TRO_TEXT` for the font warm-up only.
+a stake), and the shop's league locks. A party already holds no trophies, so nothing changes there except 4.3's coin
+line and its rules line (site 8: `PARTY_TX.noTro` says 걸지, so Toss shows `AIT_TX.friendly` instead).
+Wording rule (사행성): nothing a Toss player can see may use the verb 걸다 in any form (걸기, 걸고, 걸어, 걸지, 건),
+판돈 or 가져요 about trophies, not even in a negation. Sites 6 to 9 remove every such line; the remaining ones are
+reachable only with a stake above 0 (`안 걸고 참여`, `안 걸고 준비`, `트로피 부족`, 내 기록's `걸어 봐요`, which
+`fillRec` replaces), and `stakeNow()` is 0 in Toss. The strings stay in `TRO_TEXT` for the hidden font warm-up only.
+The Toss lines, verbatim: countdown `친선 경기 · 트로피 없음` / `연습 경기 · 비누 코인 없음`; room rules
+`친선 경기예요: 트로피는 늘지도 줄지도 않아요` / `연습 경기예요: 같은 토스 계정으로 들어온 친구가 있어요`; podium
+tag `친선 경기` / `연습`; the podium summary adds nothing about trophies (no `TRO.pod`, so `fillPodium`'s trophy
+part is empty).
 
 ---
 
@@ -461,6 +545,12 @@ v2 path (17): with 사업자, Toss login → a Cloud Function (mTLS) → `create
   `Snd.hold(true)` → `PG_AIT.lb.open()`. Opening sends the mini-app to the background, and the sound comes back
   through 10's normal path.
 - No in-game message about the leaderboard in v1. The owner checks it on the QR test after approval.
+- The console's leaderboard policy (16) must sort **higher first** and take an integer score: `G.score` is never
+  fractional, so `'UNPARSABLE_SCORE'` would mean our bug (`'bad'`).
+- Before 검토 요청 (not v1's goal): the Toss game SDK post lists the leaderboard as a required item. A reviewer on a
+  fresh phone sees 토스 랭킹 only after their first solo run ends (the first `SUCCESS`). If review asks for it
+  earlier, the button can show whenever `lb.ok()` and no `'nf'` came this page load; a failed `open()` then hides it
+  for the page load. Decide that when the review is prepared.
 
 ---
 
@@ -471,32 +561,59 @@ data can be wiped). The native `Storage` survives app restarts and is wiped only
 reads are synchronous, so localStorage stays the working copy and the native store is the durable mirror.
 
 - **Which keys**: every localStorage key starting with `ppogeul-` (the engine's, `audio.js`'s `ppogeul-muted`, the
-  test namespaces' suffixed keys). Nothing else (PeerJS or the SDK may use storage too). Internal keys, never
-  mirrored: localStorage `pgait:lseq`; native `pgait:seq` and `pgait:keys` (a JSON list of the mirrored key names,
-  since native Storage cannot list keys).
+  test namespaces' suffixed keys, `ppogeul-ait-lb`, `ppogeul-ait-who`). Nothing else (PeerJS or the SDK may use storage
+  too; the 3.9.0 SDK code itself touches no web storage). Internal keys, never mirrored: localStorage `pgait:lseq` and
+  `pgait:gen`; native `pgait:seq`, `pgait:gen` and `pgait:keys` (a JSON list of the mirrored key names, since native
+  Storage cannot list keys).
+- **The lineage id** `gen` (12 random base-36 characters from `crypto.getRandomValues`) names one history of the
+  store. A new one is made only when **both** sides are empty. Whichever side wins at boot, the other side takes its
+  `gen` too. Sequence numbers are compared **only when both sides carry the same `gen`**: a local counter restarts
+  at 0 whenever the WebView's storage is wiped, so a bare "higher seq wins" lets a fresh local copy that wrote often
+  enough overwrite the real native store.
 - **The wrapper** (installed in `boot` before anything else runs, `PV_STORE`'s technique): `Storage.prototype.setItem`
   / `removeItem` / `clear` are wrapped. When `this === window.localStorage` and the key matches, the original call
   runs first, then `lseq + 1` is written (with the original setter, so it is not mirrored) and the key is marked
-  dirty. Reads are not wrapped.
-- **Flush**: one timer, 2 s after the last dirty mark (later marks restart it). Also at once on `visibilitychange`
-  hidden, `pagehide` and `onShow(false)`. One flush: `setItem` / `removeItem` for each dirty key, then
-  `pgait:keys` if it changed, then **last** `pgait:seq = lseq`, one call after the other. On a failure: one retry 10 s
-  later, then nothing until the next write (the checklist: no bridge calls in loops, retries capped). At most one
-  flush in flight; marks that arrive meanwhile go to the next one.
-- **Boot** (`load()`, capped at 3 s; on timeout the game boots on local data and the mirror goes on from there):
-  - `nseq` = native `pgait:seq` (missing = 0), `lseq` = local `pgait:lseq` (missing = 0).
-  - `nseq > 0` and (local has no `ppogeul-trophy` **or** `nseq > lseq`) → native wins: every key in `pgait:keys` is
-    copied into localStorage (original setters), the local `ppogeul-*` keys that are not in the list are removed, and
-    `lseq = nseq`.
-  - `lseq > nseq` → local wins: every local `ppogeul-*` key is marked dirty and flushed at once.
-  - equal → nothing.
+  dirty. Reads are not wrapped. (The SDK's own export is also called `Storage`: inside `src/ait.js` the web one is
+  `window.Storage`, the native one is always `sdk.Storage`.)
+- **Flush**: one timer, 2 s after the last dirty mark (later marks restart it), but never more than 20 s after the
+  first unflushed mark and never sooner than 5 s after the previous flush started (so a burst of writes is at most
+  one flush every 5 s: the checklist's "no excessive bridge calls"). Also at once on `visibilitychange` hidden,
+  `pagehide` and `onShow(false)`. One flush: the dirty keys whose value differs from the last one flushed, written
+  with `Storage.setItems` when `Storage.setItems.isSupported()` (Toss 5.270.0+, one call), else `setItem` /
+  `removeItem` one after the other; then `pgait:keys` if it changed; then `pgait:gen` if not yet written; then
+  **last** `pgait:seq = lseq`. A flush has its own **10 s cap** (`call`, 2.4): a bridge call that never answers counts
+  as a failure and releases the in-flight flag, or one hung call would stop every later flush. On a failure: one
+  retry 10 s later, then nothing until the next write (the checklist: no bridge calls in loops, retries capped). At
+  most one flush in flight; marks that arrive meanwhile go to the next one.
+- **Boot** (`load()`, capped at 3 s). Native is read with `Storage.getItems([...])` when supported, else the
+  `getItem` calls run in parallel (not one after the other), first `pgait:gen`, `pgait:seq`, `pgait:keys`, then
+  the listed keys. `ngen` / `nseq` (missing = '' / 0) and `lgen` / `lseq` (local, missing = '' / 0):
+  - native empty (`nseq` 0 or no keys) → local wins if it has any `ppogeul-*` key: all of them are marked dirty and
+    flushed at once (with `lgen`, made now if missing). Both empty → a new `gen`, nothing to copy.
+  - native has data and `lgen === ngen` → `nseq > lseq`: native wins; `lseq > nseq`: local wins (every local
+    `ppogeul-*` key dirty, and every native-listed key that local no longer has dirty as a removal); equal: nothing.
+  - native has data and `lgen !== ngen` (local was wiped and refilled, or made by a session that never reached native)
+    → **native wins**, whatever the seqs say.
+  - "native wins" = every key in `pgait:keys` copied into localStorage (original setters), the local `ppogeul-*` keys
+    not in the list removed, `lgen = ngen`, `lseq = nseq`.
   The seq is written last in every flush. So `nseq` only counts flushes that completed: a write cut off mid-flush
-  leaves `lseq > nseq`, and the next boot pushes local again.
-- Honest limits: if the bridge needs more than 3 s at boot and the native side was newer, this session's first write
-  makes local "newer" and the native copy is replaced. The progress belongs to this device's mini-app storage, not
-  to the Toss account (a second Toss account on the same phone sees it; nothing in v1 is per account). QR origin
-  and live origin have separate localStorage, but whether native `Storage` is shared between them is UNCONFIRMED. A
-  store written by the QR build could then show up live; it is the same player's own data, valid by `troParse`.
+  leaves `lseq > nseq` in the same lineage, and the next boot pushes local again.
+- **Boot timeout** (native did not answer in 3 s, or threw): the engine boots on local data, and the mirror is
+  **unsynced**: it marks dirty keys but **never flushes** until a read of `pgait:gen` / `pgait:seq` succeeds (tried
+  again at most 3 times, 10 s apart, and once on each return to the foreground). When it succeeds: native empty, or
+  the same `gen` with `nseq <=` the `lseq` **this page booted with** (not the current one, which this session's own
+  writes raised) → normal mirroring from here (the dirty keys go out). Native has data of another
+  lineage, or a higher seq in ours → this session **never writes native**: local `pgait:gen` is cleared, so the next
+  boot restores native (the progress of this one session is lost, the long-lived store is kept). Outside Toss (a
+  desktop browser) every read throws: unsynced for good, local only, nothing is ever sent.
+- Honest limits: the session-loss case above (rare: a bridge slower than 3 s **and** a wiped WebView storage). The
+  progress belongs to this device's mini-app storage, not to the Toss account (a second Toss account on the same phone
+  sees it; 4.5's tag records whose it is, nothing in v1 is split by account). The nav bar's 더보기 → 미니앱 용량 삭제
+  may wipe the web storage only, the native one, or both (UNCONFIRMED): if only the web storage goes, the next boot
+  restores native, so that menu cannot be used as a reset. QR origin and live origin have separate localStorage;
+  whether native `Storage` is shared between them is UNCONFIRMED. If it is, a store written by the QR build shows up
+  live (same lineage, the same player's own data, valid by `troParse`), and switching between the QR and live builds
+  on one phone keeps "the last one played wins", which is consistent.
 - Size: the trophy store is a few KB (`troParse` caps every list). The value limit of native `Storage` is
   UNCONFIRMED; the QR test fills a store (64 items, a 10-draw log) and reopens.
 
@@ -507,9 +624,10 @@ reads are synchronous, so localStorage stays the working copy and the native sto
 ### 9.1 Landscape
 - At boot: `Screen.setOrientation({type:'landscape'})` (2.4 step 2). It applies to the whole Toss app, so `pagehide`
   sets `'portrait'` again (best effort). Whether Toss restores it on its own after X is UNCONFIRMED (15.6).
-- Old Toss apps (< 5.215.0, `isSupported()` false): nothing is called. `.pg-sa`'s rotate screen
-  `가로로 돌려 주세요` shows on an upright phone, as on the web. `orientLock` stays inert (no fullscreen, no
-  installed app).
+- Old Toss apps (< 5.215.0, `isSupported()` false): nothing is called. In practice a game never meets one (Toss
+  requires 5.232.0 to open a game, 1.2), so the real fallback case is a `setOrientation` that fails or hangs (the
+  800 ms cap). Either way `.pg-sa`'s rotate screen `가로로 돌려 주세요` shows on an upright phone, as on the web.
+  `orientLock` stays inert (no fullscreen, no installed app).
 
 ### 9.2 Safe Area → CSS
 - `page.html`: `:root { --sa-t: env(safe-area-inset-top, 0px); --sa-r: env(safe-area-inset-right, 0px); --sa-b:
@@ -520,8 +638,9 @@ reads are synchronous, so localStorage stays the working copy and the native sto
   (`SafeAreaInsets.subscribe`). If `get()` throws, nothing is written and `env()` stays.
 
 ### 9.3 The nav bar (더보기 + X) and the game's header
-- The game nav bar floats over the top-right corner. Its X sits at `right + 10, top + 5` (iOS) / `top + 10`
-  (Android) relative to the insets. Its width and height are UNCONFIRMED. One source for both:
+- The game nav bar floats over the top-right corner, with light icons (`theme: 'dark'`, 2.3) on the dark game. Its X
+  sits at `right + 10, top + 5` (iOS) / `top + 10` (Android) relative to the insets (the safe-area page: a game
+  button under the X "can be rejected"). Its width and height are UNCONFIRMED. One source for both:
   `NAV = { w: 96, h: 44 }` in `src/ait.js` (a box reserved from the top-right inset corner: `right inset + 10 + w`
   wide, `top inset + h` tall). The bridge writes it as `--ait-nav-w` / `--ait-nav-h` and hands it over as
   `PG_AIT.nav`; game.js reads it into `AIT.nav` (`{w: 0, h: 0}` outside Toss), so the CSS and `fit()` agree. The QR
@@ -574,8 +693,13 @@ the modal opened) and asks for portrait.
 ### 11.2 Android back (`graniteEvent` `backEvent`)
 `aitSync()` (**new**), called at the end of `showOverlay` and `toTitle`: `PG_AIT.back(atRoot ? null : aitBack)`, where
 `atRoot` = `shownOverlay === 'title' && G.mode === 'title' && !G.menuOpen`. At the bare title no listener is set, so
-Toss's own back handling exits (UNCONFIRMED that it does; if not, `aitBack` at the root calls
-`closeView()` and the root listener stays on). `aitBack()` does what Escape does:
+Toss's own back handling applies. The docs say a `backEvent` listener blocks the default back and that without one
+the default is **history back**; the page never pushes history, so what Toss then does (close, with or without its
+exit modal) is UNCONFIRMED (15.6.5). If it does not exit, the fallback keeps the root listener on and, at the root,
+`aitBack` is a **two-press confirm**: the first back shows the title line `한 번 더 누르면 게임을 나가요` for 2 s,
+a second back inside those 2 s calls `PG_AIT.close()` (`Screen.close()`). Never a bare close on the first press: the
+checklist wants an exit confirmation. The same two-press rule applies if a back reaches `aitBack` at the root anyway
+(an unsubscribe still in flight). `aitBack()` elsewhere does what Escape does:
 
 | Where | Back does |
 |---|---|
@@ -592,7 +716,8 @@ Toss's own back handling exits (UNCONFIRMED that it does; if not, `aitBack` at t
 `aitSync()` also calls `PG_AIT.play(inGame)` (`inGame` = `G.mode` is one of the game modes above, or `'paused'`).
 The bridge acts only on a change: during a game the screen stays awake and iOS's edge swipe is off (the joystick
 lives at the left edge in landscape, and a swipe there would leave the mini-app mid-run). In the menus both are back
-to normal. Every screen keeps the X as its way out.
+to normal, and `pagehide` restores both too (2.4 step 8: the docs say awake mode affects the whole Toss app). Every
+screen keeps the X as its way out.
 
 ---
 
@@ -615,8 +740,18 @@ What the source contains today (grep of the five engine files + page.html, 2026-
 `intent:` / `kakaotalk` 1 each (region 1), `beforeinstallprompt` 3 (one listener: region 6; two comments: reworded),
 `innerHTML` 5 (static strings, no outside data), `location.reload` 1 (the 새로고침 button, same origin). page.html:
 the Google Fonts URLs (removed by `tossOf`). net.js: one `http://localhost` in a comment.
-The libraries (`@apps-in-toss/web-framework` and its dependencies, `peerjs` and its dependencies, fontsource CSS) are
-**not yet scanned**: the first `npm run build` does it through `check-toss`, before anything is uploaded.
+The libraries, pre-scanned on 2026-10-27 from their published files (unpkg) with the patterns below: 0 hits in
+`@apps-in-toss/web-framework@3.9.0/dist/index.js`, `@webview-bridge/web@1.7.10` and `@webview-bridge/utils@1.7.10`,
+`valibot@1.5.0`, `semver` (index), `peerjs@1.5.4/dist/bundler.mjs` and its four dependencies (`webrtc-adapter` 9,
+`@msgpack/msgpack` 2.8.0, `peerjs-js-binarypack` 2, `eventemitter3` 4). The SDK names no URL and touches no web
+storage or `location` (one read of `location.href` for the analytics referrer). The bundled output is still scanned by
+`check-toss` on every build, because the minifier and the exact resolved versions decide what ships.
+Hosts the scan will meet in the bundle, all inert strings, to be allowlisted by hand with these comments: PeerJS
+embeds its own `package.json` (`peerjs.com`, `github.com`, `opencollective.com`: homepage / repo / funding fields),
+and its default ICE list names `turn:eu-0.turn.peerjs.com` / `turn:us-0.turn.peerjs.com` (used only when no
+`PG_PEER_OPTIONS` is set) and `stun.l.google.com`. Its signalling host `0.peerjs.com` appears without a scheme.
+`webrtc-adapter` and `valibot` name hosts only in comments, which the minifier drops (if a legal comment survives,
+it is reviewed and allowlisted the same way).
 
 `tools/check-toss.js` (**new**, node, no dependencies):
 - `--static` (part of `run-all`, needs no npm): `TMP/toss/` has exactly what 2.1 says. The five `pg/` files equal the
@@ -652,18 +787,20 @@ The libraries (`@apps-in-toss/web-framework` and its dependencies, `peerjs` and 
 | File | Change |
 |---|---|
 | `src/ait.js` | **new**: `PG.Ait = { boot, make, store }` (2.4, 8) |
-| `src/game.js`, top constants | `AIT_TX` (every Korean line of 3, 4, 5, 7) next to `PARTY_TX`; `AIT_TEXT` = their joined values, warmed in `setupDOM` with the others |
-| `src/game.js`, section "v5 앱인토스" (**new**, after "v4 friends", before "attract-mode autopilot") | `AIT`, `aitKey`, `aitGateBuild`, `aitGatePaint`, `aitLbRun`, `aitLbBtn`, `aitBack`, `aitSync`, `aitScreen`, and `PG.debug.ait` = `aitDebugApi()` like `troDebugApi()` (`state()` → `{on, st, hasKey, lb, back, play, scr}`: never the key itself) |
-| `src/game.js`, hooks (one line each) | `boot` → `aitKey()` after `setupDOM`; `showOverlay` → `aitSync(); aitScreen();` and for `'over'` / `'ending'` `aitLbRun()`; `toTitle` → `aitSync()`; `fillRec` → the Toss note lines, the hidden stats, `aitLbBtn()`; `renderFriends` → 4.2; `netGated`; `troDevHash`; `peerTag`; `domReady`; `fit` (9.3); `safeInsets` probe (9.2); `inviteText` and the room hint (3); the nine trophy sites (5); `partyRules` coin2; `Snd.hold`; the `visibilitychange` / `pagehide` listeners → `Snd.hold`; `PG_AIT.onShow` subscribed in the AIT section's init |
+| `src/game.js`, top constants | `AIT_TX` (every Korean line of 3, 4, 5, 7, 11.2) next to `PARTY_TX`; `AIT_TEXT` = their joined values, warmed in `setupDOM` with the others |
+| `src/game.js`, trophy core | `troEscrow` and `troApply`: `if (AIT.on) return false;` / `return null;` first (5, 0a / 0b) |
+| `src/game.js`, section "v5 앱인토스" (**new**, after "v4 friends", before "attract-mode autopilot") | `AIT`, `aitKey`, `aitGateBuild`, `aitGatePaint`, `aitLbRun`, `aitLbBtn`, `aitBack`, `aitSync`, `aitScreen`, and `PG.debug.ait` = `aitDebugApi()` like `troDebugApi()` (`state()` → `{on, st, hasKey, who, lb, back, play, scr}`: never the key or the tag itself) |
+| `src/game.js`, hooks (one line each) | `boot` → `aitKey()` after `setupDOM`; `showOverlay` → `aitSync(); aitScreen();` and for `'over'` / `'ending'` `aitLbRun()`; `toTitle` → `aitSync()`; `fillRec` → the Toss note lines, the hidden stats, `aitLbBtn()`; `renderFriends` → 4.2; `netGated`; `troDevHash`; `peerTag`; `domReady`; `fit` (9.3); `safeInsets` probe (9.2); `inviteText` and the room hint (3); the nine trophy sites (5); `partyRules` coin2 and `noTro`; `netTransport` (2.5);
+`Snd.hold`; the `visibilitychange` / `pagehide` listeners → `Snd.hold`; `PG_AIT.onShow` subscribed in the AIT section's init |
 | `src/game.js`, cut markers | regions 1 to 6 (2.2) and the two reworded comments |
 | `src/audio.js` | `hold(on)` in `PG.Audio`, and `pagehide` → hold |
 | `src/net.js` | `const PEER_PREFIX = W.PG_AIT ? 'ppodeuk-t-' : 'ppodeuk-';` plus a header line saying why. The code check (`CODE_RE`), the reroll on `unavailable-id` and the rest do not change. |
 | `src/page.html` | `--sa-*` on `:root`, the 20 `env()` → `var()`, the `/* v5 앱인토스 */` block (9.3) |
-| `build.js` | `--toss` / `PG_TOSS`, `tossOf`, `RESET_SA`, the cuts, the checks, the `TMP/toss/`, `TMP/toss-fx/`, `TMP/ait.js` and `test-toss.html` outputs, the "no Toss in the artifact / deploy" checks; header comment |
+| `build.js` | `--toss` / `PG_TOSS` (and the guard: with it, no write to `dist/`, `deploy/`, `TMP/deploy/`, the itch zip or `.firebaserc`), `tossOf`, `RESET_SA`, the cuts, the checks, the `TMP/toss/`, `TMP/toss-fx/`, `TMP/ait.js` and `test-toss.html` outputs, the generic test-page loop skipping `toss.js` / `toss-fake.js`, the structural "no Toss in the artifact / deploy" checks (2.1); header comment |
 | `toss/` | **new** (2.3) |
 | `tools/check-toss.js` | **new** (13) |
 | `tools/run-all.js` | jobs `check-toss` (node, `--static`), `toss` (virtual time), `toss-net` (rt), `toss-fit-*` (cdp) (15.5) |
-| `tools/check-pages.js` | the artifact and deploy have no `pg-ait` / `PG_AIT=` / `ait.js` |
+| `tools/check-pages.js` | the artifact and deploy have no `pg-ait` class on `<html>`, no `PG_AIT` assignment, no `ait.js` script tag, no `@apps-in-toss` (the same structural patterns as 2.1: page.html's `.pg-ait` CSS and game.js's `window.PG_AIT` reads are in every build) |
 | `src/tests/toss.js`, `src/tests/toss-fake.js`, `src/tests/toss-net.js` | **new** (15) |
 | `toss/.gitignore` | `node_modules/`, `dist/`, `*.ait`, `index.html`, `public/pg/` (2.3); the root `.gitignore` is unchanged |
 | `README.md` | one paragraph: the Toss build and where this spec is |
@@ -675,7 +812,9 @@ The libraries (`@apps-in-toss/web-framework` and its dependencies, `peerjs` and 
 ### 15.1 `check-toss --static` (node, every run)
 Section 13's static part, plus: `tossOf` without `turn.config.json` has no `PG_PEER_OPTIONS`, and with a test config
 it has exactly one. A bad marker layout (an opener without a closer, nesting) stops `build.js` with its message: tried
-on a copy of the repo built with `PG_BUILD_TEMP`, the way `check-cloud` builds its copy.
+on a copy of the repo built with `PG_BUILD_TEMP`, the way `check-cloud` builds its copy. On the same copy, with a
+made-up `firebase.config.json`: a plain build, then `--toss`; `dist/`, `deploy/` and the zip are byte-equal before and
+after the `--toss` run (the deploy keeps its `PG_CLOUD`), and `toss/index.html` has no `firebase`.
 
 ### 15.2 `src/tests/toss.js` (virtual time, offline, one page)
 `test-toss.html` = the Toss page shape (`pg-sa pg-ait`, the Toss head, no CDNs) with `src/tests/toss-fake.js` and
@@ -691,29 +830,40 @@ Prints `TOSS PASS|FAIL <name>` and `TOSS DONE pass=N fail=M`.
   (its text is empty), `#pg-install`, `#pg-fs`, `#pg-pal-btn`; `CLOUD.on` false. 0 `fetch`, `XMLHttpRequest`,
   `WebSocket` (spies). No visible element contains `구글` or `Google` in any scene of this test.
 - **T2 storage**: empty both sides → the gift store, native gets it about 2 s after the first write (virtual time),
-  with `pgait:seq === lseq`; local wiped + native full → the restored store is what `troLoad` reads (`TRO.s.t`, coins,
-  items, hiscore, nick, mute); `lseq > nseq` → pushed at boot; native slow ("never") → the engine boots at 3 s on
-  local data; a failing `setItem` → exactly one retry 10 s later, then nothing until the next write; `visibilitychange`
+  with `pgait:seq === lseq` and one `pgait:gen` on both sides; local wiped + native full → the restored store is what
+  `troLoad` reads (`TRO.s.t`, coins, items, hiscore, nick, mute); same `gen`, `lseq > nseq` → pushed at boot (removals
+  included); **local of another `gen` with a higher seq than native → native still wins**; native slow ("never") →
+  the engine boots at 3 s on local data and **no native write happens** while unsynced; then a late read finding
+  native data of another lineage → still no write, and local `pgait:gen` cleared (the next boot restores native); a
+  late read finding native empty → the dirty keys go out; a `setItem` that never answers → the flush gives up at 10 s
+  and the next write flushes again; a failing `setItem` → exactly one retry 10 s later, then nothing until the next
+  write; 50 writes in 10 s → at most 3 flushes; `setItems` used when the fake says supported; `visibilitychange`
   hidden flushes at once; non-`ppogeul-` keys never reach native; a flush interrupted before its seq write → the next
-  boot pushes local.
+  boot pushes local; every fake SDK function throwing synchronously (the desktop case) → the game boots, plays and
+  saves locally, zero native writes.
 - **T3 the gate**: `wait` (the key "never" answers) → the card's `wait` lines, 방 만들기 / 참여 off,
-  hosting and joining through `PG.debug.mp` refused; `ok` → the panel as usual; `isSupported` false → `old`, **no**
-  `getUserKeyForGame` call at all; `'ERROR'` → `err` + 다시 시도: one SDK call per tap, at most every 5 s;
-  `'INVALID_CATEGORY'` → `cat`; 혼자 하기 starts in every state; the key never shows up in the DOM, in
-  `PG.debug.ait.state()`, in the `hi` message (`d` is 6 base-36 characters and differs from the key's FNV with
-  another code) or in any `Analytics` argument.
+  hosting and joining through `PG.debug.mp` refused, and after 8 s `err`; a HASH arriving at 12 s → `ok`;
+  `ok` → the panel as usual, and `ppogeul-ait-who` written once (16 hex, not the key); `undefined` → `old`;
+  `'ERROR'` or a synchronous throw → `err` + 다시 시도: one SDK call per tap, at most every 5 s; 혼자 하기 starts in
+  every state; the key never shows up in the DOM, in storage, in `PG.debug.ait.state()`, in the `hi` message (`d` is
+  6 base-36 characters and differs from the key's FNV with another code) or in any `Analytics` argument; with
+  `AIT.on` and no `window.Peer`, `NET.tr` is `null` (no `'bc'` room) unless `?net=bc`.
 - **T4 trophies off** (through `PG.debug.tro` / `PG.debug.mp`, like `trophies.js`): `stakeNow()` 0 with `opts.bet` 20;
   `troHostGo` makes no `TRO.match`; `troResultIn` with a valid-looking `'tro'` changes nothing (the store JSON is
-  byte-equal); `troCountSub()` gives both Toss lines; the room's rules and summary lines (5, #8) match verbatim; the
-  stake row is absent in the host's options; the podium tag is `친선 경기`; `troDevHash` with two equal keys →
-  `troPractice() === 2` and `coinPrac()`; different keys → 0; `partyRules(2)` takes `AIT_TX.coin2`; the 목욕 보너스
-  still pays in solo.
+  byte-equal); `PG.debug.tro.hold(…)` returns false and `.result(…)` null, the store byte-equal (0a / 0b);
+  `troCountSub()` gives both Toss lines; the room's rules and summary lines (5, #8) match verbatim, and no text node a
+  Toss player can see in the room, the countdown, the podium, the party card or 내 기록 contains `걸` + a trophy word,
+  `판돈` or `가져요`; the stake row is absent in the host's options; the podium tag is `친선 경기`; `troDevHash` with
+  two equal keys → `troPractice() === 2` and `coinPrac()`; different keys → 0; `partyRules(2)` takes `AIT_TX.coin2`;
+  the 목욕 보너스 still pays in solo.
 - **T5 leaderboard**: a solo run from 탕 1 to game over → one `setLeaderboardScore({score: '<n>'})`; `nf` → `p` kept,
   no second call this page load, 토스 랭킹 hidden; next page load, `SUCCESS` → `ok = n`, the button shows and opens
   (`hold(true)` before `openLeaderboard`); a lower run → no call; co-op, the demo, `PG.debug.gotoRound` and online →
   no call; `lb.ok()` false → no call.
 - **T6 back, play, sound, screen logs**: at the bare title `back(null)`; each row of 11.2 calls the named function
-  (spied); `play(true)` once at 시작! and `play(false)` once at the title; `onShow(false)` pauses solo play and
+  (spied); a back reaching `aitBack` at the root → the `한 번 더 누르면 게임을 나가요` line and no `close`, a second
+  one inside 2 s → one `Screen.close()`, a second one after 2 s → the line again; `play(true)` once at 시작! and
+  `play(false)` once at the title; `pagehide` during a game → portrait, awake off, swipe back on; `onShow(false)` pauses solo play and
   `PG.Audio._state().ctxState` is `'suspended'` at the next frame; `hold` keeps the M-key mute after `hold(false)`;
   screen names in the order of a scripted session (title → solo → over → title → friends → room …), each once.
 
@@ -744,12 +894,17 @@ existing job must still pass: the artifact, deploy, preview and cloud fixtures m
    (`turns:…:443`). Rooms with 2, 3 and 4 phones in 같이 하기, 배틀 and 파티; Wi-Fi ↔ cellular; two different home
    networks. If no direct connection works, the relay must. 웹 디버그 툴즈 → Network shows only peerjs / TURN /
    SDK traffic.
-2. Landscape locks at entry, the game is fullscreen, and Toss is upright again after X. An old Toss app (if one is
-   at hand) shows the rotate screen.
+2. Landscape locks at entry, the game is fullscreen, and Toss is upright again after X (and the screen dims again
+   normally: awake mode restored). A Toss app below 5.232.0 cannot open the game at all (Toss's own update screen);
+   the rotate screen is only the fallback for a failed `setOrientation`.
 3. Real Safe Area (iPhone notch and Dynamic Island on either side, Android cutouts) and the **real capsule size**.
-   Correct `NAV` in `src/ait.js` afterwards; no game button under 더보기 / X.
+   Correct `NAV` in `src/ait.js` afterwards; no game button under 더보기 / X. The insets are CSS px (compare
+   `SafeAreaInsets.get()` in 웹 디버그 툴즈 → Log with the screenshot). The 더보기 / X icons are **visible** on the dark
+   game (`theme: 'dark'`); if they are dark-on-dark, flip the theme.
 4. X → the exit modal appears; the game pauses and is silent under it; confirming closes the game.
-5. Android back on every row of 11.2; at the title it exits (or 11.2's fallback is needed).
+5. Android back on every row of 11.2; at the title: does Toss's default (history back, empty history) close the
+   mini-app, and with its exit modal? If it does nothing, or closes without any confirmation, turn on 11.2's
+   two-press fallback.
 6. iOS: the edge swipe does not leave mid-game; it does at the title. The screen does not dim during a game.
 7. Sound: the toggle; silence **at once** on home / app switcher / lock / an incoming call, and sound back on return;
    the silent switch.
@@ -764,33 +919,43 @@ existing job must still pass: the artifact, deploy, preview and cloud fixtures m
     for copying by hand, as today).
 13. 웹 디버그 툴즈 → Log: no errors from boot to a finished online match.
 14. Whether `Analytics` screens appear in the console for a QR build.
+15. Storage across builds: play on QR build A, upload build B, open its new QR on the same phone → the progress is
+    there (same origin, same native store). If the owner later has a live build too: whether the QR progress shows
+    up live answers the "shared native Storage" question of 8.
+16. Every SDK call answers: no `wait` card longer than a second or two, no flush still pending (`PG.debug.ait` in the
+    Log tab). A call that hangs is exactly what 2.4's caps are for; note which one.
 
 ---
 
 ## 16. What the OWNER does
 
 One time:
-1. Console (apps-in-toss.toss.im) → the workspace → the mini-app **ppodeuk-bath**: check that the category is **게임**
-   (not 웹보드). The game key and the leaderboard only work in the game category.
-2. Workspace → 멤버: invite the friends who will test. Each needs a Toss account, 19 or older, logged into the Toss
-   app on their phone. Only workspace members can open the QR build.
-3. Put `turn.config.json` into the `bogeul` folder: Metered's "ICE Servers Array", pasted as it is (the same text as
+1. Console (apps-in-toss.toss.im) → the workspace → the mini-app **ppodeuk-bath**: check that the **앱 유형** is
+   **게임**. It is its own field (chosen when the app was registered), apart from the genre **카테고리** (pick the
+   game's genre there, and leave 웹보드 unchecked). The 앱 유형 decides the game nav bar (only 더보기 / X), the game
+   key and the leaderboard. The game itself cannot tell (4.2), so check it here.
+2. Workspace → 멤버 → **+초대하기**: invite the friends who will test, by e-mail. Each must accept, and needs a Toss
+   account, 19 or older, logged into the Toss app on their phone. Only workspace members can open the QR build.
+3. App info → **리더보드 (게임 앱)**: set the policy: an integer score, **higher is better**. It only works after the
+   app info is approved; until then the game keeps the best score for later (7).
+4. Put `turn.config.json` into the `bogeul` folder: Metered's "ICE Servers Array", pasted as it is (the same text as
    the GitHub secret `TURN_CONFIG`). Never commit it. Without it the build warns, and phones on different networks
    may not connect.
-4. In PowerShell: `cd "C:\Users\뽀숑\OneDrive\바탕 화면\미니게임\bogeul\toss"` then `npm ci` (installs the pinned
-   packages from the lock file; Node 24 is fine).
+5. In PowerShell: `cd "C:\Users\뽀숑\OneDrive\바탕 화면\미니게임\bogeul\toss"` then `npm ci` (installs the pinned
+   packages from the lock file; Node 24 is fine). `toss\node_modules` lands inside OneDrive: if `npm ci` stops with
+   `EPERM` / `EBUSY`, pause OneDrive sync (tray icon → 동기화 일시 중지) and run it again.
 
 Every build to test:
-5. In the same folder: `npm run build`. It must end with `CHECK-TOSS OK: ppodeuk-bath.ait …`. If a check fails, the
+6. In the same folder: `npm run build`. It must end with `CHECK-TOSS OK: ppodeuk-bath.ait …`. If a check fails, the
    build stops and nothing should be uploaded.
-6. Console → ppodeuk-bath → **앱 번들** → upload `toss\ppodeuk-bath.ait`. (Or: once `npx ait token add` with the API
+7. Console → ppodeuk-bath → **앱 번들** → upload `toss\ppodeuk-bath.ait`. (Or: once `npx ait token add` with the API
    key from workspace → 키, then `npm run deploy -- -m "메모"`.)
-7. Press **토스앱 테스트**. A QR code appears. Scan it with the phone's camera; it opens the build in Toss
+8. Press **토스앱 테스트**. A QR code appears. Scan it with the phone's camera; it opens the build in Toss
    (`intoss-private://…`). Every upload has its own QR.
-8. Go through 15.6 with the friends (each scans the same QR, then 친구와 하기 → 방 만들기 / 코드로 참여). For
+9. Go through 15.6 with the friends (each scans the same QR, then 친구와 하기 → 방 만들기 / 코드로 참여). For
    problems: in the game, 더보기 → **웹 디버그 툴즈** (Log, Network, Element). Send the Log tab's lines and a
    screenshot back.
-9. Not now: 검토 요청. It needs the GRAC rating, the listing (names, icon 600x600, thumbnail 1932x828, screenshots)
+10. Not now: 검토 요청. It needs the GRAC rating, the listing (names, icon 600x600, thumbnail 1932x828, screenshots)
    and at least one finished QR test, and it is researched separately.
 
 ---
@@ -800,15 +965,17 @@ Every build to test:
   친구 순위, 친구 초대 and trophy stakes on server-verified accounts. Needs 사업자 and probably Firebase Blaze.
 - `getTossShareLink` + `share` room invites (`intoss://ppodeuk-bath?join=CODE`: only after launch).
 - IAP, ads, promotions (all need 사업자). Haptics. `Game.getUserProfile` nicknames.
-- Per-account local progress on a shared phone (8's honest limit).
+- Per-account local progress on a shared phone (8's honest limit): 4.5's `ppogeul-ait-who` tag is what v2 keys it on.
 - The GRAC rating, the console listing, 검토 요청, 출시.
 
 ## 18. Risks and open questions
 1. **WebRTC inside the WebView** is the largest unknown. If DataChannels or TURN fail on one platform, v1 still ships
    solo, and the friends panel would need a Toss line saying online is not available there (a follow-up, after
    15.6.1).
-2. The capsule size and the default back behaviour are guesses until the QR test (9.3, 11.2).
-3. The eval scan of the SDK and PeerJS has not run yet (13). A hit in the SDK itself needs Toss's help.
+2. The capsule size, the nav bar's icon theme and the default back behaviour are guesses until the QR test (9.3,
+   11.2).
+3. The eval pre-scan of the libraries' published files found nothing (13), but the bundled output is what Toss scans;
+   `check-toss` runs on it every build. A hit in the SDK itself would need Toss's help (채널톡).
 4. Dead strings that name Google (`LG_TX`, `CL_BTN`, `NG_TX`, `GOOGLE_G`) stay in the Toss copy of game.js. No code
    path can show them, and no sign-in API is left, but a reviewer reading the bundle sees the words. If review asks,
    cut those constants' values too (each becomes `''`), with the same markers.
@@ -817,3 +984,71 @@ Every build to test:
    it under 사행성. That is for the rating research; nothing in v1 changes it.
 7. The client-side gate and the same-account check can be bypassed by a modified page; without a server, nothing
    stronger exists. The stakes are gone, so the gain from cheating is only coins.
+8. `getUserKeyForGame` is a deprecated alias in 3.9.0 (`= getAnonymousKey`). It still works and the docs still name it
+   for games; a later SDK may drop it. Moving to `User.getAnonymousKey()` (which throws instead of returning
+   `'ERROR'` / `undefined`) is a one-line change in `src/ait.js`, with the same hash.
+9. If the console's 앱 유형 were not 게임, nothing in the page would say so: the key may still arrive (a non-game
+   HASH), online would open, and only the nav bar's look and a never-found leaderboard would show it (16, step 1).
+
+## 19. Review against the code and the docs (2026-10-27)
+
+Opened on `feat/toss` (base `c71e3ee`): `build.js` (all of it), `src/game.js` (the cloud / sign-in part, `clOutsideUrl`,
+`clOpenOutside`, `clProvider`, `pwaInit` / `pwaSetupDOM`, `netTransport`, `peerTag` / `domReady`, `peerOpts`,
+`netGated`, every `troMut` caller, `troEscrow`, `troApply`, `troHostGo`, `troHostResult`, `troResultIn`,
+`troGuestGo`, `troPodium` / `troPodNow`, `fillPodium`, the room's ready / seat lines, every user-visible string with
+걸- / 판돈 / 가져요, every `sset` call), `src/net.js` (`PEER_PREFIX`, `peerLink`, `transports`, `fromQuery`) and
+`src/page.html` (external URLs, Google words, `env()` uses). The SDK: `@apps-in-toss/web-framework@3.9.0`
+`dist/index.js`, `dist/index.d.ts`, `dist/config.d.ts`, `package.json`. The docs: the pages listed under Sources.
+
+Confirmed as written: the six cut regions are the only `intent://`, `kakaotalk://`, `window.open`, `location.href =`,
+`GoogleAuthProvider`, `signInWithPopup` / `signInWithRedirect` and `beforeinstallprompt` listener in the engine, and
+all of them sit behind `CLOUD.on`; `lgOn()` is `CLOUD.on || PREVIEW` and `PREVIEW` comes only from `window.PG_PREVIEW`,
+so neither the login screen nor any Google button can appear in Toss; `pwaInit` / `pwaSetupDOM` return at once
+without a manifest link; page.html's only external URLs are the Google Fonts links that `tossOf` removes; game.js
+has no service-worker code; `troHostResult` returns at its first line without `TRO.match`, and `troPodium` is only
+called from `troHostResult` and `troResultIn`, so the podium shows no trophy change in Toss; `stakeNow()` 0 hides
+every 안 걸고 / 트로피 부족 line; engine writes happen on events, never per frame; `Screen.setAwakeMode({enabled})` /
+`Screen.setIosSwipeBack({isEnabled})` are the real option names; `config.d.ts` accepts exactly the keys of 2.3; the
+fontsource packages ship `400.css`.
+
+Corrected in this pass (the implementer's watch list):
+
+1. **`--toss` would have broken the web deploy.** It set `fbConf` to null and still wrote `deploy/`, so a Toss build
+   left a `deploy/index.html` without `PG_CLOUD` (no cloud sign-in) for the next `firebase deploy`. Now a `--toss`
+   run writes only `toss/` and `TMP`, with a byte-equality test (2.1, 15.1).
+2. **The "no Toss in the artifact / deploy" check would always fail**: page.html's own `.pg-ait` CSS and game.js's
+   `window.PG_AIT` reads are in every build. The checks are structural now (2.1, 14).
+3. **Test pages would collide**: the generic `src/tests/*.js` loop would overwrite the special `test-toss.html` and
+   make a `test-toss-fake.html`. It skips both files now (2.1).
+4. **`getUserKeyForGame` in 3.9.0 is `getAnonymousKey`** (one bridge call, every non-HASH answer → `'ERROR'`): the
+   `cat` state could never happen and is gone. A non-game 앱 유형 may even answer a HASH, so the owner checks the
+   앱 유형 in the console (1.2, 4.2, 16, risk 9).
+5. **SDK calls throw synchronously outside Toss and never time out inside it** (`linkBridge` `timeout: 0`). Every
+   call goes through one `call(fn, ms)` helper; the key has an 8 s cap (no endless `wait` card), a flush a 10 s cap
+   (a hung call no longer blocks every later flush) (2.4, 8).
+6. **Storage could overwrite the real progress**: a wiped WebView storage restarts the local counter at 0, so "higher
+   seq wins" let a fresh local copy, or a session whose boot read timed out, replace the native store. A lineage id
+   now guards every comparison, and an unsynced session never writes native (8, T2).
+7. **Flush rate**: debounced only, a steady trickle of writes could postpone it forever, and a burst could call the
+   bridge again and again. Now at most every 5 s, at the latest 20 s after the first mark, `setItems` when available,
+   unchanged values skipped (8).
+8. **The checklist asks that the user identifier be saved.** The raw key still never is; a one-way tag
+   `ppogeul-ait-who` is (4.5).
+9. **Trophy wording**: the rules line `트로피는 걸지도 바뀌지도 않아요` and the party's `트로피는 걸지 않아요` used 걸다,
+   which the spec's own 사행성 rule forbids. Both are now `친선 경기예요: 트로피는 늘지도 줄지도 않아요` (5).
+10. **Trophy switches were callers only**: `PG.debug.tro.hold` / `.result` and any future caller reached
+    `troEscrow` / `troApply` directly. Two core guards now come first (5, 0a / 0b).
+11. **Android back fallback was a bare `closeView()`**, which skips the exit confirmation the checklist requires. It is
+    a two-press confirm now; the docs say the default back without a listener is history back (11.2).
+12. **App-wide state on exit**: only the orientation was restored on `pagehide`; awake mode and swipe back are too
+    (2.4 step 8, 11.3).
+13. **Nav bar icons**: with a transparent bar over the dark `--bg` and the default theme, the X could be dark on dark.
+    `theme: 'dark'` and `withTitle: false` follow the docs' example for a dark background (2.3, 9.3, 15.6.3).
+14. **Online fallback in Toss**: without `window.Peer`, `netTransport` picked `'bc'`, a room nobody on another phone
+    could join. In Toss it is `'peer'` or nothing (2.5).
+15. **Leaderboard**: `lb.ok()` uses `Game.setLeaderboardScore.isSupported()`, an `undefined` answer is `'err'`, the
+    console's leaderboard policy is an owner step, and 토스 랭킹's visibility for reviewers is noted for later (7, 16).
+16. **Versions are pinned now**: fontsource 5.3.0 (both), devtools 3.9.0 (2.3). The libraries' eval pre-scan is done
+    (0 hits), and the hosts the bundle check will meet are listed so the first build does not fail by surprise (13).
+17. Owner steps: 앱 유형 vs 카테고리, invites by e-mail through +초대하기, the leaderboard policy, and OneDrive locking
+    `node_modules` during `npm ci` (16).
