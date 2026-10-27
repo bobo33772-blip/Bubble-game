@@ -83,7 +83,7 @@ Confirmed (docs or the 3.9.0 type file):
   `LEADERBOARD_NOT_FOUND` | `PROFILE_NOT_FOUND` | `UNPARSABLE_SCORE`, `openLeaderboard`, `getUserProfile`,
   `subscribeInfoOverlayHidden`), `Analytics` (`screen` / `impression` / `click` / `log`, with **no** `init`),
   `onVisibilityChangedByTransparentServiceWeb` (`onEvent(isVisible)`), `closeView`, `getOperationalEnvironment()`
-  (`'toss'` \| `'sandbox'`), `isMinVersionSupported({android, ios})`, `env.getDeploymentId()`.
+  (`'toss'` or `'sandbox'`), `isMinVersionSupported({android, ios})`, `env.getDeploymentId()`.
 - Live origin `https://ppodeuk-bath.apps.tossmini.com`, QR test origin `https://ppodeuk-bath.private-apps.tossmini.com`.
   Web storage is per origin, so test data never carries over to live. HTTPS-only and `wss://`-only. No iframes. No
   links that leave the Toss domain (`location.replace`, nested WebViews). No `eval` (the scanner also catches it inside
