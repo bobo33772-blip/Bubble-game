@@ -3,8 +3,9 @@
 //   node tools/run-chrome.js http://localhost:8765/test-party-net.html - 1200 900 rt420000 "PARTYNET DONE"
 // Every frame: tro.ns('f' + i), tro.allowBc(true) (bc is practice otherwise), party.fast(true) (every game 12 s, a card
 // 1.5 s, a result 40 f). host = slot 0 (꽥꽥이), A = slot 1 (까삐), B = slot 2 (펭펭), C = slot 3 (냥냥).
-//   1  the room: hi carries pa: 1; a party room's R says m 'p' and o[7] = the 판 수, its o[0..6] as a battle room's; a new
-//      page joining never shows 새로고침 필요 (sampled from the join on); a crafted older guest (a hi without pa) is never
+//   1  the room: hi carries pa: 2 (PARTY_V); a party room's R says m 'p' and o[7] = the 판 수, its o[0..6] as a battle
+//      room's; a new page joining never shows 새로고침 필요 (sampled from the join on); a crafted older guest (PR A's hi,
+//      pa 1) is never
 //      ready - its seat says 새로고침 필요 on the host and on the other guests (R.u), its R.p ready flag is 0, 시작 is off,
 //      the room line says why; switched to 배틀 it is ready again with no new 준비; mp.guestRoom reads o[7] 5 / missing /
 //      junk as 5 / 3 / 3
@@ -15,10 +16,14 @@
 //      decides is out on every screen within 0.5 s, its guest's control goes remote, its own line (탈락! 4등) shows on its
 //      screen only, every guest plays 'splash' for it
 //   4  왕관: a guest's claim (tp) on the holder drops the crown on every screen; the held seconds agree at the result
+//   5  거품 축구 (forced, 2v2): the card on every page with the same teams (by the standing) and each page's own side line;
+//      each page's kickoff call over its own animal only; a guest's body and a guest's bubble move the ball on the host
+//      (every guest hears 'bounce' off kn - NO_ECHO); a goal counted once and shown on every page (골! / 오른쪽 팀 0 : 1,
+//      the clock stopped); the ball drawn on each guest in step with the host's path; the team places agree
 //   6  the final podium (order, places, points) agrees everywhere; each page's coins are coinParty of its own counters
 //      (through coinGive: + the day bonus); trophies unchanged everywhere
-//   8  파티 한 번 더: a new game id, a new plan, nothing paid twice;  7  a guest leaving mid-판 2: the party finishes with
-//      3, the leaver gets nothing; no allowBc (q 1): a finished party pays nobody; the host's 방으로 mid-party: everyone
+//   8  파티 한 번 더: a new game id, a new plan, nothing paid twice;  7  a guest leaving during the 2nd card, a 거품 축구
+//      (4 -> 3): that 판 is drawn again on every page (no 축구 for 3), the party finishes with 3, the leaver gets nothing; no allowBc (q 1): a finished party pays nobody; the host's 방으로 mid-party: everyone
 //      in the room, nobody paid; the host leaving mid-party: the guests in the lobby with 방장이 나갔어요, nobody paid
 // Prints "PARTYNET PASS|FAIL <name>", "PARTYNET INFO ..." and "PARTYNET DONE pass=N fail=M".
 (function () {
@@ -74,7 +79,8 @@
   async function blows(fr, n) { const s = N(fr).mySlot; for (let k = 0; k < n; k++) { fr.D.press('shoot', true, s); await sleep(60); fr.D.press('shoot', false, s); await sleep(260); } }
   const phases = new Map();
   let watch = null;
-  function watchPhases(F) { for (const f of F) phases.set(f.i, []); watch = setInterval(() => { for (const f of F) { const a = phases.get(f.i), m = f.G.mode; if (a[a.length - 1] !== m) a.push(m); } }, 8); }
+  const notePhases = (F) => { for (const f of F) { const a = phases.get(f.i), m = f.G.mode; if (a[a.length - 1] !== m) a.push(m); } };
+  function watchPhases(F) { for (const f of F) phases.set(f.i, []); watch = setInterval(() => notePhases(F), 8); }
   const coinsOf = (f) => f.SH.state().ce;
   const TOP = (row) => 16 + row * 8;
 
@@ -86,7 +92,8 @@
     ok('room: a party room is hosted (mode party, 3판)', !!code && N(H).mode === 'party' && N(H).party.rounds === 3, N(H).party);
     for (const g of [A, B]) await join(g);
     await until(() => N(H).roster.length === 3 && N(H).party.seats.every((s) => s.slot === 0 || s.hi), 4000);
-    ok('hi: every new page says pa: 1 (the host records hi and pa)', N(H).party.seats.filter((s) => s.slot).every((s) => s.hi && s.pa === 1), N(H).party.seats);
+    const PV = H.P.consts().PARTY_V;
+    ok('hi: every new page says pa: ' + PV + ' (2: 물, 왕관 and 거품 축구; the host records hi and pa)', PV === 2 && N(H).party.seats.filter((s) => s.slot).every((s) => s.hi && s.pa === PV), N(H).party.seats);
     const R0 = N(H).tro.R;
     ok('R: m \'p\', o[7] = 3 (the 판 수), the seats\' ready flags', R0 && R0.m === 'p' && R0.o.length === 8 && R0.o[7] === 3, R0);
     ok('guests read the party room (mode party, 3판)', [A, B].every((g) => N(g).mode === 'party' && N(g).opts.rounds === 3 && N(g).party.u.length === 0), [A, B].map((g) => N(g).party));
@@ -97,10 +104,11 @@
     await join(C);
     await until(() => N(H).roster.length === 4 && N(H).party.seats.find((s) => s.slot === 3 && s.hi), 4000);
     await sleep(300); clearInterval(sampler);
-    ok('a new page joining never shows 새로고침 필요 (the r.hi gate: not before its hi, not after)', !flicker && N(H).party.seats.find((s) => s.slot === 3).pa === 1, N(H).party.seats);
-    // a crafted older guest: C says hi again without pa (an older page's hi)
+    ok('a new page joining never shows 새로고침 필요 (the r.hi gate: not before its hi, not after)', !flicker && N(H).party.seats.find((s) => s.slot === 3).pa === PV, N(H).party.seats);
+    // a crafted older guest: C says hi again with pa 1 (PR A's page: 물 and 왕관 only - it would read a 축구 판 as 물; a
+    // page older still sends no pa: the same gate)
     C.mp.ready(true); await until(() => N(H).party.seats.find((s) => s.slot === 3).ready, 3000);
-    C.mp.session().send(hostIdOf(C), { t: 'hi', n: NICKS[3], c: CHARS[3], cu: 100, d: N(H).roster[3].d || 'abcdef', z: 1 });
+    C.mp.session().send(hostIdOf(C), { t: 'hi', n: NICKS[3], c: CHARS[3], cu: 100, d: N(H).roster[3].d || 'abcdef', z: 1, pa: 1 });
     await until(() => N(H).party.seats.find((s) => s.slot === 3).old, 3000);
     A.mp.ready(true); B.mp.ready(true);
     await until(() => N(B).party.u.includes(3) && N(H).tro.R.p.find((e) => e[0] === 1)[3] === 1, 3000);
@@ -120,7 +128,7 @@
     const g5 = rd(5), gm = rd(undefined), gj = rd('x');
     ok('mp.guestRoom: R.m \'p\' reads as party; o[7] 5 / missing / junk -> 5 / 3 / 3', g5.mode === 'party' && g5.rounds === 5 && gm.rounds === 3 && gj.rounds === 3, [g5, gm, gj]);
     // C refreshed (a hi with pa again); back to party
-    C.mp.session().send(hostIdOf(C), { t: 'hi', n: NICKS[3], c: CHARS[3], cu: 100, d: N(H).roster[3].d || 'abcdef', z: 1, pa: 1 });
+    C.mp.session().send(hostIdOf(C), { t: 'hi', n: NICKS[3], c: CHARS[3], cu: 100, d: N(H).roster[3].d || 'abcdef', z: 1, pa: PV });
     H.mp.setOpts({ mode: 'party' });
     await until(() => N(H).canStart && N(H).mode === 'party' && F.every((f) => N(f).mode === 'party'), 4000);
     ok('room: every seat ready in the party room again', N(H).canStart, N(H).party.seats);
@@ -200,7 +208,7 @@
     await sleep(150);
     await Promise.all(F.map((f) => blows(f, 3)));
     const pod = await until(() => F.every((f) => PS(f).ph === 'podium'), 20000);
-    clearInterval(watch);
+    notePhases(F); clearInterval(watch); // (one last look: the podium may have come between two samples)
     ok('phases: card, countdown, playing and result reached every page, then the podium', pod && F.every((f) => ['card', 'countdown', 'playing', 'result', 'podium'].every((m) => phases.get(f.i).includes(m))), F.map((f) => phases.get(f.i).join('>')));
     ok('snapshots: under 3400 bytes all party long', N(H).snap.max > 0 && N(H).snap.max <= 3400, N(H).snap);
     await sleep(300);
@@ -218,8 +226,97 @@
     ok('coins: every page paid itself coinParty of its own counters (+ the day bonus), through coinGive', pays.every((p) => p.want > 0 && p.pod && p.pod.give - p.pod.bonus === p.want && p.got === p.pod.give && p.coins.shots >= 5), pays);
     ok('trophies: unchanged everywhere (a party holds and pays none)', F.every((f) => f.T.state().t === 100 && f.T.state().g === 0 && f.T.state().esc.length === 0), F.map((f) => f.T.state().t));
 
-    // ---- 8. 파티 한 번 더 + 7. a guest leaving mid-판 2
-    H.P.force(null);
+    // ---- 5. 거품 축구, 2v2 (forced): the teams, the kickoff calls, a guest's body / bubble on the host's ball, a goal,
+    // the ball in step on the guests, the team places
+    H.mp.toRoom(); await until(() => F.every((f) => N(f).screen === 'room'), 6000);
+    H.P.force(['ball']);
+    await readyAll(F);
+    H.mp.start();
+    const bcard = await until(() => F.every((f) => PS(f).ph === 'card' && f.P.card().shown && f.P.card().team && PS(f).mini && PS(f).mini.team), 5000);
+    const tm = PS(H).mini.team;
+    ok('축구 card: on every page with the same teams - the first 판 of a party, before any points: slots 0 + 3 left, 1 + 2 right', bcard && F.every((f) => JSON.stringify(PS(f).mini.team) === JSON.stringify(tm))
+      && JSON.stringify(tm) === '{"0":0,"1":1,"2":1,"3":0}', [tm, F.map((f) => PS(f).mini && PS(f).mini.team)]);
+    ok('축구 card: each page shows the side its own player scores on (나는 왼쪽 팀 · 오른쪽 골대에 넣어요! / 나는 오른쪽 팀 · ...)', F.every((f) => f.P.card().mine === (tm[N(f).mySlot] ? '나는 오른쪽 팀 · 왼쪽 골대에 넣어요!' : '나는 왼쪽 팀 · 오른쪽 골대에 넣어요!')), F.map((f) => f.P.card().mine));
+    const isCall = (w) => w.txt === '오른쪽으로!' || w.txt === '왼쪽으로!';
+    await until(() => F.every((f) => PS(f).ph === 'playing'), 6000);
+    const called = await until(() => F.every((f) => f.G.words.some(isCall)), 2500);
+    ok('축구 kickoff: each page calls its own side over its own animal only (no host call on the guests)', called && F.every((f) => { const ws = f.G.words.filter(isCall), m = me(f); return ws.length === 1 && Math.abs(ws[0].x - Math.max(24, Math.min(232, m.x + 8))) < 4 && ws[0].txt === (tm[m.slot] ? '왼쪽으로!' : '오른쪽으로!'); }),
+      F.map((f) => [f.G.words.filter(isCall).map((w) => [w.txt, Math.round(w.x)]), Math.round(me(f).x + 8)]));
+    // 5 blows each against a wall, where no bubble touches a rival (the coins' activity gates), then everyone on a crossbar
+    // (out of the ball's way: over a ball on the floor)
+    const WALLS = [[16, TOP(20) - 16, 'left'], [60, 200, 'left'], [208, TOP(20) - 16, 'right'], [190, 200, 'right']];
+    await Promise.all(F.map((f, k) => place(f, WALLS[k][0], WALLS[k][1], WALLS[k][2])));
+    await Promise.all(F.map((f) => blows(f, 5)));
+    const BAR = [[16, 'left'], [32, 'left'], [208, 'right'], [224, 'right']];
+    await Promise.all([place(A, BAR[1][0], TOP(20) - 16, 'left'), place(C, BAR[3][0], TOP(20) - 16, 'right')]);
+    ok('축구: (setup) nobody in a prison', await until(() => F.every((f) => f.G.players.every((p) => !p.trap)), 2500), F.map((f) => f.G.players.filter((p) => p.trap).map((p) => p.slot)));
+    await until(() => PS(H).mini.ball.kick === 0 && PS(H).mini.goalT === 0, 4000);
+    // a guest's body: A walks into the ball (the host pushes it with A's reported body)
+    H.P.ball(128, 205, 0, 0);
+    const kn0 = PS(H).mini.kn, bo0 = F.map((f) => f.sfx.filter((n) => n === 'bounce').length);
+    await place(A, 84, 200);
+    await sleep(150);
+    A.D.press('right', true, N(A).mySlot);
+    const pushed = await until(() => H.G.mini.ball.vx > 0.8, 2500, 5);
+    A.D.press('right', false, N(A).mySlot);
+    H.P.ball(128, 205, 0, 0);   // (stopped: rolled on it would reach the right goal)
+    ok('축구: a guest\'s body (A walking into it) moves the ball on the host', pushed && PS(H).mini.kn > kn0, [PS(H).mini.ball, PS(H).mini.kn, kn0]);
+    await sleep(400);
+    ok('축구: ... every guest hears \'bounce\' off kn (the host\'s push sound is not echoed)', [A, B, C].every((g) => g.sfx.filter((n) => n === 'bounce').length > bo0[g.i]), F.map((f) => f.sfx.filter((n) => n === 'bounce').length - bo0[f.i]));
+    await place(A, BAR[1][0], TOP(20) - 16, 'left');
+    // a guest's bubble: B blows at the ball from its left
+    await place(B, 70, 200, 'right');
+    await sleep(200);
+    H.P.ball(128, 205, 0, 0);
+    const kn1 = PS(H).mini.kn;
+    B.D.press('shoot', true, N(B).mySlot); await sleep(60); B.D.press('shoot', false, N(B).mySlot);
+    const shotMoved = await until(() => H.G.mini.ball.vx > 1, 2000, 5);
+    H.P.ball(128, 205, 0, 0);
+    ok('축구: a guest\'s bubble (B blowing at it) pops on the ball and pushes it along its flight on the host', shotMoved && PS(H).mini.kn > kn1, [PS(H).mini.ball, PS(H).mini.kn, kn1]);
+    await place(B, BAR[2][0], TOP(20) - 16, 'right');
+    await sleep(200);
+    // the ball in step: each guest's drawn ball lies on the host's path (a view delay behind)
+    const hs = [], gs = { 1: [], 2: [], 3: [] };
+    info('clock before the ball-in-step check: ' + PS(H).left + ' frames left');
+    H.P.ball(50, 205, 3, 0);    // (rolling across the floor, under the keepers on the crossbars)
+    const smp = setInterval(() => {
+      const t = performance.now(), hm = H.G.mini;
+      if (hm && hm.ball && hm.ball.kick === 0 && hm.goalT === 0) hs.push([t, hm.ball.x, hm.ball.y]);
+      for (const g of [A, B, C]) { const m = g.G.mini; if (m && m.ball && m.ball.kick === 0 && !(m.goalT > 0)) gs[g.i].push([t, m.ball.x, m.ball.y]); }
+    }, 6);
+    await sleep(1600);
+    clearInterval(smp);
+    const fit = (q) => { let best = 1e9, lag = 0; for (const h of hs) { if (h[0] > q[0] || h[0] < q[0] - 900) continue; const d = Math.hypot(h[1] - q[1], h[2] - q[2]); if (d < best) { best = d; lag = q[0] - h[0]; } } return [best, lag]; };
+    const stat = [A, B, C].map((g) => {
+      const fs1 = gs[g.i].filter((q) => q[0] > hs[0][0] + 900).map(fit), ds = fs1.map((v) => v[0]).sort((a, b) => a - b), lags = fs1.map((v) => v[1]).sort((a, b) => a - b);
+      return { n: ds.length, med: ds[ds.length >> 1], p90: ds[Math.floor(ds.length * 0.9)], lag: Math.round(lags[lags.length >> 1]) };
+    });
+    info('ball in step (guest drawn ball vs the host\'s path, px; lag ms): ' + JSON.stringify(stat));
+    ok('축구: the ball on each guest follows the host\'s path (median <= 1 px, 90% <= 3 px, a view delay behind)', hs.length > 100 && stat.every((q) => q.n > 50 && q.med <= 1 && q.p90 <= 3 && q.lag >= 0 && q.lag < 700), stat);
+    H.P.ball(128, 205, 0, 0);
+    // a goal: shown on every page, counted once, the clock stopped
+    H.P.ball(40, 205, -2.5, 0);
+    const gl = await until(() => F.every((f) => PS(f).mini && PS(f).mini.goals && PS(f).mini.goals[1] === 1), 2500);
+    const bnr5 = (f) => (doc(f, 'pg-banner') && !doc(f, 'pg-banner').hidden ? doc(f, 'pg-banner-main').textContent + ' / ' + doc(f, 'pg-banner-sub').textContent : '');
+    const gb = await until(() => F.every((f) => bnr5(f) === '골! / 오른쪽 팀 0 : 1'), 1500);
+    ok('축구 goal: into the left goal -> 0 : 1 on every page, 골! / 오른쪽 팀 0 : 1 everywhere', gl && gb, F.map((f) => [PS(f).mini.goals, bnr5(f)]));
+    const tl0 = PS(H).left;
+    await sleep(800);
+    ok('축구 goal: the clock stands still while 골! shows (the host\'s, and each guest\'s view of it)', PS(H).left === tl0 && PS(H).mini.goalT > 0 && [A, B, C].every((g) => Math.abs(PS(g).left - tl0) <= 3), [tl0, F.map((f) => PS(f).left)]);
+    await until(() => PS(H).mini.goalT === 0 && PS(H).mini.ball.kick === 0, 4000);
+    await sleep(300);
+    ok('축구 goal: counted once on every page', F.every((f) => JSON.stringify(PS(f).mini.goals) === '[0,1]'), F.map((f) => PS(f).mini.goals));
+    const bres = await until(() => F.every((f) => PS(f).ph === 'result'), 15000);
+    await sleep(150);
+    const rp = F.map((f) => JSON.stringify([PS(f).pts, PS(f).last])), right = [0, 1, 2, 3].filter((q) => tm[q] === 1), left = [0, 1, 2, 3].filter((q) => tm[q] === 0);
+    const pr = PS(H);
+    ok('축구 result: the team places and points agree on every page - the right team shares 1st, the left team the next place (+4 + 4 / +1 + 1)', bres && rp.every((r) => r === rp[0]) && right.every((q) => pr.gain[q] === 4 && pr.last[q] === 1) && left.every((q) => pr.gain[q] === 1 && pr.last[q] === 3), [rp, pr.gain]);
+    ok('축구 result: 오른쪽 팀 승리! on every page', F.every((f) => /^오른쪽 팀 승리!/.test(bnr5(f))), F.map(bnr5));
+    await until(() => F.every((f) => PS(f).ph === 'podium'), 8000);
+    await sleep(300);
+
+    // ---- 8. 파티 한 번 더 + 7. a guest leaving during the 축구 card (4 -> 3)
+    H.P.force(['water', 'ball', 'crown']);
     const gid1 = N(H).gid, ce1 = F.map(coinsOf), pod1 = F.map((f) => PS(f).pod);
     H.mp.again();
     await until(() => F.every((f) => PS(f).ph === 'card' && N(f).gid === gid1 + 1), 4000);
@@ -227,14 +324,17 @@
     ok('파티 한 번 더: a new game id and a new party (3판, never the same game twice in a row) on every page', F.every((f) => N(f).gid === gid1 + 1 && PS(f).i === 0) && plan2.length === 3 && plan2[0] !== plan2[1] && plan2[1] !== plan2[2], [F.map((f) => N(f).gid), plan2]);
     await until(() => PS(H).ph === 'playing', 6000);
     await Promise.all(F.map((f) => blows(f, 2)));
-    await until(() => PS(H).ph === 'playing' && PS(H).i === 1, 25000);
+    const card2 = await until(() => F.every((f) => PS(f).ph === 'card' && PS(f).i === 1 && f.P.card().name === '거품 축구'), 25000);
+    ok('leaver: (setup) the 2nd card is 거품 축구 on every page', card2, F.map((f) => [PS(f).ph, PS(f).i, f.P.card().name]));
     const ceC = coinsOf(C);
     C.mp.leave();
     await until(() => N(H).roster.length === 3 && H.G.players.length === 3, 4000);
-    ok('leaver: a guest leaving mid-판 2 - the party goes on with 3', PS(H).on && PS(H).i === 1 && H.G.players.length === 3 && !PS(H).walk, PS(H));
+    const D3 = [H, A, B];
+    const redrawn = await until(() => D3.every((f) => PS(f).ph === 'card' && f.P.card().shown && f.P.card().name === '왕관 뺏기' && !f.P.card().team && f.P.card().round === '2판 / 3판'), 4000);
+    ok('leaver: a guest leaving during the 축구 card (4 -> 3) - that 판 is drawn again on every page (왕관 뺏기, no team line), the party goes on with 3',
+      redrawn && PS(H).on && PS(H).i === 1 && PS(H).plan[1] === 'crown' && !PS(H).plan.includes('ball') && H.G.players.length === 3 && !PS(H).walk, [PS(H).plan, D3.map((f) => f.P.card())]);
     // (the leaver's page keeps no party: its lobby's demo world runs its rounds, no water / crown drawn behind the panel)
     ok('leaver: its own page has no party left (G.party / G.mini cleared, the arena list back to the battle one)', !PS(C).on && PS(C).mini === null && PS(C).kind === 'b', [PS(C).on, PS(C).mini, PS(C).kind]);
-    const D3 = [H, A, B];
     const pod2 = await until(() => D3.every((f) => PS(f).ph === 'podium'), 45000);
     await sleep(300);
     ok('leaver: the party finishes (podium of 3 on the 3 pages left)', pod2 && D3.every((f) => PS(f).podium.order.length === 3), D3.map((f) => PS(f).ph));

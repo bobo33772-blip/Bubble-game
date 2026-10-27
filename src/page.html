@@ -451,6 +451,13 @@ body {
 .pg-party-rule { margin: 0 0 0.2em; font-size: 0.82em; line-height: 1.3; color: var(--cream-dim); text-wrap: balance; }
 .pg-party-keys { margin: 0 0 0.3em; font-size: 0.8em; line-height: 1.3; color: var(--cream-dim); }
 .pg-party-team { margin: 0 0 0.3em; font-size: 0.82em; line-height: 1.3; color: var(--pink); }
+/* (거품 축구: both teams on one line, each half cut with an ellipsis; then the side I score on) */
+.pg-party-teams { display: flex; justify-content: center; gap: 0.35em; min-width: 0; white-space: nowrap; }
+.pg-party-side { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 700; }
+.pg-party-side.is-l { color: #ffb24a; }
+.pg-party-side.is-r { color: #c9a8ff; }
+.pg-party-vs { flex: none; color: var(--cream-dim); }
+.pg-party-mine { display: block; font-weight: 700; color: var(--cream); }
 .pg-party-board { list-style: none; margin: 0.25em 0 0; padding: 0; display: grid; gap: 0.15em; text-align: left; font-size: 0.9em; }
 .pg-party-row { display: flex; align-items: center; gap: 0.35em; min-width: 0; padding: 0 0.35em; border-radius: 0.45em; line-height: 1.3; background: rgba(127, 220, 200, 0.08); box-shadow: inset 0.2em 0 0 var(--slot, var(--mint)); }
 .pg-party-row.is-me { background: rgba(255, 255, 255, 0.12); }

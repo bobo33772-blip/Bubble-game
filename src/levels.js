@@ -81,8 +81,9 @@
  * reach it) and keeps the four spawns within tolerance; it prints those tables with every arena.
  *
  * PG.PARTY_ARENAS (파티, design/party.md 5): the minigames' own CLOSED arenas { key, name, theme, closed: true, map,
- * players, gather, rise? }, in this order: 물 차는 대욕장 (key 'water', 물 차오르기). 왕관 뺏기 plays on the dry battle
- * arenas above (not 냉온탕 대결: the capy's hot-tub shield would keep the crown).
+ * players, gather, rise? | goals?, sides?, ball? }, in this order: 물 차는 대욕장 (key 'water', 물 차오르기), 거품 축구장
+ * (key 'ball', 거품 축구). 왕관 뺏기 plays on the dry battle arenas above (not 냉온탕 대결: the capy's hot-tub shield would
+ * keep the crown).
  *   closed      true: row 0 and row 25 are all '#' - no wrap gap, nothing falls through the floor or wraps (the engine's
  *               normLevel opens a drain only where closed is not set).
  *   map         same cell format; dry (the rising water is a full-width layer of the minigame, not tile water).
@@ -91,8 +92,15 @@
  *               steps: [[from s, to s, surface y] ...] } - linear inside a step, flat between. Each step drowns exactly
  *               one tier (a tier is out once its top is more than WATER_SLACK = 3 px under the surface) and leaves the
  *               next one dry; the two top shelves stay dry to the end.
+ *   goals       (축구) [left, right] goal mouths { c0, c1, r0, r1 (the open cells under the crossbar), line (the mouth's
+ *               inner edge, px: the goal line) }; the crossbar is the '#' row right above the mouth (the ball bounces off
+ *               every '#' cell from all sides; players land on it from above like on any block). A goal: the ball's
+ *               centre 6 px past the line, below the crossbar.
+ *   sides       (축구) [[left team x2], [right team x2]] the kickoff spots (mirrored; the left team scores on the right).
+ *   ball        (축구) {x, y} px: where the ball drops from at each kickoff (open air, mid-screen).
  * Every party arena is left-right mirror symmetric with no gap exception; tools/validate-levels.js checks the party
- * rules too (closed, mirror, spawns reachable, each rise step drowning exactly one tier).
+ * rules too (closed, mirror, spawns reachable, each rise step drowning exactly one tier; the goal mouths open under a
+ * solid bar, the sides standable and mirrored, the ball in open air).
  */
 window.PG = window.PG || {};
 (function (PG) {
@@ -1364,6 +1372,48 @@ window.PG = window.PG || {};
       players: [{ col: 4, row: 24 }, { col: 27, row: 24 }, { col: 10, row: 24 }, { col: 21, row: 24 }],
       gather: { col: 15, row: 2 },
       rise: { y0: 222, warn: 2, steps: [[5, 9, 206], [19, 23, 174], [33, 37, 142], [47, 51, 110], [61, 65, 78]] },
+    },
+    // ── P2 ── 거품 축구장 (거품 축구): an open field, a crossbar over each goal (row 20, cols 2-5 / 26-29) and the goal
+    //    mouths under it (rows 21-24, 3 columns deep: the 22 px ball gets more than half past the line). The crossbar
+    //    top is 5 rows over the floor - out of a normal jump's reach; a cat's 2단 점프 can keep goal standing on it.
+    {
+      key: 'ball',
+      name: '거품 축구장',
+      theme: 0,
+      closed: true,
+      map: [
+        '################################',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '######....................######',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '################################',
+      ],
+      players: [{ col: 11, row: 24 }, { col: 20, row: 24 }, { col: 7, row: 24 }, { col: 24, row: 24 }],
+      sides: [[{ col: 11, row: 24 }, { col: 7, row: 24 }], [{ col: 20, row: 24 }, { col: 24, row: 24 }]],
+      goals: [{ c0: 2, c1: 4, r0: 21, r1: 24, line: 40 }, { c0: 27, c1: 29, r0: 21, r1: 24, line: 216 }],
+      ball: { x: 128, y: 64 },
+      gather: { col: 15, row: 3 },
     },
   ];
 })(window.PG);
