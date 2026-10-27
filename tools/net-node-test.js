@@ -678,6 +678,15 @@ async function testRoom() {
   lb1.advertise({ code: lhs.code, mode: 'coop', n: 2, max: 4, open: true });
   await clock.run(300);
   ok('lobby: re-opened game is listed again', lb2.games().some((x) => x.code === lhs.code && x.mode === 'coop'));
+  // (파티, design/party.md 6.2: a party room is listed as such; an advertise of an unknown mode still becomes co-op)
+  lb1.advertise({ code: lhs.code, mode: 'party', n: 3, max: 4, open: true });
+  await clock.run(300);
+  ok('lobby: a party room is listed with mode party', lb2.games().some((x) => x.code === lhs.code && x.mode === 'party' && x.n === 3) && LH.rp.lobby.mine.host.mode === 'party', LH.rp.lobby.mine);
+  lb1.advertise({ code: lhs.code, mode: 'chess', n: 3, max: 4, open: true });
+  await clock.run(300);
+  ok('lobby: an advertise with an unknown mode becomes coop', LH.rp.lobby.mine.host.mode === 'coop', LH.rp.lobby.mine);
+  lb1.advertise({ code: lhs.code, mode: 'coop', n: 2, max: 4, open: true });
+  await clock.run(300);
   r = await resolveP(LV.Net.host({ transport: 'room', code: lhs.code }));
   ok('lobby: hosting a code another page advertises -> unavailable (taken)', r.error && r.error.code === 'unavailable');
   lhs.leave();

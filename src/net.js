@@ -54,7 +54,7 @@
    `await window.claude?.use?.("room")` (null = cannot connect: signed out, not invited, public link, a
    standalone copy). On null show TEXT.roomOff and keep solo working; transports().room is false.
    Lobby: the main room. Each page's lobby presence is {v:3, nick, char, host?: {code, mode, n, max, open}};
-     a host calls lobby.advertise({nick, char, code, mode:'coop'|'battle', n, max, open}) whenever the
+     a host calls lobby.advertise({nick, char, code, mode:'coop'|'battle'|'party', n, max, open}) whenever the
      count / openness changes and advertise(null) when the game closes (a host session's leave() also
      clears its own ad). games() lists open, not-full ads of other pages.
    Game: room.join('g-' + code). Event topics are NOT used (editor-only); everything rides on presence,
@@ -123,7 +123,9 @@ window.PG = window.PG || {};
   const NICK_STRIP = new RegExp('[' + [[0x00, 0x1f], [0x7f, 0x9f], [0xad, 0xad], [0x200b, 0x200f], [0x2028, 0x202e], [0x2060, 0x206f], [0xfeff, 0xfeff], [0xfff9, 0xfffb]]
     .map((r) => String.fromCharCode(r[0]) + '-' + String.fromCharCode(r[1])).join('') + ']', 'g');
   const CHAR_RE = /^[a-z]{2,10}$/;
-  const MODES = ['coop', 'battle'];
+  // (a lobby entry of another mode is skipped, an advertised one becomes 'coop'; 'party': design/party.md 6.2 - an older
+  // page's lobby skips a party room, it could not join it anyway)
+  const MODES = ['coop', 'battle', 'party'];
   const TRANSPORTS = ['room', 'peer', 'bc'];
   const PEER_PREFIX = 'ppodeuk-';
   const BC_PREFIX = 'ppodeuk-v3-';

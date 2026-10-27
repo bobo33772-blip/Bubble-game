@@ -102,6 +102,10 @@ const LIST = [
   V('sprites-items', 'test-sprites-items.html', 6000, has(/ITEMS mode/), { shot: 'runall-sprites-items.png' }),
   // ---- v4 trophies (design/trophies.md §15): the rules / store / UI fit offline in virtual time; online over bc below
   V('trophies', 'test-trophies.html', 120000, doneZero('TROPHY'), { shot: 'runall-trophies.png' }),
+  // ---- 파티 (design/party.md §13): the rules, the two games, the flow, the coins, the card fit - offline, virtual time
+  // (the engine stepped frame by frame); its card on a landscape phone (the size it meets there: rotSync covers an upright one)
+  V('party', 'test-party.html', 120000, doneZero('PARTY'), { shot: 'runall-party.png' }),
+  V('party-fit-568', 'test-party.html#fit&touch=1', 30000, doneZero('PARTY'), { w: 568, h: 320, runner: 'cdp', mobile: true, done: 'PARTY DONE' }),
   // ---- v4 shop (design/shop.md 16): 비누 코인 (the battle economy, runs through real clears, the day bonus and soft cap,
   // the pace), the store v2 (the v1 migration, clamps, read-modify-write, buy / wear), the card rows and their fit, the
   // podium's coin line; then (S2) the items in play. check-shop: the catalog against the art, anchors and texts. Its
@@ -200,6 +204,9 @@ const LIST = [
   // v4 trophies online: stakes + consent, holds at 시작!, results, the 한 판 더 gate, leavers / cut links / host aborts,
   // walkovers, 연습 경기 (bc without allowBc, one device), co-op 목욕 보너스 (3 bc frames, real time)
   V('trophies-net', HTTP + 'test-trophies-net.html', 'rt480000', doneZero('TROPHYNET'), { done: 'TROPHYNET DONE', w: 1200, h: 900 }),
+  // 파티 online (design/party.md §13.2; 4 bc frames): the old-page gate, the cards on every screen, the water clock, the
+  // crown's authority, the podium and the coins, leavers, 파티 한 번 더
+  V('party-net', HTTP + 'test-party-net.html', 'rt420000', doneZero('PARTYNET'), { done: 'PARTYNET DONE', w: 1200, h: 900 }),
   // v4 shop online (design/shop.md 16.2, pass S4; 3 bc frames): hi.lk / 'eq' / R index 5 in the room only, forged sets,
   // an old-page guest; in game the room's sets frozen and drawn on every page, game-phase R seats 4 long in every
   // snapshot; battle coins = the host-side coinBattle on every page (the guest's clock), a countdown leaver, co-op 탕 /
@@ -230,6 +237,8 @@ const LIST = [
   V('ui-kit-phone', 'test-ui-kit-preview.html#touch,frog', 20000, doneZero('KIT'), { done: 'KIT DONE', runner: 'cdp', mobile: true, shot: 'runall-kit-phone.png', w: 390, h: 844 }),
   // phone (360x640): the room's sticky ready / start / leave row is opaque; the header keeps its buttons with the chip on
   V('ux-roomrow', HTTP + 'test-ux-roomrow.html?net=bc', 'rt30000', doneZero('ROOMROW'), { done: 'ROOMROW DONE', shot: 'runall-ux-roomrow.png', w: 360, h: 640 }),
+  // (파티's 3-button mode segment and 판 수 row on the narrowest phone too)
+  V('ux-roomrow-320', HTTP + 'test-ux-roomrow.html?net=bc', 'rt30000', doneZero('ROOMROW'), { done: 'ROOMROW DONE', shot: 'runall-ux-roomrow-320.png', w: 320, h: 568 }),
   // ---- the standalone deploy as an installable app (tools/pwa-check.js: its own server on :8766 and its own Chrome):
   // manifest / icons / installability, the service worker (precache by build, offline start with fonts + PeerJS from
   // the cache, the 3.5 s slow-network fallback, background updates that never reload a game, a stale page refused), the

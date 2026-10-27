@@ -79,6 +79,20 @@
  * tools/validate-levels.js measures fairness with a travel-time model
  * (time from each spawn to the arena centre, round trips to the rivals, time for the nearest enemy spawn to
  * reach it) and keeps the four spawns within tolerance; it prints those tables with every arena.
+ *
+ * PG.PARTY_ARENAS (파티, design/party.md 5): the minigames' own CLOSED arenas { key, name, theme, closed: true, map,
+ * players, gather, rise? }, in this order: 물 차는 대욕장 (key 'water', 물 차오르기). 왕관 뺏기 plays on the dry battle
+ * arenas above (not 냉온탕 대결: the capy's hot-tub shield would keep the crown).
+ *   closed      true: row 0 and row 25 are all '#' - no wrap gap, nothing falls through the floor or wraps (the engine's
+ *               normLevel opens a drain only where closed is not set).
+ *   map         same cell format; dry (the rising water is a full-width layer of the minigame, not tile water).
+ *   players     [{col,row} x4] spawns, mutually reachable (no wrap edge).
+ *   rise        the water's schedule: { y0 (surface y before the first step, px), warn (s of warning before a step),
+ *               steps: [[from s, to s, surface y] ...] } - linear inside a step, flat between. Each step drowns exactly
+ *               one tier (a tier is out once its top is more than WATER_SLACK = 3 px under the surface) and leaves the
+ *               next one dry; the two top shelves stay dry to the end.
+ * Every party arena is left-right mirror symmetric with no gap exception; tools/validate-levels.js checks the party
+ * rules too (closed, mirror, spawns reachable, each rise step drowning exactly one tier).
  */
 window.PG = window.PG || {};
 (function (PG) {
@@ -1308,6 +1322,48 @@ window.PG = window.PG || {};
       players: [{ col: 3, row: 24 }, { col: 28, row: 24 }, { col: 3, row: 8 }, { col: 28, row: 8 }],
       enemySpawns: [{ col: 10, row: 4 }, { col: 21, row: 4 }, { col: 13, row: 16 }, { col: 18, row: 16 }, { col: 10, row: 20 }, { col: 21, row: 20 }],
       gather: { col: 15, row: 12 },
+    },
+  ];
+
+  PG.PARTY_ARENAS = [
+    // ── P1 ── 물 차는 대욕장 (물 차오르기): one-way tiers 4 rows apart (rows 21 / 17 / 13 / 9), each within 2-3 columns
+    //    of the one below, two 4-tile shelves on top (row 5). The water rises in five steps; each drowns one tier.
+    {
+      key: 'water',
+      name: '물 차는 대욕장',
+      theme: 1,
+      closed: true,
+      map: [
+        '################################',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##.....####..........####.....##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##..###......######......###..##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##......####........####......##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##..####.....######.....####..##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##....######........######....##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '################################',
+      ],
+      players: [{ col: 4, row: 24 }, { col: 27, row: 24 }, { col: 10, row: 24 }, { col: 21, row: 24 }],
+      gather: { col: 15, row: 2 },
+      rise: { y0: 222, warn: 2, steps: [[5, 9, 206], [19, 23, 174], [33, 37, 142], [47, 51, 110], [61, 65, 78]] },
     },
   ];
 })(window.PG);
