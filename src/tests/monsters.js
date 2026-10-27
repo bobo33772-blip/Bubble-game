@@ -217,7 +217,8 @@
       D.mp.openFriends();
       const box = document.getElementById('pg-host-opts');
       if (!box) return 'no #pg-host-opts';
-      const labels = Array.from(box.children).filter((e) => e.tagName === 'SPAN').map((e) => e.textContent);
+      // (the shown labels: the party's 판 수 row is hidden outside a party room - design/party.md 7.6)
+      const labels = Array.from(box.children).filter((e) => e.tagName === 'SPAN' && !e.hidden).map((e) => e.textContent);
       if (labels.join('|') !== '경기장|시간|능력 끄기|연사|몬스터 출현|보스 난입|트로피 걸기') return 'labels ' + labels.join('|');
       const c = box.querySelector('[data-opt="monsters"]'), room = document.querySelector('#pg-room-opts [data-opt="monsters"]');
       if (!c || !room) return 'checkbox missing ' + J([!!c, !!room]);

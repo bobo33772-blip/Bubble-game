@@ -149,7 +149,7 @@
     // ---- 1. the default
     await until(() => hostR(H) && Array.isArray(hostR(H).o), 3000);
     const R0 = hostR(H);
-    ok('default: the host\'s R.o has 7 entries, o[5] = 1, o[6] = 0 (연사 off; the stake keeps index 4)', R0 && R0.o.length === 7 && R0.o[5] === 1 && R0.o[6] === 0 && R0.o[4] === 0, R0 && R0.o);
+    ok('default: the host\'s R.o has 8 entries, o[5] = 1, o[6] = 0 (연사 off; the stake keeps index 4; o[7] the party\'s 판 수, 3)', R0 && R0.o.length === 8 && R0.o[7] === 3 && R0.o[5] === 1 && R0.o[6] === 0 && R0.o[4] === 0, R0 && R0.o);
     const box = '#pg-room-opts [data-opt="monsters"]';
     ok('default: the host\'s room switch is ticked and editable', q(H, box).checked && !q(H, box).disabled && shown(q(H, box)));
     await until(() => /배틀/.test(text(G1, 'pg-room-sum')), 3000);
@@ -158,7 +158,7 @@
     // ---- 2. off
     ok('the host unticks 몬스터 출현 in the room (a click)', flip(H, box, false) && N(H).opts.monsters === false);
     const r5 = await until(() => hostR(H) && hostR(H).o[5] === 0, 3000);
-    ok('off: the host\'s R.o.length === 7 && R.o[5] === 0', r5 && hostR(H).o.length === 7 && hostR(H).o[5] === 0, hostR(H) && hostR(H).o);
+    ok('off: the host\'s R.o.length === 8 && R.o[5] === 0', r5 && hostR(H).o.length === 8 && hostR(H).o[5] === 0, hostR(H) && hostR(H).o);
     const got = await until(() => N(G1).opts.monsters === false && /몬스터 없음/.test(text(G1, 'pg-room-sum')), 4000);
     const sum1 = text(G1, 'pg-room-sum');
     ok('off: the guest has NET.opts.monsters false and #pg-room-sum says 몬스터 없음 after 능력', !!got && /능력 있음 · 몬스터 없음 · 보스 난입/.test(sum1), { o: N(G1).opts, sum1 });
@@ -200,7 +200,7 @@
     await sleep(300);
     const rbox = '#pg-room-opts [data-opt="rapid"]';
     ok('연사: the host\'s room switch is unticked by default, editable, its sub-label says 장전 없이 계속 쏴요', !!q(H, rbox) && !q(H, rbox).checked && !q(H, rbox).disabled && shown(q(H, rbox)) && q(H, rbox).parentElement.textContent === '장전 없이 계속 쏴요', q(H, rbox) && q(H, rbox).parentElement.textContent);
-    ok('연사: the host ticks it (a click), R.o[6] === 1 (7 entries)', flip(H, rbox, true) && N(H).opts.rapid === true && !!(await until(() => hostR(H) && hostR(H).o[6] === 1 && hostR(H).o.length === 7, 3000)), hostR(H) && hostR(H).o);
+    ok('연사: the host ticks it (a click), R.o[6] === 1 (8 entries)', flip(H, rbox, true) && N(H).opts.rapid === true && !!(await until(() => hostR(H) && hostR(H).o[6] === 1 && hostR(H).o.length === 8, 3000)), hostR(H) && hostR(H).o);
     const rOn = await until(() => N(G1).opts.rapid === true && /연사/.test(text(G1, 'pg-room-sum')), 4000);
     const sumR = text(G1, 'pg-room-sum');
     ok('연사: the guest has NET.opts.rapid and #pg-room-sum says 연사 after 능력', !!rOn && /능력 있음 · 연사 · 보스 난입/.test(sumR), { o: N(G1).opts, sumR });
