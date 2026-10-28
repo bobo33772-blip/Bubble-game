@@ -23,6 +23,10 @@
   --focus: #ffe27a;
   --font-sign: "Black Han Sans", "Do Hyeon", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
   --font-body: "Gowun Dodum", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  /* the notch / home-indicator insets: every use below reads these. Here they are the browser's own; the 앱인토스
+     build's page writes the Toss Safe Area over them on <html style> (src/ait.js, design/toss.md 9.2) */
+  --sa-t: env(safe-area-inset-top, 0px); --sa-r: env(safe-area-inset-right, 0px);
+  --sa-b: env(safe-area-inset-bottom, 0px); --sa-l: env(safe-area-inset-left, 0px);
 }
 /* (100dvh: the height the phone shows right now - a browser's toolbar coming and going resizes the game, fit() follows;
    the skeleton's :root pads the notch / home-indicator insets above and below) */
@@ -661,10 +665,10 @@ html, body, #pg-app, #pg-app button, #pg-app input, #pg-app select, #pg-app labe
 .pg-touch-on .pg-howto { line-height: 1.45; margin-top: 0.6em; }
 .pg-touch-on #pg-touch {
   display: flex; position: fixed; z-index: 10; left: 16px; right: 16px;
-  bottom: max(14px, env(safe-area-inset-bottom, 0px));
+  bottom: max(14px, var(--sa-b));
   justify-content: space-between; align-items: flex-end; pointer-events: none;
 }
-.pg-touch-on#pg-app { padding-bottom: calc(132px + env(safe-area-inset-bottom, 0px)); }
+.pg-touch-on#pg-app { padding-bottom: calc(132px + var(--sa-b)); }
 .pg-pad { display: flex; gap: 10px; pointer-events: auto; touch-action: none; }
 .pg-tb {
   width: 66px; height: 66px; border-radius: 50%;
@@ -713,17 +717,17 @@ html, body, #pg-app, #pg-app button, #pg-app input, #pg-app select, #pg-app labe
    columns at least --pg-side wide (thumbs never cover the play field) and sets --pg-side, --pg-tb (점프's size) and
    --pg-sr (the stick's radius); a narrow column (.pg-land-col) stacks 거품 over 점프, a wide one sets them diagonally */
 .pg-touch-on.pg-land#pg-app { padding: 4px 0; gap: 0; }
-.pg-touch-on.pg-land.pg-panel-open#pg-app { padding: 0 max(16px, env(safe-area-inset-right, 0px)) 0 max(16px, env(safe-area-inset-left, 0px)); gap: 6px; }
+.pg-touch-on.pg-land.pg-panel-open#pg-app { padding: 0 max(16px, var(--sa-r)) 0 max(16px, var(--sa-l)); gap: 6px; }
 .pg-land:not(.pg-panel-open) #pg-head {
   position: absolute; z-index: 11; top: 0; left: 0; right: 0; width: auto; max-width: none; align-items: flex-start;
-  padding: max(8px, env(safe-area-inset-top, 0px)) max(8px, env(safe-area-inset-right, 0px)) 0 max(8px, env(safe-area-inset-left, 0px));
+  padding: max(8px, var(--sa-t)) max(8px, var(--sa-r)) 0 max(8px, var(--sa-l));
   pointer-events: none;
 }
 .pg-land:not(.pg-panel-open) .pg-brand { display: none; }
-.pg-land:not(.pg-panel-open) #pg-net-chip { max-width: calc(var(--pg-side, 150px) - 16px - env(safe-area-inset-left, 0px)); white-space: normal; font-size: 12px; }
+.pg-land:not(.pg-panel-open) #pg-net-chip { max-width: calc(var(--pg-side, 150px) - 16px - var(--sa-l)); white-space: normal; font-size: 12px; }
 .pg-land:not(.pg-panel-open) .pg-tools {
   pointer-events: auto; margin-left: auto; flex-wrap: wrap; justify-content: flex-end; gap: 6px;
-  max-width: calc(var(--pg-side, 150px) - 16px - env(safe-area-inset-right, 0px));
+  max-width: calc(var(--pg-side, 150px) - 16px - var(--sa-r));
 }
 .pg-land #pg-frame { padding: 4px; border-radius: 12px; }
 .pg-land #pg-frame::before { left: 1px; top: 1px; width: 3px; height: 3px; }
@@ -731,12 +735,12 @@ html, body, #pg-app, #pg-app button, #pg-app input, #pg-app select, #pg-app labe
 .pg-touch-on.pg-land #pg-touch { display: block; left: 0; right: 0; top: 0; bottom: 0; }
 .pg-land #pg-stick-zone { position: absolute; left: 0; top: 0; bottom: 0; width: var(--pg-side, 150px); height: auto; }
 .pg-land .pg-stick {
-  left: calc(env(safe-area-inset-left, 0px) + (var(--pg-side, 150px) - env(safe-area-inset-left, 0px)) / 2 - var(--pg-sr, 50px));
-  bottom: calc(max(14px, env(safe-area-inset-bottom, 0px)) + 4px);
+  left: calc(var(--sa-l) + (var(--pg-side, 150px) - var(--sa-l)) / 2 - var(--pg-sr, 50px));
+  bottom: calc(max(14px, var(--sa-b)) + 4px);
 }
 .pg-land #pg-act {
-  position: absolute; right: 0; bottom: max(14px, env(safe-area-inset-bottom, 0px)); width: var(--pg-side, 150px);
-  padding-right: env(safe-area-inset-right, 0px); justify-content: center; align-items: flex-end; gap: 10px; pointer-events: none;
+  position: absolute; right: 0; bottom: max(14px, var(--sa-b)); width: var(--pg-side, 150px);
+  padding-right: var(--sa-r); justify-content: center; align-items: flex-end; gap: 10px; pointer-events: none;
 }
 .pg-land #pg-act .pg-tb { pointer-events: auto; }
 .pg-land #pg-t-jump { width: var(--pg-tb, 66px); height: var(--pg-tb, 66px); }
@@ -764,7 +768,7 @@ html, body, #pg-app, #pg-app button, #pg-app input, #pg-app select, #pg-app labe
   .pg-stick { --pg-sr: 44px; }
   #pg-stick-zone { height: 104px; }
   #pg-t-shoot { width: 64px; height: 64px; font-size: 17px; }
-  .pg-touch-on#pg-app { padding-bottom: calc(118px + env(safe-area-inset-bottom, 0px)); }
+  .pg-touch-on#pg-app { padding-bottom: calc(118px + var(--sa-b)); }
   .pg-ov { padding: 0.35em; }
   .pg-card, .pg-touch-on .pg-card { padding: 0.55em 0.8em 0.7em; max-width: 98%; }
   .pg-logo { font-size: 2.2em; }
@@ -920,7 +924,7 @@ html.pg-sa, html.pg-sa body { overscroll-behavior: none; }
 /* portrait phones: the screen is as wide as the phone allows - 8px side gutters and a slimmer mirror frame (390 px:
    1.31x -> 1.41x); the header keeps its 16px inset. (Panels keep the usual gutters.) */
 @media (orientation: portrait) {
-  .pg-sa .pg-touch-on:not(.pg-panel-open)#pg-app { padding-left: max(8px, env(safe-area-inset-left, 0px)); padding-right: max(8px, env(safe-area-inset-right, 0px)); }
+  .pg-sa .pg-touch-on:not(.pg-panel-open)#pg-app { padding-left: max(8px, var(--sa-l)); padding-right: max(8px, var(--sa-r)); }
   .pg-sa .pg-touch-on:not(.pg-panel-open) #pg-head { padding-left: 8px; padding-right: 8px; }
   .pg-sa .pg-touch-on:not(.pg-panel-open) #pg-frame { padding: 6px; border-radius: 14px; }
   .pg-sa .pg-touch-on:not(.pg-panel-open) #pg-frame::before { left: 2px; top: 2px; width: 3px; height: 3px; }
@@ -941,7 +945,7 @@ html.pg-sa, html.pg-sa body { overscroll-behavior: none; }
    The pixel phone turns from upright to its side in two frames (no blurry rotation), the arrow shows which way */
 .pg-rotate {
   position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  padding: max(24px, env(safe-area-inset-top, 0px)) 24px max(24px, env(safe-area-inset-bottom, 0px)); text-align: center; word-break: keep-all;
+  padding: max(24px, var(--sa-t)) 24px max(24px, var(--sa-b)); text-align: center; word-break: keep-all;
   background-color: var(--bg);
   background-image: radial-gradient(110% 70% at 50% -10%, rgba(127, 220, 200, 0.13), transparent 62%),
     linear-gradient(var(--grout) 1px, transparent 1px), linear-gradient(90deg, var(--grout) 1px, transparent 1px);
@@ -1093,7 +1097,7 @@ html.pg-sa, html.pg-sa body { overscroll-behavior: none; }
 .pg-pal-iv[aria-disabled="true"] { opacity: 0.45; cursor: default; filter: grayscale(0.5); }
 .pg-pal-iv:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .pg-iv-wrap { position: absolute; z-index: 20; left: 0; right: 0; top: 0; height: 0; container: pgiv / inline-size; pointer-events: none; }
-.pg-iv { position: absolute; top: max(6px, env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); width: max-content; max-width: calc(100% - 16px); pointer-events: auto;
+.pg-iv { position: absolute; top: max(6px, var(--sa-t)); left: 50%; transform: translateX(-50%); width: max-content; max-width: calc(100% - 16px); pointer-events: auto;
   box-sizing: border-box; display: flex; align-items: center; gap: 0.55em; padding: 0.4em 0.5em 0.4em 0.6em; border-radius: 1em; font-size: 14px; line-height: 1.3;
   text-align: left; word-break: keep-all; overflow-wrap: break-word; background: var(--panel); border: 2px solid var(--duck);
   box-shadow: 0 0 0 2px var(--ink), 0 0.4em 1.4em rgba(0, 0, 0, 0.5); animation: pg-iv-in 0.28s ease-out; }
@@ -1379,6 +1383,19 @@ html.pg-sa, html.pg-sa body { overscroll-behavior: none; }
 /* the room: 꾸미기 at the end of the 내 캐릭터 heading */
 .pg-box h3.pg-h3-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5em; }
 .pg-h3-row .pg-btn { letter-spacing: 0; }
+/* v5 앱인토스 (the Toss build only: build.js gives its root element the pg-ait class; nothing here matches the artifact
+   or the web deploy - design/toss.md 9.3). The game nav bar's 더보기 / X float over the top-right corner: the box
+   var(--sa-r) + 10px + var(--ait-nav-w) wide, var(--sa-t) + var(--ait-nav-h) tall stays free of the game's buttons */
+.pg-ait #pg-head { padding-right: calc(var(--sa-r) + 10px + var(--ait-nav-w, 0px)); }
+.pg-ait .pg-land:not(.pg-panel-open) #pg-head { padding-right: max(8px, var(--sa-r)); }
+.pg-ait .pg-land:not(.pg-panel-open) .pg-tools { margin-top: calc(var(--ait-nav-h, 0px) + 4px); }
+/* the game-key card's 다시 시도 (off while a request runs and for 5 s after), 내 기록 without 배틀 / 뽀득 KO, the
+   two-press back line over the title */
+.pg-ait-gate .pg-ait-retry[aria-disabled="true"] { opacity: 0.5; cursor: progress; }
+.pg-rec-stats.is-ait { grid-template-columns: auto 1fr; }
+.pg-rec-stats.is-ait dd { padding-right: 0; border-right: 0; }
+.pg-ait-toast { position: absolute; left: 50%; bottom: 8%; z-index: 30; transform: translateX(-50%); margin: 0; padding: 0.45em 1em; border-radius: 999px;
+  background: rgba(6, 22, 25, 0.92); box-shadow: inset 0 0 0 1.5px var(--panel-line); color: var(--cream); font-size: 0.95em; line-height: 1.3; white-space: nowrap; pointer-events: none; }
 #pg-fontwarm {
   position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: hidden;
   opacity: 0; pointer-events: none; white-space: nowrap; font-size: 16px;

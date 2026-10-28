@@ -303,6 +303,24 @@ window.PG = window.PG || {};
   };
   const PARTY_TEXT = MINI_IDS.map((id) => MINI[id].name + ' ' + MINI[id].how + ' ' + MINI[id].rule).join(' ') + ' ' +
     Object.keys(PARTY_TX).map((k) => PARTY_TX[k]).join(' ') + ' 판 등 점 공동 승리 무승부 팀 왼쪽 오른쪽 1등 2등 3등 4등 0123456789+/:·!';
+  // ---- 앱인토스 (design/toss.md): every line only the Toss build shows (AIT.on) - the game-key gate (4.2), 친선 경기 (5:
+  // no trophy moves there, and no line says 걸다 / 판돈 / 가져요 about trophies), the room hint and the invite (3), 내 기록
+  // (3, 7), Android back at the title (11.2). {0} {1}: a code / numbers
+  const AIT_TX = {
+    waitH: '온라인 친구와 하기를 준비하고 있어요', waitL: '토스 정보를 확인하는 중이에요…',
+    oldH: '토스 앱을 업데이트하면 온라인으로 할 수 있어요', oldL: '토스를 최신 버전으로 업데이트해 주세요',
+    errH: '토스 정보를 불러오지 못했어요', errL: '인터넷을 확인하고 다시 시도해 주세요', retry: '다시 시도',
+    solo: '혼자 하기는 지금 바로 할 수 있어요',
+    friendly: '친선 경기예요: 트로피는 늘지도 줄지도 않아요', same: '연습 경기예요: 같은 토스 계정으로 들어온 친구가 있어요',
+    coin2: '연습 경기예요: 같은 토스 계정으로 들어온 친구가 있어요 · 비누 코인 없음',
+    count: '친선 경기 · 트로피 없음', countQ: '연습 경기 · 비누 코인 없음', tag: '친선 경기', sum: '친선 경기',
+    hint: '친구가 토스에서 뽀득뽀득 목욕탕을 열고 ‘코드로 참여’에 {0}를 넣으면 돼요',
+    invite: '뽀득뽀득 목욕탕 같이 해요! 토스에서 뽀득뽀득 목욕탕 → 친구와 하기 → 코드로 참여: {0}',
+    gift: '처음 선물로 트로피 {0}개를 받았어요! 목욕을 끝까지 할수록 늘어요', day: '오늘 트로피 보너스 {0}/{1}개 · 혼자 하기·같이 하기에서 받아요',
+    lb: '토스 랭킹', lbAria: '토스 게임 랭킹 보기', exit: '한 번 더 누르면 게임을 나가요',
+  };
+  const AIT_TEXT = Object.keys(AIT_TX).map((k) => AIT_TX[k]).join(' ') + ' 0123456789';
+  const aitFmt = (s, a, b) => s.replace('{0}', String(a)).replace('{1}', String(b));
   const V3_TEXT = CHAR_IDS.map((c) => { const d = CHARS[c]; return [d.name, d.animal, d.role, d.tag, d.badge, d.move.name, d.move.how, d.move.touch, d.bub.name, d.bub.desc].join(' '); }).join(' ') +
     // (v4 kit cards, hints, the countdown line; the pips' aria text)
     ' ' + STAT_NAMES.join(' ') + ' 특기: 거품: ' + OFF_LINE + ' 내 특기: 5점 중 3점' +
@@ -547,6 +565,8 @@ window.PG = window.PG || {};
     music(t) { if (t === this.cur) return; this.cur = t; this.call('music', t); },
     muted() { const a = this.api(); if (!a || typeof a.isMuted !== 'function') return this.localMute; try { return !!a.isMuted(); } catch (e) { return this.localMute; } },
     setMuted(m) { this.localMute = !!m; this.call('setMuted', !!m); },
+    // silent at once (hidden, closing, an overlay over the game, the leaderboard opening) / back (the M mute stays)
+    hold(on) { this.call('hold', !!on); },
   };
 
   // ------------------------------------------------------------------ sprites
@@ -1711,6 +1731,7 @@ window.PG = window.PG || {};
     G.mode = 'title';
     setMusic('title');
     showOverlay('title');
+    aitSync();
   }
   // 3-2-1 before a multiplayer start: the world waits (sfx 'countdown' x3, then 'go')
   function beginCountdown() {
@@ -4953,9 +4974,10 @@ window.PG = window.PG || {};
   }
   // the local date as YYYYMMDD (the 목욕 보너스 day; PG.debug.tro.today fakes it)
   function troToday() { if (TRO.day !== null) return TRO.day; const d = new Date(); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); }
-  // my device id as seen by one room: FNV-1a 32 of dev + ':' + code, base 36, 6 chars (differs per room code)
+  // my device id as seen by one room: FNV-1a 32 of dev + ':' + code, base 36, 6 chars (differs per room code). In Toss
+  // the game key stands in for dev (design/toss.md 4.3): the same Toss account twice in one room is a practice match
   function troDevHash(code) {
-    const s = (TRO.s ? TRO.s.dev : '') + ':' + String(code || '');
+    const s = (AIT.hash ? 't:' + AIT.hash : TRO.s ? TRO.s.dev : '') + ':' + String(code || '');
     let h = 0x811c9dc5;
     for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
     return (h % 2176782336).toString(36).padStart(6, '0');
@@ -5125,8 +5147,9 @@ window.PG = window.PG || {};
     }
     return out;                                                 // (what the floors leave over is simply not paid)
   }
-  // 트로피 걸기: the host's stake for everyone (co-op never has one); a roster entry's count (my own: my real count)
-  const stakeNow = () => (NET.mode === 'battle' ? NET.opts.bet | 0 : 0);
+  // 트로피 걸기: the host's stake for everyone (co-op never has one; Toss: 친선 경기 only - design/toss.md 5); a roster
+  // entry's count (my own: my real count)
+  const stakeNow = () => (NET.mode === 'battle' && !AIT.on ? NET.opts.bet | 0 : 0);
   const troCupOf = (r) => (r && r.id === NET.selfId ? (TRO.s ? TRO.s.t : 0) : r ? r.cup : -1);
   const troCovers = (r) => stakeNow() === 0 || troCupOf(r) >= stakeNow();
   // 안 걸고 참여: does this seat play the stake without putting it in. Me: readied without it (TRO.free), or short of it
@@ -5173,6 +5196,7 @@ window.PG = window.PG || {};
   // plays without the stake instead (the hold's s is 0: place points only); 2 = without the stake anyway (I readied
   // without it - TRO.free - and a ready never puts in more than it agreed to)
   function troEscrow(mid, s, n, min, nos) {
+    if (AIT.on) return false;                    // (Toss: friendly matches - no hold, whoever calls; design/toss.md 5)
     if (!MID_RE.test(mid) || TRO.seen.has(mid) || TRO.ro || !TRO.s) return false;
     TRO.seen.add(mid);                                                   // once per match id, whatever happens
     return troMut((S) => {
@@ -5214,6 +5238,7 @@ window.PG = window.PG || {};
   // same mutation, so only a hold of mine that gets a result can pay it (never practice, a refund, a void match); kept
   // apart from net (the podium shows it as its own mark). put: the stake I paid
   function troApply(mid, rows, slot, host, real) {
+    if (AIT.on) return null;                     // (Toss: no result, no +5, no counts from a match)
     const L = TRO.live.get(mid);
     // a guest takes a result only after the match could have been played: a modified host cannot drain anyone faster
     // than the battle clock (rejected = the hold stays -> 'wait' -> refund)
@@ -5259,6 +5284,7 @@ window.PG = window.PG || {};
   // the match is over in my view without a result (podium / room / a newer game id): 'wait', refunded after 15 s unless
   // the result still comes (a reliable message may lag the state). In-memory check first: called on every podium snapshot
   function troWait(mid) {
+    if (AIT.on) return;
     if (!TRO.s || !TRO.s.esc.some((q) => q.m === mid && q.tab === TRO.tab && q.st === 'open')) return;
     troMut((S) => { const e = S.esc.find((q) => q.m === mid && q.tab === TRO.tab); if (e) e.st = 'wait'; });
     if (TRO.waits.has(mid)) clearTimeout(TRO.waits.get(mid));
@@ -5293,7 +5319,7 @@ window.PG = window.PG || {};
   // message: no stake in the pot, and its row tells it to pay none); an older guest page (no r.z) can only ready covering
   // the stake and pays it from its own hold, so it counts when its count covers it, as before
   function troHostGo() {
-    if (!G.online || G.role !== 'host' || G.gameMode !== 'battle' || G.party || NET.q !== 0 || !NET.ms) return; // (a party holds no trophies)
+    if (AIT.on || !G.online || G.role !== 'host' || G.gameMode !== 'battle' || G.party || NET.q !== 0 || !NET.ms) return; // (a party holds no trophies; Toss: none at all)
     const mid = NET.ms + '.' + NET.gid, s = stakeNow(), p = {}, st = {};
     let hs = 0;
     for (const pl of G.players) {
@@ -5330,6 +5356,7 @@ window.PG = window.PG || {};
   }
   // guest: the host's result (the first message a guest accepts, only from NET.hostId)
   function troResultIn(m) {
+    if (AIT.on) return;                          // (Toss: a 'tro' from anyone - an older or a hostile page - changes nothing)
     const mid = typeof m.m === 'string' && MID_RE.test(m.m) ? m.m : ''; if (!mid) return;
     const rows = Array.isArray(m.r) ? m.r.slice(0, 4) : [];
     const res = troApply(mid, rows, NET.slots.get(NET.selfId), false, troReal(rows.filter(Array.isArray).length, 0));
@@ -5342,6 +5369,7 @@ window.PG = window.PG || {};
   }
   // guest: the first 'p' snapshot of a ranked battle's game id = "시작!" for me (on a network event: a hidden tab too)
   function troGuestGo(id) {
+    if (AIT.on) return;
     const mid = NET.ms + '.' + id;
     if (TRO.seen.has(mid)) return;
     if (NET.tr === 'bc' && !TRO.allowBc) return;                       // this browser's tabs share one store
@@ -5375,8 +5403,10 @@ window.PG = window.PG || {};
   }
   // the countdown's "2" / "1" line (and its class: letters only - guests filter it)
   // (a party, online or not: "2" / "1" say which 판 this is - "1판 / 3판", the last one "3판 / 3판 · 마지막 판!")
-  const troCountSub = () => (G.party ? partyRoundTx(true) : !G.online || G.gameMode !== 'battle' ? '' : NET.q ? '연습 경기 · 트로피 없음' : stakeNow() ? '트로피 ' + stakeNow() + '개씩 걸어요!' : '트로피 경기');
-  const troCountCls = () => (G.party || !G.online || G.gameMode !== 'battle' ? '' : NET.q ? ' prac' : stakeNow() ? ' bet' : '');
+  // (Toss, design/toss.md 5 #7: 친선 경기 · 트로피 없음 / 연습 경기 · 비누 코인 없음, both dim)
+  const troCountSub = () => (G.party ? partyRoundTx(true) : !G.online || G.gameMode !== 'battle' ? '' : AIT.on ? (NET.q ? AIT_TX.countQ : AIT_TX.count)
+    : NET.q ? '연습 경기 · 트로피 없음' : stakeNow() ? '트로피 ' + stakeNow() + '개씩 걸어요!' : '트로피 경기');
+  const troCountCls = () => (G.party || !G.online || G.gameMode !== 'battle' ? '' : AIT.on || NET.q ? ' prac' : stakeNow() ? ' bet' : '');
   // (8.7) the armed label of 방으로 / 나가기 in the menu: what leaving now costs (this tab's held trophies)
   function troLeaveLabel(host) {
     const h = troHeld(), base = host ? '한 번 더 누르면 모두 방으로' : '한 번 더 누르면 나가요';
@@ -5485,6 +5515,8 @@ window.PG = window.PG || {};
     else if (P && P.kind === 'draw') txt = '무승부';
     else if (P && P.kind === 'walk') txt = '기권승';
     else if (P && P.kind === 'prac') { txt = '연습'; cls += ' is-prac'; }
+    // (Toss: a battle that is not practice is a 친선 경기 - no result ever comes, so no TRO.pod)
+    else if (!P && AIT.on && G.online && G.gameMode === 'battle' && !G.party) { txt = AIT_TX.tag; cls += ' is-prac'; }
     if (el.textContent !== txt) el.textContent = txt;
     if (el.className !== cls) el.className = cls;
     el.hidden = !txt;
@@ -5602,9 +5634,11 @@ window.PG = window.PG || {};
     }
     const de = S.day === troToday() ? S.de : 0;
     // (the deploy with the cloud, in a frame: it is the frame that keeps nothing - the cloud line offers the game's own page)
+    // (Toss, design/toss.md 3: friendly matches move no trophy - the notes name only what pays, never 걸다)
     setTxt($('pg-rec-note'), TRO.mem || TRO.ro ? (CLOUD.on && clEnv().framed ? CL_NOTE : '이 브라우저에서는 기록이 저장되지 않아요')
-      : S.g === 0 && S.de === 0 ? '처음 선물로 트로피 ' + S.best + '개를 받았어요! 친구와 배틀할 때 걸어 봐요'   // (the store's own gift: 30 before 2026-10)
-        : '오늘 트로피 보너스 ' + de + '/' + DAY_CAP + '개 · 목욕도 배틀도 받아요');
+      : S.g === 0 && S.de === 0 ? (AIT.on ? aitFmt(AIT_TX.gift, S.best) : '처음 선물로 트로피 ' + S.best + '개를 받았어요! 친구와 배틀할 때 걸어 봐요')   // (the store's own gift: 30 before 2026-10)
+        : AIT.on ? aitFmt(AIT_TX.day, de, DAY_CAP) : '오늘 트로피 보너스 ' + de + '/' + DAY_CAP + '개 · 목욕도 배틀도 받아요');
+    if (AIT.on) aitRecStats();
     clUI();                                      // (cloud trophies: the status line and the sign-in button)
   }
   // the 목욕 끝 / ending cards (8.9): the 트로피 row (+N and the count, or "오늘 보너스 끝"), then the 승급 chip
@@ -7516,20 +7550,28 @@ window.PG = window.PG || {};
     let here = ''; try { here = /^https?:/.test(location.protocol) ? location.href.split('#')[0] : ''; } catch (er) { here = ''; }
     const url = CLOUD.home || (clHere() ? here : ''); if (!url) return '';
     if (!e.inApp) return url;
+    // (the ait-cut markers: build.js cuts these lines from the 앱인토스 copy of this file - design/toss.md 2.2; every one
+    // of them is reachable only with the cloud on, which that build never has. Elsewhere they are plain comments)
+    // <ait-cut>
     if (e.kakao) return 'kakaotalk://web/openExternal?url=' + encodeURIComponent(url);
     if (e.line) return url + (url.indexOf('?') < 0 ? '?' : '&') + 'openExternalBrowser=1';
     if (e.android) { try { const u = new URL(url); return 'intent://' + u.host + u.pathname + u.search + '#Intent;scheme=https;package=com.android.chrome;end'; } catch (er) { return ''; } }
+    // </ait-cut>
     return '';
   }
   function clOpenOutside() {
     const url = clOutsideUrl(), e = clEnv(); CLOUD.opened = url;
     if (!url) return '';
+    // <ait-cut>
     try { if (e.inApp) location.href = url; else window.open(url, '_blank', 'noopener'); } catch (er) { /* refused */ }
+    // </ait-cut>
     return url;
   }
 
   // ---- auth (4.2 - 4.4)
+  // <ait-cut>
   const clProvider = () => { const p = new CLOUD.fb.auth.GoogleAuthProvider(); p.setCustomParameters({ prompt: 'select_account' }); return p; };
+  // </ait-cut>
   // once the app + auth files ran: the app, its auth (Korean pages) and the observer. true = the observer was just
   // registered (its first call comes by itself); false = it existed (a reboot reads currentUser itself)
   function clApp() {
@@ -7600,8 +7642,10 @@ window.PG = window.PG || {};
     CLOUD.pop = true; CLOUD.authAt = Date.now(); clSet('auth');
     clWatch(CL_WATCH_MS);
     // (synchronously in the tap's handler when the SDK was in memory already: Safari opens the popup only then)
+    // <ait-cut>
     let p; try { p = a.signInWithPopup(clProvider()); } catch (e) { clAuthFail(e); return; }
     Promise.resolve(p).then(() => { /* the observer links */ }, clAuthFail);
+    // </ait-cut>
   }
   // the popup's watch: 'auth' back to 'out' (saying so) 2 min after the tap, or 20 s after this page is seen again (on a
   // phone the popup is a tab of its own: a player who came back without finishing it gets the button back). The sign-in
@@ -7623,7 +7667,9 @@ window.PG = window.PG || {};
     clMetaPut({ rd: Date.now() });
     CLOUD.pop = false; clSet('auth');
     const no = (e) => { clMetaPut({ rd: 0 }); clAuthFail(e); };
+    // <ait-cut>
     try { Promise.resolve(CLOUD.auth.signInWithRedirect(clProvider())).catch(no); } catch (e) { no(e); }
+    // </ait-cut>
   }
   // boot, a sign-in redirect coming back (meta.rd < 10 min old): the result links (the observer) and 내 기록 opens with its
   // message; a failure is said there too; a cancel (no user, no error) changes nothing
@@ -9255,6 +9301,228 @@ window.PG = window.PG || {};
     return api;
   }
 
+  // ------------------------------------------------------------------ v5 앱인토스 (토스 미니앱, design/toss.md)
+  // The Toss build's page (build.js tossOf) sets window.PG_AIT before this file runs (src/ait.js: the only thing of the
+  // SDK this engine ever sees); everywhere else it is missing and all of this is inert (AIT.on false):
+  //  - the game key gates online play (4.2: 손님은 온라인 불가 has a Toss twin without any login button) and stands in
+  //    for the store's dev in the room's same-player check (troDevHash, 4.3); it is never shown, sent, logged or stored
+  //  - trophies never move in a match (5: troEscrow / troApply refuse first, then the nine UI / flow sites): 친선 경기
+  //  - the leaderboard (7): the best solo run from 탕 1, sent at its 목욕 끝 / ending card only when it beats the last
+  //    accepted one; 토스 랭킹 in 내 기록 after the first success
+  //  - Android back (11.2) goes back on every screen; the title has no listener (Toss's own back); a game keeps the
+  //    screen awake and iOS's edge swipe off (11.3); the overlay of the exit modal pauses and silences (10); one screen
+  //    log per overlay change (12)
+  // st: 'off' | 'wait' | 'ok' | 'old' | 'err'; hash only while 'ok'; at: the last key request; scr: the last screen
+  // log; back / play: what the bridge was last told; nav: the box kept for 더보기 / X ({0, 0} outside Toss)
+  const AIT = { on: false, br: null, st: 'off', hash: '', at: 0, busy: false, scr: '', back: false, play: false, nav: { w: 0, h: 0 },
+    syncKey: '', exitAt: 0, exitT: 0, lbNf: false, lbFor: null, lbWarned: false, lbT: 0, retryT: 0 };
+  // (Android back at the bare title: false = no listener there, Toss's own back applies; true = the two-press confirm
+  // stays on - the QR test decides, design/toss.md 15.6.5)
+  const AIT_ROOT_BACK = false;
+  const AIT_LB_KEY = 'ppogeul-ait-lb';
+  // the game screens where back pauses (online: opens the menu) and the screen stays on
+  const AIT_PLAY = ['playing', 'dying', 'transition', 'countdown', 'card', 'result'];
+  (function aitInit() {
+    let b = null; try { b = window.PG_AIT; } catch (e) { b = null; }
+    AIT.on = !!b && typeof b === 'object' && typeof b.key === 'function';
+    if (!AIT.on) return;
+    AIT.br = b; AIT.st = 'wait';
+    try { const n = b.nav; if (n && isFinite(n.w) && isFinite(n.h)) AIT.nav = { w: clamp(+n.w, 0, 400), h: clamp(+n.h, 0, 200) }; } catch (e) { /* ignore */ }
+    try { if (typeof b.onKey === 'function') b.onKey(() => { if (!stopped && AIT.st !== 'ok') aitKey(); }); } catch (e) { /* ignore */ }
+    try { if (typeof b.onShow === 'function') b.onShow((vis) => aitShow(vis)); } catch (e) { /* ignore */ }
+  })();
+  // ---- the game key (4.1): at boot, when 친구와 하기 opens on 'err', from the card's 다시 시도; never on a timer
+  function aitKey() {
+    if (!AIT.on || AIT.busy) return;
+    if (AIT.st !== 'ok') AIT.st = 'wait';
+    AIT.busy = true; AIT.at = Date.now();
+    aitGateUI();
+    let p = null; try { p = AIT.br.key(); } catch (e) { p = null; }
+    Promise.resolve(p).then((r) => {
+      AIT.busy = false;
+      if (stopped) return;
+      const st = r && (r.st === 'ok' || r.st === 'old' || r.st === 'err') ? r.st : 'err';
+      AIT.hash = st === 'ok' && typeof r.hash === 'string' ? r.hash : '';
+      AIT.st = st === 'ok' && !AIT.hash ? 'err' : st;
+      aitGateUI();
+    }, () => { AIT.busy = false; AIT.hash = ''; AIT.st = 'err'; aitGateUI(); });
+  }
+  // the friends panel follows the key (and its retry button its 5 s)
+  function aitGateUI() {
+    if (!dom.friends || NET.screen !== 'friends' || shownOverlay !== 'friends') return;
+    renderFriends();
+    clearTimeout(AIT.retryT);
+    const left = AIT.at + 5000 - Date.now();
+    if (AIT.st === 'err' && left > 0) AIT.retryT = setTimeout(() => { if (!stopped) aitGatePaint(); }, left + 30);
+  }
+  // ---- the gate card (4.2): the cloud card's classes and place, no login button ever; a retry only after 'err'
+  function aitGateBuild() {
+    if (!AIT.on || dom.netGate || !dom.friends) return;
+    const card = dom.friends.querySelector('.pg-pcard'), hd = $('pg-friends-h'); if (!card) return;
+    const g = h('div', 'pg-note pg-net-gate pg-ait-gate'); g.id = 'pg-net-gate'; g.hidden = true; g.setAttribute('role', 'note');
+    const head = h('b', 'pg-note-h', AIT_TX.waitH); head.id = 'pg-net-gate-h';
+    const st = h('p', 'pg-login-st', AIT_TX.waitL); st.id = 'pg-net-gate-st'; st.setAttribute('aria-live', 'polite');
+    const go = h('button', 'pg-btn pg-small pg-ait-retry', AIT_TX.retry); go.type = 'button'; go.id = 'pg-ait-retry'; go.hidden = true;
+    go.setAttribute('aria-describedby', 'pg-net-gate-h pg-net-gate-st');
+    g.append(head, st, go, h('p', 'pg-net-gate-solo', AIT_TX.solo));
+    card.insertBefore(g, hd ? hd.nextSibling : card.firstChild);
+    listen(go, 'click', (e) => { e.preventDefault(); firstGesture(); if (go.getAttribute('aria-disabled') === 'true' || AIT.st !== 'err' || AIT.busy) return; aitKey(); });
+    Object.assign(dom, { netGate: g, netGateGo: go, netGateSt: st, netGateH: head });
+  }
+  function aitGatePaint() {
+    if (!dom.netGate || dom.netGate.hidden) return;
+    const st = AIT.st === 'old' || AIT.st === 'err' ? AIT.st : 'wait', go = dom.netGateGo;
+    setTxt(dom.netGateH, AIT_TX[st + 'H']); setTxt(dom.netGateSt, AIT_TX[st + 'L']);
+    const show = st === 'err', wait = AIT.busy || Date.now() - AIT.at < 5000;
+    if (go.hidden === show) go.hidden = !show;
+    go.setAttribute('aria-disabled', show && wait ? 'true' : 'false');
+  }
+  // ---- 내 기록 (3): the friendly matches record nothing, so 배틀 / 뽀득 KO are hidden; 토스 랭킹 after a first success
+  function aitRecStats() {
+    const dl = dom.rec ? dom.rec.querySelector('.pg-rec-stats') : null; if (!dl) return;
+    dl.classList.add('is-ait');
+    for (const id of ['pg-rec-win', 'pg-rec-ko']) { const dd = $(id); if (dd) { dd.hidden = true; if (dd.previousElementSibling) dd.previousElementSibling.hidden = true; } }
+    aitLbBtn();
+  }
+  // ---- the leaderboard (7): {ok: the last accepted score, p: the best not accepted yet}
+  function aitLbRead() {
+    let o = null; try { o = JSON.parse(sget(AIT_LB_KEY) || 'null'); } catch (e) { o = null; }
+    const n = (v) => nInt(v, 0, 1e12, 0);
+    return o && typeof o === 'object' ? { ok: n(o.ok), p: n(o.p) } : { ok: 0, p: 0 };
+  }
+  const aitLbPut = (L) => sset(AIT_LB_KEY, JSON.stringify({ ok: L.ok, p: L.p }));
+  // the 목욕 끝 / ending card of a solo run from 탕 1 (not the demo, not online, not after gotoRound): once per run end
+  function aitLbRun() {
+    if (!AIT.on || !AIT.br || !AIT.br.lb) return null;
+    if (G.gameMode !== 'solo' || G.online || G.attract || !PAL.run || !TRO.run || AIT.lbFor === TRO.run) return null;
+    AIT.lbFor = TRO.run;
+    const L = aitLbRead(), c = Math.max(G.score | 0, L.p);
+    if (!(c > L.ok)) return null;
+    if (c > L.p) { L.p = c; aitLbPut(L); }
+    let can = false; try { can = AIT.br.lb.ok() === true; } catch (e) { can = false; }
+    if (!can || AIT.lbNf) return null;                // (no leaderboard here, or not found this page load: kept for later)
+    let p = null; try { p = AIT.br.lb.submit(c); } catch (e) { p = null; }
+    return Promise.resolve(p).then((r) => {
+      const M = aitLbRead();
+      if (r === 'ok') { M.ok = Math.max(M.ok, c); if (M.p <= M.ok) M.p = 0; }
+      else if (r === 'nf') AIT.lbNf = true;             // (before 미니앱 정보 승인: no more tries this page load)
+      else if (r === 'bad') { M.p = 0; if (!AIT.lbWarned) { AIT.lbWarned = true; console.warn('[ait] leaderboard: UNPARSABLE_SCORE'); } }
+      aitLbPut(M);
+      if (shownOverlay === 'rec') aitLbBtn();
+      return r;
+    }, () => 'err');
+  }
+  function aitLbBtn() {
+    if (!AIT.on) return;
+    let b = $('pg-ait-lb');
+    if (!b) {
+      const close = $('pg-rec-close'); if (!close || !close.parentNode) return;
+      b = h('button', 'pg-btn pg-ghost pg-ait-lb', AIT_TX.lb); b.type = 'button'; b.id = 'pg-ait-lb'; b.setAttribute('aria-label', AIT_TX.lbAria);
+      close.parentNode.insertBefore(b, close);
+      listen(b, 'click', (e) => { e.preventDefault(); firstGesture(); aitLbOpen(); });
+    }
+    const on = aitLbRead().ok > 0;
+    if (b.hidden === on) b.hidden = !on;
+  }
+  function aitLbOpen() {
+    if (!AIT.on || AIT.lbT) return;
+    Snd.hold(true);                                   // (the board opens over the game: its sound stops first)
+    AIT.lbT = 1;
+    let p = null; try { p = AIT.br.lb.open(); } catch (e) { p = null; }
+    Promise.resolve(p).then((ok) => { AIT.lbT = 0; if (ok !== true && !document.hidden) Snd.hold(false); }, () => { AIT.lbT = 0; if (!document.hidden) Snd.hold(false); });
+  }
+  // ---- the overlay of Toss over the game (the exit modal, the game profile): pause an offline game, silence (10)
+  function aitShow(vis) {
+    if (stopped) return;
+    if (!vis) { Snd.hold(true); if (!G.manual) pauseGame(); }
+    else if (!document.hidden) Snd.hold(false);
+  }
+  // ---- Android back (11.2) and the game state (11.3): the bridge is told only what changed
+  function aitSync() {
+    if (!AIT.on || !AIT.br) return;
+    const root = shownOverlay === 'title' && G.mode === 'title' && !G.menuOpen;
+    const fn = root && !AIT_ROOT_BACK ? null : aitBack;
+    if (AIT.back !== !!fn) { AIT.back = !!fn; try { AIT.br.back(fn); } catch (e) { /* ignore */ } }
+    const play = AIT_PLAY.includes(G.mode) || G.mode === 'paused';
+    if (AIT.play !== play) { AIT.play = play; try { AIT.br.play(play); } catch (e) { /* ignore */ } }
+  }
+  // (each frame: a mode change that came without showOverlay - the countdown's end, a guest's snapshot - reaches aitSync;
+  // it calls the bridge only when something changed)
+  function aitTick() {
+    if (!AIT.on) return;
+    const k = G.mode + '|' + shownOverlay + '|' + (G.menuOpen ? 1 : 0);
+    if (k !== AIT.syncKey) { AIT.syncKey = k; aitSync(); }
+  }
+  // what Escape does, per screen; a game pauses (online: the menu), the result cards go home, the podium's 로비로
+  // arms then leaves (its own confirmTwice)
+  function aitBack() {
+    if (stopped) return;
+    const ov = shownOverlay;
+    if (ov === 'title' && G.mode === 'title' && !G.menuOpen) { aitExit(); return; }
+    if (ov === 'friends') { netFriendsBack(); return; }
+    if (ov === 'room') { netLeave(''); return; }
+    if (ov === 'hub') { if (HUB.draw.anim) drawSkip(); else closeHub(); return; }
+    if (ov === 'rec') { closeRec(); return; }
+    if (ov === 'pal') { palClose(); return; }
+    if (G.menuOpen || G.mode === 'paused') { resumeGame(); return; }
+    if (AIT_PLAY.includes(G.mode)) { pauseGame(); return; }
+    if (ov === 'over' || ov === 'ending') { const b = $(ov === 'over' ? 'pg-over-home' : 'pg-end-home'); if (b && !b.hidden && G.online) b.click(); else toTitle(); return; }
+    if (ov === 'podium') { const b = $('pg-podium-lobby'); if (b && !b.hidden && !b.disabled) b.click(); return; }
+    if (ov === 'title' || G.mode === 'title') { showOverlay('title'); return; }
+  }
+  // the root's two-press confirm (the fallback - never a bare close): 한 번 더 누르면 게임을 나가요 for 2 s, a second back
+  // within it closes
+  function aitExit() {
+    const t = performance.now();
+    if (AIT.exitAt && t - AIT.exitAt < 2000) { AIT.exitAt = 0; aitToast(''); try { AIT.br.close(); } catch (e) { /* ignore */ } return; }
+    AIT.exitAt = t; aitToast(AIT_TX.exit);
+  }
+  function aitToast(txt) {
+    const el = $('pg-ait-toast'); if (!el) return;
+    clearTimeout(AIT.exitT);
+    setTxt(el, txt); el.hidden = !txt;
+    if (txt) AIT.exitT = setTimeout(() => { if (stopped) return; el.hidden = true; AIT.exitAt = 0; }, 2000);
+  }
+  // ---- analytics (12): one screen log per overlay change, the log name only
+  function aitScreen(name) {
+    if (!AIT.on || !AIT.br) return;
+    const n = name === null ? (G.attract ? '' : G.party ? 'party' : G.gameMode) : ['title', 'friends', 'room', 'hub', 'rec', 'over', 'ending', 'podium'].includes(name) ? name : '';
+    if (!n || n === AIT.scr) return;
+    AIT.scr = n;
+    try { AIT.br.screen(n); } catch (e) { /* ignore */ }
+  }
+  // ---- the Toss-only DOM (setupDOM): the back toast over the title, the warm-up text
+  function aitSetupDOM() {
+    if (!AIT.on) return;
+    if (dom.screen && !$('pg-ait-toast')) { const t = h('p', 'pg-ait-toast'); t.id = 'pg-ait-toast'; t.setAttribute('role', 'status'); t.setAttribute('aria-live', 'polite'); t.hidden = true; dom.screen.appendChild(t); }
+    try { for (const q of ['.pg-fw-body', '.pg-fw-sign']) { const fw = document.querySelector('#pg-fontwarm ' + q); if (fw) fw.textContent += ' ' + AIT_TEXT; } } catch (e) { /* ignore */ }
+  }
+  // PG.debug.ait: state() never shows the key or the tag
+  function aitDebugApi() {
+    return {
+      state: () => ({ on: AIT.on, st: AIT.st, hasKey: !!AIT.hash, busy: AIT.busy, who: (() => { const v = sget('ppogeul-ait-who'); return typeof v === 'string' && /^[0-9a-f]{16}$/.test(v); })(),
+        lb: aitLbRead(), lbNf: AIT.lbNf, back: AIT.back, play: AIT.play, scr: AIT.scr, nav: Object.assign({}, AIT.nav), tr: NET.tr, gated: netGated(),
+        sync: AIT.br && typeof AIT.br.sync === 'function' ? AIT.br.sync() : null }),
+      key: () => { aitKey(); return AIT.st; },
+      lbRun: () => aitLbRun(),
+      // (a new page load as far as the leaderboard is concerned: 'nf' allows a try again, the run guard is forgotten)
+      lbReset: () => { AIT.lbNf = false; AIT.lbFor = null; },
+      lbOpen: () => aitLbOpen(),
+      back: () => aitBack(),
+      sync: () => { AIT.syncKey = ''; aitTick(); return { back: AIT.back, play: AIT.play }; },
+      show: (v) => aitShow(!!v),
+      toast: () => { const el = $('pg-ait-toast'); return el && !el.hidden ? el.textContent : ''; },
+      practice: () => troPractice(), devHash: (code) => troDevHash(code),
+      tx: () => Object.assign({}, AIT_TX),
+      // (tests) the gate card in one of its states without the key changing ('wait' | 'old' | 'err'; key() goes back),
+      // the countdown's 2 / 1 line and class, the party room's rules for a practice kind, the transport rule
+      stage(st) { if (!AIT.on || !['wait', 'old', 'err'].includes(st)) return null; AIT.st = st; AIT.hash = ''; aitGateUI(); return AIT.st; },
+      count: () => ({ sub: troCountSub(), cls: troCountCls() }),
+      partyRules: (q) => partyRules(q | 0),
+      pick: (t) => trPick(t),
+    };
+  }
+
   // ------------------------------------------------------------------ attract-mode autopilot
   function autopilot() {
     const p = G.p, a = G.ap || (G.ap = { dir: 1, stuck: 0, lastX: p.x, jumpT: 0 });
@@ -10734,7 +11002,7 @@ window.PG = window.PG || {};
     }
     if (name === 'over' || name === 'ending') fillTeam(name);
     // (v4 trophies: the 목욕 보너스 of this run, paid once however often the card shows; the podium's tag / note / gate)
-    if (name === 'over' || name === 'ending') { troCard(name, troBonus(name === 'ending')); coinCard(name); }
+    if (name === 'over' || name === 'ending') { troCard(name, troBonus(name === 'ending')); coinCard(name); aitLbRun(); }
     if (name === 'podium') { fillPodium(); troPodiumUI(); }
     if (name === 'over') {
       if (dom.overScore) dom.overScore.textContent = G.score.toLocaleString('ko-KR');
@@ -10751,6 +11019,7 @@ window.PG = window.PG || {};
     // the online panels cover the whole stage (touch pads hidden); result cards / menu get the online buttons
     if (dom.app) dom.app.classList.toggle('pg-panel-open', name === 'friends' || name === 'room' || name === 'hub' || name === 'pal');
     netCardLabels(name);
+    aitSync(); aitScreen(name);                  // (앱인토스: back / awake / swipe for this screen, its screen log)
     if (name && dom[name]) {
       const b = dom[name].querySelector('[data-primary]');
       // result screens: focus the primary button only once the action-key lock is over
@@ -11261,13 +11530,14 @@ window.PG = window.PG || {};
     listen(window, 'pointerdown', (e) => { if (e.pointerType === 'touch') setTouchMode(true); }, { passive: true });
     listen(window, 'touchstart', () => setTouchMode(true), { passive: true });
   }
-  // the notch / home-indicator insets in px (a hidden probe padded with env(safe-area-inset-*))
+  // the notch / home-indicator insets in px (a hidden probe padded with page.html's --sa-* variables: env(safe-area-
+  // inset-*) everywhere, the Toss SDK's Safe Area in the 앱인토스 build - design/toss.md 9.2)
   function safeInsets() {
     let el = dom.sai;
     if (!el) {
       el = dom.sai = document.createElement('div'); el.setAttribute('aria-hidden', 'true');
       el.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;pointer-events:none;' +
-        'padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)';
+        'padding:var(--sa-t,0px) var(--sa-r,0px) var(--sa-b,0px) var(--sa-l,0px)';
       document.body.appendChild(el);
     }
     const cs = getComputedStyle(el), n = (v) => parseFloat(v) || 0;
@@ -11289,8 +11559,10 @@ window.PG = window.PG || {};
     if (dom.frame) { const cs = getComputedStyle(dom.frame); pad = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.borderLeftWidth) || 0); }
     let aw = Math.max(64, r.width - pad * 2 - 2);
     const ah = Math.max(56, r.height - pad * 2 - 2), ins = cols ? safeInsets() : null, edge = cols ? Math.max(ins.l, ins.r) : 0;
-    // (each thumb column at least 22% of the height: 104 px on a 360 px phone, 169 px on a 768 px tablet)
-    if (cols) aw = Math.max(64, Math.min(aw, vw - 2 * (edge + clamp(Math.round(vh * 0.22), 104, 180)) - pad * 2 - 2));
+    // (each thumb column at least 22% of the height: 104 px on a 360 px phone, 169 px on a 768 px tablet; in Toss also
+    // wide enough for the nav bar's 더보기 / X box, so the capsule never lies over the game screen - design/toss.md 9.3)
+    const colMin = cols ? Math.max(edge + clamp(Math.round(vh * 0.22), 104, 180), AIT.on ? ins.r + 10 + AIT.nav.w + 4 : 0) : 0;
+    if (cols) aw = Math.max(64, Math.min(aw, vw - 2 * colMin - pad * 2 - 2));
     let s = Math.min(aw / W, ah / H);
     if (s >= 2 && !land) s = Math.floor(s);
     s = Math.max(0.25, s);
@@ -11377,6 +11649,7 @@ window.PG = window.PG || {};
     clSetupDOM();       // (cloud trophies: the warm-up text; nothing without the cloud)
     lgSetupDOM(click);  // (the login screen: the deploy with the cloud / a PR preview only)
     palSetupDOM();      // (친구 순위: 내 기록's button - the deploy with the cloud / a PR preview only)
+    aitSetupDOM();      // (앱인토스: the back toast, the warm-up text; nothing outside Toss)
     click('pg-sound', toggleMute);
     click('pg-pausebtn', togglePause);
     listen(window, 'keydown', onKeyDown);
@@ -11384,8 +11657,10 @@ window.PG = window.PG || {};
     listen(window, 'blur', () => { stickReset(); clearKeys(); });
     // (trophies: hidden / shown / resumed / on- and offline mark "away" for 30 s; a guest that goes hidden tells the host
     // "if I am gone at the end, I left on purpose" (gg) and takes it back when visible; closing the tab forfeits)
-    listen(document, 'visibilitychange', () => { TRO.awayAt = Date.now(); troGg(document.hidden ? 1 : 0); if (document.hidden) { stickReset(); clearKeys(); saveHi(); clFlush(); if (!G.manual) pauseGame(); } else clBack(); });
-    listen(window, 'pagehide', () => { saveHi(); troSessionEnd('left'); clFlush(); });
+    // (the sound stops at once - a synchronous gain drop before the context suspends - and comes back on return:
+    // Snd.hold, design/toss.md 10)
+    listen(document, 'visibilitychange', () => { TRO.awayAt = Date.now(); troGg(document.hidden ? 1 : 0); Snd.hold(document.hidden); if (document.hidden) { stickReset(); clearKeys(); saveHi(); clFlush(); if (!G.manual) pauseGame(); } else clBack(); });
+    listen(window, 'pagehide', () => { Snd.hold(true); saveHi(); troSessionEnd('left'); clFlush(); });
     // (pageshow: only a page coming back from the back-forward cache - the first load is not a return)
     listen(window, 'pageshow', (e) => { if (e && e.persisted) TRO.awayAt = Date.now(); });
     for (const [tg, ev] of [[document, 'resume'], [window, 'online'], [window, 'offline']]) listen(tg, ev, () => { TRO.awayAt = Date.now(); });
@@ -11476,7 +11751,7 @@ window.PG = window.PG || {};
   // ------------------------------------------------------------------ v4 app install + fullscreen (STANDALONE deploy only)
   // build.js gives only deploy/index.html a manifest link (and its service worker, registered from that page's head);
   // the Claude artifact has none, so PWA.on stays false there: no listeners, no buttons, nothing added to the warm-up.
-  //   - Android / desktop Chrome: beforeinstallprompt is kept (Chrome's own mini-infobar stays away) and the title's
+  //   - Android / desktop Chrome: the browser's install prompt event is kept (Chrome's own mini-infobar stays away) and the title's
   //     최고 점수 line shows a small "앱으로 설치" pill; a tap opens the browser's install dialog (a prompt works once)
   //   - iOS has no prompt API (Safari, and Chrome / Edge since 16.4, add apps from the share sheet): the same line shows
   //     "공유 → 홈 화면에 추가" - not in in-app browsers (KakaoTalk, NAVER, Instagram, Facebook, LINE...) that cannot
@@ -11503,7 +11778,9 @@ window.PG = window.PG || {};
     PWA.ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && (navigator.maxTouchPoints | 0) > 1);
     PWA.inApp = IN_APP_UA.test(ua);
     try { PWA.framed = window.top !== window.self; } catch (e) { PWA.framed = true; }
+    // <ait-cut>
     listen(window, 'beforeinstallprompt', (e) => { try { e.preventDefault(); } catch (er) { /* ignore */ } PWA.prompt = e; pwaSync(); });
+    // </ait-cut>
     listen(window, 'appinstalled', () => { PWA.prompt = null; PWA.installed = true; pwaSync(); });
     for (const q of ['(display-mode: standalone)', '(display-mode: fullscreen)']) { try { listen(window.matchMedia(q), 'change', pwaSync); } catch (e) { /* old Safari: addListener only */ } }
     listen(document, 'fullscreenchange', pwaSync); listen(document, 'webkitfullscreenchange', pwaSync);
@@ -11560,7 +11837,7 @@ window.PG = window.PG || {};
   function pwaInstall() {
     const p = PWA.prompt;
     if (!p) return;
-    PWA.prompt = null; pwaSync(); // (a prompt works once; Chrome fires a fresh beforeinstallprompt when it may ask again)
+    PWA.prompt = null; pwaSync(); // (a prompt works once; Chrome fires a fresh install prompt event when it may ask again)
     if (!touchMode) { try { $('pg-start').focus({ preventScroll: true }); } catch (e) { /* ignore */ } }
     try {
       Promise.resolve(p.prompt()).then(() => p.userChoice).then((c) => { if (c && c.outcome === 'accepted') { PWA.installed = true; pwaSync(); } }, () => { /* ignore */ });
@@ -11591,6 +11868,7 @@ window.PG = window.PG || {};
     }
     render();
     if (shownOverlay === 'hub') hubTick(); // (v4 shop: the hub's preview animates on its own)
+    aitTick();                             // (앱인토스: a game state change reaches the bridge - only when one happened)
   }
 
   // ------------------------------------------------------------------ v3 ONLINE: 친구와 하기, the room, netcode
@@ -11776,14 +12054,19 @@ window.PG = window.PG || {};
       if (peerTag() && typeof window.Peer !== 'function' && !domReady) await new Promise((res) => { domWaiters.push(res); setTimeout(res, 20000); });
       let t = null; try { t = await Net.transports(); } catch (e) { t = null; }
       NET.trInfo = t;
-      NET.tr = t && t.room ? 'room' : t && t.peer ? 'peer' : t && t.bc ? 'bc' : null;
+      NET.tr = trPick(t);
       return NET.tr;
     })().then((tr) => { NET.trDone = true; return tr; }, () => { NET.trDone = true; return null; });
     return NET.trP;
   }
-  const peerTag = () => !!document.querySelector('script[src*="peerjs"]');
+  // THE transport choice (the one place: a new transport is picked here): the artifact's room, else PeerJS, else this
+  // browser's tabs. 앱인토스 (design/toss.md 2.5): 'peer' or nothing - a 'bc' room in a phone's single WebView is a room
+  // nobody can join (?net=bc still forces it: Net.fromQuery above, the tests)
+  const trPick = (t) => (AIT.on ? (t && t.peer ? 'peer' : null) : t && t.room ? 'room' : t && t.peer ? 'peer' : t && t.bc ? 'bc' : null);
+  // (the 앱인토스 build bundles PeerJS - no script tag - and runs this file after DOMContentLoaded, PeerJS already there)
+  const peerTag = () => !!window.PG_AIT || !!document.querySelector('script[src*="peerjs"]');
   // DOMContentLoaded: every deferred script (PeerJS on the standalone page) has run or failed by then
-  let domReady = document.readyState === 'complete';
+  let domReady = document.readyState === 'complete' || !!window.PG_AIT;
   const domWaiters = [];
   if (!domReady) listen(document, 'DOMContentLoaded', () => { domReady = true; for (const f of domWaiters.splice(0)) f(); if (dom.friends && NET.screen === 'friends') renderFriends(); });
   // the room capability turned out unusable (not_granted / revoked): fall back to what else this page has
@@ -11867,6 +12150,7 @@ window.PG = window.PG || {};
     }
     // (a guest on the deploy: the sign-in card, no open rooms; the SDK warmed so the tap opens Google's window at once)
     if (netGated()) clWarm();
+    if (AIT.on && AIT.st === 'err') aitKey();   // (앱인토스: the game key failed before - ask again, once per opening)
     netTransport().then(() => { renderFriends(); if (!netGated()) netLobbyOpen(); });
     // the signed-in viewer's name as the default nickname (artifact 'user' capability), once
     if (NET.nickDefault && PG.Net && typeof PG.Net.profileName === 'function' && !NET.profAsked) {
@@ -13282,18 +13566,21 @@ window.PG = window.PG || {};
     chk('rapid', '연사', RAPID_SUB, 'bp');
     chk('monsters', '몬스터 출현', '경기 내내 때 몬스터가 나와요', 'b');
     chk('intrusion', '보스 난입', '1분 30초 남으면 보스가 와요', 'b');
-    // 트로피 걸기 (v4 trophies): 안 걸기 / 5 / 10 / 20 / 50 - everyone puts it in, 1st takes it all
-    lab('트로피 걸기', 'b');
-    const bets = h('div', 'pg-seg pg-bets'); bets.setAttribute('role', 'radiogroup'); bets.setAttribute('aria-label', '트로피 걸기'); bets.dataset.for = 'b';
-    for (const s of STAKES) {
-      const b = h('button'); b.type = 'button'; b.setAttribute('role', 'radio'); b.dataset.bet = String(s);
-      b.setAttribute('aria-label', s ? '트로피 ' + s + '개씩 걸기' : '트로피 안 걸기');
-      if (s) { const cv = mk(8, 8); cv.className = 'pg-ic pg-cup'; cv.setAttribute('aria-hidden', 'true'); troIcon(cv, SPR_CUP); b.append(cv, document.createTextNode(String(s))); }
-      else b.textContent = '안 걸기';
-      listen(b, 'click', (e) => { e.preventDefault(); if (b.disabled) return; netSetOpts({ bet: s }); uiSfx('stake'); });
-      bets.appendChild(b);
+    // 트로피 걸기 (v4 trophies): 안 걸기 / 5 / 10 / 20 / 50 - everyone puts it in, 1st takes it all (not in 앱인토스: 친선
+    // 경기 only, there is no stake to choose - design/toss.md 5 #6)
+    if (!AIT.on) {
+      lab('트로피 걸기', 'b');
+      const bets = h('div', 'pg-seg pg-bets'); bets.setAttribute('role', 'radiogroup'); bets.setAttribute('aria-label', '트로피 걸기'); bets.dataset.for = 'b';
+      for (const s of STAKES) {
+        const b = h('button'); b.type = 'button'; b.setAttribute('role', 'radio'); b.dataset.bet = String(s);
+        b.setAttribute('aria-label', s ? '트로피 ' + s + '개씩 걸기' : '트로피 안 걸기');
+        if (s) { const cv = mk(8, 8); cv.className = 'pg-ic pg-cup'; cv.setAttribute('aria-hidden', 'true'); troIcon(cv, SPR_CUP); b.append(cv, document.createTextNode(String(s))); }
+        else b.textContent = '안 걸기';
+        listen(b, 'click', (e) => { e.preventDefault(); if (b.disabled) return; netSetOpts({ bet: s }); uiSfx('stake'); });
+        bets.appendChild(b);
+      }
+      box.appendChild(bets);
     }
-    box.appendChild(bets);
     // 파티's 판 수: 3판 / 5판
     lab(PARTY_TX.rounds, 'p');
     const rs = h('div', 'pg-seg'); rs.setAttribute('role', 'radiogroup'); rs.setAttribute('aria-label', PARTY_TX.rounds); rs.dataset.for = 'p';
@@ -13335,7 +13622,8 @@ window.PG = window.PG || {};
   // stays open; the artifact and a PR preview (no cloud) are as they were. An invite link opened as a guest goes on to
   // its room once signed in
   const NG_TX = { head: '온라인 같이 하기·배틀·파티는 Google 로그인하고 할 수 있어요', solo: '혼자 하기는 로그인 없이도 바로 할 수 있어요' };
-  const netGated = () => CLOUD.on && CLOUD.st !== 'in';
+  // (앱인토스, design/toss.md 4.2: online needs the Toss game key instead - its own card, aitGateBuild / aitGatePaint)
+  const netGated = () => (CLOUD.on && CLOUD.st !== 'in') || (AIT.on && AIT.st !== 'ok');
   function ngBuild() {
     if (!CLOUD.on || dom.netGate || !dom.friends) return;
     const card = dom.friends.querySelector('.pg-pcard'), hd = $('pg-friends-h'); if (!card) return;
@@ -13383,11 +13671,11 @@ window.PG = window.PG || {};
   }
   function renderFriends() {
     if (!dom.friends) return;
-    if (CLOUD.on) {
-      ngBuild();
+    if (CLOUD.on || AIT.on) {
+      if (AIT.on) aitGateBuild(); else ngBuild();
       const gated = netGated();
       if (dom.friends.classList.contains('is-gated') !== gated) dom.friends.classList.toggle('is-gated', gated);
-      if (dom.netGate) { if (dom.netGate.hidden === gated) dom.netGate.hidden = !gated; if (gated) ngPaint(); }
+      if (dom.netGate) { if (dom.netGate.hidden === gated) dom.netGate.hidden = !gated; if (gated) { if (AIT.on) aitGatePaint(); else ngPaint(); } }
       if (gated && NET.joinLink && NET.screen === 'friends') NET.joinGated = true;
     }
     const tr = NET.tr;
@@ -13399,8 +13687,9 @@ window.PG = window.PG || {};
     if (dom.hostOpts) { dom.hostOpts.hidden = NET.mode === 'coop'; syncOpts(dom.hostOpts, true); }
     // where online goes: explain when the artifact's room is not there
     let note = '';
-    // (the standalone page ships PeerJS: when it did not load, say that instead of the Claude-only explanation)
-    const why = document.querySelector('script[src*="peerjs"]') ? NET_TEXT.peerOff : NET_TEXT.roomOff;
+    // (the standalone page ships PeerJS: when it did not load, say that instead of the Claude-only explanation; the
+    // 앱인토스 build bundles it - peerTag)
+    const why = peerTag() ? NET_TEXT.peerOff : NET_TEXT.roomOff;
     const peerLoading = !NET.trDone && peerTag() && typeof window.Peer !== 'function' && !domReady;
     // only this browser's tabs (design/distinction.md 4.2): a block card instead of the note - heading, why, what to do
     // ('room': ask for a Claude email invite; 'peer': 새로고침), 방 만들기 off, 참여 on (it answers the true reason)
@@ -13434,7 +13723,7 @@ window.PG = window.PG || {};
         } else el.textContent = note;
       }
     }
-    const off = NET.busy || (NET.trDone && !NET.tr) || peerLoading;
+    const off = NET.busy || (NET.trDone && !NET.tr) || peerLoading || (AIT.on && netGated());
     if (dom.hostBtn) {
       dom.hostBtn.disabled = !!off || !!offK; dom.hostBtn.textContent = NET.busy ? NET_TEXT.connecting : (NET.mode === 'battle' ? '배틀 방 만들기' : NET.mode === 'party' ? PARTY_TX.host : '같이 하기 방 만들기');
       if (card) dom.hostBtn.setAttribute('aria-describedby', 'pg-net-note'); else dom.hostBtn.removeAttribute('aria-describedby');
@@ -13537,7 +13826,7 @@ window.PG = window.PG || {};
       const o = NET.opts, A = ARENAS[o.arena];
       // (몬스터 없음 only when off, 연사 only when on: the default line stays as it was; 파티: 미니게임 N판 · 능력 · 연사)
       const parts = NET.mode === 'battle' ? [(A ? A.name : '랜덤 경기장'), o.time + '분', o.perks ? '능력 있음' : '능력 없음'].concat(o.rapid ? ['연사'] : [], o.monsters === false ? ['몬스터 없음'] : [],
-        [o.intrusion ? '보스 난입' : '보스 없음', '트로피 ' + troStakeTxt(stake)])
+        [o.intrusion ? '보스 난입' : '보스 없음', AIT.on ? AIT_TX.sum : '트로피 ' + troStakeTxt(stake)])
         : NET.mode === 'party' ? [PARTY_TX.minis + ' ' + (o.rounds === 5 ? 5 : 3) + '판', o.perks ? PARTY_TX.perksOn : PARTY_TX.perksOff].concat(o.rapid ? ['연사'] : []) : ['첫 번째 탕부터 끝까지 청소'];
       if (q) parts.push('연습 경기');
       const key = NET.mode + parts.join();
@@ -13556,6 +13845,7 @@ window.PG = window.PG || {};
       let hint = '';
       if (NET.roster.length < MAX_PLAYERS) {
         if (NET.tr === 'room') hint = '친구가 이 게임을 열면 ‘열린 방’에 이 방이 보여요 (Claude 로그인·초대 필요)';
+        else if (NET.tr === 'peer' && AIT.on) hint = aitFmt(AIT_TX.hint, C);   // (앱인토스: no link to send - the code only)
         else if (NET.tr === 'peer') hint = '친구에게 이 게임 링크와 방 코드 ' + C + '를 보내 주세요 (코드 복사에 링크도 담겨요)';
         else hint = localOnly() ? '이 브라우저의 다른 탭에서만 들어올 수 있어요' : '다른 탭의 친구와 하기에서 방 코드 ' + C + '로 참여해요';
       }
@@ -13564,9 +13854,10 @@ window.PG = window.PG || {};
     }
     // the mode's own verbs, for first-timers (revive a partner / mash out / KO)
     if (dom.roomRules) {
-      // (trophies first: what each place gets - or why nothing changes; co-op: the 목욕 보너스)
-      const tro = q === 1 ? ['연습 경기예요: 이 브라우저의 탭끼리는 트로피가 바뀌지 않아요'] : q === 2 ? ['연습 경기예요: 같은 기기에서 들어온 친구가 있어요']
-        : NET.mode === 'battle' ? [troRulesLine(), troFreeLine(), '끝까지 한 판마다 오늘 트로피 보너스 +' + TRO_PLAY + ' (꼴등 빼고 · 하루 ' + DAY_CAP + '개까지)', '견습 리그는 등수로 잃지 않아요 · 판 중간에 나가면 꼴찌로 쳐요'].filter(Boolean) : ['끝까지 갈수록 모두 트로피를 받아요 (잃지 않아요)'];
+      // (trophies first: what each place gets - or why nothing changes; co-op: the 목욕 보너스. 앱인토스: a battle is a
+      // 친선 경기 - one line, and the same Toss account twice says so in Toss words; design/toss.md 4.3, 5 #8)
+      const tro = q === 1 ? ['연습 경기예요: 이 브라우저의 탭끼리는 트로피가 바뀌지 않아요'] : q === 2 ? [AIT.on ? AIT_TX.same : '연습 경기예요: 같은 기기에서 들어온 친구가 있어요']
+        : NET.mode === 'battle' ? (AIT.on ? [AIT_TX.friendly] : [troRulesLine(), troFreeLine(), '끝까지 한 판마다 오늘 트로피 보너스 +' + TRO_PLAY + ' (꼴등 빼고 · 하루 ' + DAY_CAP + '개까지)', '견습 리그는 등수로 잃지 않아요 · 판 중간에 나가면 꼴찌로 쳐요'].filter(Boolean)) : ['끝까지 갈수록 모두 트로피를 받아요 (잃지 않아요)'];
       const rules = NET.mode === 'party' ? partyRules(q) : tro.concat([coinRule(q)], NET.mode === 'battle'
         ? (NET.opts.monsters === false ? ['몬스터 없이 친구끼리만 겨뤄요'] : []).concat([NET.opts.rapid ? RAPID_RULE : AMMO_RULE, '갇히면 점프·거품 연타로 빨리 빠져나와요', '갇힌 친구를 터뜨리면 뽀득 KO +500'])
         : ['쓰러진 친구는 거품이 돼요. 거품에 닿으면 바로 살아나요', '목숨은 다 함께 써요']);
@@ -13606,12 +13897,15 @@ window.PG = window.PG || {};
   // next PR), coins by the room's practice kind q (no trophy lines: a party has none), the magazine / 연사, traps, leaving
   function partyRules(q) {
     const n = clamp(NET.roster.length, 2, 4), pts = PARTY_PTS[n].map((v, i) => (i + 1) + '등 ' + v + '점').join(' · ');
-    const coin = q === 1 && !(CO.allowBc && NET.tr === 'bc') ? PARTY_TX.coin1 : q === 2 ? PARTY_TX.coin2 : PARTY_TX.coin0;
-    return ['미니게임 ' + (NET.opts.rounds === 5 ? 5 : 3) + '판! 판마다 ' + pts, PARTY_TX.tie, n === 3 ? PARTY_TX.games3 : PARTY_TX.games, coin, PARTY_TX.noTro,
+    // (앱인토스: the same Toss account twice, in Toss words; no line says 걸다 about trophies - design/toss.md 5)
+    const coin = q === 1 && !(CO.allowBc && NET.tr === 'bc') ? PARTY_TX.coin1 : q === 2 ? (AIT.on ? AIT_TX.coin2 : PARTY_TX.coin2) : PARTY_TX.coin0;
+    return ['미니게임 ' + (NET.opts.rounds === 5 ? 5 : 3) + '판! 판마다 ' + pts, PARTY_TX.tie, n === 3 ? PARTY_TX.games3 : PARTY_TX.games, coin, AIT.on ? AIT_TX.friendly : PARTY_TX.noTro,
       NET.opts.rapid ? RAPID_RULE : AMMO_RULE, PARTY_TX.trap, PARTY_TX.leave];
   }
   // 코드 복사: an invite (the code, plus this page's link with ?join= on the standalone deploy); phones get the share sheet
+  // (앱인토스: the code and how to use it, never a URL - design/toss.md 3)
   function inviteText() {
+    if (AIT.on) return aitFmt(AIT_TX.invite, (NET.code || '').toUpperCase());
     let t = GAME_NAME + ' 같이 해요! 방 코드 ' + (NET.code || '').toUpperCase();
     if (NET.tr === 'peer') {
       try { const u = new URL(location.href); u.search = ''; u.hash = ''; u.searchParams.set('join', NET.code); t += ' ' + u.toString(); } catch (e) { /* ignore */ }
@@ -13952,6 +14246,8 @@ window.PG = window.PG || {};
     // the login screen (design/cloud-trophies.md "As built (login screen)")
     login: lgDebugApi(),
     pal: palDebugApi(),
+    // 앱인토스 (design/toss.md 14): the key's state (never the key), the leaderboard, back / play, the screen log
+    ait: aitDebugApi(),
     // v4 뽑기 (design/gacha.md 12): the pure draw, the odds, a test generator, the pace simulation
     draw: drawDebugApi(),
     // the standalone deploy's install UI: its state; set = { ios, inApp, framed, installed } to stage a platform
@@ -14186,6 +14482,7 @@ window.PG = window.PG || {};
     G.hiscore = Math.max(stored, (data && +data.hiscore) || 0);
     TRO.tab = troRand(6); troLoad(); // (trophies: this page load's tab id, then the store - the gift on a first visit)
     setupDOM();
+    aitKey();  // (앱인토스: the game key for online play - the bridge asked for it already; nothing without Toss)
     toTitle();
     clBoot(); // (cloud trophies: a linked browser listens again, a sign-in redirect comes back; nothing without the cloud)
     if (!NET.joinLink) lgBoot(); // (the login screen before the title: not linked, never played as a guest - deploy / preview only)

@@ -81,6 +81,14 @@ const PEER_RE = /^https:\/\/(?:cdnjs\.cloudflare\.com\/ajax\/libs\/peerjs\/\d+\.
   ok('deploy: same body as the artifact page', body.length > 1000 && body.trim() === artBody.trim(), `${body.length} vs ${artBody.length}`);
 }
 
+// ================================================================== nothing of the 앱인토스 build (design/toss.md 2.1)
+// (page.html's own .pg-ait CSS and game.js's window.PG_AIT reads are in every build: the checks are structural)
+for (const [n, html] of [['artifact', art], ['deploy', dep]]) {
+  ok(`${n}: no pg-ait class on <html>`, !/<html\b[^>]*\bpg-ait\b/i.test(html));
+  ok(`${n}: no PG_AIT assignment (game.js / net.js only read it)`, !/PG_AIT\s*=(?!=)/.test(html));
+  ok(`${n}: no ait.js script tag, no SDK name (@apps-in-toss)`, !/<script\b[^>]*\bsrc\s*=\s*["']?[^"'\s>]*ait\.js\b/i.test(html) && !/@apps-in-toss/.test(html));
+}
+
 // ================================================================== deploy page in Chrome
 function chrome(file, flags, budget) {
   const prof = `${T}/chrome-profile-pages-${process.pid}`;

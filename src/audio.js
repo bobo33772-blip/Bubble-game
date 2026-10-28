@@ -2,7 +2,7 @@
    뽀득뽀득 목욕탕 — audio.js
    WebAudio sound effects + an ORIGINAL chiptune soundtrack composed for this game.
 
-   PG.Audio = { unlock(), sfx(name, opts), music(track), setMuted(bool), isMuted() }
+   PG.Audio = { unlock(), sfx(name, opts), music(track), setMuted(bool), isMuted(), hold(bool) }
      unlock()        create/resume the AudioContext (call from a user gesture)
      sfx(name, o)    jump shoot capture pop chain(o.n) kill item extend die hurry
                      clear bounce steam start gameover escape pause
@@ -34,6 +34,8 @@
                      'boss' | 'final' | 'victory' | 'lobby' | 'battle' | 'podium' | null
                      (clear/gameover/ending/victory/podium play once; the rest loop)
      setMuted(b)     persisted in localStorage 'ppogeul-muted'
+     hold(b)         true: silent at once (the gain drops synchronously, then the context suspends) until hold(false),
+                     which restores the muted / unmuted gain; also on pagehide by itself
    Every call is a silent no-op when audio is unavailable or not yet unlocked, and never throws.
    Music runs on a lookahead scheduler (setInterval 25 ms, ~0.12 s ahead) driven by
    AudioContext.currentTime; each track plays into its own gain node so switching
@@ -1488,7 +1490,16 @@ window.PG = window.PG || {};
      Page lifecycle: pause audio while hidden, resume on return / next gesture.
      ------------------------------------------------------------------------ */
   const hasDoc = typeof document !== 'undefined' && document && typeof document.addEventListener === 'function';
+  // hold(true): silent at once and suspended until hold(false) - the page hiding or closing, an overlay over the game
+  // (the 앱인토스 exit modal), a leaderboard opening (design/toss.md 10). Nothing resumes the context meanwhile, not
+  // even a gesture; the mute flag is kept apart (hold(false) restores the gain the M key last set)
+  let held = false;
+  // (the value setter: in effect at once, even on a suspended context whose clock stands still)
+  function gainNow(v) {
+    try { master.gain.cancelScheduledValues(ctx.currentTime); master.gain.value = v; } catch (e) { /* ignore */ }
+  }
   function resumeCtx() {
+    if (held) return;
     if (ctx && ctx.state !== 'running' && ctx.state !== 'closed') settle(ctx.resume());
   }
   function onVisibility() {
@@ -1501,6 +1512,17 @@ window.PG = window.PG || {};
   function onGesture() {
     try { if (unlocked && !document.hidden) resumeCtx(); } catch (e) { /* ignore */ }
   }
+  function hold(on) {
+    try {
+      held = !!on;
+      if (!ctx || !master || ctx.state === 'closed') return;
+      if (held) { gainNow(0); if (typeof ctx.suspend === 'function') settle(ctx.suspend()); return; }
+      if (hasDoc && document.hidden) return;                   // (hidden: the return resumes it)
+      gainNow(muted ? 0 : MASTER_VOL);
+      if (unlocked) resumeCtx();
+    } catch (e) { /* never throw */ }
+  }
+  function onPageHide() { hold(true); }
   function listen(on) {
     if (!hasDoc || listening === on) return;
     listening = on;
@@ -1510,6 +1532,7 @@ window.PG = window.PG || {};
       document[fn]('pointerdown', onGesture, true);
       document[fn]('keydown', onGesture, true);
       document[fn]('touchend', onGesture, true);
+      W[fn]('pagehide', onPageHide);
     } catch (e) { /* ignore */ }
   }
 
@@ -1564,7 +1587,7 @@ window.PG = window.PG || {};
     try {
       muted = !!b;
       writeMuted(muted);
-      if (ctx && master && ctx.state !== 'closed') {
+      if (ctx && master && ctx.state !== 'closed' && !held) {
         const now = ctx.currentTime;
         master.gain.cancelScheduledValues(now);
         master.gain.setTargetAtTime(muted ? 0 : MASTER_VOL, now, 0.03);
@@ -1585,11 +1608,11 @@ window.PG = window.PG || {};
   }
 
   PG.Audio = {
-    unlock, sfx, music, setMuted, isMuted,
+    unlock, sfx, music, setMuted, isMuted, hold,
     // internal helpers for tests / hot reload (not part of the game-facing API)
     _dispose: dispose,
     _state: () => ({
-      unlocked, muted, ctxState: ctx ? ctx.state : null, track: cur ? cur.name : null,
+      unlocked, muted, held, gain: master ? master.gain.value : null, ctxState: ctx ? ctx.state : null, track: cur ? cur.name : null,
       pos: cur ? cur.pos : 0, pending, fading: fading.length, timer: !!timer,
     }),
     _songs: SONGS,

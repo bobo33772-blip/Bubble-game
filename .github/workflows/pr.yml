@@ -40,7 +40,7 @@ jobs:
         # 흔들려서 빼요 (그건 PC에서 node tools/run-all.js 전체로 돌려요)
         env:
           JOBS: >-
-            check-sprites check-integration check-shop check-pages check-cloud net-node audio-node validate-levels
+            check-sprites check-integration check-shop check-pages check-cloud check-toss net-node audio-node validate-levels
             smoke campaign final-e2e final-e2e2 fixes integration levels-engine v2-core v2-boss review-correctness
             mp-local v3-levels v3-fixes arena-gate monsters distinction trophies party shop gacha kits clutter touch-input
         run: node tools/run-all.js --no-build --exact $JOBS

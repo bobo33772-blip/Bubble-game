@@ -84,7 +84,8 @@
    ---- 'peer' : PeerJS WebRTC, the STANDALONE deploy build only ---------------------------------------------
    build.js adds PeerJS 1.5.4 (cdnjs, exact version) to deploy/index.html only, so window.Peer exists there
    and transports().peer is true; the artifact page never loads it. The host registers the peer id
-   'ppodeuk-' + code ('unavailable-id' = code taken: a generated code is re-rolled); guests take a random id
+   'ppodeuk-' + code ('ppodeuk-t-' + code in the 앱인토스 build, which bundles PeerJS: its rooms never meet the web's)
+   ('unavailable-id' = code taken: a generated code is re-rolled); guests take a random id
    and connect to it with ONE reliable, ordered DataConnection carrying JSON. Star topology: the host relays
    guests' states and messages to the other guests. Optional host/join option {peerOptions} is passed to
    new Peer(...) (custom signalling server / ICE config); the PeerJS defaults are used otherwise.
@@ -127,7 +128,9 @@ window.PG = window.PG || {};
   // page's lobby skips a party room, it could not join it anyway)
   const MODES = ['coop', 'battle', 'party'];
   const TRANSPORTS = ['room', 'peer', 'bc'];
-  const PEER_PREFIX = 'ppodeuk-';
+  // (the 앱인토스 build - its page sets window.PG_AIT before this file - has its own id space, design/toss.md 3: its
+  // rooms are friendly matches between game keys, the web's have trophy stakes and Google accounts; they never meet)
+  const PEER_PREFIX = W.PG_AIT ? 'ppodeuk-t-' : 'ppodeuk-';
   const BC_PREFIX = 'ppodeuk-v3-';
   const ROOM_PREFIX = 'g-';
   const TERMINAL = ['revoked', 'not_granted', 'capability_disabled', 'capability_removed', 'transform_error'];
@@ -1371,6 +1374,7 @@ window.PG = window.PG || {};
     transports, lobby, host, join,
     fromQuery, profileName, TEXT,
     roomDead: () => roomDead,
+    peerId: (code) => PEER_PREFIX + String(code || ''),   // (the 'peer' host id of a room code: tests)
     MAX_PLAYERS, STATE_MAX, MSG_MAX,
     _sessions: () => Array.from(live, (c) => c.api),
     _dispose: dispose,
