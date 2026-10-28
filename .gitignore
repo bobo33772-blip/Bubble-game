@@ -18,7 +18,9 @@ firebase-debug.*.log*
 
 # relay servers for online play (CI writes it from the TURN_CONFIG secret)
 turn.config.json
-# the relay Worker (cloudflare/): wrangler's local state and its local secrets file - the TURN key lives only in 'wrangler secret'
+# the relay Worker (cloudflare/, CLOUDFLARE-SETUP.md): wrangler's local state, its npm install, a local vars file (none is needed)
 cloudflare/.wrangler/
 cloudflare/node_modules/
 cloudflare/.dev.vars
+# a local convenience: the relay Worker's address for build.js (CI uses the repository variable RELAY_URL)
+relay.config.json

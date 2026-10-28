@@ -181,12 +181,10 @@ const LIST = [
   V('net-node', 'net-node-test.js', 0, has(/NET NODE OK/), { runner: 'node' }),
   // the two shipped pages' contracts (artifact / standalone) + the standalone page playing solo without PeerJS
   V('check-pages', 'check-pages.js', 0, has(/^PAGES OK: \d+ passed, 0 failed/m), { runner: 'node' }),
-  // the relay Worker (cloudflare/: origins, /turn against a fake Cloudflare API, errors, the abuse guard, no secret in any
-  // answer) and its client (src/relay/ice.js in a vm, build.js's relay URL on a copy of the sources, the deploy-relay
-  // fixture in Chrome against the real Worker code: the TURN servers reach new Peer, cache, fallbacks, the 3 s timeout -
-  // serial: it times that timeout). tools/ice-check.js (a deployed page / Worker, needs the internet) is manual
-  V('relay-worker', 'relay-worker-test.js', 0, has(/RELAY-WORKER OK: \d+ passed, 0 failed/), { runner: 'node' }),
-  V('relay-client', 'relay-client-test.js', 0, has(/RELAY-CLIENT OK: \d+ passed, 0 failed/), { runner: 'node', serial: true }),
+  // the WebSocket relay (design/relay.md 11.1): cloudflare/'s RoomCore (seats, routing, caps, the lazy time rules, the
+  // host re-seat, a woken object), the Worker's gate (paths, origins per space, the limiter, 4503), the Durable Object with
+  // a fake ctx, the shipped wrangler.toml, tools/ws-relay.js over real sockets, build.js's relay URL on a copy of the sources
+  V('relay-node', 'relay-node-test.js', 0, has(/RELAY-NODE OK: \d+ passed, 0 failed/), { runner: 'node' }),
   V('sprites-scene', 'test-sprites-scene.html', 6000, has(/SCENE mode/), { shot: 'runall-sprites-scene.png' }),
   // ---- real time (one at a time)
   V('realinput', 'test-realinput.html', 40000, doneZero('REAL'), { runner: 'cdp', done: 'REAL DONE' }),
