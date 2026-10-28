@@ -15,8 +15,9 @@
 
 export const RELAY_V = 1;
 export const MAX_SOCKS = 6, MAX_MEMBERS = 3, FRAME_MAX = 4096;
-// the bucket: BUCKET tokens, REFILL a second, one per frame; OVER_MS without a refill to OVER_RESET tokens closes
-export const BUCKET = 100, REFILL = 50, OVER_MS = 5000, OVER_RESET = 5;
+// the bucket: BUCKET tokens, REFILL a second, one per frame. A frame that finds none is "over"; over frames for OVER_MS in
+// a row - no gap of more than OVER_GAP between two of them (TCP delivers in bursts: a gap test, not a refill test) - close
+export const BUCKET = 100, REFILL = 50, OVER_MS = 5000, OVER_GAP = 1000;
 export const JUNK_BIG = 3, JUNK_ANY = 8, JUNK_MS = 60000;
 export const STRANGER_MAX = 8, STRANGER_MS = 20000;
 // IDLE_GAP: nothing at all arrived for this long - the object could have hibernated (a Durable Object is rebuilt with
@@ -60,7 +61,7 @@ export class RoomCore {
     if (!this.host && this.bySock.size) this.closeAll(C_GONE, 'no host');
   }
   seat(sock, id, role, t, tok) {
-    const s = { id, role, sock, tok, t, last: t, tokens: BUCKET, tokAt: t, overAt: 0, junk: 0, junkAt: t, big: 0, sn: 0, sAt: t, q: 0, done: false };
+    const s = { id, role, sock, tok, t, last: t, tokens: BUCKET, tokAt: t, overAt: 0, overLast: 0, junk: 0, junkAt: t, big: 0, sn: 0, sAt: t, q: 0, done: false };
     this.bySock.set(sock, s);
     this.byId.set(id, s);
     return s;
@@ -103,7 +104,7 @@ export class RoomCore {
           this.bySock.delete(old);
           this.io.save(old, null);
           this.io.close(old, C_GONE, 'reseat');
-          s.sock = sock; s.last = t; s.tokens = BUCKET; s.tokAt = t; s.overAt = 0;
+          s.sock = sock; s.last = t; s.tokens = BUCKET; s.tokAt = t; s.overAt = 0; s.overLast = 0;
           this.bySock.set(sock, s);
         } else return { code: C_TAKEN, reason: 'taken' };
       } else if (this.host) return { code: C_TAKEN, reason: 'taken' };
@@ -135,9 +136,12 @@ export class RoomCore {
     s.tokens = Math.min(BUCKET, s.tokens + (t - s.tokAt) * REFILL / 1000);
     s.tokAt = t;
     const token = s.tokens >= 1;
-    if (token) { s.tokens -= 1; if (s.overAt && s.tokens >= OVER_RESET) s.overAt = 0; }
-    else if (!s.overAt) s.overAt = t;
-    else if (t - s.overAt >= OVER_MS) { this.end(s, 'lost', C_RATE, 'rate'); return; }
+    if (token) s.tokens -= 1;
+    else {
+      if (!s.overAt || t - s.overLast > OVER_GAP) s.overAt = t;     // (a new run of over frames)
+      s.overLast = t;
+      if (t - s.overAt >= OVER_MS) { this.end(s, 'lost', C_RATE, 'rate'); return; }
+    }
     if (typeof data !== 'string' || data.length > FRAME_MAX) { if (++s.big >= JUNK_BIG) this.end(s, 'lost', C_BIG, 'big'); return; }
     if (data === PING) { this.io.send(sock, PONG); return; }        // (the Durable Object's auto-response answers it first)
     let m = null;

@@ -1,4 +1,4 @@
-// Node unit tests for src/net.js (PG.Net) against FAKES of its three transports, on a virtual clock
+// Node unit tests for src/net.js (PG.Net) against FAKES of its four transports, on a virtual clock
 // (deterministic and fast: a minute of network time runs in a few seconds).
 // Usage: node bogeul/tools/net-node-test.js [seed=7] [-v]
 //   - fake 'room' capability, faithful to the runtime contract: presence merge (per top-level field, latest
@@ -11,6 +11,8 @@
 //     with probability `drop` (joins / leaves never dropped).
 //   - fake PeerJS (Peer / DataConnection, 'unavailable-id', 'peer-unavailable', json serialization, ordered).
 //   - fake BroadcastChannel (structured clones, async, in order).
+//   - fake WebSocket (one TCP stream per page: in order, never dropped, a modelled uplink, cuts) in front of the REAL relay
+//     room logic (cloudflare/src/room.js behind relay.js's gate) for the 'ws' transport and its fallback to 'peer' (testWs).
 //   - v4 kits on the wire (testV4Wire): the engine's body bits / qk / a:1 / NET_V / SNAP_LIMIT in game.js and those
 //     shapes carried intact by PG.Net (the measured snapshot sizes are kits-net.js's).
 // Prints "PASS/FAIL <name>" and "NET NODE OK" / "NET NODE FAIL (n)"; exit code 1 on failure.
@@ -18,6 +20,7 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const { pathToFileURL } = require('url');
 
 const SRC = fs.readFileSync(process.env.NET_SRC || path.join(__dirname, '..', 'src', 'net.js'), 'utf8');   // NET_SRC: test a modified copy
 const args = process.argv.slice(2);
@@ -899,8 +902,8 @@ async function testBc() {
   const NET = { latency: 50, jitter: 50, drop: 0.3 };
   const mk = (n, search) => loadPage(n, { BroadcastChannel: bus.BC, location: { search: search || '' } });
   const H = mk('bhost'), G1 = mk('bg1', '?net=bc&lat=50&jit=50&drop=0.3'), G2 = mk('bg2'), G3 = mk('bg3'), G4 = mk('bg4'), Q = mk('q', '?net=bc&lat=80&jit=30&drop=0.1');
-  ok('bc: fromQuery parses ?net=bc&lat=80&jit=30&drop=0.1', same(Q.Net.fromQuery(), { transport: 'bc', net: { latency: 80, jitter: 30, drop: 0.1 } }), Q.Net.fromQuery());
-  ok('bc: fromQuery clamps and ignores junk', same(Q.Net.fromQuery('?net=evil&lat=-5&drop=7'), { transport: null, net: { latency: 0, jitter: 0, drop: 0.95 } }), Q.Net.fromQuery('?net=evil&lat=-5&drop=7'));
+  ok('bc: fromQuery parses ?net=bc&lat=80&jit=30&drop=0.1', same(Q.Net.fromQuery(), { transport: 'bc', net: { latency: 80, jitter: 30, drop: 0.1 }, relay: null }), Q.Net.fromQuery());
+  ok('bc: fromQuery clamps and ignores junk', same(Q.Net.fromQuery('?net=evil&lat=-5&drop=7'), { transport: null, net: { latency: 0, jitter: 0, drop: 0.95 }, relay: null }), Q.Net.fromQuery('?net=evil&lat=-5&drop=7'));
   let r = await resolveP(H.Net.transports());
   ok('bc: transports().bc true when BroadcastChannel exists', r.value && r.value.bc === true);
   r = await resolveP(H.Net.host({ transport: 'bc', code: 'b0b0', net: NET }));
@@ -980,6 +983,476 @@ async function testBc() {
   ok('bc: ... then closed:lost', g5s.includes('closed:lost'), g5s);
 }
 
+// ==================================================================================== FAKE WebSocket + the REAL relay core
+// (design/relay.md 11.2) The relay is cloudflare/src/room.js itself (RoomCore) behind cloudflare/src/relay.js's gate(), on
+// the virtual clock: each page's FakeWebSocket is one TCP stream - frames in FIFO order each way with latency + jitter,
+// never dropped, never reordered; bufferedAmount models the uplink (rate in bytes/s, stall(ms): nothing leaves for a
+// while, then everything queued goes at once); cut() is an abrupt network death (1006 here; the relay hears of it after a
+// latency, or never: {half: true}); the keepalive {"k":"p"} is answered by the "runtime" (as the auto-response) and
+// remembered for the dead-seat sweep. Relay switches: refuse (every connect ends 1006 before the handshake), silent (a
+// connect never answers), cap (4503 'cap'), takenNext (the next host connect gets 4409), restart().
+const WALL = { base: Date.UTC(2026, 9, 28, 23, 0, 0), skew: 0 };
+class VDate extends Date {
+  constructor(...a) { if (a.length) super(...a); else super(WALL.base + WALL.skew + clock.now()); }
+  static now() { return WALL.base + WALL.skew + clock.now(); }
+}
+async function makeWsRelay(o) {
+  const CFS = path.join(__dirname, '..', 'cloudflare', 'src');
+  const Rm = await import(pathToFileURL(path.join(CFS, 'room.js')).href);
+  const Rl = await import(pathToFileURL(path.join(CFS, 'relay.js')).href);
+  const net = Object.assign({ latency: 25, jitter: 10, refuse: 0, silent: false, cap: false, takenNext: 0, connects: 0, pings: 0, rooms: new Map(), clients: [] }, o || {});
+  const env = { ORIGINS: 'w=https://bubble-c3ad4.web.app p=https://bubble-c3ad4--*.web.app', ALLOW_LOCALHOST: '0' };
+  const delay = () => net.latency + rng() * net.jitter;
+  const coreFor = (key) => {
+    let c = net.rooms.get(key);
+    if (!c) {
+      c = new Rm.RoomCore({ send: (s, str) => s.deliver(str), close: (s, code, reason) => s.shut(code, reason), save: (s, a) => { s.att = a; }, heard: (s) => s.heardAt, rand: (n) => randLabel(n), now: () => clock.now() });
+      net.rooms.set(key, c);
+    }
+    return c;
+  };
+  class FakeWebSocket {
+    constructor(url, origin) {
+      this.url = String(url); this.origin = origin === undefined ? 'https://bubble-c3ad4.web.app' : origin;
+      this.readyState = 0; this.onopen = null; this.onmessage = null; this.onclose = null; this.onerror = null;
+      this.up = orderedLink(); this.down = orderedLink(); this.q = []; this.lastLeave = 0; this.stallUntil = 0; this.uplink = net.uplink || Infinity;
+      this.dead = false; this.srv = null; this.core = null; this.got = []; this.sent = [];
+      net.clients.push(this); net.connects++;
+      clock.add(() => { this.handshake().catch((e) => timerErrors.push(e)); }, delay());
+    }
+    get bufferedAmount() { const t = clock.now(); this.q = this.q.filter((e) => e.leave > t); return this.q.reduce((a, e) => a + e.bytes, 0); }
+    finish(code, reason) { if (this.readyState === 3) return; this.readyState = 3; if (typeof this.onclose === 'function') this.onclose({ code, reason: reason || '' }); }
+    opened() { this.readyState = 1; if (typeof this.onopen === 'function') this.onopen({}); }
+    async handshake() {
+      if (this.dead || this.readyState !== 0 || net.silent) return;
+      if (net.refuse) { this.dead = true; this.finish(net.refuse, ''); return; }
+      const u = new URL(this.url.replace(/^ws/, 'http'));
+      const H = { upgrade: 'websocket', origin: this.origin, 'cf-connecting-ip': '192.0.2.1' };
+      const g = await Rl.gate({ url: 'https://relay.test' + u.pathname + u.search, method: 'GET', headers: { get: (n) => (H[String(n).toLowerCase()] === undefined || H[String(n).toLowerCase()] === null ? null : H[String(n).toLowerCase()]) } }, env, { limiter: () => true });
+      // (a refusal: the Worker accepts its own socket and closes it - the page sees open, then the code)
+      const refuse = (code, reason) => { this.opened(); this.down.push(clock.now() + delay(), () => this.finish(code, reason)); };
+      if (!g.ok) { refuse(g.close || 1006, g.reason); return; }
+      if (net.cap) { refuse(4503, 'cap'); return; }
+      if (net.takenNext && g.role === 'h') { net.takenNext--; refuse(4409, 'taken'); return; }
+      const core = coreFor(g.space + ':' + g.code);
+      const ws = this;
+      const srv = {
+        client: ws, att: null, heardAt: 0, closed: false, inS: 0, inAll: 0,
+        deliver(str) { if (srv.closed) return; ws.down.push(clock.now() + delay(), () => { if (ws.dead || ws.readyState !== 1) return; ws.got.push(str); if (typeof ws.onmessage === 'function') ws.onmessage({ data: str }); }); },
+        shut(code, reason) { if (srv.closed) return; srv.closed = true; ws.down.push(clock.now() + delay(), () => { if (!ws.dead) ws.finish(code, reason); }); },
+      };
+      this.srv = srv; this.core = core;
+      this.opened();
+      const no = core.open(srv, { role: g.role, id: u.searchParams.get('id') || '', tok: u.searchParams.get('tok') || '' });
+      if (no) srv.shut(no.code, no.reason);
+    }
+    send(str) {
+      if (this.readyState === 0) throw new Error('InvalidStateError: still connecting');
+      if (this.readyState !== 1 || this.dead) return;
+      str = String(str);
+      this.sent.push(str);
+      const bytes = Buffer.byteLength(str), t = clock.now();
+      const leave = Math.max(t, this.lastLeave, this.stallUntil) + (this.uplink === Infinity ? 0 : bytes * 1000 / this.uplink);
+      this.lastLeave = leave; this.q.push({ bytes, leave });
+      this.up.push(leave + delay(), () => this.arrive(str));
+    }
+    arrive(str) {
+      const srv = this.srv;
+      if (this.dead || !srv || srv.closed) return;
+      srv.inAll++;
+      if (str === Rm.PING) { srv.heardAt = clock.now(); net.pings++; srv.deliver(Rm.PONG); return; }   // (the auto-response)
+      if (/^\{"k":"s"/.test(str)) srv.inS++;
+      this.core.message(srv, str);
+    }
+    close(code) {
+      if (this.readyState >= 2) return;
+      if (this.readyState === 0 || !this.srv) { this.dead = true; this.readyState = 2; clock.add(() => this.finish(1006, ''), 1); return; }
+      this.readyState = 2;
+      const leave = Math.max(clock.now(), this.lastLeave, this.stallUntil);
+      this.up.push(leave + delay(), () => {
+        const srv = this.srv;
+        if (srv && !srv.closed) { srv.closed = true; this.core.closed(srv); }
+        this.down.push(clock.now() + delay(), () => this.finish(code || 1000, ''));
+      });
+    }
+    // the network dies under this page: 1006 here; the relay hears of it after a latency, or never ({half: true})
+    cut(opt) {
+      if (this.dead) return;
+      this.dead = true;
+      clock.add(() => this.finish(1006, ''), 1);
+      const srv = this.srv;
+      if (srv && !(opt && opt.half)) clock.add(() => { if (!srv.closed) { srv.closed = true; this.core.closed(srv); } }, net.latency);
+    }
+    stall(ms) { this.stallUntil = clock.now() + ms; }
+  }
+  net.WS = (origin) => class extends FakeWebSocket { constructor(u) { super(u, origin); } };
+  net.Raw = FakeWebSocket;
+  net.restart = () => { for (const c of net.clients) if (c.srv && !c.srv.closed) { c.srv.closed = true; const w = c; c.down.push(clock.now() + delay(), () => { if (!w.dead) w.finish(1012, 'restart'); }); } net.rooms.clear(); };
+  net.of = (sess) => net.clients.filter((c) => c.srv && !c.srv.closed && c.got.length && JSON.parse(c.got[0]).id === sess.selfId).pop() || null;
+  net.Rm = Rm;
+  return net;
+}
+
+// ==================================================================================== TESTS: ws (the relay)
+async function testWs() {
+  const SRCWS = SRC.match(/ws: \{ stateMs: (\d+), pingMs: (\d+), unstableMs: (\d+), lostMs: (\d+), joinMs: (\d+), connectMs: (\d+), quietMs: (\d+), byeMs: (\d+) \}/);
+  ok('ws: TUNE.ws joinMs (12 s) above connectMs (6 s): a ws join timeout always means the relay found the room', SRCWS && +SRCWS[5] > +SRCWS[6] && +SRCWS[2] === 2000, SRCWS && SRCWS.slice(1));
+  const rl = await makeWsRelay();
+  const URL0 = 'https://relay.test';
+  const mk = (n, o) => {
+    o = o || {};
+    const ex = { WebSocket: o.noWs ? undefined : rl.WS(o.origin), Date: VDate, location: { search: o.search || '' } };
+    if (!o.noRelay) ex.PG_RELAY = o.relay || { url: URL0 };
+    if (o.Peer) ex.Peer = o.Peer;
+    return loadPage(n, ex);
+  };
+  // ---- finding the relay (4.2)
+  let r = await resolveP(mk('w0').Net.transports());
+  ok('ws: transports().ws true with window.PG_RELAY and a WebSocket', r.value && r.value.ws === true && r.value.room === false && r.value.peer === false, r.value);
+  r = await resolveP(mk('w0b', { noWs: true }).Net.transports());
+  ok('ws: ... false without a WebSocket', r.value && r.value.ws === false);
+  r = await resolveP(mk('w0c', { noRelay: true }).Net.transports());
+  ok('ws: ... false without PG_RELAY', r.value && r.value.ws === false);
+  for (const bad of [{ url: 'http://evil.example' }, { url: 'javascript:alert(1)' }, { url: 'https://relay.test/r?x=1' }, { url: 'wss://relay.test' }, { url: URL0, space: 'q' }, 'https://relay.test', [URL0], { url: 5 }]) {
+    r = await resolveP(mk('w0d', { relay: bad }).Net.transports());
+    ok('ws: a bad PG_RELAY gives no ws: ' + JSON.stringify(bad), r.value && r.value.ws === false);
+  }
+  const Lq = mk('w0e', { noRelay: true, search: '?relay=ws://localhost:1/ws' });
+  r = await resolveP(Lq.Net.transports());
+  ok('ws: a test page\'s ?relay=ws://localhost:1/ws is accepted (fromQuery().relay)', r.value && r.value.ws === true && Lq.Net.fromQuery().relay === 'ws://localhost:1/ws', Lq.Net.fromQuery());
+  for (const q of ['?relay=wss://evil.example', '?relay=ws://localhost.evil.example/ws', '?relay=http://localhost:1', '?relay=ws://127.0.0.1:1/a?b']) {
+    const P = mk('w0f', { noRelay: true, search: q });
+    r = await resolveP(P.Net.transports());
+    ok('ws: ' + q + ' is ignored', r.value && r.value.ws === false && P.Net.fromQuery().relay === null);
+  }
+  r = await resolveP(mk('w0g').Net.lobby('ws'));
+  ok('ws: no lobby on ws', r.value === null);
+  ok('ws: PG.Net.relay() -> {on, state ok, until 0}', same(mk('w0h').Net.relay(), { on: true, state: 'ok', until: 0 }) && mk('w0i', { noRelay: true }).Net.relay().on === false);
+
+  // ---- host, join, roster
+  const H = mk('whost'), G1 = mk('wg1'), G2 = mk('wg2'), G3 = mk('wg3'), G4 = mk('wg4'), X = mk('wx');
+  r = await resolveP(H.Net.host({ transport: 'ws', code: 'w7w7' }));
+  const hs = r.value;
+  ok('ws: host on a code (the relay issues the seat id)', hs && hs.code === 'w7w7' && /^s[a-z0-9]{11}$/.test(hs.selfId) && hs.transport === 'ws' && hs.fallback === null, r.error && r.error.code);
+  if (!hs) return;
+  r = await resolveP(X.Net.host({ transport: 'ws', code: 'w7w7' }));
+  ok('ws: an explicit taken code -> unavailable (taken)', r.error && r.error.code === 'unavailable' && r.error.reason === 'taken', r.error && [r.error.code, r.error.reason]);
+  rl.takenNext = 1;
+  r = await resolveP(X.Net.host({ transport: 'ws' }));
+  ok('ws: a generated code re-rolls past a taken one', r.value && /^[a-z0-9]{4}$/.test(r.value.code) && rl.takenNext === 0, r.error && r.error.code);
+  if (r.value) r.value.leave();
+  const hr = record(hs);
+  const gs = [];
+  for (const G of [G1, G2, G3]) { r = await resolveP(G.Net.join({ transport: 'ws', code: 'W7W7' })); ok('ws: ' + G.name + ' joins', !!r.value, r.error && r.error.code); gs.push(r.value); }
+  if (gs.some((s) => !s)) return;
+  const [s1, s2, s3] = gs;
+  const recs = gs.map(record);
+  await clock.run(400);
+  ok('ws: rosters agree everywhere (relay-issued ids)', [s1, s2, s3].every((s) => idsOf(s) === idsOf(hs)) && hs.peers().length === 4, [hs, s1, s2, s3].map(idsOf));
+  r = await resolveP(G4.Net.join({ transport: 'ws', code: 'w7w7' }));
+  ok('ws: the 5th -> full (the host core\'s answer)', r.error && r.error.code === 'full' && r.error.reason === 'full', r.error && r.error.code);
+  await clock.run(300);
+  // two silent extra sockets: 6 in the room; a 7th page -> 4430 from the relay
+  const raws = [new rl.Raw(URL0.replace('https', 'wss') + '/r/w/w7w7?v=1&role=g'), new rl.Raw(URL0.replace('https', 'wss') + '/r/w/w7w7?v=1&role=g')];
+  await clock.run(200);
+  r = await resolveP(G4.Net.join({ transport: 'ws', code: 'w7w7' }));
+  ok('ws: a 7th socket -> full (the relay\'s 6-socket cap)', r.error && r.error.code === 'full' && rl.rooms.get('w:w7w7').info().seats === 6, r.error && r.error.code);
+  r = await resolveP(G4.Net.join({ transport: 'ws', code: 'nnnn' }));
+  ok('ws: an unknown code -> not_found', r.error && r.error.code === 'not_found', r.error && r.error.code);
+  // ---- states
+  for (let f = 0; f < 60; f++) { hs.setState({ t: f }); s1.setState({ g: 1, f }); await clock.run(1000 / 60); }
+  await clock.run(400);
+  ok('ws: host state -> guests (latest)', recs.every((rc) => rc.last.get(hs.selfId) && rc.last.get(hs.selfId).t === 59));
+  ok('ws: guest state -> host and the other guests, stamped with the guest id', hr.last.get(s1.selfId).f === 59 && recs[1].last.get(s1.selfId).f === 59 && recs[2].last.get(s1.selfId).f === 59 && !recs[0].last.has(s1.selfId));
+  const rawGot = (w) => w.got.map((x) => JSON.parse(x));
+  ok('ws: a stranger socket receives no states', raws.every((w) => !rawGot(w).some((m) => m.k === 's')));
+  const rh = raws[0];
+  rh.send(JSON.stringify({ k: 's', q: 1, d: { evil: 1 } }));
+  rh.send(JSON.stringify({ k: 'r', t: '*', d: { u: { k: 'evil' } } }));
+  await clock.run(300);
+  ok('ws: a stranger\'s states are dropped and its * reaches the host only (no guest hears it)', !hr.states.some(([, o]) => o && o.evil) && recs.every((rc) => !rc.msgs.some(([, m]) => m && m.k === 'evil')));
+  // ---- reliable
+  await Promise.all([sendStream(hs, '*', 'hb', 100, 5, 20), sendStream(s1, '*', 'g1b', 60, 4, 20), sendStream(s2, s3.selfId, 'g2to3', 30, 3, 20), sendStream(s3, hs.selfId, 'g3h', 30, 3, 20)]);
+  await until(() => recs.every((rc) => seqOf(rc, hs.selfId, 'hb').length >= 100) && seqOf(recs[2], s2.selfId, 'g2to3').length >= 30 && seqOf(recs[2], s1.selfId, 'g1b').length >= 60, 10000);
+  await clock.run(500);
+  ok('ws: host broadcast in order, once', recs.every((rc) => same(seqOf(rc, hs.selfId, 'hb'), range(100))));
+  ok('ws: guest broadcast in order, once, to the host and the other guests', same(seqOf(hr, s1.selfId, 'g1b'), range(60)) && same(seqOf(recs[1], s1.selfId, 'g1b'), range(60)) && same(seqOf(recs[2], s1.selfId, 'g1b'), range(60)) && !seqOf(recs[0], s1.selfId, 'g1b').length);
+  ok('ws: guest -> guest direct only to the target', same(seqOf(recs[2], s2.selfId, 'g2to3'), range(30)) && seqOf(recs[0], s2.selfId, 'g2to3').length === 0 && seqOf(hr, s2.selfId, 'g2to3').length === 0);
+  ok('ws: guest -> host direct', same(seqOf(hr, s3.selfId, 'g3h'), range(30)) && seqOf(recs[0], s3.selfId, 'g3h').length === 0);
+  await clock.run(2500);
+  ok('ws: rtt measured (>= 4 one-way hops of 25 ms)', typeof s1.stats().rttMs === 'number' && s1.stats().rttMs >= 100 && s1.stats().transport === 'ws', s1.stats());
+  for (const w of raws) w.close(1000);
+  const lastWord = lastBeforeLeave(hs, s3);
+  s3.send(hs.selfId, { k: 'gg-last' });
+  s3.leave();
+  await clock.run(600);
+  ok('ws: a guest leaving updates every roster', hs.peers().length === 3 && s1.peers().length === 3 && s2.peers().length === 3);
+  ok('ws: a reliable message sent right before leave() arrives before the player is gone', lastWord.join() === 'msg,gone', lastWord);
+  ok('ws: the leaver said bye: its socket closed 1000', rl.clients.some((c) => c.sent.includes('{"k":"bye"}') && c.readyState === 3));
+  const c2 = rl.of(s2);
+  c2.cut();
+  await clock.run(800);
+  ok('ws: a guest whose socket dies is dropped and sees closed:lost', hs.peers().length === 2 && recs[1].status.includes('closed:lost'), [hs.peers().length, recs[1].status]);
+  hs.leave();
+  await clock.run(600);
+  ok('ws: host leaving -> guests closed:host_left', recs[0].status.includes('closed:host_left'), recs[0].status);
+  ok('ws: ... the room and its code are free', !rl.rooms.get('w:w7w7') || rl.rooms.get('w:w7w7').info().seats === 0);
+
+  // ---- a host whose socket dies with guests in the room; a relay restart
+  const pair = async (code) => {
+    const A = mk('wa-' + code), B = mk('wb-' + code);
+    const a = (await resolveP(A.Net.host({ transport: 'ws', code }))).value;
+    const b = a ? (await resolveP(B.Net.join({ transport: 'ws', code }))).value : null;
+    return { A, B, a, b, ra: a && record(a), rb: b && record(b) };
+  };
+  {
+    const p = await pair('k1k1');
+    if (ok('ws: a second room', p.a && p.b)) {
+      rl.of(p.a).cut();
+      await clock.run(800);
+      ok('ws: the host\'s socket dies with a guest in the room -> the guest closed:lost (no re-seat with guests)', p.rb.status.includes('closed:lost') && p.ra.status.includes('closed:lost'), [p.ra.status, p.rb.status]);
+    }
+  }
+  {
+    const p = await pair('k2k2'), q = await pair('k3k3');
+    rl.restart();
+    await clock.run(800);
+    ok('ws: a relay restart (every socket 1012) -> everyone closed:lost', [p.ra, p.rb, q.ra, q.rb].every((x) => x && x.status.includes('closed:lost')), [p.ra, p.rb].map((x) => x && x.status));
+  }
+  // ---- junk / oversize / rate from one page close only that page
+  for (const [what, act] of [
+    ['junk', (w) => { for (let i = 0; i < 8; i++) w.send('{nope'); }],
+    ['oversize', (w) => { for (let i = 0; i < 3; i++) w.send(JSON.stringify({ k: 'r', t: '*', d: 'x'.repeat(5000) })); }],
+    ['rate', async (w, n) => { for (let i = 0; i < 1100; i++) { w.send(JSON.stringify({ k: 's', q: n + i, d: 1 })); if (i % 15 === 14) await clock.run(100); } }],
+  ]) {
+    const A = mk('wj-a-' + what), B = mk('wj-b-' + what), C = mk('wj-c-' + what), code = { junk: 'j1j1', oversize: 'j2j2', rate: 'j3j3' }[what];
+    const a = (await resolveP(A.Net.host({ transport: 'ws', code }))).value;
+    const b = a && (await resolveP(B.Net.join({ transport: 'ws', code }))).value;
+    const c = b && (await resolveP(C.Net.join({ transport: 'ws', code }))).value;
+    if (!c) { ok('ws: ' + what + ': a room of 3', false); continue; }
+    const ra = record(a), rb = record(b), rc = record(c);
+    const cbx = rl.of(b);
+    await act(cbx, 1e6);
+    if (VERBOSE) console.log(what, 'relay saw', cbx.srv && cbx.srv.inAll, 'closed', cbx.srv && cbx.srv.closed, cbx.readyState);
+    await clock.run(1500);
+    ok('ws: ' + what + ' from one page closes only that page (closed:lost), the others play on', rb.status.includes('closed:lost') && !ra.status.some((x) => /closed/.test(x)) && !rc.status.some((x) => /closed/.test(x)) && a.peers().length === 2, [ra.status, rb.status, rc.status]);
+    a.leave(); await clock.run(500);
+  }
+  // ---- backpressure, a host alone, the keepalive
+  {
+    const A = mk('wp-a'), B = mk('wp-b');
+    const a = (await resolveP(A.Net.host({ transport: 'ws', code: 'p1p1' }))).value;
+    const ca = rl.of(a);
+    for (let i = 0; i < 40; i++) { a.setState({ alone: i }); await clock.run(50); }
+    ok('ws: a host alone sends no states (design/relay.md 9.3)', ca.srv.inS === 0, ca.srv.inS);
+    const b = (await resolveP(B.Net.join({ transport: 'ws', code: 'p1p1' }))).value;
+    const rb = b && record(b);
+    await clock.run(300);
+    ok('ws: ... the first admitted guest still gets the host\'s latest state at once', !!rb && rb.last.get(a.selfId) && rb.last.get(a.selfId).alone === 39, rb && rb.last.get(a.selfId));
+    const cb = rl.of(b);
+    cb.uplink = 2000;                                          // 2 KB/s: a body of ~600 bytes 30 times a second backs up
+    const ra = record(a);
+    let sent = 0;
+    for (let i = 0; i < 120; i++) { b.setState({ body: i, pad: 'p'.repeat(560) }); if (i % 10 === 0 && b.send(a.selfId, { k: 'bp', i: sent })) sent++; await clock.run(33); }
+    ok('ws: backpressure: states skip a beat while more than 8 KB wait (latest wins, the queue stays near 8 KB)', cb.sent.filter((x) => /^\{"k":"s"/.test(x)).length < 60 && cb.bufferedAmount < 12000, [cb.sent.filter((x) => /^\{"k":"s"/.test(x)).length, cb.bufferedAmount]);
+    ok('ws: ... a slow uplink that still sends some states stays healthy', !rb.status.includes('error:unstable'), rb.status);
+    await clock.run(8000);
+    cb.uplink = Infinity;
+    cb.stall(4000);                                             // (the uplink stops: nothing leaves for 4 s)
+    for (let i = 0; i < 100; i++) { b.setState({ body: 200 + i, pad: 'p'.repeat(560) }); if (i % 10 === 0 && b.send(a.selfId, { k: 'bp', i: sent })) sent++; await clock.run(33); }
+    ok('ws: ... health() false once every state was held back for 2 s: the guest shows error:unstable', rb.status.includes('error:unstable'), rb.status);
+    await clock.run(6000);
+    ok('ws: ... reliable messages never skipped (all arrive, in order) and the link recovers', same(seqOf(ra, b.selfId, 'bp'), range(sent)) && rb.status.includes('open:recovered'), [seqOf(ra, b.selfId, 'bp').length, sent, rb.status]);
+    b.leave(); await clock.run(500);
+    const before = rl.pings;
+    await clock.run(50000);
+    ok('ws: a quiet socket sends the keepalive {"k":"p"} after 45 s (answered by the runtime)', rl.pings > before && ca.got.includes('{"k":"P"}'), rl.pings - before);
+    a.leave(); await clock.run(500);
+  }
+  // ---- the host re-seat (8.1)
+  {
+    const A = mk('wr-a'), B = mk('wr-b');
+    const a = (await resolveP(A.Net.host({ transport: 'ws', code: 'r1r1' }))).value;
+    const ra = record(a), id = a.selfId;
+    rl.of(a).cut();                                            // (KakaoTalk: the OS killed the socket; the relay heard it)
+    await clock.run(1500);
+    ok('ws: a host alone whose socket dies re-seats with the same id: its session never closes', !ra.status.some((x) => /closed/.test(x)) && a.selfId === id && rl.rooms.get('w:r1r1').info().host === id, ra.status);
+    const b = (await resolveP(B.Net.join({ transport: 'ws', code: 'r1r1' }))).value;
+    ok('ws: ... a friend then gets in with the code', !!b && a.peers().length === 2);
+    if (b) b.leave();
+    await clock.run(500);
+    rl.of(a).cut({ half: true });                              // (the relay never heard: a half-open seat)
+    await clock.run(1500);
+    ok('ws: ... and over its own half-open seat (id + tok)', !ra.status.some((x) => /closed/.test(x)) && rl.rooms.get('w:r1r1').info().host === id, ra.status);
+    a.leave(); await clock.run(500);
+  }
+  {
+    const A = mk('wr2-a'), Z = mk('wr2-z');
+    const a = (await resolveP(A.Net.host({ transport: 'ws', code: 'r2r2' }))).value;
+    const ra = record(a);
+    rl.refuse = 1006;
+    rl.of(a).cut();
+    await clock.run(500);
+    rl.refuse = 0;
+    const z = (await resolveP(Z.Net.host({ transport: 'ws', code: 'r2r2' }))).value;
+    await clock.run(4000);
+    ok('ws: a re-seat refused (4409: someone else took the code meanwhile) -> closed:lost', !!z && ra.status.includes('closed:lost'), ra.status);
+    if (z) z.leave();
+    const A3 = mk('wr3-a');
+    const a3 = (await resolveP(A3.Net.host({ transport: 'ws', code: 'r3r3' }))).value;
+    const r3 = record(a3);
+    rl.refuse = 1006;
+    rl.of(a3).cut();
+    await clock.run(14000);
+    ok('ws: ... still re-seating after 14 s (at once, then 1 / 2 / 4 / 8 s)', !r3.status.some((x) => /closed/.test(x)), r3.status);
+    await clock.run(4000);
+    ok('ws: ... 5 failed tries -> closed:lost', r3.status.includes('closed:lost'), r3.status);
+    rl.refuse = 0;
+  }
+  // ---- an LTE stall on a guest
+  {
+    const A = mk('ws-a'), B = mk('ws-b');
+    const a = (await resolveP(A.Net.host({ transport: 'ws', code: 's1s1' }))).value;
+    const b = a && (await resolveP(B.Net.join({ transport: 'ws', code: 's1s1' }))).value;
+    if (ok('ws: an LTE room', !!b)) {
+      const ra = record(a), rb = record(b);
+      rl.of(b).stall(5000);
+      let n = 0;
+      for (let i = 0; i < 180; i++) { b.setState({ f: i }); if (i % 6 === 0 && b.send(a.selfId, { k: 'lte', i: n })) n++; a.setState({ t: i }); await clock.run(33); }
+      await clock.run(3000);
+      ok('ws: an LTE stall (the uplink stops 5 s, then delivers): the guest is still in the room', a.peers().length === 2 && !rb.status.some((x) => /closed/.test(x)), rb.status);
+      ok('ws: ... no reliable message lost, in order', same(seqOf(ra, b.selfId, 'lte'), range(n)), [seqOf(ra, b.selfId, 'lte').length, n]);
+      a.leave(); await clock.run(500);
+    }
+  }
+  // ---- ?net=ws&lat=80&jit=40: in order, never dropped
+  {
+    const Q = '?net=ws&lat=80&jit=40';
+    const A = mk('wl-a', { search: Q }), B = mk('wl-b', { search: Q });
+    ok('ws: fromQuery ?net=ws&lat=80&jit=40', same(A.Net.fromQuery(), { transport: 'ws', net: { latency: 80, jitter: 40, drop: 0 }, relay: null }), A.Net.fromQuery());
+    const a = (await resolveP(A.Net.host({ transport: 'ws', code: 'l1l1' }))).value;
+    const b = a && (await resolveP(B.Net.join({ transport: 'ws', code: 'l1l1' }))).value;
+    if (ok('ws: a room over the simulated link', !!b)) {
+      const rb = record(b);
+      const at = [];
+      b.onState((f, o) => { if (o && o.at !== undefined) at.push(clock.now() - o.at); });
+      for (let i = 0; i < 90; i++) { a.setState({ t: i, at: clock.now() }); if (i % 3 === 0) a.send('*', { k: 'lat', i: i / 3 }); await clock.run(40); }
+      await clock.run(1500);
+      const ts = rb.states.filter(([f]) => f === a.selfId).map(([, o]) => o.t);
+      ok('ws: simulated delays keep the order and never drop (states every one, reliable all 30)', same(Array.from(new Set(ts)), range(90)) && same(seqOf(rb, a.selfId, 'lat'), range(30)), [new Set(ts).size, seqOf(rb, a.selfId, 'lat').length]);
+      const m = at.reduce((x, y) => x + y, 0) / Math.max(1, at.length);
+      ok('ws: ... one-way ~ 2 x (80 + U(0,40)) + 2 relay hops', m > 200 && m < 380, m.toFixed(0));
+      a.leave(); await clock.run(500);
+    }
+  }
+
+  // ---- falling back to 'peer' (4.5, 4.6)
+  const pn = makePeerNet({ latency: 20, jitter: 10 });
+  const mkF = (n, o) => mk(n, Object.assign({ Peer: pn.Peer }, o || {}));
+  {
+    const A = mkF('wf-a'), B = mkF('wf-b');
+    rl.refuse = 1006;
+    const c0 = rl.connects;
+    r = await resolveP(A.Net.host({ transport: ['ws', 'peer'], code: 'f1f1' }));
+    ok('ws: [ws, peer] with the relay refusing (1006) -> a peer room, fallback down', r.value && r.value.transport === 'peer' && r.value.fallback === 'down' && A.Net.relay().state === 'down', r.value ? [r.value.transport, r.value.fallback] : r.error && r.error.code);
+    const a = r.value;
+    rl.refuse = 0;
+    const c1 = rl.connects;
+    r = await resolveP(A.Net.host({ transport: ['ws', 'peer'], code: 'f2f2' }));
+    ok('ws: ... the next host within 60 s skips ws (no socket at all)', r.value && r.value.transport === 'peer' && r.value.fallback === 'down' && rl.connects === c1 && c1 === c0 + 1, [rl.connects - c1]);
+    if (r.value) r.value.leave();
+    r = await resolveP(B.Net.join({ transport: ['ws', 'peer'], code: 'f1f1' }));
+    ok('ws: a joiner: ws not_found -> peer finds the room', r.value && r.value.transport === 'peer' && r.value.fallback === null, r.value ? r.value.transport : r.error && r.error.code);
+    if (r.value) r.value.leave();
+    // a joiner whose relay memory says down (its own host attempt failed 10 s earlier) still tries ws and finds a ws room
+    const W1 = mk('wf-w1');
+    const ws1 = (await resolveP(W1.Net.host({ transport: 'ws', code: 'f3f3' }))).value;
+    await clock.run(10000);
+    const c2 = rl.connects;
+    r = await resolveP(A.Net.join({ transport: ['ws', 'peer'], code: 'f3f3' }));
+    ok('ws: a joiner whose memory says down still opens a socket and finds a ws room', r.value && r.value.transport === 'ws' && rl.connects === c2 + 1 && A.Net.relay().state === 'ok', r.value ? r.value.transport : r.error && r.error.code);
+    if (r.value) r.value.leave();
+    if (ws1) ws1.leave();
+    if (a) a.leave();
+    await clock.run(500);
+  }
+  {
+    const A = mkF('wf2-a'), B = mkF('wf2-b'), C = mkF('wf2-c');
+    rl.cap = true;
+    r = await resolveP(A.Net.host({ transport: ['ws', 'peer'], code: 'f4f4' }));
+    const nextUtc = (Math.floor(VDate.now() / 86400000) + 1) * 86400000;
+    ok('ws: a 4503 cap -> a peer room, fallback cap, the relay capped until the next 00:00 UTC (09:00 KST)', r.value && r.value.transport === 'peer' && r.value.fallback === 'cap' && A.Net.relay().state === 'cap' && A.Net.relay().until === nextUtc, [r.value && r.value.fallback, A.Net.relay()]);
+    const a = r.value;
+    r = await resolveP(B.Net.join({ transport: ['ws', 'peer'], code: 'zzz9' }));
+    ok('ws: a join while capped that finds nothing -> not_found with .relay cap (game.js adds capTail)', r.error && r.error.code === 'not_found' && r.error.relay === 'cap', r.error && [r.error.code, r.error.reason, r.error.relay]);
+    rl.cap = false;
+    WALL.skew += 3600000;
+    ok('ws: ... at 00:00 UTC the cap is forgotten by itself', A.Net.relay().state === 'ok' && A.Net.relay().until === 0, A.Net.relay());
+    rl.silent = true;
+    const t0 = clock.now();
+    r = await resolveP(C.Net.host({ transport: ['ws', 'peer'], code: 'f5f5' }));
+    ok('ws: a connect that never answers -> peer after ~6 s (connectMs)', r.value && r.value.transport === 'peer' && r.value.fallback === 'down' && clock.now() - t0 >= 6000 && clock.now() - t0 < 8000, [r.value && r.value.transport, clock.now() - t0]);
+    rl.silent = false;
+    if (r.value) r.value.leave();
+    if (a) a.leave();
+    await clock.run(500);
+  }
+  {
+    // ws full -> no peer try; both not found -> not_found with .transport
+    const p = await pair('f6f6');
+    const Ps = [], ps = [];
+    for (let i = 0; i < 2; i++) { const P = mkF('wf6-' + i); Ps.push(P); const s = (await resolveP(P.Net.join({ transport: 'ws', code: 'f6f6' }))).value; ps.push(s); }
+    const F = mkF('wf6-f'), made = pn.peers.size;
+    r = await resolveP(F.Net.join({ transport: ['ws', 'peer'], code: 'f6f6' }));
+    ok('ws: a joiner: ws says full -> the search stops (no peer try)', r.error && r.error.code === 'full' && r.error.transport === 'ws' && pn.peers.size === made, r.error && [r.error.code, r.error.transport]);
+    r = await resolveP(F.Net.join({ transport: ['ws', 'peer'], code: 'qqq7' }));
+    ok('ws: a joiner: both not_found -> not_found from peer', r.error && r.error.code === 'not_found' && r.error.transport === 'peer' && r.error.relay === null, r.error && [r.error.code, r.error.transport]);
+    rl.refuse = 1006;
+    r = await resolveP(F.Net.join({ transport: ['ws', 'peer'], code: 'qqq7' }));
+    ok('ws: a joiner: the relay unreachable and peer not_found -> unavailable, reason relay (joinDown)', r.error && r.error.code === 'unavailable' && r.error.reason === 'relay' && r.error.relay === 'down', r.error && [r.error.code, r.error.reason, r.error.relay]);
+    rl.refuse = 0;
+    for (const s of ps) if (s) s.leave();
+    if (p.b) p.b.leave();
+    if (p.a) p.a.leave();
+    await clock.run(500);
+  }
+  {
+    // the relay found the room but its host never answers -> timeout, the search stops (joinQuiet)
+    const A = mk('wq-a');
+    const a = (await resolveP(A.Net.host({ transport: 'ws', code: 'q1q1' }))).value;
+    const ca = rl.of(a);
+    ca.srv.deliver = () => {};                                   // (the host page hears nothing: a frozen phone)
+    const F = mkF('wq-f'), made = pn.peers.size;
+    r = await resolveP(F.Net.join({ transport: ['ws', 'peer'], code: 'q1q1' }));
+    ok('ws: a ws join timeout (hi came, no welcome) stops the search: timeout from ws, no peer try', r.error && r.error.code === 'timeout' && r.error.transport === 'ws' && pn.peers.size === made, r.error && [r.error.code, r.error.transport]);
+    a.leave(); await clock.run(500);
+  }
+  {
+    // window.Peer arriving 2 s after the tap; a 4403 refusal (a preview page asking for the live space)
+    const late = makePeerNet({ latency: 20, jitter: 10 });
+    const L = mk('wlate', { noRelay: false });
+    rl.refuse = 1006;
+    clock.add(() => { L.win.Peer = late.Peer; }, 2000);
+    r = await resolveP(L.Net.host({ transport: ['ws', 'peer'], code: 'f7f7' }));
+    ok('ws: [ws, peer] with window.Peer arriving 2 s after the tap -> the peer entry waits and works', r.value && r.value.transport === 'peer', r.value ? r.value.transport : r.error && [r.error.code, r.error.reason]);
+    if (r.value) r.value.leave();
+    rl.refuse = 0;
+    const O = mkF('worigin', { origin: 'https://bubble-c3ad4--pr9-x.web.app' });
+    r = await resolveP(O.Net.host({ transport: ['ws', 'peer'], code: 'f8f8' }));
+    ok('ws: a 4403 refusal (a preview origin in the live space) -> peer, fallback down', r.value && r.value.transport === 'peer' && r.value.fallback === 'down', r.value ? [r.value.transport, r.value.fallback] : r.error && r.error.code);
+    if (r.value) r.value.leave();
+    const P2 = mkF('wspace', { origin: 'https://bubble-c3ad4--pr9-x.web.app', relay: { url: URL0, space: 'p' } });
+    r = await resolveP(P2.Net.host({ transport: ['ws', 'peer'], code: 'f9f9' }));
+    ok('ws: ... the same preview page in its own space p -> a ws room', r.value && r.value.transport === 'ws' && rl.rooms.has('p:f9f9'), r.value ? r.value.transport : r.error && r.error.code);
+    const W2 = mkF('wspace-w');
+    r = await resolveP(W2.Net.join({ transport: ['ws', 'peer'], code: 'f9f9' }));
+    ok('ws: ... a live page cannot find that preview room (the spaces never meet)', r.error && r.error.code === 'not_found', r.error && r.error.code);
+    for (const s of live(P2)) s.leave();
+    await clock.run(500);
+  }
+}
+const live = (P) => P.Net._sessions();
+
 // ==================================================================================== TESTS: v4 kits on the wire
 // (design/char-kits.md §9.2, §14.5). net.js itself is unchanged by the kits - its messages are generic. What the kits
 // rely on is checked here: the engine's wire items and their clamps in game.js (static), and the same shapes carried
@@ -1042,12 +1515,13 @@ async function testV4Wire() {
 // ==================================================================================== main
 (async () => {
   const t0 = Date.now();
-  await testRoom();
-  await testRoomFlap();
-  await testRoomSlowHost();
-  await testPeer();
-  await testBc();
-  await testV4Wire();
+  // (NET_ONLY=ws,bc,...: only those groups - a quicker loop while working on one transport)
+  const only = (process.env.NET_ONLY || '').split(',').filter(Boolean), on = (g) => !only.length || only.includes(g);
+  if (on('room')) { await testRoom(); await testRoomFlap(); await testRoomSlowHost(); }
+  if (on('peer')) await testPeer();
+  if (on('bc')) await testBc();
+  if (on('ws')) await testWs();
+  if (on('v4')) await testV4Wire();
   ok('no timer callback threw', timerErrors.length === 0, timerErrors.map((e) => String(e && e.message)).slice(0, 3));
   ok('no unhandled promise rejection', unhandled.length === 0, unhandled.map((e) => String(e && (e.code || e.message))).slice(0, 3));
   if (VERBOSE && warnings.length) console.log('warnings:', [...new Set(warnings)].join(' | '));

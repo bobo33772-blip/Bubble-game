@@ -223,6 +223,24 @@ async function testRoom() {
     ok('room: 150 frames/s: still open after 5.5 s (the bucket empty since ~1 s, < OVER_MS)', !b.closed, b);
     const c = rateRun(R, 150, 7000);
     ok('room: 150 frames/s: closed 4429 at ~6 s (empty for OVER_MS 5 s in a row)', c.closed && c.closed.code === 4429 && c.closedAt > 5800 && c.closedAt < 6400, c);
+    const e = (() => {
+      // 150 frames/s arriving in TCP-like bursts (15 at once every 100-112 ms): the run is not broken by a lucky refill
+      const { H, h, g } = room(R, 1);
+      let q = 0, at = null;
+      const t0 = H.t;
+      while (H.t - t0 < 9000 && !g[0].closed) { H.adv(100 + (q % 7) * 2); for (let i = 0; i < 15 && !g[0].closed; i++) { H.send(g[0], { k: 's', q: ++q, d: 1 }); if (g[0].closed) at = H.t - t0; } }
+      void h;
+      return { closed: g[0].closed, at };
+    })();
+    ok('room: 150 frames/s in bursts: closed 4429 at ~6 s', e.closed && e.closed.code === 4429 && e.at > 5800 && e.at < 6600, e);
+    const f = (() => {
+      // a legit page: an LTE stall burst (150), 6 s of 46/s, another burst - two runs of over frames 6 s apart: open
+      const { H, g } = room(R, 1);
+      let q = 0;
+      for (let k = 0; k < 2; k++) { for (let i = 0; i < 150; i++) H.send(g[0], { k: 's', q: ++q, d: 1 }); for (let i = 0; i < 46 * 6; i++) { H.adv(1000 / 46); H.send(g[0], { k: 's', q: ++q, d: 1 }); } }
+      return g[0].closed;
+    })();
+    ok('room: two stall bursts 6 s apart with 46 frames/s between: never closed (each burst is its own short run)', !f, f);
     const d = rateRun(R, 70, 12000);
     ok('room: 70 frames/s: closed 4429 at ~10 s (5 s to empty the bucket, 5 s empty)', d.closed && d.closed.code === 4429 && d.closedAt > 9500 && d.closedAt < 10600, d);
   }

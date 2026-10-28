@@ -1,11 +1,11 @@
 /* ==========================================================================
    뽀득뽀득 목욕탕 — net.js
-   PG.Net: ONE small session interface for online play (같이 하기 co-op / 배틀, 2-4 players) over three
+   PG.Net: ONE small session interface for online play (같이 하기 co-op / 배틀, 2-4 players) over four
    transports. The engine never touches a transport directly.
 
    ---- interface -------------------------------------------------------------------------------------------
-   PG.Net.transports()                      -> Promise<{room:boolean, peer:boolean, bc:boolean}>
-   PG.Net.lobby(transport)                  -> Promise<Lobby|null>   ('room' only; 'peer' / 'bc' resolve null)
+   PG.Net.transports()                      -> Promise<{room:boolean, ws:boolean, peer:boolean, bc:boolean}>
+   PG.Net.lobby(transport)                  -> Promise<Lobby|null>   ('room' only; 'ws' / 'peer' / 'bc' resolve null)
      Lobby { games() -> [{code, mode, n, max, hostNick}]   open games of OTHER pages, newest first
              onChange(fn(games)) -> unsub                   also called once soon after subscribing
              advertise(info|null)                           info = {nick?, char?, code?, mode?, n?, max?, open?}
@@ -20,8 +20,15 @@
    PG.Net.join({transport, code, net?})     -> Promise<Session>  rejects an Error whose .code is
                                                                  'not_found' | 'full' | 'unavailable' | 'timeout'
                                                                  ('full' carries .reason 'full' | 'playing')
+     transport: one name, or a LIST tried in order (game.js netOrder(); design/relay.md 4.5): a host takes the first
+     that works ('taken' with an explicit code throws at once); a join stops at 'full' or at a 'ws' timeout (the relay
+     found the room, its host never answered) and goes on after 'not_found' / 'unavailable'. A 'peer' entry after
+     another one waits up to 5 s for a deferred PeerJS. The final error is the most telling one (full > timeout >
+     not_found > unavailable) with .transport (who said it) and .relay ('cap' | 'down' | null); a join whose 'ws'
+     entry could not reach the relay and whose later entries said not_found rejects 'unavailable' with .reason 'relay'
    Session {
-     role: 'host'|'guest', code, selfId, transport
+     role: 'host'|'guest', code, selfId, transport (the one that worked), fallback (null, or 'cap' / 'down': an earlier
+     'ws' entry was skipped or refused for that reason)
      peers() -> [{id, isMe, host, slot}]   the players, host first then join order; slot 0..3 is fixed per
                                            player for the whole session (P1 = host = slot 0)
      onPeers(fn(list)) -> unsub            the player list changed (join / leave)
@@ -45,9 +52,10 @@
    Everything received is untrusted: payloads arrive as plain-JSON deep copies (functions, prototypes,
    non-finite numbers and oversize lists stripped), only from admitted players; the engine still clamps
    every field it reads. Max 4 players: the host answers a 5th hello with a reliable 'full'.
-   Helpers: PG.Net.fromQuery() -> {transport|null, net|null} from ?net=bc&lat=80&jit=30&drop=0.1 (test
-   pages only; the artifact never sets these), PG.Net.profileName() -> Promise<string> (the signed-in
-   viewer's display name from the 'user' capability, '' when unavailable), PG.Net.TEXT (Korean strings).
+   Helpers: PG.Net.fromQuery() -> {transport|null, net|null, relay|null} from ?net=bc&lat=80&jit=30&drop=0.1 and
+   ?relay=ws://localhost:<port>/ws (test pages only; the artifact never sets these), PG.Net.profileName() ->
+   Promise<string> (the signed-in viewer's display name from the 'user' capability, '' when unavailable),
+   PG.Net.relay() -> {on, state: 'ok'|'cap'|'down', until} (the relay memory below), PG.Net.TEXT (Korean strings).
 
    ---- 'room' : the Claude artifact runtime (the published artifact page) ---------------------------------
    The artifact is published with capabilities {room: {}, user: {scopes: ["profile"]}}. The namespace is
@@ -81,6 +89,23 @@
      without it, so a guest that comes back later closes 'lost' instead of playing on alone); a guest whose host
      is gone closes 'host_left'. A dropped guest that still pings is told again (rate-limited).
 
+   ---- 'ws' : the WebSocket relay, the STANDALONE deploy built with a relay (design/relay.md) ----------------
+   A Cloudflare Worker with one Durable Object per room code forwards JSON text frames between a room's host page and
+   its guests (cloudflare/: no game logic, nothing stored). build.js gives the deploy page window.PG_RELAY ({url} -
+   the relay Worker's address; a PR preview adds space 'p', Toss 't'; the artifact never has it), so transports().ws
+   is true there; a test page may name a LOOPBACK relay with ?relay=ws://localhost:<port>/ws (tools/ws-relay.js), any
+   other ?relay= is ignored. One socket per page: wss://<relay>/r/<space>/<code>?v=1&role=h|g. The relay's first frame
+   {k:'hi', v:1, id, h, tok?} issues my seat id (id) and names the host (h); then {k:'s', q, d} (a state), {k:'r', t, d}
+   (a reliable envelope to t = an id or '*'), {k:'m', l:[ids]} (host only: the admitted guests), {k:'bye'}; the relay
+   stamps what it forwards with its sender f, says {k:'gone', f, why:'left'|'lost'} and lets a stranger (a guest not
+   admitted yet) talk to the host only - peerLink's rules. Close codes before hi: 4409 taken, 4404 / 4001 not_found,
+   4430 full, 4503 'cap' (the free tier is used up) / 'busy', anything else 'unavailable'; after hi a closed socket is
+   'lost', except a host still ALONE in its room, which re-seats with its old id (&id=&tok=, 5 tries: the room and its
+   code survive an app switch). States skip a beat while more than 8 KB wait in the socket (latest wins), a host alone
+   sends none, a quiet socket sends the keepalive {"k":"p"} after 45 s. Relay memory (in memory only): after a 4503
+   'cap' a HOST skips 'ws' until the next 00:00 UTC (09:00 KST), after a refusal / timeout for 60 s ('down'); a join
+   always tries. ?net=ws&lat=..&jit=.. delays frames in order (never drops: TCP).
+
    ---- 'peer' : PeerJS WebRTC, the STANDALONE deploy build only ---------------------------------------------
    build.js adds PeerJS 1.5.4 (cdnjs, exact version) to deploy/index.html only, so window.Peer exists there
    and transports().peer is true; the artifact page never loads it. The host registers the peer id
@@ -88,7 +113,7 @@
    and connect to it with ONE reliable, ordered DataConnection carrying JSON. Star topology: the host relays
    guests' states and messages to the other guests. Optional host/join option {peerOptions} is passed to
    new Peer(...) (custom signalling server / ICE config); the PeerJS defaults are used otherwise. (game.js hands it
-   window.PG_PEER_OPTIONS - and, on a deploy built with a relay URL, window.PG_RELAY's fresh TURN servers: build.js)
+   window.PG_PEER_OPTIONS.) With a relay it is the fallback behind 'ws'.
 
    ---- 'bc' : BroadcastChannel, local multi-tab play and AUTOMATED TESTS ----------------------------------
    Same-origin tabs / iframes on one machine (needs a real http origin - run `node tools/serve.js`, then
@@ -127,7 +152,17 @@ window.PG = window.PG || {};
   // (a lobby entry of another mode is skipped, an advertised one becomes 'coop'; 'party': design/party.md 6.2 - an older
   // page's lobby skips a party room, it could not join it anyway)
   const MODES = ['coop', 'battle', 'party'];
-  const TRANSPORTS = ['room', 'peer', 'bc'];
+  const TRANSPORTS = ['room', 'ws', 'peer', 'bc'];
+  const WS_V = 1;                      // the relay protocol (design/relay.md 2), apart from V in the core's hello
+  const WS_SPACES = ['w', 'p', 't'];   // the live game, PR previews, Toss: the relay keeps their rooms apart
+  const WS_BUF = 8192;                 // bytes waiting in the socket above which a state skips a beat
+  const WS_PING = '{"k":"p"}';         // the keepalive, answered by the relay's auto-response
+  const WS_RESEAT = [0, 1000, 2000, 4000, 8000];   // a host alone re-seats: at once, then after 1 / 2 / 4 / 8 s
+  const RELAY_DOWN_MS = 60000;         // a host skips a relay that just failed for this long
+  // the page's relay: https://<host>[:port][/path] (or http:// to a loopback host), as build.js checks it
+  const RELAY_URL_RE = /^(https:\/\/[a-z0-9.-]+\.[a-z]{2,}|http:\/\/(?:localhost|127\.0\.0\.1|\[::1\]))(:\d{1,5})?((?:\/[A-Za-z0-9._~-]+)*)\/?$/i;
+  // a test page's ?relay=: ws:// or wss:// to a loopback host only (a link must never send a room to a stranger's server)
+  const RELAY_Q_RE = /^(wss?:\/\/(?:localhost|127\.0\.0\.1|\[::1\]))(:\d{1,5})?((?:\/[A-Za-z0-9._~-]+)*)\/?$/i;
   const PEER_PREFIX = 'ppodeuk-';
   const BC_PREFIX = 'ppodeuk-v3-';
   const ROOM_PREFIX = 'g-';
@@ -138,6 +173,9 @@ window.PG = window.PG || {};
   const TUNE = {
     bc: { stateMs: 30, pingMs: 1000, unstableMs: 2500, lostMs: 9000, joinMs: 10000 },
     peer: { stateMs: 30, pingMs: 1000, unstableMs: 3000, lostMs: 12000, joinMs: 15000 },
+    // pingMs 2000: a traffic cut (every incoming relay message is billed, design/relay.md 9.3). joinMs must stay above
+    // connectMs: a 'ws' join timeout then always means "the relay found the room, its host never welcomed me"
+    ws: { stateMs: 30, pingMs: 2000, unstableMs: 3000, lostMs: 12000, joinMs: 12000, connectMs: 6000, quietMs: 45000, byeMs: 150 },
     // graceMs: a player whose presence vanishes from the game room is only provisionally gone (the platform refreshes
     // connections, a phone switching networks re-asserts its presence on reconnect) unless it said bye (presence x:1);
     // settleMs: after my own reconnect the room is re-presented over a second or two, so absences wait that long
@@ -248,7 +286,7 @@ window.PG = window.PG || {};
     return s.latency || s.jitter || s.drop ? s : null;
   }
 
-  // ?net=bc&lat=80&jit=30&drop=0.1  (test pages only)
+  // ?net=bc&lat=80&jit=30&drop=0.1&relay=ws://localhost:8765/ws  (test pages only)
   function fromQuery(search) {
     let q = search;
     if (typeof q !== 'string') { try { q = (W.location && W.location.search) || ''; } catch (e) { q = ''; } }
@@ -262,7 +300,8 @@ window.PG = window.PG || {};
     }
     const transport = TRANSPORTS.includes(get.net) ? get.net : null;
     const net = simOf({ latency: get.lat, jitter: get.jit, drop: get.drop });
-    return { transport, net };
+    const m = typeof get.relay === 'string' ? RELAY_Q_RE.exec(get.relay.trim()) : null;
+    return { transport, net, relay: m ? m[1].toLowerCase() + (m[2] || '') + (m[3] || '') : null };
   }
 
   function waitUntil(pred, ms, step) {
@@ -277,6 +316,52 @@ window.PG = window.PG || {};
       };
       tick();
     });
+  }
+
+  // Simulated delays go through FIFO queues (one setTimeout per message would NOT keep them ordered: browsers truncate
+  // delays to whole milliseconds and run callbacks a little late, so two messages due at nearly the same time can
+  // swap). T: the owner's timer function (cancelled with it), dead(): the owner has shut down
+  function fifo(T, dead) {
+    const q = [];
+    let armed = false;
+    const arm = () => { if (!armed && q.length && !dead()) { armed = true; T(pump, Math.ceil(q[0].at - now())); } };
+    function pump() {
+      armed = false;
+      const t = now();
+      while (q.length && !dead() && q[0].at <= t + 0.5) q.shift().fn();
+      arm();
+    }
+    return { push(at, fn) { q.push({ at: q.length ? Math.max(at, q[q.length - 1].at) : at, fn }); arm(); }, size: () => q.length };
+  }
+
+  // ------------------------------------------------------------------ the relay ('ws', design/relay.md 4.2 / 4.6)
+  // where this page's relay is: {base: 'wss://host[:port][/path]', space} or null. A test page's loopback ?relay= first,
+  // else window.PG_RELAY (build.js: {url, space?}; this file only ever reads it), else none
+  function relayInfo() {
+    let r = null;
+    try { r = W.PG_RELAY; } catch (e) { r = null; }
+    const plain = !!r && typeof r === 'object' && !Array.isArray(r);
+    const space = plain && r.space !== undefined ? r.space : 'w';
+    if (!WS_SPACES.includes(space)) return null;
+    const q = fromQuery().relay;
+    if (q) return { base: q, space };
+    const m = plain && typeof r.url === 'string' ? RELAY_URL_RE.exec(r.url.trim()) : null;
+    if (!m) return null;
+    return { base: m[1].toLowerCase().replace(/^https:/, 'wss:').replace(/^http:/, 'ws:') + (m[2] || '') + (m[3] || ''), space };
+  }
+  // what the relay said last (memory only - a reload asks again): 'cap' until the next 00:00 UTC (the free tier's daily
+  // reset, 09:00 KST), 'down' for RELAY_DOWN_MS; a HOST skips 'ws' meanwhile (a join always tries)
+  const relayMem = { state: 'ok', until: 0 };
+  const wallNow = () => Date.now();
+  function relayState() {
+    if (relayMem.state !== 'ok' && wallNow() >= relayMem.until) { relayMem.state = 'ok'; relayMem.until = 0; }
+    return relayMem.state;
+  }
+  function relayMark(kind) {
+    const t = wallNow();
+    if (kind === 'cap') { relayMem.state = 'cap'; relayMem.until = (Math.floor(t / 86400000) + 1) * 86400000; }
+    else if (kind === 'down') { if (relayState() !== 'cap') { relayMem.state = 'down'; relayMem.until = t + RELAY_DOWN_MS; } }
+    else if (relayMem.state === 'down') { relayMem.state = 'ok'; relayMem.until = 0; }    // ('ok': it answered)
   }
 
   // ------------------------------------------------------------------ the artifact runtime
@@ -315,7 +400,7 @@ window.PG = window.PG || {};
   }
   async function transports() {
     const room = await roomNs();
-    return { room: !!room && !roomDead, peer: typeof W.Peer === 'function', bc: typeof W.BroadcastChannel === 'function' };
+    return { room: !!room && !roomDead, ws: typeof W.WebSocket === 'function' && !!relayInfo(), peer: typeof W.Peer === 'function', bc: typeof W.BroadcastChannel === 'function' };
   }
 
   // ==================================================================================== LOBBY (room only)
@@ -736,6 +821,7 @@ window.PG = window.PG || {};
 
     const api = {
       role, code, transport,
+      fallback: null,         // (host / join with a list: why an earlier 'ws' entry did not serve, 'cap' | 'down')
       get selfId() { return st.selfId; },
       peers: peersList,
       onPeers: (fn) => sub(ls.peers, fn),
@@ -769,6 +855,7 @@ window.PG = window.PG || {};
 
   function openLink(transport, code, role, h, opts) {
     if (transport === 'bc') return bcLink(code, role, simOf(opts && opts.net !== undefined ? opts.net : fromQuery().net), h);
+    if (transport === 'ws') return wsLink(code, role, h, opts);
     if (transport === 'peer') return peerLink(code, role, h, opts);
     if (transport === 'room') return roomLink(code, role, h);
     return Promise.reject(fail('unavailable'));
@@ -785,22 +872,9 @@ window.PG = window.PG || {};
       const inQ = new Map(), lastQ = new Map();
       let closed = false, leaving = false, stateQ = 0, found = null;
       const T = (fn, ms) => { const id = later(() => { timers.delete(id); fn(); }, ms); timers.add(id); };
-      // Simulated delays for reliable traffic go through FIFO queues (one out, one per sender in): one setTimeout
-      // per message would NOT keep them ordered, because browsers truncate delays to whole milliseconds and run
-      // callbacks a little late, so two messages due at nearly the same time can swap.
-      function fifo() {
-        const q = [];
-        let armed = false;
-        const arm = () => { if (!armed && q.length && !closed) { armed = true; T(pump, Math.ceil(q[0].at - now())); } };
-        function pump() {
-          armed = false;
-          const t = now();
-          while (q.length && !closed && q[0].at <= t + 0.5) q.shift().fn();
-          arm();
-        }
-        return { push(at, fn) { q.push({ at: q.length ? Math.max(at, q[q.length - 1].at) : at, fn }); arm(); }, size: () => q.length };
-      }
-      const outQ = fifo();
+      // (simulated delays for reliable traffic: FIFO queues, one out, one per sender in - see fifo())
+      const dead = () => closed;
+      const outQ = fifo(T, dead);
       const RELIABLE = { r: 1, who: 1, here: 1, bye: 1 };
       const rawPost = (m) => { if (!closed) { try { ch.postMessage(m); } catch (e) { /* ignore */ } } };
       function post(k, t, extra) {
@@ -845,7 +919,7 @@ window.PG = window.PG || {};
         const at = now() + sim.latency + Math.random() * sim.jitter;
         if (!rel) { T(() => handle(m), at - now()); return; }       // states may arrive out of order (stale ones dropped)
         let q = inQ.get(m.f);
-        if (!q) { if (inQ.size >= 64) return; q = fifo(); inQ.set(m.f, q); }
+        if (!q) { if (inQ.size >= 64) return; q = fifo(T, dead); inQ.set(m.f, q); }
         q.push(at, () => handle(m));
       };
       const link = {
@@ -890,6 +964,166 @@ window.PG = window.PG || {};
         };
         probe();
       }
+    });
+  }
+
+  // ==================================================================================== 'ws' link (the relay)
+  // design/relay.md 4.3. The relay is the star's centre: it fans states and '*' messages out to the admitted members
+  // (the host's {k:'m'}), stamps every frame with its sender and issues the seat ids, so this link only moves frames.
+  const WS_HOLD = [4409, 4400, 4413, 4429];          // closes after hi that a host alone does NOT re-seat from
+  const WS_STOP = [4409, 4400, 4403, 4413, 4426, 4429]; // ... nor go on re-seating after
+  function wsLink(code, role, h, opts) {
+    return new Promise((resolve, reject) => {
+      const tune = TUNE.ws, info = relayInfo(), WSC = W.WebSocket, host = role === 'host';
+      if (!info || typeof WSC !== 'function') { reject(fail('unavailable', { reason: 'ws', relay: null })); return; }
+      // (a relay known to be capped / down: a host goes straight on to its next transport - no socket, no request)
+      if (host) { const rs = relayState(); if (rs !== 'ok') { reject(fail('unavailable', { reason: rs, relay: rs })); return; } }
+      const sim = simOf(opts && opts.net !== undefined ? opts.net : fromQuery().net);
+      const timers = new Set();
+      const T = (fn, ms) => { const id = later(() => { timers.delete(id); fn(); }, ms); timers.add(id); return id; };
+      const U = (id) => { if (id !== null && id !== undefined) { timers.delete(id); cancel(id); } };
+      const lastQ = new Map();
+      let ws = null, settled = false, closed = false, leaving = false, stateQ = 0, tok = '', alone = host;
+      let lastSend = now(), stallAt = 0, reseat = 0, keep = null;
+      const dead = () => closed;
+      const outQ = sim ? fifo(T, dead) : null, inQ = sim ? fifo(T, dead) : null;
+      const delay = () => sim.latency + Math.random() * sim.jitter;
+      const buffered = () => { try { return (ws && ws.bufferedAmount) || 0; } catch (e) { return 0; } };
+      const rawSend = (sock, s) => { if (sock && sock === ws && sock.readyState === 1) { try { sock.send(s); } catch (e) { /* ignore */ } } };
+      function sendStr(s) {
+        lastSend = now();
+        const sock = ws;
+        if (sim) outQ.push(now() + delay(), () => rawSend(sock, s)); else rawSend(sock, s);
+      }
+      const send = (obj) => sendStr(JSON.stringify(obj));
+      const url = (extra) => info.base + '/r/' + info.space + '/' + code + '?v=' + WS_V + '&role=' + (host ? 'h' : 'g') + (extra || '');
+      function shut() {
+        if (closed) return;
+        closed = true;
+        for (const id of timers) cancel(id);
+        timers.clear();
+        if (keep !== null) { W.clearInterval(keep); keep = null; }
+        const s = ws;
+        ws = null;
+        if (s) { s.onmessage = null; s.onclose = null; s.onerror = null; try { if (s.readyState < 2) s.close(1000); } catch (e) { /* ignore */ } }
+      }
+      // a close before hi: the reason the page reads (2.5); the relay memory learns cap / down
+      function closeErr(code, reason) {
+        if (code === 4404 || code === 4001) { relayMark('ok'); return fail('not_found', { relay: null }); }
+        if (code === 4409) { relayMark('ok'); return fail('taken', { relay: null }); }
+        if (code === 4430) { relayMark('ok'); return fail('full', { reason: 'full', relay: null }); }
+        const why = { 4400: 'bad', 4403: 'origin', 4426: 'version', 4429: 'rate' }[code];
+        if (why) return fail('unavailable', { reason: why, relay: 'down' });
+        if (code === 4503 && reason === 'cap') { relayMark('cap'); return fail('unavailable', { reason: 'cap', relay: 'cap' }); }
+        relayMark('down');
+        return fail('unavailable', { reason: code === 4503 ? 'busy' : 'down', relay: 'down' });
+      }
+      // the first frame of every socket: {k:'hi', v, id, h, tok?}
+      function onHi(d) {
+        let m = null;
+        try { m = typeof d === 'string' ? JSON.parse(d) : null; } catch (e) { m = null; }
+        if (!m || m.k !== 'hi' || m.v !== WS_V || typeof m.id !== 'string' || !ID_RE.test(m.id) || typeof m.h !== 'string' || !ID_RE.test(m.h) || (host && m.h !== m.id)) return false;
+        relayMark('ok');
+        if (reseat) {                                   // (the re-seat: the same seat, the session goes on)
+          reseat = 0;
+          if (m.id !== link.selfId) { shut(); h.fatal('lost'); return true; }
+          send({ k: 'm', l: [] });
+          return true;
+        }
+        link.selfId = m.id; link.hostId = m.h;
+        if (host && typeof m.tok === 'string' && /^[a-z0-9]{16}$/.test(m.tok)) tok = m.tok;
+        settled = true;
+        keep = W.setInterval(() => {
+          if (!closed && !leaving && ws && ws.readyState === 1 && now() - lastSend >= tune.quietMs) sendStr(WS_PING);
+        }, 5000);
+        resolve(link);
+        return true;
+      }
+      function onFrame(d) {
+        if (closed || leaving || typeof d !== 'string') return;
+        let m = null;
+        try { m = JSON.parse(d); } catch (e) { return; }
+        if (!m || typeof m !== 'object' || typeof m.f !== 'string' || !ID_RE.test(m.f)) return;
+        if (m.k === 's') {
+          if (!Number.isInteger(m.q) || m.q <= (lastQ.get(m.f) || 0)) return;
+          lastQ.set(m.f, m.q);
+          h.state(m.f, m.d);
+        } else if (m.k === 'r') { if (m.t === '*' || m.t === link.selfId) h.rel(m.f, m.d); }
+        else if (m.k === 'gone') h.gone(m.f, m.why === 'left' ? 'left' : 'lost');
+      }
+      // a socket ended (code -1: no hi within connectMs). gotHi: that socket had said hi
+      function onClose(code, reason, gotHi) {
+        if (closed) return;
+        if (!settled) { const e = code === -1 ? (relayMark('down'), fail('unavailable', { reason: 'down', relay: 'down' })) : closeErr(code, reason); shut(); reject(e); return; }
+        if (leaving) { shut(); return; }
+        if (reseat && !gotHi) { if (WS_STOP.includes(code)) { shut(); h.fatal('lost'); } else nextReseat(); return; }
+        if (code === 4001) { shut(); h.gone(link.hostId, 'left'); return; }
+        // a host still alone (it went to KakaoTalk to send the code and the OS killed its socket): the same seat again
+        if (host && alone && !WS_HOLD.includes(code)) { reseat = 1; T(() => connect(true), WS_RESEAT[0]); return; }
+        shut();
+        h.fatal('lost');
+      }
+      function nextReseat() {
+        if (reseat >= WS_RESEAT.length) { shut(); h.fatal('lost'); return; }
+        T(() => connect(true), WS_RESEAT[reseat++]);
+      }
+      function connect(again) {
+        if (closed || leaving) return;
+        let s = null, gotHi = false, over = false, cto = null;
+        const fin = (c, r) => {
+          if (over) return;
+          over = true;
+          U(cto);
+          if (s) { s.onmessage = null; s.onclose = null; s.onerror = null; }
+          if (ws === s) ws = null;
+          onClose(c, r, gotHi);
+        };
+        const inbound = (fn) => { if (sim) inQ.push(now() + delay(), fn); else fn(); };
+        try { s = new WSC(url(again ? '&id=' + link.selfId + '&tok=' + tok : '')); } catch (e) { s = null; }
+        if (!s) { T(() => fin(0, ''), 0); return; }
+        ws = s;
+        cto = T(() => { if (gotHi || over) return; try { s.close(); } catch (e) { /* ignore */ } fin(-1, 'timeout'); }, tune.connectMs);
+        s.onmessage = (ev) => {
+          const d = ev ? ev.data : null;
+          inbound(() => {
+            if (over) return;
+            if (!gotHi) { if (onHi(d)) { gotHi = true; U(cto); } return; }
+            onFrame(d);
+          });
+        };
+        s.onclose = (ev) => { const c = ev && Number.isInteger(ev.code) ? ev.code : 1006, r = ev && typeof ev.reason === 'string' ? ev.reason : ''; inbound(() => fin(c, r)); };
+        s.onerror = () => { /* the close event follows */ };
+      }
+      const link = {
+        selfId: null, hostId: null,
+        setMembers(ids) { if (!host || closed || leaving) return; alone = !ids.length; if (alone) stallAt = 0; send({ k: 'm', l: ids }); },
+        // stallAt: the first state skipped since the last one that went out (a slow uplink still sends some: healthy)
+        sendState(obj) {
+          if (closed || leaving || (host && alone)) return;       // (nobody to hear it: design/relay.md 9.3)
+          if (buffered() > WS_BUF) { if (!stallAt) stallAt = now(); return; }
+          stallAt = 0;
+          send({ k: 's', q: ++stateQ, d: obj });
+        },
+        sendRel(to, env) { if (!closed && !leaving) send({ k: 'r', t: to, d: env }); },
+        // false while re-seating, closing, or with every state held back for over 2 s (a stalled uplink: the core shows
+        // 연결이 불안정해요; the core's once-a-second re-send tries again, so a drained socket clears it)
+        health() {
+          if (closed || leaving || reseat || !ws || ws.readyState !== 1) return false;
+          if (stallAt && buffered() <= WS_BUF) stallAt = 0;
+          return !(stallAt && now() - stallAt > 2000);
+        },
+        close(fast) {
+          if (closed || leaving) return;
+          leaving = true;
+          if (fast) { rawSend(ws, '{"k":"bye"}'); shut(); return; }
+          send({ k: 'bye' });
+          // (the bye leaves after everything queued before it: a reliable message sent right before leave() arrives first)
+          const t0 = now(), max = tune.byeMs + (sim ? sim.latency + sim.jitter : 0);
+          const wait = () => { if (closed) return; if (((!outQ || !outQ.size()) && buffered() === 0) || now() - t0 >= max) shut(); else T(wait, 10); };
+          T(wait, 10);
+        },
+      };
+      connect(false);
     });
   }
 
@@ -1330,15 +1564,20 @@ window.PG = window.PG || {};
   }
 
   // ==================================================================================== public entry points
-  async function host(opts) {
-    opts = opts || {};
-    const transport = opts.transport;
-    if (!TRANSPORTS.includes(transport)) throw fail('unavailable', { reason: 'transport' });
-    let code = null;
-    if (opts.code !== undefined && opts.code !== null) {
-      code = String(opts.code).trim().toLowerCase();
-      if (!CODE_RE.test(code)) throw fail('unavailable', { reason: 'bad_code' });
-    }
+  // opts.transport: one name, or a list tried in order (design/relay.md 4.5) -> the list, or null when any entry is unknown
+  function trList(t) {
+    const l = Array.isArray(t) ? t.slice(0, 4) : [t];
+    return l.length && l.every((x) => TRANSPORTS.includes(x)) ? l : null;
+  }
+  // the most telling of two failures: full > timeout > not_found > unavailable (the later one on a tie: the last word)
+  const RANK = { full: 4, timeout: 3, not_found: 2, unavailable: 1 };
+  const worse = (a, b) => (!a || (RANK[b.code] || 1) >= (RANK[a.code] || 1) ? b : a);
+  // why a 'ws' entry did not serve, as the session's fallback says it: 'cap', else 'down' (any other refusal too)
+  const fbOf = (e) => (e && e.relay === 'cap' ? 'cap' : 'down');
+  // a 'peer' entry after another one: the deferred PeerJS may still be on its way (game.js lists 'peer' while its tag
+  // loads, design/relay.md 5.1) - up to 5 s
+  const peerWait = () => (typeof W.Peer === 'function' ? Promise.resolve(true) : waitUntil(() => typeof W.Peer === 'function', 5000, 100));
+  async function hostOn(transport, code, opts) {
     for (let attempt = 0; attempt < 5; attempt++) {
       const c = code || genCode();
       const core = makeCore(transport, 'host', c, opts);
@@ -1351,14 +1590,67 @@ window.PG = window.PG || {};
     }
     throw fail('unavailable', { reason: 'taken' });
   }
+  async function host(opts) {
+    opts = opts || {};
+    const list = trList(opts.transport);
+    if (!list) throw fail('unavailable', { reason: 'transport' });
+    let code = null;
+    if (opts.code !== undefined && opts.code !== null) {
+      code = String(opts.code).trim().toLowerCase();
+      if (!CODE_RE.test(code)) throw fail('unavailable', { reason: 'bad_code' });
+    }
+    let fb = null, err = null;
+    for (let i = 0; i < list.length; i++) {
+      const tr = list[i];
+      if (i > 0 && tr === 'peer') await peerWait();
+      try {
+        // (a relay known to be capped / down: wsLink refuses at once, without a socket - design/relay.md 4.6)
+        const s = await hostOn(tr, code, opts);
+        s.fallback = fb;
+        return s;
+      } catch (e) {
+        const x = e && e.code ? e : fail('unavailable');
+        x.transport = tr;
+        if (x.reason === 'taken' && code) { x.relay = fb; throw x; }       // (the test API's explicit code: at once)
+        if (tr === 'ws') fb = fbOf(x);
+        err = worse(err, x);
+      }
+    }
+    err.relay = fb;
+    throw err;
+  }
   async function join(opts) {
     opts = opts || {};
-    const transport = opts.transport;
-    if (!TRANSPORTS.includes(transport)) throw fail('unavailable', { reason: 'transport' });
+    const list = trList(opts.transport);
+    if (!list) throw fail('unavailable', { reason: 'transport' });
     const code = String(opts.code === undefined || opts.code === null ? '' : opts.code).trim().toLowerCase();
     if (!CODE_RE.test(code)) throw fail('not_found');
-    return makeCore(transport, 'guest', code, opts).openGuest();
+    // a join never skips 'ws' (the relay memory says where a NEW room can go, not where an existing one is), and stops
+    // at an answer from a room that exists: full, or a 'ws' timeout (the relay found the host, it never welcomed me)
+    let fb = null, err = null, wsDown = false;
+    for (let i = 0; i < list.length; i++) {
+      const tr = list[i];
+      if (i > 0 && tr === 'peer') await peerWait();
+      try {
+        const s = await makeCore(tr, 'guest', code, opts).openGuest();
+        s.fallback = fb;
+        return s;
+      } catch (e) {
+        const x = e && e.code ? e : fail('unavailable');
+        x.transport = tr;
+        if (tr === 'ws' && x.code === 'unavailable') { wsDown = true; fb = fbOf(x); }
+        if (x.code === 'full' || (x.code === 'timeout' && tr === 'ws')) { x.relay = fb; throw x; }
+        err = worse(err, x);
+      }
+    }
+    // (the relay could not be reached and nobody else knew the code: the room may well be on that relay - joinDown. A
+    // capped relay answered: no new room is on it, so not_found stands - with .relay 'cap', game.js adds capTail)
+    if (wsDown && fb === 'down' && list.length > 1 && err.code === 'not_found') err = fail('unavailable', { reason: 'relay', transport: err.transport });
+    err.relay = fb;
+    throw err;
   }
+  // the relay memory for game.js (design/relay.md 4.6): on = this page has a relay at all
+  function relay() { const st = relayState(); return { on: !!relayInfo(), state: st, until: st === 'ok' ? 0 : relayMem.until }; }
 
   function onPageHide() { for (const c of Array.from(live)) c.close('left', true); }
   try { W.addEventListener('pagehide', onPageHide); } catch (e) { /* ignore */ }
@@ -1372,8 +1664,10 @@ window.PG = window.PG || {};
     transports, lobby, host, join,
     fromQuery, profileName, TEXT,
     roomDead: () => roomDead,
+    relay,
     MAX_PLAYERS, STATE_MAX, MSG_MAX,
     _sessions: () => Array.from(live, (c) => c.api),
+    _relayReset() { relayMem.state = 'ok'; relayMem.until = 0; },
     _dispose: dispose,
   };
 })(window.PG);
