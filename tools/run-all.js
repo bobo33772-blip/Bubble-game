@@ -201,6 +201,18 @@ const LIST = [
   // DEPLOY page through a fake PeerJS (the deferred script arriving late, codes, host leaving)
   V('room-platform', HTTP + 'rrp-main.html', 'rt600000', doneZero('RRP'), { done: 'RRP DONE', w: 1200, h: 900 }),
   V('peer-deploy', HTTP + 'rrp-peer-main.html', 'rt300000', doneZero('RPD'), { done: 'RPD DONE', w: 1200, h: 900 }),
+  // ---- the WebSocket relay (design/relay.md 11.3): PG.Net's contract over real sockets through serve.js's local relay
+  // (tools/ws-relay.js: the real cloudflare/src/room.js behind the real gate)
+  V('net-ws', HTTP + 'test-net-ws.html', 'rt120000', doneZero('NETWS'), { done: 'NETWS DONE' }),
+  // the battle scenarios of battle-net over 'ws' (lat 60 ms on each page's link)
+  V('battle-net-ws', HTTP + 'test-battle-net.html?tr=ws', 'rt300000', doneZero('BNET'), { done: 'BNET DONE', w: 1200, h: 900 }),
+  // the DEPLOY page with a relay (rrp-ws-frame.html, from deploy-relay/): 2 players over ws without the PeerJS wait, a host
+  // alone re-seating after its socket is cut, the relay capped -> the fake PeerJS room with the cap hint and a joiner
+  // finding it, a preview's space p apart from w (review-peer-deploy.js's fake PeerJS)
+  V('ws-deploy', HTTP + 'rrp-ws-main.html', 'rt240000', doneZero('RWD'), { done: 'RWD DONE', w: 1200, h: 900 }),
+  // net-ws once more through `wrangler dev` (Cloudflare's own runtime on this PC, no login) - SKIP until wrangler is
+  // installed in cloudflare/ (npm install there: design/relay.md 11.6, open question 7)
+  V('ws-workerd', 'ws-workerd.js', 0, (out) => (/WS-WORKERD SKIP/.test(out) ? 'skip' : /WS-WORKERD OK/.test(out) ? true : 'no WS-WORKERD OK'), { runner: 'node', serial: true }),
   // ... and its screenshots to LOOK at (C:/Temp/bogeul/off-friends-*.png, design/distinction.md 4.4 test 7): a
   // public-link viewer's 친구와 하기 panel (the block card, 방 만들기 off), before and after a 참여 tap with a code
   ...[[390, 844], [900, 760]].flatMap(([w, h]) => [['', 'off'], ['-tap', 'off-tap']].map(([sfx, s]) =>
@@ -311,6 +323,8 @@ function isRealtime(j) { return j.runner === 'cdp' || /^rt/.test(j.budget) || !!
 //   rrp-peer-frame.html the deploy page with its PeerJS tag made inert and window.Peer taken from window.parent.__FP
 //                       (?late=manual: defined only when the driver says so - the deferred script arriving late)
 //   rrp-peer-main.html  src/tests/review-peer-deploy.js
+//   rrp-ws-frame.html   the deploy page with a relay (deploy-relay/), its URL serve.js's local relay, the same fake PeerJS
+//   rrp-ws-pv-frame.html  the same as a PR preview's copy (space p);   rrp-ws-main.html  src/tests/review-ws-deploy.js
 function genPlatformPages() {
   const RESET = ':root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}';
   const SC = '<' + 'script', SE = '</' + 'script>';
@@ -325,7 +339,7 @@ function genPlatformPages() {
   fs.writeFileSync(`${T}/rrp-main.html`, `<!doctype html><html><head><meta charset="utf-8"><title>rrp</title><style>body{margin:0;background:#061518}</style></head><body>${SC}>\n${drv}\n${SE}</body></html>`);
   // (without the cloud config: this page plays online as a guest, which the deploy with the cloud does not allow -
   // design/friends.md "As built (invites)"; the cloud's own online gate is tested in src/tests/cloud.js)
-  // (nor the relay client a build with a relay URL inlines: these rooms run through the fake PeerJS, never a Worker)
+  // (nor the relay line of a build with a relay URL: these rooms run through the fake PeerJS - rrp-ws-frame.html below has it)
   const dep = fs.readFileSync(path.join(ROOT, 'deploy', 'index.html'), 'utf8').replace(/<script>window\.PG_CLOUD=[\s\S]*?<\/script>\n?/, '').replace(/<script id="pg-relay">[\s\S]*?<\/script>\n?/, '');
   const tag = dep.match(/<script defer src="(https:\/\/[^"]*peerjs[^"]*)"[^>]*><\/script>/);
   if (!tag) throw new Error('no PeerJS tag in deploy/index.html');
@@ -334,6 +348,18 @@ function genPlatformPages() {
   fs.writeFileSync(`${T}/rrp-peer-frame.html`, dep.replace(tag[0], () => fake));
   const pdrv = fs.readFileSync(path.join(ROOT, 'src', 'tests', 'review-peer-deploy.js'), 'utf8');
   fs.writeFileSync(`${T}/rrp-peer-main.html`, `<!doctype html><html><head><meta charset="utf-8"><title>rpd</title></head><body style="margin:0;background:#061518">${SC}>\n${pdrv}\n${SE}</body></html>`);
+  // the deploy page WITH a relay (build.js's deploy-relay/ fixture): its window.PG_RELAY line pointed at serve.js's local
+  // relay (http://localhost:<port>/ws becomes ws://), the PeerJS tag swapped for the same fake as above;
+  // rrp-ws-pv-frame.html is a PR preview's copy (space p). Both driven by src/tests/review-ws-deploy.js (rrp-ws-main.html)
+  const wdep = fs.readFileSync(path.join(T, 'deploy-relay', 'index.html'), 'utf8');
+  const LINE = '<script id="pg-relay">window.PG_RELAY={url:"http://127.0.0.1:9"};</script>';
+  const wtag = wdep.match(/<script defer src="(https:\/\/[^"]*peerjs[^"]*)"[^>]*><\/script>/);
+  if (!wdep.includes(LINE) || !wtag) throw new Error('deploy-relay/index.html: no placeholder relay line or no PeerJS tag');
+  const wpage = (space) => wdep.replace(LINE, () => `<script id="pg-relay">window.PG_RELAY={url:"http://localhost:${PORT}/ws"${space ? ',space:"' + space + '"' : ''}};</script>`).replace(wtag[0], () => fake);
+  fs.writeFileSync(`${T}/rrp-ws-frame.html`, wpage(''));
+  fs.writeFileSync(`${T}/rrp-ws-pv-frame.html`, wpage('p'));
+  const wdrv = fs.readFileSync(path.join(ROOT, 'src', 'tests', 'review-ws-deploy.js'), 'utf8');
+  fs.writeFileSync(`${T}/rrp-ws-main.html`, `<!doctype html><html><head><meta charset="utf-8"><title>rwd</title></head><body style="margin:0;background:#061518">${SC}>\n${wdrv}\n${SE}</body></html>`);
 }
 
 function runJob(j) {
@@ -360,11 +386,17 @@ function runJob(j) {
       if (verdict === true && /run-chrome: no \/|cdp: timeout|chrome did not start/.test(out)) verdict = 'timed out';
       if (verdict === true && j.shot && !/screenshot: /.test(out)) verdict = 'no screenshot';
       if (verdict === true && j.runner === 'node' && code !== 0) verdict = 'exit code ' + code;
-      resolve({ name: j.name, ok: verdict === true, why: verdict === true ? '' : verdict, secs: ((Date.now() - t0) / 1000).toFixed(0) });
+      // ('skip': a job whose tool is not installed here says so - it neither passes nor fails)
+      const skip = verdict === 'skip';
+      resolve({ name: j.name, ok: verdict === true || skip, skip, why: verdict === true || skip ? '' : verdict, secs: ((Date.now() - t0) / 1000).toFixed(0) });
     });
   });
 }
 
+// the server on PORT runs tools/ws-relay.js (an older serve.js without it would fail every ws job: say so instead)
+function relayOn() {
+  return new Promise((r) => { const q = http.get(HTTP + 'ws-admin/info', (res) => { res.resume(); r(res.statusCode === 200); }); q.on('error', () => r(false)); q.setTimeout(1500, () => { q.destroy(); r(false); }); });
+}
 function portOpen() {
   // (open and serving this T: its preview.html is ours; another build there -> stop, it would test the wrong page)
   let mine = ''; try { mine = fs.readFileSync(`${T}/preview.html`, 'utf8'); } catch (e) { /* not built */ }
@@ -389,13 +421,14 @@ function portOpen() {
   if (list.some((j) => /\/rrp-/.test(j.page))) genPlatformPages();
   let srv = null;
   if (list.some((j) => j.page.startsWith('http')) && !(await portOpen())) srv = require('./serve').start(PORT, T, { quiet: true });
+  else if (list.some((j) => j.page.startsWith('http') && /ws/.test(j.name)) && !(await relayOn())) { console.log(`RUN-ALL: :${PORT} runs a serve.js without the local relay (no /ws-admin/info) - restart it, or set PG_HTTP_PORT to a free port`); process.exit(2); }
   const results = [];
   const queue = list.filter((j) => !isRealtime(j));
-  const report = (r) => { results.push(r); console.log(`${r.ok ? 'PASS' : 'FAIL'} ${r.name.padEnd(22)} ${String(r.secs).padStart(4)} s ${r.why}`); };
+  const report = (r) => { results.push(r); console.log(`${r.skip ? 'SKIP' : r.ok ? 'PASS' : 'FAIL'} ${r.name.padEnd(22)} ${String(r.secs).padStart(4)} s ${r.why}`); };
   await Promise.all(Array.from({ length: JOBS }, async () => { while (queue.length) report(await runJob(queue.shift())); }));
   for (const j of list.filter(isRealtime)) report(await runJob(j));
   if (srv) srv.close();
-  const bad = results.filter((r) => !r.ok);
-  console.log(`\nRUN-ALL ${bad.length ? 'FAIL' : 'OK'}: ${results.length - bad.length}/${results.length} jobs passed${bad.length ? ' — failed: ' + bad.map((r) => r.name).join(', ') : ''} (logs in ${LOGS})`);
+  const bad = results.filter((r) => !r.ok), skipped = results.filter((r) => r.skip);
+  console.log(`\nRUN-ALL ${bad.length ? 'FAIL' : 'OK'}: ${results.length - bad.length - skipped.length}/${results.length - skipped.length} jobs passed${skipped.length ? ' (' + skipped.length + ' skipped: ' + skipped.map((r) => r.name).join(', ') + ')' : ''}${bad.length ? ' — failed: ' + bad.map((r) => r.name).join(', ') : ''} (logs in ${LOGS})`);
   process.exit(bad.length ? 1 : 0);
 })();

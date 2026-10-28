@@ -5,6 +5,7 @@
 // origins allowed in every space) at <base>/r/<space>/<code>: tools/serve.js attaches it at /ws, so a test page uses
 // ?net=ws&relay=ws://localhost:<port>/ws. It answers the keepalive {"k":"p"} itself, as the Durable Object's
 // auto-response does (the room never sees it), and remembers when (the room's dead-seat sweep reads that).
+// The connect limiter is off unless create({limit: true}) (every test page shares one address).
 // Admin (GET, the loopback test server only):
 //   /ws-admin/kill?code=c     destroy that room's sockets abruptly (no close frame: the pages see 1006)
 //   /ws-admin/restart         close every socket with 1012 and forget every room (what a redeploy does)
@@ -111,7 +112,9 @@ function create(opts) {
   const rooms = new Map();                          // "<space>:<code>" -> RoomCore
   const conns = new Set();
   const state = { cap: false, connects: 0, refused: 0 };
-  let limiter = null;
+  // (the connect limiter: off unless opts.limit - every test page here shares one address, and a suite makes far more
+  // than 30 rooms a minute)
+  let limiter = opts.limit ? null : () => true;
   const ABC = 'abcdefghijklmnopqrstuvwxyz0123456789';
   const rand = (n) => { const b = crypto.randomBytes(n); let s = ''; for (let i = 0; i < n; i++) s += ABC[b[i] % 36]; return s; };
   const io = () => ({
