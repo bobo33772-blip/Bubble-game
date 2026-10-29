@@ -4513,6 +4513,8 @@ window.PG = window.PG || {};
     G.mini = Array.isArray(g.mg) ? miniView(g.mg, g1 && Array.isArray(g1.mg) && g1.mg[0] === g.mg[0] ? g1.mg : null, t, g) : null;
     // (a new beat: its view now - before guestPhase, which keeps a result view up; 끝! / the winner stage hide it)
     if (P.b === 'w' && b0 !== 'w') P.wAt = G.frame - P.bt;
+    // (끝!: a line of my own - my 탈락 - gives way, so the host's 끝! shows here from the next snapshot)
+    if (P.b === 'f' && b0 !== 'f' && G.banner && String(G.banner.id).charAt(0) === 'l') G.banner.end = G.frame;
     if (ph === 'result' && G.mode === 'result' && (P.b !== b0 || P.bk !== k0)) {
       if (beatView(P.b)) { showOverlay(G.menuOpen ? 'pause' : 'party'); fillParty(); } else if (shownOverlay === 'party') showOverlay(null);
     } else if (shownOverlay === 'party') fillParty();
@@ -4661,8 +4663,9 @@ window.PG = window.PG || {};
   // the soaps' life, then the first touch takes one (a host-local body exactly, a remote one with SOAP.slack px; never a
   // raft or a trapped animal: canTouch): got +1, and a save when it holds none
   function soapTick(M, R, k) {
-    for (const q of M.soaps) if (M.t - q.t0 >= SOAP.life) burst(q.x + 4, soapY(q, M.t, R, k), 6, ['#ffffff', '#ffc9dc'], 1, 10);
-    M.soaps = M.soaps.filter((q) => M.t - q.t0 < SOAP.life);
+    const life = Math.round(SOAP.life * k);   // (the debug fast party's soaps live as much shorter as its schedule)
+    for (const q of M.soaps) if (M.t - q.t0 >= life) burst(q.x + 4, soapY(q, M.t, R, k), 6, ['#ffffff', '#ffc9dc'], 1, 10);
+    M.soaps = M.soaps.filter((q) => M.t - q.t0 < life);
     for (const q of M.soaps.slice()) {
       const y = soapY(q, M.t, R, k), p = G.players.find((pl) => { const s = pl.local !== false ? 0 : SOAP.slack; return canTouch(pl) && overlap(pl.x + 2 - s, pl.y + 2 - s, 12 + 2 * s, 14 + 2 * s, q.x, y - 4, 8, 8); });
       if (!p) continue;
@@ -4790,7 +4793,7 @@ window.PG = window.PG || {};
     }
     // (the 비누 방울: the pink soap disc in a ring, bobbing over the water; blinking in its last second)
     for (const q of M.soaps || []) {
-      if (now - q.t0 > SOAP.life - 60 && ((G.frame >> 2) & 1)) continue;
+      if (now - q.t0 > SOAP.life * k - 60 && ((G.frame >> 2) & 1)) continue;
       const sy = Math.round(soapY(q, now, R, k)), cx = Math.round(q.x + 4);
       ctx.globalAlpha = 0.25; ctx.fillStyle = '#ffc9dc'; ctx.beginPath(); ctx.arc(cx, sy, 6, 0, Math.PI * 2); ctx.fill();
       ctx.globalAlpha = 0.9; ctx.strokeStyle = '#ffc9dc'; ctx.lineWidth = 1; ctx.stroke(); ctx.globalAlpha = 1;
@@ -14832,7 +14835,7 @@ window.PG = window.PG || {};
       // host, 물 v2: a 비누 방울 now (at x: else a random spot), that seat a 오리 튜브 now (as if it drowned: its out entry too)
       soapsOff(on) { partyNoSoap = !!on; return partyNoSoap; },
       soapY(i) { const M = G.mini, q = M && M.soaps && M.soaps[i]; return q ? soapY(q, M.t, LV && LV.rise, waterK()) : null; },
-      soap(x) { const M = G.mini; if (!M || M.id !== 'water') return null; const n = M.soaps.length, keep = partyNoSoap; partyNoSoap = false; soapSpawn(M); partyNoSoap = keep; if (M.soaps.length > n && x !== undefined) M.soaps[M.soaps.length - 1].x = +x; return api.state().mini; },
+      soap(x) { const M = G.mini; if (!M || M.id !== 'water') return null; M.soaps = []; const n = 0, keep = partyNoSoap; partyNoSoap = false; soapSpawn(M); partyNoSoap = keep; if (M.soaps.length > n && x !== undefined) M.soaps[M.soaps.length - 1].x = +x; return api.state().mini; },
       raft(slot) { const M = G.mini, p = G.players.find((q) => q.slot === slot); if (!M || M.id !== 'water' || !p || p.raft) return false; waterOut(p, M); return p.raft; },
       // host, 거품 축구: the ball by hand (in play: no kickoff wait), a goal for team t, a capy's quake at its spot, a
       // capture-phase bubble of slot's kit blown at x, y (vx: its direction) - returns it
