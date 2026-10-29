@@ -91,7 +91,10 @@
  *   rise        the water's schedule: { y0 (surface y before the first step, px), warn (s of warning before a step),
  *               steps: [[from s, to s, surface y] ...] } - linear inside a step, flat between. Each step drowns exactly
  *               one tier (a tier is out once its top is more than WATER_SLACK = 3 px under the surface) and leaves the
- *               next one dry; the two top shelves stay dry to the end.
+ *               next one dry; the two top shelves stay dry until the flood. 물 v2 (design/party-polish.md 4.1.1): surges
+ *               [[at s, length s, peak y]] (a half sine over the next tier and back, overlapping no step), flood [from
+ *               s, to s, level y] (after the last step, over the shelves: nothing stays dry), soaps [s ...] (a 비누 방울
+ *               appears), revive [{col,row} x2] (역전: a rafter comes back on a top shelf).
  *   goals       (축구) [left, right] goal mouths { c0, c1, r0, r1 (the open cells under the crossbar), line (the mouth's
  *               inner edge, px: the goal line) }; the crossbar is the '#' row right above the mouth (the ball bounces off
  *               every '#' cell from all sides; players land on it from above like on any block). A goal: the ball's
@@ -1335,7 +1338,8 @@ window.PG = window.PG || {};
 
   PG.PARTY_ARENAS = [
     // ── P1 ── 물 차는 대욕장 (물 차오르기): one-way tiers 4 rows apart (rows 21 / 17 / 13 / 9), each within 2-3 columns
-    //    of the one below, two 4-tile shelves on top (row 5). The water rises in five steps; each drowns one tier.
+    //    of the one below, two 4-tile shelves on top (row 5). The water rises in five steps (each drowns one tier), two
+    //    surges wash over the next tier for 1.6 s, and the 마지막 물결 floods the top shelves (design/party-polish.md 4.1).
     {
       key: 'water',
       name: '물 차는 대욕장',
@@ -1371,7 +1375,12 @@ window.PG = window.PG || {};
       ],
       players: [{ col: 4, row: 24 }, { col: 27, row: 24 }, { col: 10, row: 24 }, { col: 21, row: 24 }],
       gather: { col: 15, row: 2 },
-      rise: { y0: 222, warn: 2, steps: [[5, 9, 206], [19, 23, 174], [33, 37, 142], [47, 51, 110], [61, 65, 78]] },
+      rise: { y0: 222, warn: 2,
+        steps: [[4, 7, 206], [18, 21, 174], [30, 33, 142], [42, 45, 110], [48, 50, 78]],   // [from s, to s, level y]: each drowns one tier
+        surges: [[13, 1.6, 178], [37, 1.6, 114]],     // [at s, length s, peak y]: a half-sine wave up from the level and back
+        flood: [52, 59, 34],                          // 마지막 물결: [from s, to s, level y] - over the top shelves
+        soaps: [3, 9, 15, 24, 28, 36, 46],            // 비누 방울: the seconds one appears (over the water)
+        revive: [{ col: 8, row: 4 }, { col: 23, row: 4 }] },   // 역전: the top shelves' spots
     },
     // ── P2 ── 거품 축구장 (거품 축구): an open field, a crossbar over each goal (row 20, cols 2-5 / 26-29) and the goal
     //    mouths under it (rows 21-24, 3 columns deep: the 22 px ball gets more than half past the line). The crossbar
