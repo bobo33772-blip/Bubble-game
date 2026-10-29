@@ -1,6 +1,7 @@
 # 뽀득뽀득 목욕탕: 파티 새 게임 (party games, PR C) v1 — design spec
 
-Status: **design** on `feat/party-games` (worktree `bogeul-games`), stacked on `feat/party-polish` (PR #23, not merged).
+Status: **design**, checked against the code (section 17), on `feat/party-games` (worktree `bogeul-games`), stacked on
+`feat/party-polish` (PR #23, not merged).
 It builds on the party as built (design/party.md sections 18 / 18.1) and its polish (design/party-polish.md section 14):
 the sequencer `G.party`, the minigame contract `MINI` / `MINI_FN`, the card with its 96x32 demo and 준비 완료!, the
 result beats, the last 판 x2, the 3 보너스상, `PARTY_V` 3. Code is referenced by function name, never by line number.
@@ -23,9 +24,10 @@ the same game three times. The genres offered were 연타, 반응속도, 기억�
 | Where they play | 바나나우유 and 펑 are **`world: false`** games (the reserved polish-5 hook, built now): their own scene drawn over a plain closed arena **무대 목욕탕** (`PG.PARTY_ARENAS[2]`, key `'stage'`), the animals parked on fixed spots, no physics, no bubbles. 술래 plays on its own closed arena **살금살금 복도** (`PG.PARTY_ARENAS[3]`, key `'sneak'`) with bodies, but no 특기, no bubbles for anyone and a 술래 that never moves. |
 | Inputs | Only what exists: the joystick (left / right / down with its hysteresis) and the 점프 / 거품 buttons on a phone; ←→↓, Z / ↑, X on a keyboard. 바나나우유: either button. 펑: mash either button, **down** banks. 술래: walk and hop; the 술래 mashes 거품 to chant and may feint with 점프. |
 | Fairness rule | **Each page measures itself between two events on its own clock** (what it drew and what it pressed, a window of its own, or the host tick its view showed). The host only collects, clamps and closes. Latency changes when you learn the result, never the result (sections 4.4, 5.4, 6.4). |
-| Press times | **New** `pressQ`: every fresh 점프 / 거품 press on this screen with its event `timeStamp` (keydown and pointerdown, where `latch` is set today), and **new** `G.drawT`: the rAF time of the frame being drawn. |
-| This page's own part | **New** optional hooks `local(M, slot, inp)` (the page that controls a seat: host for its local seats, a guest for itself) → `mi`, at most 8 ints; `input(M, slot, mi)` (host: applies any seat's `mi`, its own too - one code path). A guest sends `mi` in its **body state** beside `pr` (latest wins). **No new message type.** |
-| Rotation | Six games in **two families**: `'a'` 몸 게임 (물, 왕관, 축구) and `'n'` 새 게임 (바나나우유, 펑, 술래). A party **alternates families** from a random first one (3판 A N A or N A N; 5판 A N A N A or N A N A N), each family its own no-repeat bag. Never the same game twice in a row, never two run-and-jump 판 in a row, at least one arena 판 in every party (the 가두기 / 탈출 awards). 3 players: family A is 물 + 왕관 (no 축구, unchanged); every new game fits 2-4. |
+| Press times | **New** `pressQ`: every fresh 점프 / 거품 press on this screen with its event `timeStamp` (keydown and pointerdown, where `latch` is set today) and every fresh **down** with its time (a ↓ keydown, the stick's down edge in `stickMove`), and **new** `G.drawT`: the time of the frame being drawn (set in `render`, so `D.step` tests have it too). |
+| This page's own part | **New** optional hooks `local(M, slot, inp)` (the page that controls a seat: host for its local seats, a guest for itself) → `mi`, at most 8 ints; `input(M, slot, mi)` (host: applies any seat's `mi`, its own too - one code path). A guest sends `mi` in its **body state** beside `pr` (latest wins). **No new message type.** No game logic ever runs in a network callback (`hostBodyIn`): 술래's judge reads the states the host already keeps (`rem.buf`) from its own tick (6.4). |
+| How a 판 ends | The two round games (바나나우유, 술래) end **by their own last round** (`M.endAt`); `secs` is only a safety cap that a slow link never reaches (75 / 80 s; the first draft's 50 / 60 s could cut the last round). The fast debug party gives each new game its own `fastSecs` (today's flat 12 s would cut both mid-round). 펑 ends on every page's own 45 s window plus the host's wait (5.4). |
+| Rotation | Six games in **two families**: `'a'` 몸 게임 (물, 왕관, 축구) and `'n'` 새 게임 (바나나우유, 펑, 술래). A party **alternates families** from a random first one (3판 A N A or N A N; 5판 A N A N A or N A N A N), each family its own no-repeat bag. Never the same game twice in a row, never two arena games in a row (술래 has bodies too, but it plays stop-and-go: the closest pair the rotation allows), at least one arena 판 in every party (the 가두기 / 탈출 awards). 3 players: family A is 물 + 왕관 (no 축구, unchanged); every new game fits 2-4. |
 | Points | Unchanged: places → 4 / 2 / 1 / 0 (x2 on the last 판). Every new game ranks by a key with a measured tie-break (ms, pops, frames), so shared places are rare. |
 | Coins | "2+ bubbles blown in a 판" becomes **"2+ actions in a 판"**: **new** `coinAct()` counts a game's action into `CO.bshots` on my own page (a valid grab; a finished bubble; an arrival, a survived look with progress, or a chant). The arena games keep `coinShot`. Nothing else in `coinParty` changes. |
 | Awards | Unchanged. 최다 1등상 always works; 최다 가두기상 / 최다 탈출상 come from the arena games **and from 술래** (its catches are prisons owned by the 술래, its escapes are mash-outs). The family rotation puts at least one arena 판 in every party; a party where nobody trapped skips those awards by the existing top-0 rule. |
@@ -43,7 +45,9 @@ the same game three times. The genres offered were 연타, 반응속도, 기억�
 | 살금살금 술래 | Creep toward the 술래 and freeze when it turns; as the 술래, mash the chant and fake | It plays the opposite way of the arena games: stop-and-go, no bubbles for runners, a player who never moves, and roles that rotate | The loudest of the six: the 술래 teases with the rhythm and a 흠칫! feint, runners flinch, a hop at the wrong syllable gets bubbled and carried back, `3초!` after the first arrival |
 
 Across the six, every 판 now has its own verb: 물 escape, 왕관 hold, 축구 push, 바나나우유 snap, 펑 gamble, 술래 freeze. The
-rotation alternates the arena games with the new ones, so a 3판 party never has two run-and-jump games in a row.
+rotation alternates the arena games with the new ones, so a party never has two arena games in a row. (술래 still walks
+and hops the platformer bodies; what makes it a different game is that standing still is the skill. An arena game next
+to 술래 is the closest pair the rotation allows.)
 
 ---
 
@@ -81,20 +85,33 @@ arena (which every renderer, the name tags, `takeOver` and the winner stage expe
 
 - `MINI[id].ar = ['p', 2]`. `spawns()` = **new** `stageSpots(n)`: the feet centres `STAGE_X[n]` (2: `[100, 156]`, 3: `[72,
   128, 184]`, 4: `[44, 100, 156, 212]` - the centres of 2-4 stalls 56 px wide, centred), body `x = c - 8`, feet on the
-  floor; the k-th present player in slot order.
+  floor; the k-th present player in slot order. `placePlayer` takes a cell (`bodyAt`: `x = col * 8 - 4`), so a spot is
+  `{ col: (c - 4) / 8, row: 24 }` - the 3-player centres give half columns (8.5, 15.5, 22.5), which `bodyAt` takes as they
+  are (it never rounds a column).
 - **Freeze** (`miniParked(p)`, **new**: `world === false`, or the game's `frozen(M, p)` - 술래's own animal and the arrived
   runners): `updateBody` returns at its top with `vx = vy = 0`, `onGround = true`, `invuln = 0` (else `START_INV` would
   blink all game); `guestSelf` runs the game's `local` and returns before `updatePlayer`. No `updatePlayer` means no
   `fire()`, no kit move, no magazine use.
-- **Bubbles off** (`MINI[id].noFire`, also set by 술래): `fire()` returns `null` before `coinShot` (host and guest), so a
-  stray 거품 press never makes a bubble or counts as a blow; `drawMagHud` is skipped; `syncJumpSub` hides the kit's
-  sub-label on the touch 점프 button.
+- **Bubbles off** (`MINI[id].noFire`, also set by 술래): `fire()` returns `null` before `coinShot` (host and guest - the
+  guest's `guestFire` is inside `fire`, so no `'shot'` message leaves either), so a stray 거품 press never makes a bubble
+  or counts as a blow; `hostShot` drops a `'shot'` that arrives anyway while `noFire` (a modified page); `drawMagHud` is
+  skipped; `syncJumpSub` hides the kit's sub-label on the touch 점프 button.
 - **No clock cues** (`MINI[id].cues === false`, all three new games): `updateBattle` skips the last-3-s `countdown` beeps
   and `10초 남았어요!` (the rounds end these games, or the page's own clock does).
 - **Poses** (`MINI_FN[id].pose(M, p)`, **new** optional): returns draw-time fields (`x`, `y`, `facing`, `onGround`, `vy`,
   `shootAnim`, `die` frame, `sit` px) that the player draw loop swaps in for `drawPlayer` and puts back, exactly as
   `drawPartyWin` does. Bodies, epochs and the wire never see them. Name tags follow the real (parked) bodies, which stand at
   the same x.
+- **Name tags** (`MINI_FN[id].tagY(M, p)`, **new** optional): `syncTags` anchors a tag at `headTop(p) - 5`, a DOM box over
+  the canvas. In 펑 that is exactly where the bubble grows (up to 44 px over the head), so the tag would hide the tremble
+  and the flash, the game's only warning. A game with `tagY` gives the anchor instead: 펑 `PF_BOT - 8 - 16 - 50` (over the
+  biggest bubble), 바나나우유 the head as today (its reveal times are drawn over the tag, 4.6). `tagSpot` still moves a tag
+  off another one.
+- **The end**: 바나나우유 and 술래 end by `M.endAt` (30 f after their last round closes), as 물 does. Their `secs` (75 / 80)
+  is only a safety cap: the worst honest case (every round waiting out its close cap) is about 62 s for 바나나우유 and 60 s
+  for 4-player 술래, so the 50 / 60 s of the first draft would have cut the last round. At the cap (a stalled host) the 판
+  ends with the rounds already closed. `partySecs` in the fast debug party reads `MINI[id].fastSecs || 12` (바나나우유 and
+  술래 30: their fast schedules are 4 rounds / 2 rounds, about 18 / 15 s). 펑 ends by its `over` (5.4).
 - The card, the 3-2-1, 끝!, the winner stage, the tally, the awards and the podium are unchanged: they only see a `MINI`
   entry and places.
 
@@ -105,10 +122,15 @@ arena (which every renderer, the name tags, `takeOver` and the winner stage expe
   //   local(M, slot, inp) -> mi | null   this page's own seat this playing frame (host: each local seat; guest: itself).
   //                                      Keeps its state in G.mloc[slot]; inp has the frame's edges and inp.pq (3.3)
   //   input(M, slot, mi)                 host only: a seat's latest mi (its own local seats' too: one code path)
-  //   body(M, p, s)                      host only: each accepted remote body state as it arrives (술래's judge)
   //   clock(M) -> string                 the HUD's centre text instead of m:ss (digits, '/', ':')
-  //   pose(M, p), frozen(M, p)           3.1
+  //   pose(M, p), frozen(M, p), tagY(M, p)   3.1
+  // MINI[id] (new, optional): fam, world, noFire, cues, fastSecs (3.1, 3.6)
 ```
+
+(The first draft also had a `body(M, p, s)` hook called from `hostBodyIn` for each arriving state. It is dropped: that
+callback runs on the network's schedule, outside `update()`, where a catch would make a prison, sounds and recorded
+events between two world frames. `hostBodyIn` already keeps every accepted state in `rem.buf.list` (`{k, d}`, `d.rt`
+included, up to 64); 술래's tick reads the new ones from there, 6.4.)
 
 - **`mi`**: at most 8 integers, always `[판 index, ...]`. The guest's `guestSelf` stores what `local` returns in `NET.mi`;
   `guestSend` adds `mi: NET.mi` while `G.mode === 'playing'` and `G.mini` (left out otherwise, as `pr`). `parseBody` reads
@@ -125,17 +147,25 @@ arena (which every renderer, the name tags, `takeOver` and the winner stage expe
 ### 3.3 Press times and draw times
 
 ```js
-  const pressQ = [];   // this screen's fresh 점프 / 거품 presses since the last frame: [act, t] (t: the event's timeStamp)
+  const pressQ = [];   // this screen's fresh presses since the last frame: [act, t] (act 'jump' | 'shoot' | 'down'; t: the event's timeStamp)
   const evT = (e) => { const n = performance.now(), t = e && e.timeStamp; return t > 0 && Math.abs(t - n) < 10000 ? t : n; };
-  // onKeyDown:        where latch[act] = true (a fresh press): pressQ.push([act, evT(e)])
+  // onKeyDown:        where latch[act] = true (a fresh press): pressQ.push([act, evT(e)]); a fresh ↓ / S (!keys.down): pressQ.push(['down', evT(e)])
   // bindTouch sync(): on the rising edge (latch set):          pressQ.push([act, evT(e)])
-  // readInputs:       my slot: i.pq = pressQ.splice(0, 8); a debug seat: i.pq = dbgPq[s].splice(0); i.downP = i.down && !prev.down
-  // loop(now):        G.drawT = now, before renderScene
+  // stickMove(cx, cy, t): when STICK.dn turns on (stickDown's edge): pressQ.push(['down', t]) (its two pointer callers pass evT(e))
+  // readInputs:       my slot: i.pq = pressQ.splice(0).slice(0, 8) (all of them leave the queue: nothing stale is left for the
+  //                   next frame), [] while G.menuOpen or outside 'playing'; a debug seat: i.pq = dbgPq[s].splice(0);
+  //                   i.downP = i.down && !prev.down
+  // loop(now):        frameT = now; render(): G.drawT = vclock ? pageNow() : frameT || performance.now()
 ```
 
 - `event.timeStamp` and the rAF time are both `DOMHighResTimeStamp`s from the page's time origin in current Chrome and
   Safari; `evT` falls back to `performance.now()` in the handler (an old engine's epoch stamp, a 0). Two presses inside
   one frame are two entries (the second button, a fast double tap).
+- `G.drawT` is set in `render()`, not in `loop`: `PG.debug.step` calls `update()` n times and then `render()` directly, so a
+  `loop`-only stamp would never move in party.js.
+- The `'down'` entries give 펑 the order of a bank and a puff that land in the same frame (5.1). `stickMove(cx, cy)` takes
+  coordinates today; its callers (the zone's pointerdown, the window's pointermove) add the event's time as a third
+  argument.
 - `pageNow()` (**new**): `performance.now()`, or the virtual clock under `PG.debug.party.vclock(true)` (tests set the press
   and draw times exactly; 13.1).
 - Nothing outside the party reads `pq` / `downP`; battle and co-op ignore them.
@@ -165,16 +195,18 @@ minutes and pays at most 24 to the 1st of 4: still under battle's rate (party.md
   // MINI[id].fam: 'a' the arena games (물, 왕관, 축구), 'n' the new ones (바나나우유, 펑, 술래)
   // the 판 list: the families alternate from a random first one; each family its own shuffled bag of the games that fit
   // n, refilled when empty, a fresh bag never starting with that family's last pick. from: the 판 already decided (kept;
-  // the next family is the other one of from's last)
+  // the next family is the other one of from's last; a replan's first bag leaves out what from already played, so a
+  // 5판 replan does not bring back 바나나우유 while 술래 is still unplayed)
   function partyPlan(n, rounds, from) {
-    const out = (from || []).slice(), bag = { a: [], n: [] }, last = { a: null, n: null };
+    const out = (from || []).slice(), bag = { a: [], n: [] }, last = { a: null, n: null }, first = { a: true, n: true };
     const ok = (f) => MINI_IDS.filter((id) => MINI[id].fam === f && MINI[id].fits(n));
     for (const id of out) last[MINI[id].fam] = id;
     let f = out.length ? (MINI[out[out.length - 1]].fam === 'a' ? 'n' : 'a') : (ri(0, 1) ? 'a' : 'n');
     while (out.length < rounds) {
       if (!ok(f).length) f = f === 'a' ? 'n' : 'a';                     // (a family with nothing that fits: never today)
       if (!bag[f].length) {
-        bag[f] = shuffle(ok(f));
+        const fresh = first[f] ? ok(f).filter((id) => !out.includes(id)) : [];
+        bag[f] = shuffle(fresh.length ? fresh : ok(f)); first[f] = false;
         if (bag[f].length > 1 && bag[f][0] === last[f]) [bag[f][0], bag[f][1]] = [bag[f][1], bag[f][0]];
       }
       const id = bag[f].shift(); out.push(id); last[f] = id; f = f === 'a' ? 'n' : 'a';
@@ -204,18 +236,22 @@ victim) and `esc` (`escapeTrap` with ≥ `ESC_MASH` presses) only where prisons 
 
 ## 4. 바나나우유 잡기 (반응속도)
 
-`MINI.milk = { c: 'm', fam: 'n', secs: 50, ar: ['p', 2], world: false, noFire: true, cues: false, fits: (n) => n >= 2, ... }`
+`MINI.milk = { c: 'm', fam: 'n', secs: 75, fastSecs: 30, ar: ['p', 2], world: false, noFire: true, cues: false, fits: (n) => n >= 2, ... }`
 
 ### 4.1 Rules
 
-- **8 rounds** (`MILK.rounds`); `secs` 50 is a cap. The 판 ends 30 f after round 8's reveal (`M.endAt`).
+- **8 rounds** (`MILK.rounds`). The 판 ends 30 f after round 8's reveal (`M.endAt`); `secs` 75 is only a safety cap (3.1:
+  8 rounds that each wait out the close cap take about 62 s).
 - **Each round** (host frames; `A` = the round's arm tick):
   1. **Intro** `MILK.intro` 30 f: the counter steams, three dots blink. Presses are not armed yet (ignored, no penalty: a
      press held over from the last round counts for nothing).
   2. **Wait**: the banana milk appears at `m = A + 30 + ri(72, 180)` (1.2-3.0 s, host RNG). Before it, decoys may appear,
      each **30 f** on the counter, at least **24 f** apart (from the end of one to the start of the next and before `m`):
      rounds 1-2 none; 3-4 one; 5-8 one or two. A decoy is a 요구르트, a 식혜 or a 맥반석 계란, and from round 5 it may be
-     **딸기우유** - the banana milk jar itself tinted pink (at most one a round).
+     **딸기우유** - the banana milk jar itself tinted pink (at most one a round). The plan fits the decoys inside the wait:
+     one needs `decoyF + gapF` = 54 f before `m`, two need 108 f, so a round 5-8 whose wait drew under 108 f (`m - A - 30`
+     is 72-180) gets one decoy, never two squeezed together. A decoy's start is drawn inside what is left, so the milk does
+     not always come right after a decoy.
   3. **NO-GO rounds**: 2 of rounds 4-8 (host RNG, never two in a row) have no banana milk: 2-3 decoys, then the round's
      **end** at the last decoy's end + 60 f.
   4. Every appearance, decoys included, plays the same `ticket` chime: the sound gives nothing away, you have to look.
@@ -230,8 +266,12 @@ victim) and `esc` (`escapeTrap` with ≥ `ESC_MASH` presses) only where prisons 
 - **Round points**: valid grabs by RT, fastest first: **3 / 2 / 1 / 0** (equal ms share the place); 반칙 -1; 느려요 0;
   NO-GO 참았다 +1, 반칙 -1.
 - **Close**: the host closes a round when every present seat has reported (4.4), or at `m` (or the NO-GO end) + 180 f; a
-  missing report is 느려요 (0). Then a **60 f reveal**: each animal's time over it in canvas digits (`0.27`), `반칙!` /
-  `느려요` / `참았다!` word pops, the fastest grabs the bottle (it arcs into its paws). The next round arms right after.
+  missing report is 느려요 (0). The host does not wait for a seat whose body states have stopped (no new state for
+  `MILK.staleF` 30 f: a hidden tab, a frozen phone - its rAF loop sends nothing): without this, one friend who switched
+  apps makes every round sit out the full 3 s cap, 24 s of nothing over 8 rounds (the owner's "the flow is awkward").
+  Such a seat scores 느려요 unless its report is in before the close. Then a **60 f reveal**: each animal's time over it in
+  canvas digits (`0.27`), `반칙!` / `느려요` / `참았다!` word pops, the fastest grabs the bottle (it arcs into its paws).
+  The next round arms right after.
 - Length: about 30 + 126 + ~50 (reactions and reports) + 60 ≈ 270 f a round, **about 37 s** for the 8.
 - Round-opening banners: round 3 `가짜 간식이 나와요!` / `바나나우유만 잡아요` (class `round`); round 5 `딸기우유 조심!` /
   `분홍색은 참아요` (class `hurry`). A NO-GO round is never announced; its reveal says `바나나우유가 없었어요!` /
@@ -254,10 +294,16 @@ victim) and `esc` (`escapeTrap` with ≥ `ESC_MASH` presses) only where prisons 
 - **The schedule never leaks early**: the host draws the round's plan at `A` (decoy kinds and ticks, `m` or the end), but
   `g.mg` carries an event `[kind, tick]` only once the host's clock has reached it. A page draws an appearance when its
   view clock reaches its tick (host: `G.frame`; guest: `NET.rt`). A guest's view is always behind the host's newest
-  snapshot, so the event is in hand before it is due.
+  snapshot, so the event is in hand before it is due - but only in the *next* snapshot: an event at tick `e` with `a.k <
+  e <= rt` is in `b` (`mg1`), not in `a`. `milkView` merges the events of `mg` and `mg1` (`miniView` already passes both).
 - **The draw time**: the first render that draws an appearance stores `G.drawT` in `G.mloc` (`shown.milk`, `shown.d =
   [[kind, t0, t1]]`). **The press time**: each `inp.pq` entry's event time. `local` runs every playing frame and settles
-  the round as 4.1 says: `rt = round(tp - shown.milk)`.
+  the round as 4.1 says: `rt = round(tp - shown.milk)`. A press processed before the milk's first draw (same frame, the
+  update runs before the render) has `tp` before that draw and is a 반칙, which is right: it came before the milk.
+- **Once drawn, it stays drawn**: the guest's view clock can step back (`bufPush` lowers `B.off` after a stall, so `rt`
+  jumps back by up to a second). The counter is drawn from `G.mloc`'s `shown` record once an appearance was drawn (a
+  decoy until its own 30 f have passed on this page's clock, the milk until the reveal), never from a fresh `rt` test, so
+  the milk never vanishes and re-appears with a second draw time.
 - **The report**: `mi = [판 i, round, ms, flag]` (flag 1 잡았다, 2 반칙, 3 참았다, 4 느려요), sent once the round is over
   for me (a press, 1500 ms after my milk, or my draw of the NO-GO end). The host's local seat goes through the same
   `local` → `input`.
@@ -266,7 +312,8 @@ victim) and `esc` (`escapeTrap` with ≥ `ESC_MASH` presses) only where prisons 
 - **Latency and jitter** only change *when* a page sees the milk (its view delay, a stalled snapshot), never how fast its
   player reacts: a guest at 100 ms + 40 ms jitter is timed from its own later draw. A faster network wins nothing; it
   only learns the result a little sooner. Rounds stretch by the slowest report (about 0.3-0.6 s at those numbers), which
-  the 180 f cap bounds.
+  the 180 f cap bounds: the worst honest report (a 24-tick playout delay + 1500 ms + the way back) is in by about `m` +
+  130 f.
 - **Cheating bounds**: a modified page could report any RT; the clamp means it can claim at most 100 ms and can never
   avoid 느려요 by staying silent (the cap scores it). Reading the schedule early from devtools needs a modified page:
   the same trust as every self-reported body. Accepted for 4 friends.
@@ -287,12 +334,16 @@ victim) and `esc` (`escapeTrap` with ≥ `ESC_MASH` presses) only where prisons 
   `#9fe3e8` 0.25-alpha pane, three shelf lines, bottles as 2x4 coloured pixel pairs), a wooden counter in front of it
   (x 64-192, y 150-170, `#a8683a` with a `#d99a5b` top edge). The drink of the moment stands on the counter at **2x (32
   px)**, centred at x 128: `item_banana_milk`, `item_yogurt`, `item_sikhye`, `item_egg`, or `tintOf(item_banana_milk,
-  '#ff8fb1', 0.6)` for 딸기우유; it pops in over 4 f (scale 0.6 → 1). The real one gets a blinking gold ring (canvas, r
-  20). The wait's three dots blink over the counter.
+  '#ff8fb1', 0.6)` for 딸기우유; it pops in over 4 f (scale 0.6 → 1). In rounds 1-4 the real one gets a blinking gold
+  ring (canvas, r 20) to teach it; **from round 5 no ring** - the ring is a "press now" sign of its own, and with it the
+  pink twin would be no test at all (the ring comes back on the bottle in the reveal). The wait's three dots blink over
+  the counter.
 - **The animals** (`pose`): idle while waiting; the jump frame for 6 f on my press; 물벼락: `die` frame 0, shivering ±1 px,
   `lg_2` at 2x tipping over the head (rotated over 8 f) and `water_cold_top` drops falling (local cosmetic `G.parts`); the
   round's fastest holds the bottle over its head during the reveal.
-- **Times**: during the reveal, `0.27` over each animal in canvas digits (my own as soon as I pressed, in my colour).
+- **Times**: during the reveal, `0.27` over each animal in canvas digits (my own as soon as I pressed, in my colour), at y
+  172 - between the counter's front and the name tags (a tag is a DOM box anchored at the head, over the canvas: digits
+  drawn at the head would sit under it).
 - **HUD**: line 2 = a bottle icon (`item_banana_milk` at 8 px) and my round points total (`-1` possible); `clock` `3/8`.
 - **Sounds**: `ticket` (every appearance; each page at its own draw, local), `item` (my valid grab, local), `scald_splash`
   (a 물벼락: mine at once, a friend's when its flag appears in `g.mg`; local), `countdown` (each reveal), `win` is left to
@@ -337,15 +388,22 @@ of the same round.
 - **45 s on each page's own clock**: my window is 45 000 ms from the first frame my screen drew 시작! (`G.drawT`), measured
   with `pageNow()` - a phone that drops frames loses no time, a stalled view does not lengthen it.
 - **A puff** is a fresh 점프 or 거품 press (a `pq` entry). One counts at most every **66 ms** (15 a second; rolling two
-  buttons gains nothing past that). Each puff adds **3.4%**: 0 → 100% takes 30 puffs.
-- **Banking**: a fresh **down** (the stick pulled down, `downP`, or ↓) while my bubble has at least one puff sends it off:
-  it floats up and banks `round(size² / 100)` points (50% → 25, 70% → 49, 90% → 81, 100% → 100). A bubble that reaches
-  100% sends itself off (`만점!`). Then the wand dips for **0.6 s** (puffs ignored).
+  buttons gains nothing past that). Each puff adds **3.4%**: 0 → 100% takes 30 puffs. The size is `min(100, 3.4 x puffs)`
+  (an integer count of puffs, never a float that drifts).
+- **Banking**: a fresh **down** (a `'down'` entry in `pq`: the stick pulled down or ↓) while my bubble has at least one
+  puff sends it off: it floats up and banks `round(size² / 100)` points (50% → 25, 70% → 49, 90% → 81, 100% → 100). A
+  bubble that reaches 100% sends itself off (`만점!`). Then the wand dips for **0.6 s** (puffs ignored). `local` handles a
+  frame's `pq` entries in time order, so a bank pulled 20 ms before a mashed puff of the same frame banks first and that
+  puff falls in the dip (with `downP` alone, which has no time, the order inside a frame would be a coin toss).
 - **The pop**: bubble k pops at **L_k%**. One sequence for everyone: `L_k = puffL(seed, k)`, integers uniform in **40-110**
-  (`seed` from the host at the card; a pure 32-bit hash, never `rng`). A puff that brings the size to L_k or more pops it
-  (L_k above 100 cannot pop: a golden bubble that reaches 만점). 0 points, foam over my face, **1.0 s** before the next.
-- **The warnings** (on every page, from the size and L_k): from **70% of L_k** the bubble trembles ±1 px; from **90% of
-  L_k** it flashes white every 6 f.
+  (`seed` from the host at the card; a pure 32-bit hash, never `rng`). A puff that brings the size to L_k or more pops it;
+  this test comes before 만점, so L_k 99 or 100 pops on the 30th puff and only L_k 101-110 (10 of 71, 14%) are golden
+  bubbles that reach 만점. 0 points, foam over my face, **1.0 s** before the next.
+- **The warnings** (on every page, from the size and L_k): from **70% of L_k** the bubble trembles ±1 px, from **85%** ±2
+  px; from **90% of L_k** it flashes white every 6 f. (±1 game px is about 1.4 css px on a 568x320 phone: too little alone
+  to read in a mash, hence the second step.) The flash is not a "bank now" button: at 15 puffs a second the next puff
+  comes 66 ms after it, faster than anyone reacts, so the warning works only for a player who slows down at the tremble.
+  That is the decision the game is about: mash fast to the tremble, then puff one at a time.
 - **The bell**: 5 s before my window ends, my own line `마지막엔 꼭 날려요!` / `안 날린 방울은 터져요` and `hurry` (local). At
   my window's end a bubble not sent off pops (0) and I am done.
 - **Score** = the sum of my banked bubbles. Typical 300-700.
@@ -371,8 +429,11 @@ of the same round.
   foam are timed by `pageNow()` too. `mi = [판 i, score, size, n (bubbles finished), pops, st]` (st 0 blowing, 1 dip, 2
   foam, 3 done), cumulative: a dropped state loses nothing.
 - **The host** (`input`): keeps each seat's latest row, clamped (`size` 0-100, `n` 0-40 and never decreasing, `pops <= n`,
-  `score <= 100 n`); relays the rows in `g.mg`. `over(M)`: true once every present seat says `st 3`, or 120 f after the
-  host's own time-up (a seat that never said done: its last row, the bubble in hand counted as popped).
+  `score <= 100 n`); relays the rows in `g.mg`. `over(M)`: true once every present seat says `st 3` (a seat whose states
+  stopped for `MILK.staleF` 30 f is not waited for, as in 4.1), or 120 f after the host's own time-up (a seat that never
+  said done: its last row, the bubble in hand counted as popped). The host's frame clock can run slower than the pages'
+  wall clocks (`loop` drops time after 8 catch-up steps or a 250 ms gap), so the done reports may all be in before the
+  host's time-up: `miniOver` still waits for `left <= 0`, and each page shows `다 불었어요!` / `친구들을 기다려요` meanwhile.
 - **Latency and jitter** only move when my window starts (my 시작! is drawn later) and when friends see my bubble (their
   view of my row, about 0.3-0.5 s late: cosmetic). The same press pattern gives the same score at 0 ms and at 100 ms
   (party-net 13.2).
@@ -396,7 +457,8 @@ of the same round.
   pop the `die` frame 0 with white foam pixels over the head for the foam's second.
 - **The bubble** (`draw(M, true)`): `giant_bubble` drawn at `2r`, `r = 3 + size * 0.19` (up to 22 px), tinted with the seat
   colour (`tintOf`, 0.25), centred `r + 4` px over the head; trembling / flashing by 5.1; a popped one shows `bubble_pop`
-  for 12 f and `펑!` as a word pop (each page its own, `NET.rec` off).
+  for 12 f and `펑!` as a word pop (each page its own, `NET.rec` off). The name tags sit over the biggest bubble (`tagY`,
+  3.1), never on it.
 - **Banked bubbles** float to the stall's top in 40 f and join a column of 8 px bubbles (the last 6; an 81+ one at 12 px);
   the score in canvas digits over each stall at y 30.
 - My own stall from `G.mloc` (instant); friends' from their `g.mg` rows (size, st, score), so their bubble lags a little.
@@ -433,8 +495,8 @@ About 80 bytes at 4 players (a seed instead of the 40-entry list the first draft
 
 ## 6. 살금살금 술래 (1대N) — behind the cut line
 
-`MINI.sneak = { c: 's', fam: 'n', secs: 60, ar: ['p', 3], noFire: true, cues: false, fits: (n) => n >= 2, ... }` (a normal
-world: bodies move; `frozen` parks the 술래 and the arrived).
+`MINI.sneak = { c: 's', fam: 'n', secs: 80, fastSecs: 30, ar: ['p', 3], noFire: true, cues: false, fits: (n) => n >= 2, ... }`
+(a normal world: bodies move; `frozen` parks the 술래 and the arrived).
 
 A stop-and-go creeping game with the structure of the playground game 무궁화 꽃이 피었습니다, with our own chant, no doll,
 no elimination: a caught runner is bubbled and carried back.
@@ -443,7 +505,9 @@ no elimination: a caught runner is bubbled and carried back.
 
 - **Rounds**: one per player present at 시작! (4 players 4 rounds, 3 players 3), and **2 players play 4** (each is the
   술래 twice). The 술래 order is seat order rotated by the 판 index. Round caps: **13 s** (4p), **16 s** (3p), **12 s**
-  (2p); `secs` 60 is the 판's cap. Between rounds a **72 f swap**: banner `다음 술래: 냥냥!` / `술래가 돌아보면 멈춰요!`,
+  (2p). The 판 ends 30 f after the last round closes (`M.endAt`); `secs` 80 is only a safety cap (4 players: 4 x 13 s + 3
+  swaps + up to 60 f of waiting per round is 59.6 s, which the first draft's 60 s cap would have cut). Between rounds a
+  **72 f swap**: banner `다음 술래: 냥냥!` / `술래가 돌아보면 멈춰요!`,
   every prison opened, everyone `placePlayer`d (runners on the start, all at the same x - nobody starts ahead; the new
   술래 on its spot), my own line `이번엔 내가 술래!` / `거품 연타로 외쳐요` when it is me.
 - **Kits**: everyone uses `KIT_BASE` (`kitOf` → base for a 술래 판, as for a raft): no 특기, no glide, no double jump.
@@ -456,15 +520,20 @@ no elimination: a caught runner is bubbled and carried back.
   with no red edge and no red pips. It catches nothing; a runner who flinches only loses time.
 - **The look**: 90 f from T. The 술래 faces the runners, the pips flash red, a soft red edge lines the playfield. A runner
   is **caught** if, between T+10 and T+90 on its own view (6.4), it **moved 2 px or more** from where it stood at T+10, or
-  was **in the air**. Exempt: trapped runners, runners freed less than 30 f before T+10, runners who arrived. (Walking
-  stops in 2 frames at the base kit's `acc` 0.5: the 10 f grace and the 2 px are well inside it; a hop near 탕! is the
-  intended risk - airtime is 37 f.)
+  was **in the air**. Exempt: trapped runners, runners who arrived, and a runner freed after T+10 - 30 - **for the rest of
+  that look**, including one freed in the middle of it (`releasePlayer` pops a freed animal up with `vy -1.6`, so a
+  mash-out during a look would otherwise be "in the air" at once: caught, mashed out, caught again until the look ends).
+  Such a runner's anchor is where it lands. (Walking stops in 2 frames at the base kit's `acc` 0.5 - 0.875, 0.375, 0 px/f:
+  the 10 f grace and the 2 px are well inside it; on a phone the reliable stop is lifting the thumb, `stickReset`. A hop
+  near 탕! is the intended risk - airtime is 37 f.)
 - **Caught**: word pop `들켰다!`, my own line `움직였어요!` / `연타로 빠져나와요`, then a prison owned by the 술래
   (`makeBubble` + `catchPlayer`: `MINI_TRAP` 90 f, `PTRAP_MASH` a press, as every minigame). The prison drifts back toward
   the start at **1.2 px/f** (a `floatMove` branch for 술래: `G.gather` = the start spot): the full 90 f costs about 108
   px, a mash-out after 30 f about 36 px. The runner drops wherever the prison is.
 - **Arrival**: a free runner whose body box reaches **x 200** (`p.x + 12 >= SNEAK.line`) has arrived: it stops there
-  (`frozen`), hops and cheers with stars, word pop `도착!`, and is no longer judged. The first arrival starts **`3초!`**
+  (`frozen`), hops and cheers with stars, word pop `도착!`, and is no longer judged. A guest freezes **its own** animal the
+  frame its own body crosses the line (`frozen` reads the body's x on the page that moves it); waiting for the host's
+  arrival list in the mirror would let it walk on into the 술래 for a round trip. The first arrival starts **`3초!`**
   (banner, class `hurry`, sub `빨리 와요!`). The round ends 3 s after the first arrival, or as soon as every runner arrived,
   or at the cap.
 - **Points in the 판**: arrivals **3 / 2 / 1** in arrival order (6.4); the 술래 **+1 per catch, at most 3 a round** (as much
@@ -493,15 +562,31 @@ no elimination: a caught runner is bubbled and carried back.
   goes through the same `local` → `input`). The host applies the increase with the 6 f rule, decides T and sends `[syllable,
   T, feintT]` in `g.mg`. A page draws the pips and the look from its view clock, so 탕! shows on a guest exactly when its
   view reaches T. The fixed 21 f from 욕 to 탕! means a host-local 술래 cannot time the turn better than a guest 술래.
-- **The judge**: host-local runners from their bodies at `G.frame`; remote runners from **each body state as it arrives**
-  (the new `body` hook in `hostBodyIn`), using its `rt` - the host tick that runner's view showed when it sent it. A state
-  with `rt` in [T+10, T+90] that moved 2 px from the runner's first state at or after T+10 (or says `onGround` 0) catches
-  it. A guest that stopped in time on its own screen is safe, whatever its latency or jitter.
+- **The judge** runs in `sneakTick` (inside `update()`, never in the network callback): host-local runners from their
+  bodies at `G.frame`; remote runners from **the states the host already keeps** - `hostBodyIn` pushes every accepted
+  state into `rem.buf.list` (`{k, d}`, up to 64, `d.rt` the host tick that runner's view showed when it sent it), and the
+  tick reads the ones newer than the last it judged (`M.seenK[slot]`), of the runner's current epoch only (`d.ep === p.ep`:
+  a state from before a catch or a swap is the old body). The **anchor** is the runner's first state at or after T+10. A
+  later state with `rt` in (T+10, T+90] catches it when it is 2 px from the anchor, or says `onGround` 0, **or (from T+12
+  on) still has `|vx| >= 0.1`** - the same test for a host-local runner, frame by frame. The velocity test matters
+  because states come about every 2 frames and some are dropped or arrive out of order (and are thrown away): the first
+  state at or after T+10 can be T+16, and a runner that walked until T+14 would be anchored after it stopped. With `vx`
+  any sampled state of a still-walking runner catches it. (Interpolating the anchor between the states around T+10 was
+  considered and rejected: across a gap of dropped states it puts the anchor short of where a runner that stopped at T+9
+  stands, a false catch of an honest player.) What is left: a remote runner can get away with walking for at most the
+  gap between two of its states that reach the host (2 f normally, a few more after drops), where a host-local runner is
+  judged every frame. A guest that stopped in time on its own screen is safe, whatever its latency or jitter.
+- **`rt` only goes forward**: the guest's view clock can jump back (`bufPush` lowers `B.off` when the last second of
+  snapshots all came late, or after a starve), so `NET.rt` - and every later state's `rt` - can drop by up to a second.
+  The host keeps `M.rtMax[slot]` and reads each state's `rt` as `max(rt, rtMax)`; the guest draws the pips, 탕! and the
+  look from its own monotonic `NET.rtHi = max(NET.rtHi, NET.rt)` (reset per 판). Without this, a jump back in the middle of
+  a look would show the guest the chant again (the look "ends" on its screen), it walks, and its states land inside [T+10,
+  T+90] a second time: an unfair catch. And its arrival stamp would come out early.
 - **A stalled view** cannot creep through a look: `rt` is clamped to at most **`SNEAK.lagMax` 60 f** behind the host's
-  frame when the state arrives (`lagTrapCheck`'s principle with a wider bound: at 100 ms each way + 40 ms jitter + the view
-  buffer of 8-24 ticks, a normal guest's states arrive about 20-45 f after their `rt`, so 60 f never binds a healthy
-  link; `REWIND` 30 would). The host keeps a
-  look's judging open until every remote runner has a state past T+90, or T+90+60.
+  frame when the state arrived (`hostBodyIn` stamps `s.at = G.frame` on each accepted state: a host-side field, nothing on
+  the wire; `lagTrapCheck`'s principle with a wider bound: at 100 ms each way + 40 ms jitter + the view buffer of 8-24
+  ticks, a normal guest's states arrive about 20-45 f after their `rt`, so 60 f never binds a healthy link; `REWIND` 30
+  would). The host keeps a look's judging open until every remote runner has a state past T+90, or T+90+60.
 - **Arrivals** are ordered by their `rt` stamp (host-local: its frame), not by when they reach the host, so a faster
   network never wins a close finish. The `3초!` end is `first + 180` in the same clock; the host waits until every remote
   runner still running has a state past that tick (or 60 f more) before closing. The same for the round cap.
@@ -511,8 +596,12 @@ no elimination: a caught runner is bubbled and carried back.
   own predicted one)` (the same 6 f rule over its own presses) until T arrives from the host.
 - **Cheating bounds**: a modified page could send still bodies while its runner walks. Same trust as every body state;
   the look's 2 px / in-air test and the `rt` clamp bound an honest page that lags.
-- **Not equal**: a view-clock resync (`bufTick` jumping after a long stall) shifts a guest's later `rt` stamps; it can only
-  make that runner's arrival later. Rare, and visible as a stutter on its own screen.
+- **Not equal**: the guest's view clock does not run at exactly one tick a frame. When its playout delay grows (`B.adapt`
+  rises by up to 1 tick per arrival after a jitter spike, to at most `BUF_MAXD` 24), `rt` runs slow for a moment and that
+  runner gets a few more physics frames per host tick: its arrival stamp comes a little early (by the delay's growth
+  during the round: typically 2-5 ticks, at most 24). A forward resync makes it late. With the monotonic `rt` above,
+  nothing larger can happen. Arrivals closer than that are rare; accepted, and party-net logs each guest's delay change
+  per round as INFO so the friends' play can tell if it matters.
 
 ### 6.5 Places, ties, coins, awards
 
@@ -543,7 +632,12 @@ Mirror-symmetric map; the asymmetry is data:
   name tag `술래 · 냥냥`;
   7 pips (3x3) over its head, grey → gold as syllables light, red on 탕!; during a look the 술래 flipped and a red edge
   (`rgba(255,80,80,0.18)`, 6 px) around the playfield.
-- The chant text is DOM: a `round`-class banner growing with each syllable (`뽀득뽀득목…`), then `탕!` (class `hurry`) at T.
+- The chant text is DOM: each syllable is a **word pop** over the 술래's head (`wordPop`, recorded, so every page shows it
+  when its view reaches it, as every host word pop), in the 술래's colour; then `탕!` is the one banner (class `hurry`) at T.
+  (The first draft grew a `round` banner per syllable. `syncDOM` re-runs the banner's pop animation for every new banner
+  id, and a guest's `guestBanner` only takes a new id, so a banner rewritten up to 10 times a second would either flicker
+  or need both paths changed. At most 6 word pops live at once (`G.words`): a fast chant drops its oldest syllable, which
+  reads fine.)
 - HUD: line 2 = my points in the 판; a towel icon on the 술래's panel; `clock` `2/4`.
 - Sounds: `chain` per syllable (`o.n` = the syllable: the pitch climbs), `stamp` on 탕!, `trap_player` / `escape` (as every
   capture), `extend` on the first arrival and `item` on the others, `hurry` with `3초!`, `ready` at each swap. All echoed
@@ -567,6 +661,7 @@ Mirror-symmetric map; the asymmetry is data:
 ```js
   // G.mini (host): order [slots], r (round), it (the 술래's slot), ph ('run' | 'swap'), rs (round start), syl (0..7), q
   //   (queued presses), lastSyl, lastPress, T (-1), look (the last T, judged until closed), feintT, fUsed, anchor {slot: x},
+  //   seenK {slot: the last state k judged}, rtMax {slot}, freeAt {slot: the rt a prison let it go},
   //   arr [[slot, rt]], first (-1), base {slot: [presses, feints]}, catches [by seat] (this round), pts [by seat], arrSum
   // g.mg = ['s', r, it, syl, T, feintT, first, end, [arrived slots in order], [catches this round by seat], [pts by seat], ph]
   // mi   = [판 i, presses, feints]   (the 술래's seat; a runner sends none)
@@ -617,9 +712,10 @@ A party snapshot has no enemy rows: about 1.0-1.3 KB at 4 players with the large
 ### 7.4 Guest hooks
 
 - `guestSelf`: in `'playing'`, a game with `local` → `NET.mi = F.local(G.mini, G.localSlot, inp)`; a parked animal
-  (`miniParked`) returns before `updatePlayer`.
+  (`miniParked`: world false, the 술래, or my own body past the line) returns before `updatePlayer`.
 - `guestSend`: `mi: NET.mi` beside `pr` (left out when null).
-- `applyView`: a new `g.pa.i` resets `G.mloc`, `NET.mi` (with `NET.pred` / the magazine, as today).
+- `applyView`: a new `g.pa.i` resets `G.mloc`, `NET.mi`, `NET.rtHi` (with `NET.pred` / the magazine, as today);
+  `guestUpdate` keeps `NET.rtHi = max(NET.rtHi, NET.rt)` for 술래's pips and look (6.4).
 - `partyView` / `miniView`: the three new `view`s mirror their `g.mg` row (bounded by `nInt` / `nStr` as every view).
 - Sounds that are each page's own (`ticket`, `item`, `scald_splash` in 바나나우유; `puff`, `pop`, `b_splash`, `item`,
   `hurry` in 펑) are played by every page from its own measurements and its mirror; the host plays them with `NET.rec` off
@@ -663,7 +759,7 @@ Battle and co-op never see any of this: every new branch checks `G.mini` (and it
 | `snNext` / `snNext2` | `다음 술래: {0}!` / `술래가 돌아보면 멈춰요!` | the swap banner |
 | `snMe1` / `snMe2` | `이번엔 내가 술래!` / `거품 연타로 외쳐요` | my own line at my round |
 | `snCount` | `이번 술래: 나!` | the countdown's 2 / 1 sub, my screen, when I am the first 술래 |
-| `snChant` / `snTang` | `뽀득뽀득목욕탕` / `탕!` | the chant banner (its first k syllables + `…`), the turn |
+| `snChant` / `snTang` | `뽀득뽀득목욕탕` / `탕!` | the chant's word pops (syllable k of the string), the turn's banner |
 | `snCaught` / `snFeint` / `snArrive` | `들켰다!` / `흠칫!` / `도착!` | word pops |
 | `snMoved1` / `snMoved2` | `움직였어요!` / `연타로 빠져나와요` | my own line when caught |
 | `snHurry1` / `snHurry2` | `3초!` / `빨리 와요!` | after the first arrival |
@@ -727,20 +823,23 @@ battle and co-op, so it cannot go into `NO_ECHO`). Music: `battle` as for every 
   const STAGE_X = { 2: [100, 156], 3: [72, 128, 184], 4: [44, 100, 156, 212] };   // world: false - feet centres by players
   // 바나나우유 잡기: rounds, NO-GO rounds (among from..8, never adjacent), the intro (unarmed), the wait to the milk, a decoy's
   // frames on the counter and the gap between appearances, decoys from round dFrom (1) / dTwo (up to 2), 딸기우유 from
-  // pinkFrom; a valid grab minMs..maxMs after my draw; the host's close cap after the milk / the end; the reveal; my
-  // splash; points by place and for a 반칙 / a NO-GO hold; kbAdj: ms added to a keyboard page's RT
+  // pinkFrom; a valid grab minMs..maxMs after my draw; the host's close cap after the milk / the end; a seat with no new
+  // body state for staleF frames is not waited for (also 펑's over); the reveal; my splash; points by place and for a
+  // 반칙 / a NO-GO hold; the teaching ring up to ringTo; kbAdj: ms added to a keyboard page's RT
   const MILK = { rounds: 8, nogo: 2, nogoFrom: 4, intro: 30, wait: [72, 180], decoyF: 30, gapF: 24, dFrom: 3, dTwo: 5, pinkFrom: 5,
-    minMs: 100, maxMs: 1500, capF: 180, revealF: 60, splashF: 48, pts: [3, 2, 1, 0], foul: -1, held: 1, kbAdj: 0 };
+    minMs: 100, maxMs: 1500, capF: 180, staleF: 30, revealF: 60, splashF: 48, pts: [3, 2, 1, 0], foul: -1, held: 1, ringTo: 4, kbAdj: 0 };
   // 펑! 비눗방울: my window (ms), % per puff, ms between counted puffs, the dip / foam (ms), pop sizes lo..hi (%), the
-  // tremble / flash at this share of L, my bell (ms before the end), the host's wait for the last reports (f)
-  const PUFF = { winMs: 45000, step: 3.4, gapMs: 66, dipMs: 600, foamMs: 1000, lo: 40, hi: 110, shake: 0.7, flash: 0.9, bellMs: 5000, waitF: 120 };
+  // tremble (±1 px) / the bigger tremble (±2 px) / the flash at this share of L, my bell (ms before the end), the host's
+  // wait for the last reports (f)
+  const PUFF = { winMs: 45000, step: 3.4, gapMs: 66, dipMs: 600, foamMs: 1000, lo: 40, hi: 110, shake: 0.7, shake2: 0.85, flash: 0.9, bellMs: 5000, waitF: 120 };
   // 살금살금 술래: rounds and caps (s) by players, the swap; the runners' walk (x WALK); the chant (f between syllables, the
   // idle before it moves by itself, then every autoF; 욕 -> 탕), the look, its grace, the freed exemption, the feint; the
   // look's move tolerance (px); the rt clamp; the prisons' drift (px/f); 3초!; arrival points; catch points (cap a round)
   const SNEAK = { rounds: { 2: 4, 3: 3, 4: 4 }, cap: { 2: 12, 3: 16, 4: 13 }, swapF: 72, walk: 0.7,
     sylF: 6, queue: 3, idleF: 60, autoF: 24, tangF: 21, lookF: 90, graceF: 10, freeF: 30, feintF: 8, feintFrom: 3,
     moveTol: 2, lagMax: 60, drift: 1.2, hurryF: 180, arr: [3, 2, 1], catch: 1, catchMax: 3, progPx: 16 };
-  // MINI: milk 50 s, puff 45 s, sneak 60 s (caps); MINI_IDS = ['water', 'crown', 'ball', 'milk', 'puff', 'sneak']
+  // MINI: milk 75 s, sneak 80 s (safety caps: they end by their last round), puff 45 s (its window); fastSecs 30 for
+  // milk / sneak (the fast debug party; every other game keeps 12); MINI_IDS = ['water', 'crown', 'ball', 'milk', 'puff', 'sneak']
 ```
 
 Tuning knobs after the friends' next play: `MILK.wait` / the decoy counts / `nogo` (how tricky), `PUFF.shake` / `flash`
@@ -753,14 +852,14 @@ Tuning knobs after the friends' next play: `MILK.wait` / the decoy counts / `nog
 
 | File | What |
 |---|---|
-| `game.js`, top constants | `PARTY_V` 4, `STAGE_X`, `MILK`, `PUFF`, `SNEAK`; `MINI.milk / puff / sneak` (with `fam`, `world`, `noFire`, `cues`, `keys`, `keysT`); `fam: 'a'` on the three old entries; `MINI_IDS`; `PARTY_TX` additions; `PARTY_TEXT` adds `keys` / `keysT`. |
-| `game.js`, input layer | `pressQ`, `evT`, `dbgPq`; `onKeyDown` / `bindTouch` push; `readInputs` sets `pq` / `downP`; `loop` sets `G.drawT`; `pageNow`. |
-| `game.js`, world | `updateBody` / `guestSelf` early return (`miniParked`); `fire()` guard (`noFire`); `updatePlayer` walk factor `SNEAK.walk` for a runner; `kitOf` → `KIT_BASE` in a 술래 판; `floatMove` 술래 branch; `updateWorld` → `updateBattle(ins)` → `miniTick(ins)`; `updateBattle` skips the cues (`cues === false`). |
-| `game.js`, party section | `partyPlan` by family (3.6), `shuffle` helper; `miniLoad` (`G.mloc`, the seed, stage spots); `miniTick(ins)` → `local` / `input`; `miniParked`; `coinAct`; `partyTeamLine`'s 술래 branch; `troCountSub`'s 술래 line. |
-| `game.js`, the games (after 축구's section) | 바나나우유: `milkInit`, `milkPlan`, `milkTick`, `milkLocal`, `milkInput`, `milkClose`, `milkView`, `milkDraw`, `milkPose`, `milkHud`, `milkDemo`. 펑: `puffL`, `puffLocal`, `puffInput`, `puffOver`, `puffView`, `puffDraw`, `puffPose`, `puffHud`, `puffDemo`. 술래: `sneakSpawns`, `sneakInit`, `sneakTick`, `sneakChant`, `sneakLocal`, `sneakInput`, `sneakBody` (judge), `sneakJudge`, `sneakArrive`, `sneakRound`, `sneakView`, `sneakDraw`, `sneakHud`, `sneakDemo`; `MINI_FN` entries. |
-| `game.js`, render / HUD | the player draw loop's `pose` swap; `drawHUDParty` `clock`, no mag pips for `noFire`; `syncTags` the 술래 prefix and the stacked tags of animals on one spot; `drawPartyDemo` unchanged (the demos take `a`, `b`; 술래 derives `c`). |
-| `game.js`, net | `parseBody` `mi`; `guestSend` `mi`; `hostBodyIn` → `body` hook; `applyView` resets `G.mloc` / `NET.mi` per 판 index. |
-| `game.js`, debug | `PG.debug.party`: `press(slot, act, t)`, `vclock(on)`, `drawAt(t)`, `down(slot)`, `mloc(slot)`, `mi(slot)`, `milk()` (the round's plan), `puffL(seed, k)`, `look()` (술래: force a turn now), `it()`, `arrive(slot)`; `state().mini` and `consts()` gain the new fields; `fast(on)`: 바나나우유 4 rounds, 펑 a 12 s window, 술래 2 rounds of 6 s. |
+| `game.js`, top constants | `PARTY_V` 4, `STAGE_X`, `MILK`, `PUFF`, `SNEAK`; `MINI.milk / puff / sneak` (with `fam`, `world`, `noFire`, `cues`, `fastSecs`, `keys`, `keysT`); `fam: 'a'` on the three old entries; `MINI_IDS`; `partySecs` reads `fastSecs`; `PARTY_TX` additions; `PARTY_TEXT` adds `keys` / `keysT`. |
+| `game.js`, input layer | `pressQ`, `evT`, `dbgPq`; `onKeyDown` / `bindTouch` push (and `'down'` from a fresh ↓ and from `stickMove`'s down edge, which takes the event time from its two callers); `readInputs` sets `pq` (all entries, none while the menu is open or outside 'playing') / `downP`; `loop` keeps `frameT`, `render` sets `G.drawT`; `pageNow`. |
+| `game.js`, world | `updateBody` / `guestSelf` early return (`miniParked`; a guest's own arrival by its own x); `fire()` guard (`noFire`) and `hostShot` drops a `'shot'` while `noFire`; `updatePlayer` walk factor `SNEAK.walk` for a runner; `kitOf` → `KIT_BASE` in a 술래 판; `floatMove` 술래 branch; `updateWorld` → `updateBattle(ins)` → `miniTick(ins)`; `updateBattle` skips the cues (`cues === false`). |
+| `game.js`, party section | `partyPlan` by family (3.6), `shuffle` helper; `miniLoad` (`G.mloc`, the seed, stage spots); `miniTick(ins)` → `local` / `input`; `miniParked`; `coinAct`; `partyTeamLine`'s 술래 branch; `troCountSub`'s 술래 line; the stale-seat test (`MILK.staleF`) shared by 바나나우유's close and 펑's `over`. |
+| `game.js`, the games (after 축구's section) | 바나나우유: `milkInit`, `milkPlan`, `milkTick`, `milkLocal`, `milkInput`, `milkClose`, `milkView`, `milkDraw`, `milkPose`, `milkHud`, `milkDemo`. 펑: `puffL`, `puffLocal`, `puffInput`, `puffOver`, `puffView`, `puffDraw`, `puffPose`, `puffHud`, `puffDemo`. 술래: `sneakSpawns`, `sneakInit`, `sneakTick`, `sneakChant`, `sneakLocal`, `sneakInput`, `sneakJudge` (in the tick: host-local bodies, remote `rem.buf` states by monotonic `rt`, the T+10 anchor and the `vx` test), `sneakArrive`, `sneakRound`, `sneakView`, `sneakDraw`, `sneakHud`, `sneakDemo`; `MINI_FN` entries. |
+| `game.js`, render / HUD | the player draw loop's `pose` swap; `drawHUDParty` `clock`, no mag pips for `noFire`; `syncTags` the game's `tagY` anchor (펑 over the biggest bubble), the 술래 prefix and the stacked tags of animals on one spot; `drawPartyDemo` unchanged (the demos take `a`, `b`; 술래 derives `c`). |
+| `game.js`, net | `parseBody` `mi`; `guestSend` `mi`; `hostBodyIn` stamps `s.at = G.frame` (host-side, for the 60 f clamp) - no game logic there; `applyView` resets `G.mloc` / `NET.mi` / `NET.rtHi` per 판 index. |
+| `game.js`, debug | `PG.debug.party`: `press(slot, act, t)`, `vclock(on)`, `drawAt(t)`, `down(slot)`, `mloc(slot)`, `mi(slot)`, `milk()` (the round's plan), `puffL(seed, k)`, `look()` (술래: force a turn now), `it()`, `arrive(slot)`, `fakeBody(slot, st)` (push a remote state with its own `k` / `rt` / `ep` into that seat's `rem.buf`, as `hostBodyIn` would - today's `fakeRemote` only sets `rem.st` and an empty buffer); `state().mini` and `consts()` gain the new fields; `fast(on)`: 바나나우유 4 rounds, 펑 a 12 s window, 술래 2 rounds of 6 s (each within its `fastSecs` 30). |
 | `levels.js` | `PG.PARTY_ARENAS[2]` 무대 목욕탕 (`'stage'`), `[3]` 살금살금 복도 (`'sneak'`, its `sneak` field). Engine: `PARTY_KEYS = ['water', 'ball', 'stage', 'sneak']`, `fallbackPartyArena` for both, `sneakOf`. |
 | `sprites.js` | nothing. |
 | `audio.js` | `puff` (~15 lines). |
@@ -773,23 +872,29 @@ Tuning knobs after the friends' next play: `MILK.wait` / the decoy counts / `nog
 Each step leaves the party playable.
 
 1. **Must - shared machinery**: `PARTY_V` 4, `MINI` flags and families, `partyPlan` by family, the stage arena (+ fallback,
-   validator), the freeze / `noFire` / cues, `pressQ` / `evT` / `G.drawT` / `pageNow`, the hooks `local` / `input` / `clock` /
-   `pose` / `frozen`, `mi` on the wire, `G.mloc`, `coinAct`, the texts, the debug hooks.
+   validator), the freeze / `noFire` / cues, `pressQ` (with `'down'`) / `evT` / `G.drawT` in `render` / `pageNow`, the hooks
+   `local` / `input` / `clock` / `pose` / `frozen` / `tagY`, `fastSecs`, the stale-seat test, `mi` on the wire, `G.mloc`,
+   `coinAct`, the texts, the debug hooks (`fakeBody` included), the rewritten rotation / flow checks.
 2. **Must - 바나나우유 잡기**: rules, NO-GO rounds, 딸기우유, the 매점 scene, poses, times, HUD, demo, wire; its tests.
 3. **Must - 펑! 비눗방울**: rules, the seed, warnings, stalls, poses, HUD, demo, `puff`; its tests.
 
    **— cut line: two new games ship here (the rotation runs with 5) —**
 
-4. **Should - 살금살금 술래 core**: the 'sneak' arena (+ validator), rounds and roles, the chant (6 f, auto, 21 f), the look
-   judge (host-local by frame, remote by `rt` with the `body` hook and the 60 f clamp), catches into drifting prisons,
-   arrivals by stamp, `3초!`, points, HUD, the base kit / walk / `noFire`, demo; its tests.
+4. **Should - 살금살금 술래 core**: the 'sneak' arena (+ validator), rounds and roles, the chant (6 f, auto, 21 f, word
+   pops), the look judge (host-local by frame, remote from `rem.buf` by monotonic `rt`, the anchor + `vx` test, the 60 f
+   clamp, the freed-in-a-look exemption), catches into drifting prisons, arrivals by stamp (a guest freezes itself),
+   `3초!`, points, HUD, the base kit / walk / `noFire`, demo; its tests.
 5. **Could**: 술래's 흠칫! feint (fallback: no feint), the guest 술래's predicted pips (fallback: the host's pips, a round
    trip late), the card's 술래 order line; 펑's banked-bubble column art (fallback: the score digits only).
 
-**Effort**: about **2,300-2,600 changed lines**: `game.js` ~1,350 (machinery ~300, 바나나우유 ~320, 펑 ~300, 술래 ~430),
-`levels.js` ~50, `validate-levels.js` ~60, `audio.js` ~15, tests ~900 (`party.js` ~520, `party-net.js` ~300, `touch.js` ~40,
-`check-integration` / `audio-node` small). Like the polish PR: **two lean build passes** (one for steps 1-3, one for 4-5
-and the online tests), **one check, one full suite run** (`node tools/run-all.js`, every Chrome run with `--mute-audio`).
+**Effort**: about **2,900-3,400 changed lines**: `game.js` ~1,650 (machinery ~400, 바나나우유 ~350, 펑 ~320, 술래 ~580),
+`levels.js` ~50, `validate-levels.js` ~60, `audio.js` ~15, tests ~1,100-1,300 (`party.js` ~650 incl. rewriting today's
+rotation and flow checks, `party-net.js` ~400 incl. the `#lag` run, `touch.js` ~40, `check-integration` / `audio-node`
+small). For scale: the polish PR (#23: no new game, less new machinery) was about 2,400 changed lines in `src` / `tools`
+and took four build commits plus a review fix; 거품 축구 alone (#21) was about 900. 술래 by itself is a 축구-sized PR (an rt judge is
+harder than a ball). So: **three lean build passes** (1: steps 1-2, 2: step 3 and the online tests of both, 3: steps
+4-5 if time allows), **one check, one full suite run** (`node tools/run-all.js`, every Chrome run with `--mute-audio`).
+The cut line is real: plan for 바나나우유 + 펑 and treat 술래 as the bonus.
 
 ---
 
@@ -800,59 +905,90 @@ and the online tests), **one check, one full suite run** (`node tools/run-all.js
 1. **Machinery**: a `world: false` 판 parks every animal (no motion, no blink, `invuln` 0), a 거품 press makes no bubble
    and no blow (`CO.bshots` unchanged by `coinShot`), no magazine pips, no `10초 남았어요!` / beeps; `pq` carries each press
    with its time (two in one frame = two); `downP` is an edge; `local` → `input` runs for a host-local seat; `mi` is
-   bounded (`parseBody` of junk); `G.mloc` resets at a new 판; `coinAct` counts only my seat.
+   bounded (`parseBody` of junk); `G.mloc` resets at a new 판; `coinAct` counts only my seat; `pq` is empty while the menu
+   is open and carries nothing stale into the next frame; a `'down'` entry orders a bank before a later puff of the same
+   frame; `G.drawT` moves under `D.step` (set in `render`); a world: false game's name tags use its `tagY`; a 'shot'
+   message during a `noFire` game makes no bubble; `fastSecs` reaches `G.battle.total` in the fast party.
 2. **Rotation**: over 300 seeds for 2, 3 and 4 players and 3 / 5 판: families alternate, no game twice in a row, at least
    one arena 판, 3 players never 축구 and 3판 always distinct; with only two new games (`MINI` without `sneak`) the same; a
-   4 → 3 replan during a 축구 card draws from family A; `partyForced` unchanged.
+   4 → 3 replan during a 축구 card draws from family A; `partyForced` unchanged. **Today's checks that break and are
+   rewritten**, not just added to: `rotationTests` ("2 / 4 players play each of the three once in 3판", "3 players: A B A",
+   "any of the three may come first", the replans from `['water']` / `['crown', 'water']`) and `flowTests`' "a 4-player 3판
+   party plays each of the three games once" (unforced: it now draws new games; give it a forced old-games plan, or assert
+   the families). Every other unforced `party(...)` in party.js is checked for the same assumption.
 3. **바나나우유**: the plan (decoys by round, 딸기우유 from 5, two NO-GO rounds in 4-8 never adjacent, events never in
    `g.mg` before their tick); my result for presses at -50 / 0 / 99 / 100 / 1500 / 1501 ms around my draw, on a decoy, in a
    NO-GO round, no press; the 물벼락 ignores later presses; round points 3 / 2 / 1 / 0 with a shared ms, -1, +1; close on
-   all reports and at the cap (a missing one is 느려요); the key's ms tie-break; 8 rounds then the end; coins per valid grab;
-   a leaver mid-round.
+   all reports and at the cap (a missing one is 느려요); a fake remote seat whose states stop (`staleF`) is not waited for;
+   the key's ms tie-break; 8 rounds then the end (never cut by the clock: every round at its cap still finishes); coins per
+   valid grab; a leaver mid-round; a round 5-8 whose wait drew under 108 f has one decoy; the ring only in rounds 1-4;
+   an event at tick e is drawn from `mg1` when `a.k < e <= rt`; a view clock stepping back after the milk was drawn keeps
+   it drawn (one draw time).
 4. **펑**: `puffL` is pure and in 40-110; the 66 ms cap (presses at 50 ms count every other one); 30 puffs → 만점 at 100;
-   a pop exactly at L_k, none above 100; the tremble / flash thresholds; the dip / foam block puffs; the bell's pop at the
+   a pop exactly at L_k (L_k 99 / 100 pop on the 30th puff), none above 100; the tremble / bigger tremble / flash
+   thresholds; the dip / foam block puffs; a bank and a puff in one frame in time order; the bell's pop at the
    window's end; the window is wall-clock (a virtual-clock jump of 2 s during dropped frames still ends at 45 000 ms); the
    key (score, pops, bubbles); `over` waits for done reports or 120 f; clamps of a junk row; coins per finished bubble.
 5. **술래**: rounds for 2 / 3 / 4 players and the order by 판 index; the chant's 6 f rule and queue, the auto-advance (60 f
    then 24 f), T = 욕 + 21; the feint's window (syllable 3 to 욕, once); the look's edges (moving at T+9 is safe, at T+10
-   caught; 1.9 px safe, 2 px caught; airborne caught; trapped / arrived / freed < 30 f exempt); a catch → a prison owned by
+   caught; 1.9 px safe, 2 px caught; airborne caught; trapped / arrived / freed < 30 f exempt); **a runner mashed out in
+   the middle of a look is not caught again by its release hop**; a catch → a prison owned by
    the 술래, drifting left 1.2 px/f, mash-out (`esc` with 3+ presses), `caps` for the 술래 (points capped at 3 a round);
-   a remote runner judged by `rt` (a fake remote seat whose states stop at its own T+5 is safe even when they arrive 40 f
-   late; one with `rt` stuck 90 f back is judged at host − 60); arrivals ordered by `rt` not by arrival; catch + arrival in
-   one state → caught; `3초!` and the wait for in-flight states; the 술래 leaving ends its round; base kit and no bubbles;
-   coins (arrival, survived look with 16 px, a chant with 3 presses).
+   a remote runner judged by `rt` through `fakeBody` states (one whose states stop at its own T+5 is safe even when they
+   arrive 40 f late; one with `rt` stuck 90 f back is judged at host − 60; a state at T+12 with `vx` 0.875 catches it
+   though its position is still within 2 px of the anchor; states at T+0 and T+40 only, of a runner that stopped at T+9,
+   never catch it (no interpolated anchor); a state of an older epoch is never judged; `rt` stepping back by 60 in
+   mid-look neither catches a runner that stopped nor gives an earlier arrival); arrivals ordered by `rt` not by arrival;
+   catch + arrival in one state → caught; a runner crossing the line stops on its own page that frame; `3초!` and the wait for in-flight states; the 술래 leaving ends its round; base kit and no bubbles; the 4-player 판 with
+   every round at its cap and every wait at 60 f still plays its 4th round; coins (arrival, survived look with 16 px, a
+   chant with 3 presses).
 6. **Demos**: each new `demo` draws 240 frames into a 96x32 context without errors and leaves pixels.
 7. **Fit**: each new card (4 players, 12-syllable nicks; 술래 with its order line) at **1x** (no rule line; how and keys one
    line each), **2x** and the **568x320** phone (`#fit`, touch keys line, rule line): `scrollHeight <= clientHeight`.
    `PARTY_TEXT` holds every new string.
 8. **No regressions**: a battle and a co-op round after a party: bodies move, bubbles fire, `pq` unused, the magazine back.
 
-### 13.2 `src/tests/party-net.js` (4 bc frames, real time; **frame 3 at `?lat=100&jit=40`**, the others at 8 / 4)
+### 13.2 `src/tests/party-net.js` (4 bc frames, real time)
+
+The fairness checks need a slow guest, but today's sections (물 v2's "within 1 px", "a 오리 튜브 on every screen within
+0.5 s", the beats) were tuned on frames at `lat=8&jit=4`; putting frame 3 at 100 / 40 for the whole run would test those
+on a link they were never meant for. So the new games run in a **second load**: `test-party-net.html#lag` builds the
+four frames with frame 3 at `?lat=100&jit=40` (the others 8 / 4) and runs only sections 2-5 below, as a new `run-all`
+job `party-net-lag` (rt300000). The plain run keeps every frame at 8 / 4 and adds 1 and 5. (net.js applies `lat` on both
+ends of each page's link: frame 3 to the host is about 100 + 8 ms plus up to 44 ms of jitter each way.)
 
 1. Adjust: the crafted older guest sends `pa: 3`; the plans of the forced parties include the new codes.
 2. **바나나우유** (forced): the same rounds and events on every page; the host's own player and frames 1 and 3 each press
-   **250 ms after their own draw** of the milk (a scripted `D.pressAfterDraw`): all three RTs within 250 ± 17 ms; with frame
-   3 scripted at 240 and frame 1 at 260, frame 3 places above frame 1 despite its lag; a scripted press on a decoy splashes
-   on every page; the reveal rows agree everywhere.
-3. **펑** (forced): frames 1 and 3 run the same press pattern from their own 시작! (8 Hz puffs, down at the tremble, then at
-   the flash) and end with **the same score, bubbles and pops**; the host places by the done reports; friends' pops play
-   `pop` on every page once.
+   **250 ms after their own draw** of the milk (`D.pressAfterDraw(ms)`: at the page's own first draw of the milk it sets a
+   `setTimeout` that dispatches a real `keydown` - so `evT` and the rAF time base are really exercised, not a stamp the
+   test wrote): each page's reported RT equals `round(that event's timeStamp - its recorded draw time)` exactly (the
+   plumbing), and lies in 250..300 ms (a timer runs late, never early; four frames share one main thread); with frame 3
+   scripted at 200 and frame 1 at 320, frame 3 places above frame 1 despite its lag (a 120 ms gap no timer lateness can
+   flip - 240 vs 260 could); a scripted press on a decoy splashes on every page; the reveal rows agree everywhere.
+3. **펑** (forced, fast: a 12 s window): frames 1 and 3 run the same press pattern from their own 시작! (8 Hz puffs, down
+   at the tremble, then at the flash) and stop pressing 2 s before their window ends (the last bank in, so the window's
+   edge cannot add or cut a puff by timer luck); they end with **the same score, bubbles and pops**; the host places by
+   the done reports; friends' pops play `pop` on every page once.
 4. **술래** (forced, 4 players): frame 3 as a runner stops 5 f after its own view shows 탕! - never caught over 3 looks;
    the same runner walking through a look is caught on every page (a prison owned by the 술래); frames 1 and 3 reach the
-   line with `rt` stamps 4 f apart, frame 3 first - frame 3 is ordered first though its state reached the host later; a
-   guest 술래's chant reaches the host and T is the same on every page.
+   line with `rt` stamps 12 f apart, frame 3 first - frame 3 is ordered first though its state reached the host later (12,
+   not 4: the playout delay's drift moves a stamp by a few ticks, 6.4); a guest 술래's chant reaches the host and T is
+   the same on every page; INFO: each guest's playout delay at each round's start and end.
 5. Snapshots stay under 3400 bytes throughout; `mi` appears only during the new games.
 
 ### 13.3 Other tests and jobs
 
 - `src/tests/touch.js`: a pointerdown on 거품 pushes a `pq` entry with its event time; both buttons in one frame give two;
-  the stick pulled down while the 거품 button is held gives `down` and keeps the presses (two thumbs).
+  the stick pulled down while the 거품 button is held gives `down` and keeps the presses (two thumbs); the stick's down
+  edge pushes one `'down'` entry with the pointermove's time (a stick held down pushes no more; the hysteresis release
+  and a new pull push the next).
 - `tools/validate-levels.js`: the two new arenas (section 11).
 - `tools/check-integration.js`: every new literal sprite name the engine draws exists with its size (`item_*` 16x16, `lg_2`
   8x8, `shower` 16x8, `giant_bubble` 40x40).
 - `tools/audio-node-test.js`: `puff` with `o.n` 0..10, no NaN, under the sfx level.
 - `check-pages` / `final-e2e2`: the warm-up text; `ux-roomrow` (also at 320): the rules list's new lines fit.
-- `run-all.js` jobs unchanged (`party`, `party-fit-568`, `party-net`). One full suite run at the end, `--mute-audio`.
+- `run-all.js`: `party`, `party-fit-568`, `party-net` as today plus **`party-net-lag`** (13.2). `party`'s 120 s budget is
+  checked once the new sections are in (three more games in virtual time). One full suite run at the end, `--mute-audio`.
 
 ---
 
@@ -861,21 +997,31 @@ and the online tests), **one check, one full suite run** (`node tools/run-all.js
 1. **Device input lag** (바나나우유): phone touch is 20-60 ms slower than a desktop key, 120 Hz screens draw sooner.
    Accepted (all friends on phones); `MILK.kbAdj` is the knob.
 2. **The time bases** (`event.timeStamp` vs the rAF time): both high-resolution in current browsers; `evT`'s fallback
-   covers an odd engine. party-net checks scripted RTs come out within one frame.
+   covers an odd engine. party-net dispatches real key events and checks each page's RT is exactly its event time minus
+   its draw time (13.2).
 3. **A hidden or stalled tab** misses 바나나우유 rounds as 느려요 and ends 펑 with what it banked: the same as a hidden tab
-   anywhere; the caps close the rounds.
+   anywhere. Its silent body stream (`MILK.staleF`) means nobody waits for it, so the others' rounds keep their pace. A
+   guest whose report lands after the close sees its own `0.27` and then `느려요` from the host: rare (the honest worst
+   case is in by `m` + 130 f of the 180 f cap).
 4. **펑's warning on a phone**: if the tremble is too subtle, pops feel random. `PUFF.shake` / `flash` are the knobs; the
    flash is a white blink, not a colour shift.
 5. **Thumb fatigue** (펑): 45 s with natural pauses (dip, foam, the decision); the 15/s cap stops it being a pure speed
    contest.
 6. **"I stopped!"** (술래): the 10 f grace and 2 px cover a stop; my own line says why I was caught; a hop near 탕! is
-   the risk by design. The judge by `rt` is the most delicate code of the PR - party.js and party-net cover its edges.
-7. **The 술래 role's strength** is a guess (catch points capped at 3 a round); the friends' play tunes it.
+   the risk by design. The judge by `rt` is the most delicate code of the PR - party.js and party-net cover its edges. Two
+   small biases stay (6.4): a remote runner can walk for up to the gap between two of its received states (2-6 f) after
+   T+10, and a guest whose playout delay grows during a round gets its arrival stamp a few ticks early. Both are smaller
+   than a human stop; both go the guest's way, never against an honest player.
+7. **The 술래 role's strength** is a guess (catch points capped at 3 a round); the friends' play tunes it. In numbers: a
+   runner who sees 욕 has 21 + 10 = 31 f (0.5 s) to stop, twice a normal reaction, so an attentive runner is rarely
+   caught; the 술래's catches come from greed (walking on after 욕), hops started after 욕 (37 f of air), the feint and
+   the look's end (moving at T+89 is still a catch). If catches are too rare: `SNEAK.tangF` 21 → 15 or `graceF` 10 → 6.
 8. **The world: false freeze** touches shared code (`updateBody`, `guestSelf`, `fire`, the HUD, `syncJumpSub`, the cues):
    every branch is behind `G.mini` and a `MINI` flag; battle / co-op / kits tests must stay green.
 9. **Self-reported results** (`mi`): a modified page can lie within the clamps. The same trust as bodies, fine for 4
    friends.
 10. **Rotation change**: a party now always mixes families; a group that loved 물 sees it less. The open question 15.2.
+    Today's rotation tests assert the old bag (each of the three once in 3판) and are rewritten (13.1).
 11. **Squid Game association** (술래): no doll, no elimination, our chant, bubbles and a towel hat - cute, not grim.
 
 ---
@@ -910,3 +1056,44 @@ Everything else (round counts, timings, thresholds, caps) is a tuning knob (sect
   instead of a 40-entry list, and a wall-clock window; 술래 takes the `rt` judge and widens its clamp to fit a 100 ms link.
 - All six are genre-level ideas (a quickdraw, a bubble push-your-luck, a playground stop-and-go game) with our own rules,
   names and art. None copies a specific minigame.
+
+---
+
+## 17. Check against the code (before the build)
+
+An adversarial read of this spec against `feat/party-games` as it is (game.js party / mini / card / demo / coins /
+rotation / snapshot / guest hooks / touch input, levels.js, net.js, the party tests). What it found and what changed:
+
+| Found in the code | Consequence for the first draft | Changed |
+|---|---|---|
+| `miniOver` ends a 판 at time-up unless `over` plays on; 바나나우유's worst honest case (every round at its 180 f close cap) is ~62 s, 4-player 술래's 59.6 s; `partySecs` is a flat 12 s in the fast party | the clock would cut the last round (or, fast, the third) | 3.1, 4.1, 6.1, 10: they end by `M.endAt`; `secs` 75 / 80 is a safety cap; `fastSecs` 30 |
+| `hostBodyIn` runs on the network's schedule, outside `update()`; it already keeps every accepted state in `rem.buf.list` | the `body` hook would make prisons, sounds and recorded events between two world frames | 3.2, 6.4: hook dropped; `sneakTick` reads `rem.buf` (epoch-filtered), `hostBodyIn` only stamps `s.at` |
+| states are coalesced, about every 2 frames, and `bufPush` throws away late ones | "the first state at or after T+10" can be T+16: a remote runner walking until T+14 went free | 6.4: a `vx` test from T+12 on, for host-local runners too; an interpolated anchor was rejected (false catches across a gap) |
+| `bufPush` lowers `B.off` after a late second or a starve: `NET.rt` can step back by up to a second; the playout delay grows by up to 1 tick per arrival | a look could "end" twice on a guest (an unfair catch), arrival stamps could come early; the draft said a resync "can only delay" an arrival | 6.4: monotonic `rt` on the host (`rtMax`) and on the guest's draw (`NET.rtHi`); the drift bias stated as it is |
+| `releasePlayer` gives a freed animal `vy -1.6` | a runner mashed out during a look is "in the air" at once: caught again until the look ends | 6.1: freed after T+10 - 30 is exempt for the rest of that look |
+| a guest's mirror learns its arrival a round trip late | a guest walks on past the line into the 술래 | 6.1: a guest freezes its own animal at its own crossing |
+| `syncDOM` re-runs the banner pop for each new id; `guestBanner` only takes new ids | a banner per syllable flickers up to 10 times a second | 6.6: syllables as recorded word pops, one banner at 탕! |
+| `syncTags` anchors a DOM tag at `headTop - 5`, over the canvas | 펑's bubble (its tremble / flash, the only warning) and 바나나우유's times would sit under the tags | 3.1 `tagY`; 4.6 times at y 172; 5.6 |
+| a decoy needs 54 f and two need 108 f, the wait is 72-180 f | two decoys could not fit a short wait | 4.1: one decoy under 108 f |
+| the round's gold ring marks the real milk | with it the 딸기우유 twin is no test | 4.6: the ring only in rounds 1-4 |
+| `miniView` passes `mg1`; an event with `a.k < e <= rt` is only in `b` | events would show up to a snapshot late, with a later draw time | 4.4: `milkView` merges `mg` and `mg1`; once drawn, it stays drawn |
+| one friend's hidden tab sends no body states (no rAF) | every 바나나우유 round would wait out its 3 s cap: 24 s of nothing | 4.1, 5.4: `MILK.staleF` 30 f - a silent seat is not waited for |
+| `D.step` calls `render()` without `loop` | a `loop`-only `G.drawT` never moves in party.js | 3.3: `G.drawT` set in `render` |
+| `downP` has no time; `pressQ.splice(0, 8)` leaves extras for the next frame; presses with the menu open | a bank and a puff in one frame in random order; stale presses | 3.3, 5.1: `'down'` entries with their time, all entries leave each frame, none with the menu open |
+| `bodyAt` takes `col * 8 - 4` | 3-player stage spots are half columns | 3.1: fractional `col` (bodyAt never rounds) |
+| size `3.4 x n` passes 100 on the 30th puff | pop vs 만점 at L 99-100 undefined | 5.1: the pop test comes first; only 101-110 are golden (14%) |
+| ±1 game px ≈ 1.4 css px on the 568x320 phone; a puff every 66 ms | the tremble alone is hard to read; the flash cannot be reacted to mid-mash | 5.1: ±2 px from 85%; the warning is a "slow down" cue, said so |
+| party.js `rotationTests` / `flowTests` assert the old one-bag rotation; party-net's sections were tuned at 8 / 4 ms | the family rotation fails today's tests; frame 3 at 100 / 40 would test old sections on a link they were never meant for | 13.1 rewrites them; 13.2 a separate `#lag` load and `party-net-lag` job |
+| scripted presses stamped by the test would make the RT check trivially true; timers run late in 4 frames on one thread | 250 ± 17 and 240-vs-260 would be either meaningless or flaky | 13.2: real dispatched key events, an exact plumbing check, 200 vs 320 ms; arrivals 12 f apart |
+| the polish PR was ~2,400 changed lines in four build commits + a fix, 축구 alone ~900 | 2,300-2,600 / two passes for three games + machinery was low | 12: ~2,900-3,400, three passes, 술래 as the bonus |
+| `partyReplan` calls `partyPlan` with the 판 already played | the draft's fresh bags could bring back a played game while another was unplayed | 3.6: a replan's first bag per family leaves out what `from` played |
+| `fire()` holds `guestFire`, `hostShot` takes any `'shot'` | - | 3.1: `hostShot` drops a `'shot'` while `noFire` |
+
+Checked and fine as written: the PARTY_V gate (`seatReady` / `seatOld` read `pa >= PARTY_V`), plan codes `m f s` (no
+clash with `w c b`), `MINI` / `MINI_FN` dispatch, `rankBy` keys (no overflow), `coinAct` into `CO.bshots` (reset by
+`coinGo`, read by `coinPartyClose` / `coinParty`), the awards' counters (`trapPlayer` owner ≠ victim, `escapeTrap`
+with `ESC_MASH`), `KIT_BASE` through `kitOf`, `WALK` 1.25 x 0.7 = 0.875 px/f, the base jump (37 f of air, 38 px),
+`STICK_DN_ON` / `ny >= 2|nx|`, the canvas font (digits, `- x ! : . + /`), every reused sprite, `NO_ECHO` (`b_splash`
+already in it), word pops recorded through `netEv('w')`, the card's `keys` / `keysT` path, `#pg-party-demo` hidden
+only under 17em of height (the 1x window is 20.4em), `viewKindOf` / `loadView` for party arena indexes 2 and 3, the
+snapshot budget.
