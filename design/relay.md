@@ -1321,6 +1321,17 @@ the jobs left out are forced `?net=bc` pages, where `netOrder()` is `['bc']` as 
 | `peer-deploy` / `room-platform` | 22 / 90 | The deploy page without a relay (`netOrder()` `['peer']`, today's behaviour) and the artifact (`['room']`) |
 | `test-mp-net.html?tr=ws` (manual, not a job) | 103 | All of `mp-net` over the local relay (24 sockets): the same 103 checks as on `bc`. The WIP's note that its `bc`-only lines would differ there was wrong: its one `bc` assertion is a `?shot=friendsnote` scene on a frame with its own query |
 
+**The review commit (`7c2f4f7`, 2026-10-29)**: an adversarial pass against this document, the diff from `origin/main` and
+the Cloudflare docs (pricing, rate-limit bindings, WebSocket hibernation) found the three bugs of the 19.1 rows marked
+"review 2026-10-29" (the idle clock across rooms in one object, the unbounded re-seat loop, a frozen socket on a host
+alone) and two slips in `CLOUDFLARE-SETUP.md` (when to start: after the merge; the `[[ratelimits]]` block is six lines,
+not five). New checks: `relay-node` +1 (207), `net-node` ws +3 (91; 271 in all); each fails on the code before the fix.
+Then the **full** suite, as 11.4 asks (`PG_BUILD_TEMP=C:/Temp/bogeul-ws PG_HTTP_PORT=8798 node tools/run-all.js`,
+headless Chrome always with `--mute-audio`): **292 of 292 jobs passed, `ws-workerd` skipped** (wrangler not
+installed). `pwa` failed once on its known Google Fonts cache check (121/122) and passed on its one rerun (122). The
+relay's jobs: `relay-node` 207, `net-node` 271, `net-ws` 36, `battle-net-ws` 28, `ws-deploy` 25, `check-pages` 44; the
+unchanged paths: `peer-deploy` 22, `room-platform` 90, `net-bc` 33, `mp-net` 103.
+
 ### 19.4 Still open (the owner's part, and what no test here can answer)
 
 - **Day one, the most important check (risk 0, guide step 7)**: does Cloudflare Free count incoming WebSocket messages at
