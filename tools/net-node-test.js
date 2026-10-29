@@ -1045,6 +1045,8 @@ async function makeWsRelay(o) {
       this.opened();
       const no = core.open(srv, { role: g.role, id: u.searchParams.get('id') || '', tok: u.searchParams.get('tok') || '' });
       if (no) srv.shut(no.code, no.reason);
+      // (kickHosts: a relay that closes every host seat right after its hi - the re-seat must not loop)
+      else if (net.kickHosts && g.role === 'h') clock.add(() => { if (!srv.closed) { const s = core.bySock.get(srv); if (s) core.end(s, 'lost', 4408, 'kick'); } }, 5);
     }
     send(str) {
       if (this.readyState === 0) throw new Error('InvalidStateError: still connecting');
@@ -1066,6 +1068,7 @@ async function makeWsRelay(o) {
     }
     close(code) {
       if (this.readyState >= 2) return;
+      if (this.frozen) { this.readyState = 3; return; }                // (a frozen socket: no close reaches anyone)
       if (this.readyState === 0 || !this.srv) { this.dead = true; this.readyState = 2; clock.add(() => this.finish(1006, ''), 1); return; }
       this.readyState = 2;
       const leave = Math.max(clock.now(), this.lastLeave, this.stallUntil);
@@ -1084,6 +1087,9 @@ async function makeWsRelay(o) {
       if (srv && !(opt && opt.half)) clock.add(() => { if (!srv.closed) { srv.closed = true; this.core.closed(srv); } }, net.latency);
     }
     stall(ms) { this.stallUntil = clock.now() + ms; }
+    // the socket freezes (a phone back from another app): it still says OPEN, nothing moves either way, no close event
+    // ever comes, and the relay never hears of it (a half-open seat)
+    freeze() { this.dead = true; this.frozen = true; }
   }
   net.WS = (origin) => class extends FakeWebSocket { constructor(u) { super(u, origin); } };
   net.Raw = FakeWebSocket;
@@ -1308,6 +1314,33 @@ async function testWs() {
     await clock.run(4000);
     ok('ws: ... 5 failed tries -> closed:lost', r3.status.includes('closed:lost'), r3.status);
     rl.refuse = 0;
+  }
+  {
+    // a socket that freezes (still OPEN, nothing moves, the relay keeps the half-open seat): the host alone's keepalive
+    // goes unanswered for 10 s -> it gives that socket up and re-seats over its own seat; a friend then gets in
+    const A = mk('wf-a'), B = mk('wf-b');
+    const a = (await resolveP(A.Net.host({ transport: 'ws', code: 'f1f1' }))).value;
+    const ra = record(a), id = a.selfId, old = rl.of(a);
+    old.freeze();
+    await clock.run(75000);
+    const cur = rl.of(a);
+    ok('ws: a host alone whose socket freezes (OPEN, silent) re-seats once its keepalive goes unanswered for 10 s', !!cur && cur !== old && rl.rooms.get('w:f1f1').info().host === id && !ra.status.some((x) => /closed/.test(x)), ra.status);
+    const b = (await resolveP(B.Net.join({ transport: 'ws', code: 'f1f1' }))).value;
+    ok('ws: ... a friend then gets in with the code (not a hi for a dead host)', !!b && a.peers().length === 2);
+    if (b) b.leave();
+    a.leave(); await clock.run(500);
+  }
+  {
+    // a relay that closes every host seat right after its hi: the re-seats go on with the backoff, then lost - no loop
+    const A = mk('wk-a');
+    const a = (await resolveP(A.Net.host({ transport: 'ws', code: 'k9k9' }))).value;
+    const ra = record(a);
+    rl.kickHosts = true;
+    const c0 = rl.connects;
+    rl.of(a).cut();
+    await clock.run(20000);
+    rl.kickHosts = false;
+    ok('ws: a relay closing every re-seat at once -> 5 re-seats in all, then closed:lost (no reconnect loop)', ra.status.includes('closed:lost') && rl.connects - c0 <= 5, [rl.connects - c0, ra.status]);
   }
   // ---- an LTE stall on a guest
   {

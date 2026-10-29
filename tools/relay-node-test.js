@@ -323,6 +323,18 @@ async function testRoom() {
     ok('room: one busy minute (12 frames/s) at minute 20 restarts the clock: open at 40 min', !c.h, c);
   }
   {
+    // the same object (still in memory) right after its idle close: the host re-seats into the empty room at once (a
+    // host left alone does) and sends its m - a fresh room's clock, so it is not closed again (no close / re-seat loop)
+    const { H, h, g } = room(R, 1);
+    let q = 0;
+    for (let i = 0; i < 31 * 60 * 4 && !h.closed; i++) { H.send(i % 2 ? h : g[0], { k: 'r', t: '*', d: ++q }); H.adv(250); }
+    const n = H.open('h-again', { role: 'h', id: h.id, tok: h.hi.tok });
+    H.send(n, { k: 'm', l: [] });
+    H.adv(30000);
+    H.send(n, { k: 'm', l: [] });
+    ok('room: right after the idle close, a host opening into the empty room starts a fresh clock (its frames do not close it again)', h.closed && h.closed.code === 4408 && !n.no && !n.closed && H.core.info().host === h.id, { h: h.closed, n: n.no || n.closed });
+  }
+  {
     const H = harness(R);
     const h = H.open('h', { role: 'h' });
     H.adv(40 * 60000); h.heard = H.t - 20000;

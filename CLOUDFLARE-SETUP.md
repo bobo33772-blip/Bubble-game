@@ -12,6 +12,9 @@
 
 준비물: 이메일 주소, 이 `bogeul` 폴더, Node.js (`node build.js`를 실행할 때 쓰는 그것), GitHub 저장소 관리 권한
 
+**언제**: 중계 서버 PR이 main에 합쳐진 뒤에 해요. `bogeul` 폴더 안에 `cloudflare` 폴더가 보여야 해요
+(안 보이면 Claude에게 "bogeul을 최신으로 받아 줘"라고 해요).
+
 ---
 
 ## 1. 가입
@@ -39,9 +42,9 @@ npx wrangler deploy
 
 - 처음에는 계정의 workers.dev 이름을 물어볼 수 있어요. 짧은 영어 이름을 적고 Enter.
 - 끝에 나오는 주소를 복사해 둬요: `https://ppodeuk-relay.<내계정이름>.workers.dev` (비밀이 아니에요).
-- `ratelimits`라는 말이 든 오류로 멈추면: `cloudflare\wrangler.toml`을 메모장으로 열어 `[[ratelimits]]`부터
-  `period = 60`까지 다섯 줄을 지우고 다시 `npx wrangler deploy` 해요. (그 줄은 접속 제한인데, 없어도 Worker가
-  스스로 대신 세요.) 오류 글자는 Claude에게 보내 주세요.
+- `ratelimits`라는 말이 든 오류로 멈추면: `cloudflare\wrangler.toml`을 메모장으로 열어 `[[ratelimits]]` 줄부터
+  `period = 60` 줄까지 (빈 줄 하나를 끼고 여섯 줄) 지우고 다시 `npx wrangler deploy` 해요. (그 줄은 접속 제한인데,
+  없어도 Worker가 스스로 대신 세요.) 오류 글자는 Claude에게 보내 주세요.
 
 ## 4. 확인
 

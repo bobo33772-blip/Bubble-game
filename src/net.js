@@ -100,8 +100,9 @@
    stamps what it forwards with its sender f, says {k:'gone', f, why:'left'|'lost'} and lets a stranger (a guest not
    admitted yet) talk to the host only - peerLink's rules. Close codes before hi: 4409 taken, 4404 / 4001 not_found,
    4430 full, 4503 'cap' (the free tier is used up) / 'busy', anything else 'unavailable'; after hi a closed socket is
-   'lost', except a host still ALONE in its room, which re-seats with its old id (&id=&tok=, 5 tries: the room and its
-   code survive an app switch). States skip a beat while more than 8 KB wait in the socket (latest wins), a host alone
+   'lost', except a host still ALONE in its room, which re-seats with its old id (&id=&tok=, 5 tries in a row: the room
+   and its code survive an app switch) - also when its keepalive goes unanswered for 10 s (a socket that still says
+   OPEN but is dead). States skip a beat while more than 8 KB wait in the socket (latest wins), a host alone
    sends none, a quiet socket sends the keepalive {"k":"p"} after 45 s. Relay memory (in memory only): after a 4503
    'cap' a HOST skips 'ws' until the next 00:00 UTC (09:00 KST), after a refusal / timeout for 60 s ('down'); a join
    always tries. ?net=ws&lat=..&jit=.. delays frames in order (never drops: TCP).
@@ -972,6 +973,8 @@ window.PG = window.PG || {};
   // (the host's {k:'m'}), stamps every frame with its sender and issues the seat ids, so this link only moves frames.
   const WS_HOLD = [4409, 4400, 4413, 4429];          // closes after hi that a host alone does NOT re-seat from
   const WS_STOP = [4409, 4400, 4403, 4413, 4426, 4429]; // ... nor go on re-seating after
+  const WS_SEAT_OK = 10000;   // a re-seated socket that ends sooner than this after its hi goes on with the backoff
+  const WS_PONG_MS = 10000;   // a host alone: its keepalive unanswered this long = a dead socket (re-seat)
   function wsLink(code, role, h, opts) {
     return new Promise((resolve, reject) => {
       const tune = TUNE.ws, info = relayInfo(), WSC = W.WebSocket, host = role === 'host';
@@ -984,7 +987,13 @@ window.PG = window.PG || {};
       const U = (id) => { if (id !== null && id !== undefined) { timers.delete(id); cancel(id); } };
       const lastQ = new Map();
       let ws = null, settled = false, closed = false, leaving = false, stateQ = 0, tok = '', alone = host;
-      let lastSend = now(), stallAt = 0, reseat = 0, keep = null;
+      let lastSend = now(), stallAt = 0, keep = null;
+      // the host re-seat (design/relay.md 8.1): reseating while a new socket is on its way, reseatI the next WS_RESEAT
+      // step, hiAt the last hi (a seat that ends within WS_SEAT_OK of it goes on with the backoff, so a relay that keeps
+      // closing it gets 5 tries in all, never a loop); pingAt a keepalive not answered yet; drop() gives the current
+      // socket up as dead
+      let reseating = false, reseatI = 0, hiAt = 0, pingAt = 0, drop = null;
+      const shown = () => { try { const d = W.document; return !d || d.visibilityState !== 'hidden'; } catch (e) { return true; } };
       const dead = () => closed;
       const outQ = sim ? fifo(T, dead) : null, inQ = sim ? fifo(T, dead) : null;
       const delay = () => sim.latency + Math.random() * sim.jitter;
@@ -1024,8 +1033,9 @@ window.PG = window.PG || {};
         try { m = typeof d === 'string' ? JSON.parse(d) : null; } catch (e) { m = null; }
         if (!m || m.k !== 'hi' || m.v !== WS_V || typeof m.id !== 'string' || !ID_RE.test(m.id) || typeof m.h !== 'string' || !ID_RE.test(m.h) || (host && m.h !== m.id)) return false;
         relayMark('ok');
-        if (reseat) {                                   // (the re-seat: the same seat, the session goes on)
-          reseat = 0;
+        hiAt = now(); pingAt = 0;
+        if (reseating) {                                // (the re-seat: the same seat, the session goes on)
+          reseating = false;
           if (m.id !== link.selfId) { shut(); h.fatal('lost'); return true; }
           send({ k: 'm', l: [] });
           return true;
@@ -1034,13 +1044,19 @@ window.PG = window.PG || {};
         if (host && typeof m.tok === 'string' && /^[a-z0-9]{16}$/.test(m.tok)) tok = m.tok;
         settled = true;
         keep = W.setInterval(() => {
-          if (!closed && !leaving && ws && ws.readyState === 1 && now() - lastSend >= tune.quietMs) sendStr(WS_PING);
+          if (closed || leaving || !ws || ws.readyState !== 1) return;
+          // (a host alone hears nothing but its keepalive's answer: unanswered for WS_PONG_MS, the socket is dead - a phone
+          // back from KakaoTalk may hold one that still says OPEN. Judged while the page is shown: a frozen page's queued
+          // answer is not late. Everyone else has the core's lostMs)
+          if (host && alone && pingAt && now() - pingAt > WS_PONG_MS && shown() && drop) { drop(); return; }
+          if (now() - lastSend >= tune.quietMs) { if (!pingAt) pingAt = now(); sendStr(WS_PING); }
         }, 5000);
         resolve(link);
         return true;
       }
       function onFrame(d) {
         if (closed || leaving || typeof d !== 'string') return;
+        pingAt = 0;                                     // (anything from the relay - its {"k":"P"} too - proves the socket)
         let m = null;
         try { m = JSON.parse(d); } catch (e) { return; }
         if (!m || typeof m !== 'object' || typeof m.f !== 'string' || !ID_RE.test(m.f)) return;
@@ -1056,16 +1072,17 @@ window.PG = window.PG || {};
         if (closed) return;
         if (!settled) { const e = code === -1 ? (relayMark('down'), fail('unavailable', { reason: 'down', relay: 'down' })) : closeErr(code, reason); shut(); reject(e); return; }
         if (leaving) { shut(); return; }
-        if (reseat && !gotHi) { if (WS_STOP.includes(code)) { shut(); h.fatal('lost'); } else nextReseat(); return; }
+        if (reseating && !gotHi) { if (WS_STOP.includes(code)) { shut(); h.fatal('lost'); } else nextReseat(); return; }
         if (code === 4001) { shut(); h.gone(link.hostId, 'left'); return; }
-        // a host still alone (it went to KakaoTalk to send the code and the OS killed its socket): the same seat again
-        if (host && alone && !WS_HOLD.includes(code)) { reseat = 1; T(() => connect(true), WS_RESEAT[0]); return; }
+        // a host still alone (it went to KakaoTalk to send the code and the OS killed its socket): the same seat again -
+        // at once after a seat that lasted, else the backoff goes on (a relay closing every re-seat at once: 5 in all)
+        if (host && alone && !WS_HOLD.includes(code)) { if (now() - hiAt >= WS_SEAT_OK) reseatI = 0; reseating = true; nextReseat(); return; }
         shut();
         h.fatal('lost');
       }
       function nextReseat() {
-        if (reseat >= WS_RESEAT.length) { shut(); h.fatal('lost'); return; }
-        T(() => connect(true), WS_RESEAT[reseat++]);
+        if (reseatI >= WS_RESEAT.length) { shut(); h.fatal('lost'); return; }
+        T(() => connect(true), WS_RESEAT[reseatI++]);
       }
       function connect(again) {
         if (closed || leaving) return;
@@ -1075,13 +1092,15 @@ window.PG = window.PG || {};
           over = true;
           U(cto);
           if (s) { s.onmessage = null; s.onclose = null; s.onerror = null; }
-          if (ws === s) ws = null;
+          if (ws === s) { ws = null; drop = null; }
           onClose(c, r, gotHi);
         };
         const inbound = (fn) => { if (sim) inQ.push(now() + delay(), fn); else fn(); };
         try { s = new WSC(url(again ? '&id=' + link.selfId + '&tok=' + tok : '')); } catch (e) { s = null; }
         if (!s) { T(() => fin(0, ''), 0); return; }
         ws = s;
+        pingAt = 0;
+        drop = () => { try { s.close(); } catch (e) { /* ignore */ } fin(1006, 'dead'); };
         cto = T(() => { if (gotHi || over) return; try { s.close(); } catch (e) { /* ignore */ } fin(-1, 'timeout'); }, tune.connectMs);
         s.onmessage = (ev) => {
           const d = ev ? ev.data : null;
@@ -1108,7 +1127,7 @@ window.PG = window.PG || {};
         // false while re-seating, closing, or with every state held back for over 2 s (a stalled uplink: the core shows
         // 연결이 불안정해요; the core's once-a-second re-send tries again, so a drained socket clears it)
         health() {
-          if (closed || leaving || reseat || !ws || ws.readyState !== 1) return false;
+          if (closed || leaving || reseating || !ws || ws.readyState !== 1) return false;
           if (stallAt && buffered() <= WS_BUF) stallAt = 0;
           return !(stallAt && now() - stallAt > 2000);
         },

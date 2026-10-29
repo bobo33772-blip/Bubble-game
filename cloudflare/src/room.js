@@ -90,6 +90,10 @@ export class RoomCore {
   open(sock, p) {
     const t = this.io.now();
     this.sweep(t, null);
+    // (an empty room starts afresh: the idle clock belongs to one room's life, and an object still in memory may serve
+    // the code again at once - a host left alone re-seating right after the idle close would otherwise meet the old
+    // clock on its first frame, be closed again, re-seat again ...)
+    if (!this.bySock.size) { this.busyAt = t; this.minAt = t; this.minN = 0; this.lastAt = t; }
     const role = p && p.role === 'h' ? 'h' : 'g';
     let s = null;
     if (role === 'h') {
