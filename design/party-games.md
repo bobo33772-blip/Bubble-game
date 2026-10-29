@@ -13,6 +13,18 @@ twist for 왕관 / 축구) are PR #23. **This is C: three new minigames of other
 the same game three times. The genres offered were 연타, 반응속도, 기억력, 1대3. Two designers proposed four games each
 (fun-first, then risk-first); this spec picks three, one per genre, and merges the best parts of both.
 
+> **Owner decisions (2026-10-29, after the check; they override the defaults below):**
+> 1. The three games: 바나나우유 잡기, 펑! 비눗방울, 살금살금 술래 (no 기억력 game) - as specified.
+> 2. **Rotation: draw freely from all six** ("6개 중 아무거나"), NOT the family rotation. One shuffled no-repeat bag of
+>    the games that fit n, never the same game twice in a row (today's `partyPlan`, plus the replan fix of 3.6). There is
+>    no `fam` field, no `roomAlt` line, no "at least one arena 판" guarantee: a party with no prisons skips 최다 가두기상
+>    / 최다 탈출상 by the existing top-0 rule. Wherever a later section says "family", read this.
+> 3. 바나나우유: a false start or a decoy press costs **-1** - as specified.
+> 4. 살금살금 술래 **plays with 2 players** (1 v 1, each the 술래 twice) - as specified.
+> 5. Since this spec was written, `main` gained PR #22 (the ws relay), #23 (the polish) and a crown change (fix/crown-last:
+>    the player wearing the crown at time-up wins, no gold x2) and maybe party trophies (feat/party-trophies, which also
+>    bumps `PARTY_V`). Merge `origin/main` before building; `PARTY_V` is main's value + 1 at build time.
+
 ---
 
 ## 0. Decisions in one table
@@ -27,7 +39,7 @@ the same game three times. The genres offered were 연타, 반응속도, 기억�
 | Press times | **New** `pressQ`: every fresh 점프 / 거품 press on this screen with its event `timeStamp` (keydown and pointerdown, where `latch` is set today) and every fresh **down** with its time (a ↓ keydown, the stick's down edge in `stickMove`), and **new** `G.drawT`: the time of the frame being drawn (set in `render`, so `D.step` tests have it too). |
 | This page's own part | **New** optional hooks `local(M, slot, inp)` (the page that controls a seat: host for its local seats, a guest for itself) → `mi`, at most 8 ints; `input(M, slot, mi)` (host: applies any seat's `mi`, its own too - one code path). A guest sends `mi` in its **body state** beside `pr` (latest wins). **No new message type.** No game logic ever runs in a network callback (`hostBodyIn`): 술래's judge reads the states the host already keeps (`rem.buf`) from its own tick (6.4). |
 | How a 판 ends | The two round games (바나나우유, 술래) end **by their own last round** (`M.endAt`); `secs` is only a safety cap that a slow link never reaches (75 / 80 s; the first draft's 50 / 60 s could cut the last round). The fast debug party gives each new game its own `fastSecs` (today's flat 12 s would cut both mid-round). 펑 ends on every page's own 45 s window plus the host's wait (5.4). |
-| Rotation | Six games in **two families**: `'a'` 몸 게임 (물, 왕관, 축구) and `'n'` 새 게임 (바나나우유, 펑, 술래). A party **alternates families** from a random first one (3판 A N A or N A N; 5판 A N A N A or N A N A N), each family its own no-repeat bag. Never the same game twice in a row, never two arena games in a row (술래 has bodies too, but it plays stop-and-go: the closest pair the rotation allows), at least one arena 판 in every party (the 가두기 / 탈출 awards). 3 players: family A is 물 + 왕관 (no 축구, unchanged); every new game fits 2-4. |
+| Rotation | **Owner: draw freely from all six.** One shuffled no-repeat bag of the games that fit n (6 for 2 / 4 players, 5 for 3: no 축구, unchanged), never the same game twice in a row across a refill; a replan's bag leaves out what was already played (3.6). 3판 and 5판 are always all distinct. |
 | Points | Unchanged: places → 4 / 2 / 1 / 0 (x2 on the last 판). Every new game ranks by a key with a measured tie-break (ms, pops, frames), so shared places are rare. |
 | Coins | "2+ bubbles blown in a 판" becomes **"2+ actions in a 판"**: **new** `coinAct()` counts a game's action into `CO.bshots` on my own page (a valid grab; a finished bubble; an arrival, a survived look with progress, or a chant). The arena games keep `coinShot`. Nothing else in `coinParty` changes. |
 | Awards | Unchanged. 최다 1등상 always works; 최다 가두기상 / 최다 탈출상 come from the arena games **and from 술래** (its catches are prisons owned by the 술래, its escapes are mash-outs). The family rotation puts at least one arena 판 in every party; a party where nobody trapped skips those awards by the existing top-0 rule. |
@@ -45,9 +57,8 @@ the same game three times. The genres offered were 연타, 반응속도, 기억�
 | 살금살금 술래 | Creep toward the 술래 and freeze when it turns; as the 술래, mash the chant and fake | It plays the opposite way of the arena games: stop-and-go, no bubbles for runners, a player who never moves, and roles that rotate | The loudest of the six: the 술래 teases with the rhythm and a 흠칫! feint, runners flinch, a hop at the wrong syllable gets bubbled and carried back, `3초!` after the first arrival |
 
 Across the six, every 판 now has its own verb: 물 escape, 왕관 hold, 축구 push, 바나나우유 snap, 펑 gamble, 술래 freeze. The
-rotation alternates the arena games with the new ones, so a party never has two arena games in a row. (술래 still walks
-and hops the platformer bodies; what makes it a different game is that standing still is the skill. An arena game next
-to 술래 is the closest pair the rotation allows.)
+rotation draws freely from all six (the owner's pick), so with half the pool new, most parties mix both kinds. (술래
+still walks and hops the platformer bodies; what makes it a different game is that standing still is the skill.)
 
 ---
 
@@ -62,7 +73,7 @@ to 술래 is the closest pair the rotation allows.)
 | World step | `updateWorld(ins)`: `updateBody` for every player, bubbles, then `updateBattle()` → `miniTick()` (no inputs today). A guest's `guestSelf(ins)` runs `updatePlayer(me, inp)` for its own animal. `fire()` starts with `coinShot(p)`. `kitOf` already gives a raft `KIT_BASE`. | `updateBattle(ins)` / `miniTick(ins)` pass the frame's inputs on. The freeze of a `world: false` game is one early return in `updateBody` and one in `guestSelf` (3.1). |
 | Drawing | `drawPartyWin` poses animals by a draw-time swap of the fields `drawPlayer` reads (x, y, facing, onGround, vy...) and puts them back; `drawPartyDemo` calls `MINI_FN[id].demo(dx, P.t % 240, a, b)`; `drawHUDParty` prints `m:ss` (or 축구's `+0:07`), the seat panels, `miniHud` and `drawMagHud`. | A `pose` hook (3.1) swaps the same way during play; a `clock` hook replaces `m:ss` (3.4). |
 | Arenas | `PARTY_KEYS = ['water', 'ball']`, `loadPartyArenas` gives each index its key's game and swaps a broken entry for `fallbackPartyArena(key)`; `tools/validate-levels.js` has `PARTY_KEYS` / `PARTY_NAMES` and a closed-arena branch. | Two more keys: `'stage'` and `'sneak'` (sections 3.1, 6.6). |
-| Rotation | `partyPlan(n, rounds, from)`: one shuffled bag of `MINI_IDS` that fit n, never twice in a row; `partyReplan` re-draws what no longer fits after a leaver. | Replaced by the family rotation (3.6); `partyReplan` is unchanged (only 축구 has a `fits` rule). |
+| Rotation | `partyPlan(n, rounds, from)`: one shuffled bag of `MINI_IDS` that fit n, never twice in a row; `partyReplan` re-draws what no longer fits after a leaver. | Kept (owner: draw freely from all six), with the replan fix of 3.6; `partyReplan` is unchanged (only 축구 has a `fits` rule). |
 | Coins | `coinShot` → `CO.bshots++` (battle mode), reset by `coinGo` at each 판's 시작!; `coinPartyClose(i)`: `act[i] = CO.bshots >= COIN.roundShots` (2); `coinParty` needs `shots >= COIN.gameShots` (5). | `coinAct()` feeds the same counter (3.5). |
 | Sound | `ticket`, `item`, `pop`, `b_splash`, `scald_splash`, `stamp`, `chain` (pitch by `o.n`), `hurry`, `extend`, `trap_player`, `escape`, `countdown`, `ready`. `NO_ECHO` keeps a body's own sounds local. Recording is off while `NET.rec` is false (as `coinPop` does). | One new local sfx (`puff`); the per-page sounds of 바나나우유 / 펑 are played with `NET.rec` off on the host (section 9). |
 | Sprites | `item_yogurt`, `item_egg`, `item_banana_milk`, `item_sikhye`, `item_towel_hat` (16x16, `REQUIRED` via `ITEM_TYPES`), `lg_2` (8x8: the yellow 바가지 with steam), `giant_bubble` (40x40), `bubble_pop`, `shower` (16x8), `water_cold_top`, the animals' `idle walk jump fall shoot die`. | Every frame named in this spec exists. |
@@ -189,42 +200,24 @@ The per-판 rule stays `CO.bshots >= COIN.roundShots` (2), the party's `COIN.gam
 today. An idle player still earns 0. The new games are 40-57 s long (the arena games 60), so a 3판 party is about 3.6
 minutes and pays at most 24 to the 1st of 4: still under battle's rate (party.md 8.1).
 
-### 3.6 Rotation with six games
+### 3.6 Rotation with six games (owner: draw freely)
 
-```js
-  // MINI[id].fam: 'a' the arena games (물, 왕관, 축구), 'n' the new ones (바나나우유, 펑, 술래)
-  // the 판 list: the families alternate from a random first one; each family its own shuffled bag of the games that fit
-  // n, refilled when empty, a fresh bag never starting with that family's last pick. from: the 판 already decided (kept;
-  // the next family is the other one of from's last; a replan's first bag leaves out what from already played, so a
-  // 5판 replan does not bring back 바나나우유 while 술래 is still unplayed)
-  function partyPlan(n, rounds, from) {
-    const out = (from || []).slice(), bag = { a: [], n: [] }, last = { a: null, n: null }, first = { a: true, n: true };
-    const ok = (f) => MINI_IDS.filter((id) => MINI[id].fam === f && MINI[id].fits(n));
-    for (const id of out) last[MINI[id].fam] = id;
-    let f = out.length ? (MINI[out[out.length - 1]].fam === 'a' ? 'n' : 'a') : (ri(0, 1) ? 'a' : 'n');
-    while (out.length < rounds) {
-      if (!ok(f).length) f = f === 'a' ? 'n' : 'a';                     // (a family with nothing that fits: never today)
-      if (!bag[f].length) {
-        const fresh = first[f] ? ok(f).filter((id) => !out.includes(id)) : [];
-        bag[f] = shuffle(fresh.length ? fresh : ok(f)); first[f] = false;
-        if (bag[f].length > 1 && bag[f][0] === last[f]) [bag[f][0], bag[f][1]] = [bag[f][1], bag[f][0]];
-      }
-      const id = bag[f].shift(); out.push(id); last[f] = id; f = f === 'a' ? 'n' : 'a';
-    }
-    return out;
-  }
-```
+Today's `partyPlan(n, rounds, from)` already is "one shuffled bag of `MINI_IDS` that fit n, never twice in a row"; with
+the three new ids in `MINI_IDS` it draws from all six. One fix: when it is called with `from` (a replan after a leaver),
+its first bag leaves out what `from` already played, so a 5판 replan never brings back a played game while another is
+still unplayed. No `fam` field.
 
-| Players | 3판 | 5판 |
-|---|---|---|
-| 2 or 4 | A N A (2 of 물 / 왕관 / 축구, 1 new) or N A N (2 new, 1 arena) - all distinct | A N A N A (3 arena games once each, 2 new) or N A N A N (the 3 new once each, 2 arena) - all distinct |
-| 3 | A N A: 물 + 왕관 around a new game; N A N: two new games around 물 or 왕관 - all distinct | A N A N A: 물 왕관 물 (or 왕관 물 왕관) with 2 new games - the only repeat is the arena family's, never adjacent; N A N A N: all distinct |
+| Players | Games that fit | 3판 | 5판 |
+|---|---|---|---|
+| 2 or 4 | 6 | 3 distinct of 6 | 5 distinct of 6 |
+| 3 | 5 (no 축구) | 3 distinct of 5 | all 5 once |
 
-- With only two new games built (the cut line), N A N A N plays one of them twice, never in a row.
-- `partyReplan` and the 축구 `fits` rule are unchanged: a 4 → 3 leaver during a 축구 card re-draws that 판 from family A.
+- With only two new games built (the cut line), 2 / 4 players draw from 5 and 3 players from 4 (a 5판 party then plays
+  one game twice, never in a row).
+- `partyReplan` and the 축구 `fits` rule are unchanged: a 4 → 3 leaver during a 축구 card re-draws that 판 from what fits.
 - `partyForced` (debug) is unchanged.
-- The room's rules list gains one line with the new games (`PARTY_TX.gamesN`, built from the `'n'` entries present) and
-  `roomAlt` (section 8.1).
+- The room's rules list gains one line with the new games (`PARTY_TX.gamesN`, built from the new entries present).
+- Awards: a party may have no arena 판 and no 술래; 최다 가두기상 / 최다 탈출상 are then skipped by the existing top-0 rule.
 
 ### 3.7 Places, ties, awards
 
@@ -675,7 +668,7 @@ About 70 bytes. Prisons ride in `U` as in every minigame.
 
 ### 7.1 Gate: `PARTY_V` 4
 
-`PARTY_V` 3 → **4** (this page plays the new games, `mi`, the family rotation). A polish page (`hi.pa` 3) in a party room is
+`PARTY_V` 3 → **4** (this page plays the new games and `mi`). A polish page (`hi.pa` 3) in a party room is
 never ready, shows `새로고침 필요`, and the room says why - the existing `seatReady` / `seatOld` / `R.u` path. An older page
 would read a `'m'` / `'f'` / `'s'` plan code as 물 (its `partyView` falls back to `MINI_IDS[0]`). party-net's crafted
 older guest sends `pa: 3`. The old games' wire is byte-identical, so a new guest in a stale v3 host's room still plays
@@ -685,7 +678,7 @@ older guest sends `pa: 3`. The old games' wire is byte-identical, so a new guest
 
 | Thing | Who | On the wire |
 |---|---|---|
-| The plan (families) | host | `g.pa.L` (codes `w c b m f s`) |
+| The plan | host | `g.pa.L` (codes `w c b m f s`) |
 | 바나나우유: the schedule | host (RNG, revealed tick by tick) | `g.mg` events |
 | 바나나우유: my RT, my 반칙 | **my page** (my draw time, my press time) | `mi` |
 | 바나나우유: round points, the close | host (clamps, cap) | `g.mg` results |
@@ -764,7 +757,6 @@ Battle and co-op never see any of this: every new branch checks `G.mini` (and it
 | `snMoved1` / `snMoved2` | `움직였어요!` / `연타로 빠져나와요` | my own line when caught |
 | `snHurry1` / `snHurry2` | `3초!` / `빨리 와요!` | after the first arrival |
 | `gamesN` | `바나나우유 잡기 · 펑! 비눗방울 · 살금살금 술래` | the room's rules (built from the new games present) |
-| `roomAlt` | `달리는 게임과 새 게임이 번갈아 나와요` | the room's rules |
 
 The how lines are one line each (14 / 15 / 16 syllables, ≤ 17). No string uses the retired v1 title's syllables
 (`final-e2e2`). The canvas font draws only digits and `- x ! : . + /`: times (`0.27`), scores, `-1`, `+3`, `2/4`, `0:23`.
@@ -855,7 +847,7 @@ Tuning knobs after the friends' next play: `MILK.wait` / the decoy counts / `nog
 | `game.js`, top constants | `PARTY_V` 4, `STAGE_X`, `MILK`, `PUFF`, `SNEAK`; `MINI.milk / puff / sneak` (with `fam`, `world`, `noFire`, `cues`, `fastSecs`, `keys`, `keysT`); `fam: 'a'` on the three old entries; `MINI_IDS`; `partySecs` reads `fastSecs`; `PARTY_TX` additions; `PARTY_TEXT` adds `keys` / `keysT`. |
 | `game.js`, input layer | `pressQ`, `evT`, `dbgPq`; `onKeyDown` / `bindTouch` push (and `'down'` from a fresh ↓ and from `stickMove`'s down edge, which takes the event time from its two callers); `readInputs` sets `pq` (all entries, none while the menu is open or outside 'playing') / `downP`; `loop` keeps `frameT`, `render` sets `G.drawT`; `pageNow`. |
 | `game.js`, world | `updateBody` / `guestSelf` early return (`miniParked`; a guest's own arrival by its own x); `fire()` guard (`noFire`) and `hostShot` drops a `'shot'` while `noFire`; `updatePlayer` walk factor `SNEAK.walk` for a runner; `kitOf` → `KIT_BASE` in a 술래 판; `floatMove` 술래 branch; `updateWorld` → `updateBattle(ins)` → `miniTick(ins)`; `updateBattle` skips the cues (`cues === false`). |
-| `game.js`, party section | `partyPlan` by family (3.6), `shuffle` helper; `miniLoad` (`G.mloc`, the seed, stage spots); `miniTick(ins)` → `local` / `input`; `miniParked`; `coinAct`; `partyTeamLine`'s 술래 branch; `troCountSub`'s 술래 line; the stale-seat test (`MILK.staleF`) shared by 바나나우유's close and 펑's `over`. |
+| `game.js`, party section | the `partyPlan` replan fix (3.6); `miniLoad` (`G.mloc`, the seed, stage spots); `miniTick(ins)` → `local` / `input`; `miniParked`; `coinAct`; `partyTeamLine`'s 술래 branch; `troCountSub`'s 술래 line; the stale-seat test (`MILK.staleF`) shared by 바나나우유's close and 펑's `over`. |
 | `game.js`, the games (after 축구's section) | 바나나우유: `milkInit`, `milkPlan`, `milkTick`, `milkLocal`, `milkInput`, `milkClose`, `milkView`, `milkDraw`, `milkPose`, `milkHud`, `milkDemo`. 펑: `puffL`, `puffLocal`, `puffInput`, `puffOver`, `puffView`, `puffDraw`, `puffPose`, `puffHud`, `puffDemo`. 술래: `sneakSpawns`, `sneakInit`, `sneakTick`, `sneakChant`, `sneakLocal`, `sneakInput`, `sneakJudge` (in the tick: host-local bodies, remote `rem.buf` states by monotonic `rt`, the T+10 anchor and the `vx` test), `sneakArrive`, `sneakRound`, `sneakView`, `sneakDraw`, `sneakHud`, `sneakDemo`; `MINI_FN` entries. |
 | `game.js`, render / HUD | the player draw loop's `pose` swap; `drawHUDParty` `clock`, no mag pips for `noFire`; `syncTags` the game's `tagY` anchor (펑 over the biggest bubble), the 술래 prefix and the stacked tags of animals on one spot; `drawPartyDemo` unchanged (the demos take `a`, `b`; 술래 derives `c`). |
 | `game.js`, net | `parseBody` `mi`; `guestSend` `mi`; `hostBodyIn` stamps `s.at = G.frame` (host-side, for the 60 f clamp) - no game logic there; `applyView` resets `G.mloc` / `NET.mi` / `NET.rtHi` per 판 index. |
@@ -871,7 +863,7 @@ Tuning knobs after the friends' next play: `MILK.wait` / the decoy counts / `nog
 
 Each step leaves the party playable.
 
-1. **Must - shared machinery**: `PARTY_V` 4, `MINI` flags and families, `partyPlan` by family, the stage arena (+ fallback,
+1. **Must - shared machinery**: `PARTY_V` 4, `MINI` flags, the `partyPlan` replan fix (3.6), the stage arena (+ fallback,
    validator), the freeze / `noFire` / cues, `pressQ` (with `'down'`) / `evT` / `G.drawT` in `render` / `pageNow`, the hooks
    `local` / `input` / `clock` / `pose` / `frozen` / `tagY`, `fastSecs`, the stale-seat test, `mi` on the wire, `G.mloc`,
    `coinAct`, the texts, the debug hooks (`fakeBody` included), the rewritten rotation / flow checks.
@@ -909,9 +901,10 @@ The cut line is real: plan for 바나나우유 + 펑 and treat 술래 as the bon
    is open and carries nothing stale into the next frame; a `'down'` entry orders a bank before a later puff of the same
    frame; `G.drawT` moves under `D.step` (set in `render`); a world: false game's name tags use its `tagY`; a 'shot'
    message during a `noFire` game makes no bubble; `fastSecs` reaches `G.battle.total` in the fast party.
-2. **Rotation**: over 300 seeds for 2, 3 and 4 players and 3 / 5 판: families alternate, no game twice in a row, at least
-   one arena 판, 3 players never 축구 and 3판 always distinct; with only two new games (`MINI` without `sneak`) the same; a
-   4 → 3 replan during a 축구 card draws from family A; `partyForced` unchanged. **Today's checks that break and are
+2. **Rotation** (owner: draw freely): over 300 seeds for 2, 3 and 4 players and 3 / 5 판: every game that fits shows up
+   (each of the six for 2 / 4, the five for 3), no game twice in a row, 3판 and 5판 all distinct, 3 players never 축구;
+   with only two new games (`MINI` without `sneak`) no game twice in a row; a replan from a played prefix never repeats a
+   played game while an unplayed one fits; a 4 → 3 replan during a 축구 card draws what fits; `partyForced` unchanged. **Today's checks that break and are
    rewritten**, not just added to: `rotationTests` ("2 / 4 players play each of the three once in 3판", "3 players: A B A",
    "any of the three may come first", the replans from `['water']` / `['crown', 'water']`) and `flowTests`' "a 4-player 3판
    party plays each of the three games once" (unforced: it now draws new games; give it a forced old-games plan, or assert
@@ -1026,11 +1019,12 @@ ends of each page's link: frame 3 to the host is about 100 + 8 ms plus up to 44 
 
 ---
 
-## 15. Open questions for the owner (defaults chosen; the build uses the defaults)
+## 15. Open questions for the owner (answered 2026-10-29: 1 yes, 2 **draw freely from all six**, 3 -1, 4 on for 2)
 
 1. **No 기억력 game in this PR** (목욕탕에 가면 / 간식 찾기 were proposed): the three picked play louder and read faster
    from the demo. **Default: left out**; it is the next game if the friends want more.
 2. **The rotation always alternates** arena / new games. **Default: alternate** (alternative: draw freely from all six).
+   **Owner: draw freely from all six** (3.6).
 3. **반칙 in 바나나우유 costs a point** (-1), not just 0. **Default: -1** (it is what stops random mashing).
 4. **살금살금 술래 with 2 players** (1 v 1, each the 술래 twice). **Default: on** (alternative: leave it out for 2, as 축구
    is for 3).
