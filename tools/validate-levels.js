@@ -181,7 +181,7 @@ const PARTY_ARENAS = ctx.PG && ctx.PG.PARTY_ARENAS;
 const PARTY_KEYS = ['water', 'ball'];   // (파티: 물 차는 대욕장, 거품 축구장)
 const PARTY_NAMES = ['물 차는 대욕장', '거품 축구장'];
 const BALL_R = 11; // (game.js BALL.r: the 축구 ball's radius, px)
-const WATER_SLACK = 3, WATER_SECS = 75; // (game.js MINI.water / WATER_SLACK)
+const WATER_SLACK = 3, WATER_SECS = 60, CEIL_Y = 24; // (game.js MINI.water / WATER_SLACK; the ceiling's underside)
 
 const isWaterCh = (ch) => ch === '~' || ch === '=';
 const isCell = (p) => !!p && typeof p === 'object' && Number.isInteger(p.col) && Number.isInteger(p.row);
@@ -862,6 +862,37 @@ function analyse(L, idx, kind) {
         else if (k + 1 >= tiers.length) err(`rise.steps[${k}] (level ${q[2]}) leaves no dry tier above`);
       });
       res.rise = R.steps.map((q, k) => `${q[0]}-${q[1]} s -> ${q[2]} (row ${tiers[k]} under, row ${tiers[k + 1]} dry)`).join(' · ');
+      // 물 v2 (design/party-polish.md 4.1.1 / 10.4): each surge peak drowns exactly the tier above its level and no higher,
+      // overlapping no step; the flood after the last step, ending before secs - 1, its level at most CEIL_Y + 16 -
+      // WATER_SLACK - 1 (an animal with its head on the ceiling has its feet under it: everybody goes out); soaps inside
+      // the game and before the flood; the revive spots standable on the top shelves and mirrored
+      const steps = R.steps.filter((q) => Array.isArray(q) && q.length === 3 && q.every(Number.isFinite)), lastEnd = steps.length ? steps[steps.length - 1][1] : 0;
+      const levelAt = (t) => { let y = R.y0; for (const q of steps) { if (t <= q[0]) break; if (t < q[1]) return null; y = q[2]; } return y; };
+      (Array.isArray(R.surges) ? R.surges : []).forEach((q, k) => {
+        if (!Array.isArray(q) || q.length !== 3 || !q.every(Number.isFinite) || !(q[1] > 0)) { err(`rise.surges[${k}] must be [at s, length s, peak y]`); return; }
+        const a = levelAt(q[0]), b = levelAt(q[0] + q[1]);
+        if (a === null || b === null || a !== b || steps.some((st) => q[0] < st[1] && q[0] + q[1] > st[0])) { err(`rise.surges[${k}] [${q}] overlaps a step`); return; }
+        if (out(q[2]) !== out(a) + 1) err(`rise.surges[${k}] (peak ${q[2]} over level ${a}) drowns ${out(q[2]) - out(a)} more tier(s), not exactly the one above`);
+        if (q[0] + q[1] >= WATER_SECS) err(`rise.surges[${k}] runs past the game's ${WATER_SECS} s`);
+      });
+      const F = R.flood, maxL = CEIL_Y + 16 - WATER_SLACK - 1;
+      if (F !== undefined && F !== null) {
+        if (!Array.isArray(F) || F.length !== 3 || !F.every(Number.isFinite) || !(F[1] > F[0])) err('rise.flood must be [from s, to s, level y]');
+        else {
+          if (F[0] < lastEnd) err(`rise.flood starts at ${F[0]} s, before the last step ends (${lastEnd} s)`);
+          if (F[1] > WATER_SECS - 1) err(`rise.flood ends at ${F[1]} s, after the game's ${WATER_SECS} - 1 s (the last one out needs its second)`);
+          if (F[2] > maxL) err(`rise.flood level ${F[2]} leaves a dry spot (at most ${maxL}: feet under it with the head on the ceiling)`);
+          if ((R.surges || []).some((q) => Array.isArray(q) && q[0] + q[1] > F[0])) err('a surge runs into the flood');
+        }
+      }
+      (Array.isArray(R.soaps) ? R.soaps : []).forEach((v, k) => { if (!Number.isFinite(v) || v <= 0 || v >= WATER_SECS || (Array.isArray(F) && v >= F[0])) err(`rise.soaps[${k}] ${v} must be inside the game and before the flood`); });
+      const RV = Array.isArray(R.revive) ? R.revive : [], topRow = tiers[tiers.length - 1];
+      if (RV.length) {
+        RV.forEach((q, k) => { if (!q || !Number.isInteger(q.col) || !Number.isInteger(q.row) || q.row + 1 !== topRow || L.map[q.row][q.col] !== '.' || L.map[q.row + 1][q.col] === '.') err(`rise.revive[${k}] must be a spot standing on a top shelf (row ${topRow - 1})`); });
+        if (RV.length !== 2 || !RV[0] || !RV[1] || RV[1].row !== RV[0].row || RV[1].col !== COLS - 1 - RV[0].col) err('rise.revive must be two mirrored spots');
+      }
+      if (Array.isArray(R.surges) && R.surges.length) res.rise += ' · surges ' + R.surges.map((q) => `${q[0]} s +${q[1]} -> ${q[2]}`).join(', ');
+      if (Array.isArray(F)) res.rise += ` · flood ${F[0]}-${F[1]} s -> ${F[2]}`;
     }
   }
   // 축구 (5.4): each goal mouth open air on the floor under a solid bar (the left one at the left wall, the right one

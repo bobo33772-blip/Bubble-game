@@ -3351,6 +3351,28 @@ window.PG = window.PG || {};
     .kWWWWk.
     ..kkkk..
   `)];
+  // 파티 물 차오르기's 오리 튜브 (16x8, design/party-polish.md 8.1; frame 1 lifts the head 1 px): the ring's front half in
+  // Y with a y shade under a k outline, a little duck head on the right end (a w eye with k beside, an O beak). game.js's
+  // drawPlayer draws it over a rafter's waist (the animal's bottom rows clipped away)
+  SPR.duck_ring = [A(`
+    ................
+    ..........kkk...
+    ..kkkkkkkkYYYk..
+    .kYYYYYYYkYwkOO.
+    kYyYYYYYYYYYYyk.
+    kyyYYYYYYYYYyyk.
+    .kyyyyyyyyyyyk..
+    ..kkkkkkkkkkk...
+  `), A(`
+    ..........kkk...
+    .........kYYYk..
+    ..kkkkkkkkYwkOO.
+    .kYYYYYYYYYYYk..
+    kYyYYYYYYYYYYyk.
+    kyyYYYYYYYYYyyk.
+    .kyyyyyyyyyyyk..
+    ..kkkkkkkkkkk...
+  `)];
   // e7's duckling (5x4; frame 1 lifts the back foot): a Y body with a y shade, k outline, a w eye with k beside, an O
   // bill at the front; the round head's top is bare Y (inked, it read as a dash on the dark floors). game.js's
   // drawDucklings draws two of them behind the wearer's heel (gacha.md 4.3)

@@ -469,8 +469,47 @@ body {
 .pg-party-gain { flex: none; min-width: 1.6em; text-align: right; font-weight: 700; color: #7fe08f; }
 .pg-party-bar { display: block; height: 0.4em; margin: 0.5em 0 0; border-radius: 999px; overflow: hidden; background: rgba(127, 220, 200, 0.16); }
 .pg-party-bar > i { display: block; height: 100%; background: var(--duck); transform-origin: 0 50%; transform: scaleX(0); }
+/* 파티 다듬기 (design/party-polish.md 7.2 / 7.3): #pg-party[data-view] - card (the title splash: .is-splash, then the
+   how-to with the demo, the ready row, 준비 완료! and the bar), tally (N판 결과 / 최종 순위: the board counting up),
+   stand (마지막 판!), award (보너스상! and each award) */
+.pg-party-x2 { margin-left: 0.4em; padding: 0 0.45em; border-radius: 999px; background: var(--pink); color: var(--ink); font-size: 0.95em; }
+.pg-party-x2[hidden], .pg-party-sub[hidden], .pg-party-skip[hidden], .pg-party-award[hidden] { display: none; }
+.pg-party-sub { margin: -0.1em 0 0.25em; font-size: 0.85em; line-height: 1.3; font-weight: 700; color: var(--pink); }
+.pg-party-demo { display: block; margin: 0.05em auto 0.3em; width: calc(96px * var(--pg-px, 1)); height: calc(32px * var(--pg-px, 1)); image-rendering: pixelated; border-radius: 0.25em; background: #0c2629; }
+.pg-party-demo[hidden] { display: none; }
+.pg-party-ready { list-style: none; margin: 0.15em 0 0.3em; padding: 0; display: flex; justify-content: center; gap: 0.4em; min-height: 1.45em; }
+.pg-party-chip { display: flex; align-items: center; gap: 0.1em; padding: 0.05em 0.2em; border-radius: 0.4em; background: rgba(127, 220, 200, 0.08); }
+.pg-party-chip.is-me { box-shadow: inset 0 0 0 1.5px #ffffff; }
+.pg-party-ck { flex: none; width: 0.75em; height: 0.75em; image-rendering: pixelated; visibility: hidden; }
+.pg-party-chip.is-ok .pg-party-ck { visibility: visible; }
+.pg-party-go { font-size: 1em; padding: 0.42em 1.3em 0.36em; }
+.pg-party-go:disabled { filter: saturate(0.35) brightness(0.85); cursor: default; }
+.pg-party-bart { display: block; margin: 0.15em 0 0; font-size: 0.75em; line-height: 1.2; color: var(--cream-dim); }
+.pg-party-skip { margin: 0.35em 0 0; font-size: 0.75em; line-height: 1.2; color: var(--cream-dim); }
+.pg-party-mv { flex: none; min-width: 1.5em; font-size: 0.8em; font-weight: 700; text-align: right; color: var(--cream-dim); }
+.pg-party-mv.is-up { color: var(--mint); }
+.pg-party-gain.is-gap { min-width: 0; font-size: 0.8em; color: var(--cream-dim); white-space: nowrap; }
+.pg-party-gain.is-lead { color: var(--duck); }
+.pg-party-award { margin: 0.1em 0 0; font-size: 0.9em; line-height: 1.3; color: var(--cream); }
+.pg-party-aw-ic { display: block; margin: 0 auto 0.15em; width: 2em; height: 2em; image-rendering: pixelated; }
+.pg-party-aw-line { display: block; color: var(--cream-dim); }
+.pg-party-aw-tie { display: block; margin-top: 0.2em; font-weight: 700; color: var(--pink); }
+.pg-party-aw-who { display: flex; justify-content: center; flex-wrap: wrap; gap: 0.15em 0.6em; margin: 0.2em 0 0.1em; min-width: 0; }
+.pg-party-aw-p { display: flex; align-items: center; gap: 0.25em; min-width: 0; max-width: 100%; font-weight: 700; }
+.pg-party-aw-p span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pg-party-aw-v { display: block; font-family: var(--font-sign); font-size: 1.15em; color: var(--duck); }
+.pg-party-aw-v b { margin-left: 0.4em; font-weight: 400; color: #7fe08f; }
+#pg-party[data-view="card"] :is(#pg-party-sub, #pg-party-award, #pg-party-board, #pg-party-skip) { display: none; }
+#pg-party:not([data-view="card"]) :is(#pg-party-round, #pg-party-demo, #pg-party-how, #pg-party-rule, #pg-party-keys, #pg-party-team, #pg-party-ready, #pg-party-go, .pg-party-bar, #pg-party-bart) { display: none; }
+#pg-party:not([data-view="award"]) #pg-party-award, #pg-party[data-view="award"] #pg-party-board { display: none; }
+.pg-party-card.is-splash > :not(#pg-party-round):not(#pg-party-name) { display: none; }
+.pg-party-card.is-splash .pg-h2 { margin: 0.1em 0 0.15em; font-size: 2.6em; }
+@media (prefers-reduced-motion: no-preference) { .pg-party-card.is-splash .pg-h2 { animation: pg-splash 0.45s cubic-bezier(0.2, 1.4, 0.45, 1); } }
+@keyframes pg-splash { from { transform: scale(0.3); opacity: 0; } 60% { transform: scale(1.12); opacity: 1; } to { transform: scale(1); opacity: 1; } }
+/* (the 끝! banner: big, duck yellow with a white outline) */
+.pg-banner.finish #pg-banner-main { color: var(--duck); font-size: 4.6em; text-shadow: 0.08em 0 0 #ffffff, -0.08em 0 0 #ffffff, 0 0.08em 0 #ffffff, 0 -0.08em 0 #ffffff, 0 0.14em 0 var(--ink); }
 @container (max-height: 22em) { #pg-party-rule { display: none; } }
-@container (max-height: 17em) { .pg-party-round, .pg-party-bar { display: none; } .pg-party-board { grid-template-columns: 1fr 1fr; } }
+@container (max-height: 17em) { .pg-party-round, .pg-party-bar, .pg-party-bart, .pg-party-demo { display: none; } .pg-party-board { grid-template-columns: 1fr 1fr; } }
 @container (max-width: 19em) { .pg-party-board { grid-template-columns: 1fr 1fr; } }
 /* ---- v3 online panels (친구와 하기, the room): they cover the whole stage, so phones get the full height */
 .pg-panel {
@@ -1475,17 +1514,24 @@ html.pg-sa, html.pg-sa body { overscroll-behavior: none; }
           </div>
         </section>
 
-        <!-- 파티 (design/party.md 9.2): a minigame's card before each 판, over the shut doors (game.js fillParty) -->
-        <section id="pg-party" class="pg-ov pg-party" aria-labelledby="pg-party-name" hidden>
+        <!-- 파티 (design/party.md 9.2, party-polish.md 7.2): one overlay, four views (data-view) - a minigame's card before
+             each 판 over the shut doors, and the result beats' tally / 마지막 판! / award views (game.js fillParty) -->
+        <section id="pg-party" class="pg-ov pg-party" aria-labelledby="pg-party-name" data-view="card" hidden>
           <div class="pg-card pg-party-card" aria-live="polite">
-            <p id="pg-party-round" class="pg-party-round">1판 / 3판</p>
+            <p id="pg-party-round" class="pg-party-round"><span id="pg-party-rt">1판 / 3판</span><b id="pg-party-x2" class="pg-party-x2" hidden>점수 2배!</b></p>
             <h2 id="pg-party-name" class="pg-h2">물 차오르기</h2>
+            <p id="pg-party-sub" class="pg-party-sub" hidden></p>
+            <canvas id="pg-party-demo" class="pg-party-demo" width="96" height="32" aria-hidden="true"></canvas>
             <p id="pg-party-how" class="pg-party-how"></p>
             <p id="pg-party-rule" class="pg-party-rule"></p>
             <p id="pg-party-keys" class="pg-party-keys"></p>
             <p id="pg-party-team" class="pg-party-team" hidden></p>
+            <ol id="pg-party-ready" class="pg-party-ready" aria-label="준비"></ol>
+            <button id="pg-party-go" class="pg-btn pg-party-go" type="button">준비 완료!</button>
+            <div id="pg-party-award" class="pg-party-award" hidden></div>
             <ol id="pg-party-board" class="pg-party-board" aria-label="점수판"></ol>
-            <i class="pg-party-bar" aria-hidden="true"><i id="pg-party-fill"></i></i>
+            <i class="pg-party-bar" aria-hidden="true"><i id="pg-party-fill"></i></i><span id="pg-party-bart" class="pg-party-bart"></span>
+            <p id="pg-party-skip" class="pg-party-skip" hidden>방장: 눌러서 넘기기</p>
           </div>
         </section>
 

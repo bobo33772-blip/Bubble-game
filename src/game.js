@@ -189,7 +189,7 @@ window.PG = window.PG || {};
   };
   const SHOT_MAX = 110; // (no shot phase is longer: checked by newShot's numbers above, see the guest's prediction)
   const ECHO_GRACE = 12;  // (frames an echo that just stopped behind its duck cannot be touch-popped)
-  const kitOf = (pl) => (!pl || G.perksOff || !isChar(pl.char) ? KIT_BASE : KIT[pl.char]);
+  const kitOf = (pl) => (!pl || G.perksOff || pl.raft || !isChar(pl.char) ? KIT_BASE : KIT[pl.char]);
   // the word each move pops over its owner the first time it is used in a round (that player's own screen only)
   const MOVE_WORD = {}; CHAR_IDS.forEach((c) => { MOVE_WORD[c] = CHARS[c].move.word; });
   // each animal's own blow sound (replaces 'shoot' with perks on; local, like 'shoot')
@@ -248,26 +248,53 @@ window.PG = window.PG || {};
     ' 트로피가 모자라면 안 걸고 참여해요 (등수 점수만 받아요) 내 트로피가 모자라서 다음 판은 안 걸고 해요 다음 판은 안 걸고 하는 친구가 있어요 나는 안 걸고 해요';
   // ---- 파티 (design/party.md): constants up here - PARTY_TEXT and the font warm-up read them at load (the sequencer and
   // the minigames are their own section after rematch)
-  // hi's pa: the minigames this page plays - 1 물 + 왕관, 2 + 거품 축구 (a seat under it is never ready in a party room: a
-  // page with pa 1 would read a 축구 판 as 물, so it is told to refresh; the board PR needs 3)
-  const PARTY_V = 2;
+  // hi's pa: the minigames this page plays - 1 물 + 왕관, 2 + 거품 축구, 3 the polish (물 v2, the beats, the card's 준비 -
+  // design/party-polish.md); a seat under it is never ready in a party room (a page with pa 2 would read the beats and
+  // 물 v2's wire as noise), so it is told to refresh; the board PR takes the next number
+  const PARTY_V = 3;
   const PARTY_ROUNDS = [3, 5];
   const PARTY_PTS = { 2: [4, 0], 3: [4, 2, 0], 4: [4, 2, 1, 0] };   // by place; n = players at that 판's 시작!
-  const PARTY_F = { card: 300, result: 180, early: 60 };             // frames: the card, the result beat, last one standing
+  // frames (polish 3.1): early - last one standing; the card: the title splash, the earliest start, everyone ready ->
+  // allIn later, the auto start (autoRe: a game already played in this party); the result beats: 끝!, the winner stage,
+  // the tally, 마지막 판!, 보너스상!, one award, 최종 순위; skipMin - the host may skip a beat this far into it.
+  // PARTY_FF: the debug fast party's
+  const PARTY_F = { early: 60,
+    splash: 72, cardMin: 150, allIn: 30, auto: 600, autoRe: 360,
+    finish: 54, win: 132, tally: 168, stand: 150, awardIn: 54, award: 108, final: 96, skipMin: 30 };
+  const PARTY_FF = { early: 60, splash: 24, cardMin: 40, allIn: 30, auto: 90, autoRe: 90,
+    finish: 20, win: 40, tally: 60, stand: 40, awardIn: 20, award: 36, final: 30, skipMin: 30 };
+  const PARTY_LAST_X = 2;                 // the last 판's points (1: off)
+  const AWARD_PTS = 2;                    // each 보너스상 (0: shown, no points)
+  // the 보너스상 (3.8), in this order: c its wire code, k the sequencer's counter it reads (wins: 판 won, caps: rivals
+  // trapped, esc: escapes by mashing), its texts and its icon's frame
+  const AWARDS = [{ c: 'w', k: 'wins', name: '최다 1등상', line: '1등을 가장 많이 했어요', icon: 'crown' },
+    { c: 'c', k: 'caps', name: '최다 가두기상', line: '친구를 가장 많이 가뒀어요', icon: 'bubble' },
+    { c: 'e', k: 'esc', name: '최다 탈출상', line: '거품에서 가장 많이 빠져나왔어요', icon: 'bubble_pop' }];
+  const ESC_MASH = 3;                     // an escape counts for 최다 탈출상 with at least this many presses
+  // 물 v2 (4.1): 비누 방울 - hover px over the surface, bob ±px, life frames, at most max at once, a remote body's slack px,
+  // the save's grace frames and hop (saveUp px over the surface, saveVy), gap: px at least between two soaps
+  const SOAP = { hover: 20, bob: 2, life: 480, max: 2, slack: 4, grace: 45, saveUp: 22, saveVy: -3.4, gap: 32 };
+  // 오리 튜브: its walk (x WALK), its body's top dy px over the surface, its hop's vy, a comeback's blink frames
+  const RAFT = { walk: 0.75, dy: 12, hop: -3.0, inv: 90 };
+  const SURGE_WARN = 1.5;                 // s of warning before a surge (the steps / the flood: rise.warn)
+  const CROWN2 = { every: 15, goldAt: 45, goldX: 2 };               // 왕관: a flight every 15 s; gold from 45 s, x2
+  const BALL2 = { twoAt: 45, redrop: 45, golden: 20, cheer: 60 };   // 축구: the 2nd ball at 45 s; 골든 골 at most 20 s
   // each minigame: c its wire code, secs, ar the arena (['p', i] PG.PARTY_ARENAS[i], ['b'] a dry battle arena), fits(n),
   // team (two sides: the card's team line), and the card texts: name; how - the ONE-LINE how-to, which also says how to
   // win (<= 17 syllables: one line at 0.9em in the 1x window's 17.4em, 9.2); rule - the one extra line, hidden on short
   // screens (9.2). A minigame is an entry here, its arena (PG.PARTY_ARENAS or the battle ones) and its MINI_FN hooks
   const MINI = {
-    water: { c: 'w', secs: 75, ar: ['p', 0], fits: (n) => n >= 2, name: '물 차오르기',
-      how: '물이 차올라요! 끝까지 안 젖으면 1등', rule: '물에 닿으면 탈락 · 거품에 갇히면 물로 가라앉아요 · 끝까지 남은 친구는 모두 1등' },
+    water: { c: 'w', secs: 60, ar: ['p', 0], fits: (n) => n >= 2, name: '물 차오르기',
+      how: '물이 차올라요! 가장 늦게 젖으면 1등', rule: '비누 방울을 먹으면 한 번 살아나요 · 빠지면 오리 튜브로 친구를 맞혀 역전!' },
     crown: { c: 'c', secs: 60, ar: ['b'], fits: (n) => n >= 2, name: '왕관 뺏기',
-      how: '왕관을 쓰고 가장 오래 버티면 1등', rule: '왕관을 쓰면 조금 느려요 · 거품에 갇히면 왕관이 떨어져요' },
+      how: '왕관을 쓰고 가장 오래 버티면 1등', rule: '15초마다 왕관이 날아가요 · 마지막 15초는 황금 왕관 2배!' },
     // (not for 3 players: the screen has two sides - a third goal would sit in the ceiling or the floor, and 2v1 needs a
     // handicap kids cannot read off the screen; 3.2)
     ball: { c: 'b', secs: 60, ar: ['p', 1], fits: (n) => n === 2 || n === 4, team: true, name: '거품 축구',
-      how: '큰 거품 공을 상대 골대에 넣어요', rule: '몸이나 거품으로 공을 밀어요 · 골을 더 많이 넣은 팀이 이겨요' },
+      how: '큰 거품 공을 상대 골대에 넣어요', rule: '45초부터 공이 2개! · 비기면 골든 골' },
   };
+  // (optional per game, polish 5: keys / keysT - the card's own keys line (a 연타 game's "X 연타!"), else PARTY_TX.keys /
+  // keysT; reserved for the next PR: world: false - a game with its own screen, no arena and no spawns)
   const MINI_IDS = ['water', 'crown', 'ball'];
   // (a short no-KO capture in every minigame; prisons sink in 물 0.3 px/f; out once the feet are 3 px under the surface; a
   // guest draws the water at its estimate of the host's NOW, at most WATER_LEAD frames past the newest snapshot - 4.1;
@@ -300,9 +327,20 @@ window.PG = window.PG || {};
     shared: '공동', board: '점수판', me: '나', practice: '연습 경기', minis: '미니게임', perksOn: '능력 있음', perksOff: '능력 없음',
     teamL: '왼쪽 팀', teamR: '오른쪽 팀', sideL: '왼쪽', sideR: '오른쪽', mineL: '나는 왼쪽 팀 · 오른쪽 골대에 넣어요!', mineR: '나는 오른쪽 팀 · 왼쪽 골대에 넣어요!',
     goal: '골!', toR: '오른쪽으로!', toL: '왼쪽으로!', winL: '왼쪽 팀 승리!', winR: '오른쪽 팀 승리!', draw: '무승부!',
+    // (the polish, 7.1: the card's 준비, the result beats, the awards, the games' new lines, the room's rules; {0} is
+    // filled in at run time - ptx)
+    ready: '준비 완료!', readyK: '준비 완료! (Z)', readyDone: '준비됐어요!', allReady: '모두 준비됐어요!', autoIn: '{0}초 뒤 시작',
+    x2: '점수 2배!', finish: '끝!', resultH: '{0}판 결과', lastH: '마지막 판!', lastSub: '점수 2배 · ', lead: '선두', gap: '1위와 {0}점 차',
+    awardsH: '보너스상!', awardsSub: '상마다 +2점', times: '번', awardPts: '+2점', awardTie: '공동 수상!', finalH: '최종 순위', skip: '방장: 눌러서 넘기기',
+    surge1: '큰 물결!', surge2: '점프로 피해요!', flood2: '계속 점프!', soapGot: '비누!', saved: '살았다!', raftMe: '오리 튜브로 친구를 맞혀요!',
+    revive: '역전!', reviveMe: '다시 올라왔어요!', crownFly: '왕관이 날아가요!', gold1: '황금 왕관!', gold2: '2배!',
+    two1: '공이 하나 더!', two2: '골을 넣으면 공이 다시 떨어져요', golden1: '골든 골!', golden2: '먼저 넣는 팀이 이겨요!',
+    roomLast: '마지막 판은 점수 2배!', roomAwards: '끝나면 보너스상 3개 · 상마다 +2점',
   };
+  const ptx = (k, v) => PARTY_TX[k].replace('{0}', String(v));
   const PARTY_TEXT = MINI_IDS.map((id) => MINI[id].name + ' ' + MINI[id].how + ' ' + MINI[id].rule).join(' ') + ' ' +
-    Object.keys(PARTY_TX).map((k) => PARTY_TX[k]).join(' ') + ' 판 등 점 공동 승리 무승부 팀 왼쪽 오른쪽 1등 2등 3등 4등 0123456789+/:·!';
+    Object.keys(PARTY_TX).map((k) => PARTY_TX[k].replace('{0}', '')).join(' ') + ' ' + AWARDS.map((a) => a.name + ' ' + a.line).join(' ') +
+    ' 판 등 점 공동 승리 무승부 팀 왼쪽 오른쪽 1등 2등 3등 4등 0123456789+/:·!';
   const V3_TEXT = CHAR_IDS.map((c) => { const d = CHARS[c]; return [d.name, d.animal, d.role, d.tag, d.badge, d.move.name, d.move.how, d.move.touch, d.bub.name, d.bub.desc].join(' '); }).join(' ') +
     // (v4 kit cards, hints, the countdown line; the pips' aria text)
     ' ' + STAT_NAMES.join(' ') + ' 특기: 거품: ' + OFF_LINE + ' 내 특기: 5점 중 3점' +
@@ -591,10 +629,12 @@ window.PG = window.PG || {};
   LOOK_SLOTS.forEach((s) => { OPT_SPR['slot_' + s] = 1; });
   // (v4 뽑기, gacha.md 8) the 상점's capsule icon, e7's duckling, the machine, its crank and the capsules (whole, halves)
   Object.assign(OPT_SPR, { ic_cap: 1, fx_duck: 2, gacha: 1, gacha_h: 4, cap: 4, cap_t: 4, cap_b: 1 });
+  OPT_SPR.duck_ring = 2;   // (파티 물 차오르기's 오리 튜브, 16x8: a missing one draws a ring of canvas lines instead)
   function sizeOf(name) {
     if (/^boss_|^portrait_/.test(name)) return [32, 32];
     if (/^tile_|^life_/.test(name)) return [8, 8];
     if (/^icon_/.test(name)) return [5, 5];
+    if (name === 'duck_ring') return [16, 8];
     // (the shop sprites: their size from the art, PG.ITEM_SIZE - none there = [0, 0], so every frame is left out)
     // (gacha.md 8: ic_cap, fx_duck and the machine / crank / capsules too - exact names: /^cap/ would take the capybara)
     if (/^(it_|ic_|slot_|fx_)|^(gacha|gacha_h|cap|cap_t|cap_b)$/.test(name)) { const s = PG.ITEM_SIZE && Object.prototype.hasOwnProperty.call(PG.ITEM_SIZE, name) ? PG.ITEM_SIZE[name] : null; return Array.isArray(s) && s.length === 2 ? s : [0, 0]; }
@@ -1225,7 +1265,8 @@ window.PG = window.PG || {};
     }
     return { key: 'water', name: '물 차는 대욕장', theme: 1, closed: true, map, gather: { col: 15, row: 2 },
       players: [{ col: 4, row: 24 }, { col: 27, row: 24 }, { col: 10, row: 24 }, { col: 21, row: 24 }],
-      rise: { y0: 222, warn: 2, steps: [[5, 9, 206], [19, 23, 174], [33, 37, 142], [47, 51, 110], [61, 65, 78]] } };
+      rise: { y0: 222, warn: 2, steps: [[4, 7, 206], [18, 21, 174], [30, 33, 142], [42, 45, 110], [48, 50, 78]],
+        surges: [[13, 1.6, 178], [37, 1.6, 114]], flood: [52, 59, 34], soaps: [3, 9, 15, 24, 28, 36, 46], revive: [{ col: 8, row: 4 }, { col: 23, row: 4 }] } };
   }
   // a rise schedule as the engine runs it: numbers clamped, at most 8 steps sorted by start, null when unusable
   function riseOf(R) {
@@ -1233,7 +1274,16 @@ window.PG = window.PG || {};
     const steps = R.steps.filter((q) => Array.isArray(q) && q.length >= 3 && q.every((v) => isFinite(+v)))
       .map((q) => [clamp(+q[0], 0, 600), clamp(+q[1], 0, 600), clamp(+q[2], CEIL_Y, PF_BOT)]).filter((q) => q[1] > q[0])
       .sort((a, b) => a[0] - b[0]).slice(0, 8);
-    return steps.length ? { y0: clamp(isFinite(+R.y0) ? +R.y0 : PF_BOT - 2, CEIL_Y, PF_BOT), warn: clamp(isFinite(+R.warn) ? +R.warn : 2, 0, 10), steps } : null;
+    if (!steps.length) return null;
+    // (물 v2, polish 4.1.1: the surges [at s, length s, peak y], the flood [from s, to s, level y], the 비누 seconds and the
+    // 역전 spots - each optional, a broken one left out)
+    const num = (v) => isFinite(+v) && v !== null && v !== '';
+    const surges = (Array.isArray(R.surges) ? R.surges : []).filter((q) => Array.isArray(q) && q.length >= 3 && q.every(num))
+      .map((q) => [clamp(+q[0], 0, 600), clamp(+q[1], 0.1, 10), clamp(+q[2], CEIL_Y, PF_BOT)]).sort((a, b) => a[0] - b[0]).slice(0, 4);
+    const F = R.flood, flood = Array.isArray(F) && F.length >= 3 && F.every(num) && +F[1] > +F[0] ? [clamp(+F[0], 0, 600), clamp(+F[1], 0, 600), clamp(+F[2], CEIL_Y, PF_BOT)] : null;
+    const soaps = (Array.isArray(R.soaps) ? R.soaps : []).filter(num).map((v) => clamp(+v, 0, 600)).sort((a, b) => a - b).slice(0, 12);
+    const revive = (Array.isArray(R.revive) ? R.revive : []).filter((q) => q && num(q.col) && num(q.row)).map((q) => ({ col: clamp(+q.col | 0, 2, COLS - 3), row: clamp(+q.row | 0, 1, ROWS - 2) })).slice(0, 4);
+    return { y0: clamp(isFinite(+R.y0) ? +R.y0 : PF_BOT - 2, CEIL_Y, PF_BOT), warn: clamp(isFinite(+R.warn) ? +R.warn : 2, 0, 10), steps, surges, flood, soaps, revive };
   }
   // 축구's fields as the engine runs them (numbers clamped), null when unusable: goals [left, right] {c0, c1, r0, r1, line},
   // sides [[left x2], [right x2]] spawn cells, ball {x, y} (the kickoff spot)
@@ -1407,7 +1457,7 @@ window.PG = window.PG || {};
   function bodyAt(sp) {
     return { x: clamp(sp.col * TS - 4, WALL_L - 2, WALL_R - 14), y: (sp.row + 1) * TS, vx: 0, vy: 0, onGround: true, facing: 1,
       coyote: 0, jumpBuf: 0, shootCd: 0, autoCd: 0, shootBuf: 0, shootAnim: 0, invuln: 0, dead: false, walkT: 0, sq: 0, water: 0, waterSkip: 0,
-      splashY: undefined, splashK: undefined, dieT: 0, ghost: null, trap: null, stunT: 0, koT: 0, out: false, shield: 0, shieldCd: 0, hotIn: false,
+      splashY: undefined, splashK: undefined, dieT: 0, ghost: null, trap: null, stunT: 0, koT: 0, out: false, raft: false, shield: 0, shieldCd: 0, hotIn: false,
       thruR: -1, thruT: 0, ...MV_BODY };
   }
   // the move state of a body (v4 kits): airT airborne frames (0 on the ground / afloat); mv the move running ('' |
@@ -1455,7 +1505,7 @@ window.PG = window.PG || {};
   const alive = (pl) => !!pl && !pl.dead && !pl.out && !pl.koT && !pl.ghost;
   const free = (pl) => alive(pl) && !pl.trap;
   // perks are on unless the battle option "능력 끄기" (or a test) turned them off
-  const perk = (pl, c) => !!pl && pl.char === c && !G.perksOff;
+  const perk = (pl, c) => !!pl && pl.char === c && !G.perksOff && !pl.raft;   // (파티's 오리 튜브: plain moves, plain bubbles)
   // the player an enemy / boss goes after: the nearest free one (player 1 in single play, whatever its state).
   // Battle (mirror-symmetric arenas, a drain half a tile left of the axis): an enemy  leans a little toward one
   // half of the arena by its id, so near-ties between mirror-image rivals do not always go to the left / lower slot
@@ -1744,7 +1794,7 @@ window.PG = window.PG || {};
     updateFx();
     if (G.countT >= COUNT_FRAMES) {
       G.mode = G.countNext || 'playing'; G.countNext = null;
-      Snd.sfx('go');
+      Snd.sfx(G.party && G.mini ? 'mg_go' : 'go');   // (파티: its own start fanfare)
       // (co-op: the round name now; its usual "준비!" would come after the 3-2-1 and is skipped)
       if (G.gameMode === 'coop' && LV) { showBanner(LV.name, (G.round + 1) + '번째 탕 · 다 함께!', INTRO_NAME, 'round'); G.introT = Math.max(G.introT, INTRO_NAME + 1); }
       // (몬스터 출현 off: 시작! says 몬스터 없음 - the arena's own banner, '배틀 · N분 · 몬스터 없음', is replaced by the
@@ -1812,6 +1862,7 @@ window.PG = window.PG || {};
     return false;
   }
   function updatePlayer(p, inp) {
+    if (p.raft) { raftMove(p, inp); return; } // (파티 물 차오르기's 오리 튜브: its own physics)
     if (p.invuln > 0) p.invuln--;
     if (p.shield > 0) p.shield--;
     if (p.shieldCd > 0) p.shieldCd--;
@@ -3381,7 +3432,7 @@ window.PG = window.PG || {};
   // can this player grab things / pop bubbles? (a remote player's reported spot is ~100 ms old: it gets 8 px of
   // slack each way for touching things; being caught by a battle bubble is judged against its own view instead, see
   // lagTrapCheck)
-  const canTouch = (p) => !!p && !p.dead && !p.trap && !p.koT && !p.out && !(p.stunT > 0);
+  const canTouch = (p) => !!p && !p.dead && !p.trap && !p.koT && !p.out && !p.raft && !(p.stunT > 0);
   const slack = (p) => (p.local ? 0 : 8);
   function touching(p, x, y, w, h) { const s = slack(p); return overlap(p.x + 2 - s, p.y + 2 - s, 12 + s * 2, 14 + s * 2, x, y, w, h); }
   function updateItems() {
@@ -3702,7 +3753,7 @@ window.PG = window.PG || {};
   // A fresh prison cannot be popped for TRAP_GRACE frames (no same-frame KO), and not by its own trapper for
   // OWNER_LOCK frames (the victim gets its chance to mash out).
   const HIST_KEEP = 48, TRAP_GRACE = 15, OWNER_LOCK = 60;
-  const trappable = (v, b) => v.slot !== b.owner && free(v) && !(v.invuln > 0);
+  const trappable = (v, b) => v.slot !== b.owner && free(v) && !(v.invuln > 0) && !v.raft;
   // A touch you can SEE is a catch: the owner's ring (2 px at r 9 x the drawn scale sc: its outer edge 9 s + 1) on the
   // drawn 16x16 animal, outline included (tol: the host's slack on a guest's claim). (Before: rP on the 12x14 body box -
   // a fifth of the visible touches did not count.)
@@ -3950,6 +4001,8 @@ window.PG = window.PG || {};
     burst(b.x + 8, b.y + 8, 10, [SLOT_COLS[b.owner] || '#ffffff', '#ffffff', '#c8f4ff'], 1.3, 14);
     Snd.sfx('trap_player');
     if (G.mini && G.mini.id === 'crown') crownDrop(v, b); // (왕관 뺏기: a caught holder drops the crown)
+    // (파티's 최다 가두기상: a rival caught - a 오리 튜브's bubble too, never one's own)
+    if (G.party && G.party.caps && b.owner >= 0 && b.owner !== v.slot) G.party.caps[b.owner] = (G.party.caps[b.owner] | 0) + 1;
   }
   // a capture's length: a minigame's short no-KO trap, else the battle's (updateTrapped, mashTrap, a prison's wobble)
   const ptrapMax = () => (G.mini ? MINI_TRAP : PTRAP_FRAMES);
@@ -3968,6 +4021,8 @@ window.PG = window.PG || {};
   function mashTrap(pl) { if (pl && pl.trap) { pl.trap.prog += PTRAP_MASH; pl.trap.mash++; if (pl.trap.prog >= ptrapMax()) escapeTrap(pl); } }
   function escapeTrap(pl) {
     const b = pl.trap && pl.trap.b;
+    // (파티's 최다 탈출상: out by mashing - the timer alone does not count, nor a friend's touch or a kickoff's release)
+    if (G.party && G.party.esc && pl.trap && pl.trap.mash >= ESC_MASH) G.party.esc[pl.slot] = (G.party.esc[pl.slot] | 0) + 1;
     if (b) burst(b.x + 8, b.y + 8, 10, ['#ffffff', '#c8f4ff', pl.color], 1.5, 14);
     Snd.sfx('escape');
     releasePlayer(pl);
@@ -4153,18 +4208,23 @@ window.PG = window.PG || {};
   // 2-4 friends play 3 or 5 short minigames (판) in a row, each on one fixed screen, for placement points (4 / 2 / 1 / 0),
   // and finish on the podium; 비누 코인 only (no trophies). G.gameMode stays 'battle' (rival capture, the magazine, the
   // claims, the snapshots' lc / am work unchanged); G.party is the sequencer, G.mini the minigame now. Host flow:
-  //   newParty -> partyNext: miniLoad, 'card' (5 s) -> 3-2-1 -> 시작! (miniStart) -> 'playing' (miniTick each frame) ->
-  //   miniOver -> partyResult: places -> points, 'result' (3 s) -> partyNext ... -> partyFinal: the podium, the coins
+  //   newParty -> partyNext: miniLoad, 'card' (the splash, then 준비 완료 / the auto start) -> 3-2-1 -> 시작! (miniStart)
+  //   -> 'playing' (miniTick each frame) -> miniOver -> partyResult: places -> points (the last 판 x2), 'result': its
+  //   beats (끝!, the winner stage, the tally, [마지막 판!], after the last 판 the 보너스상 and 최종 순위) -> partyNext ...
+  //   -> partyFinal: the podium, the coins (design/party-polish.md 3)
   // The minigame layer is a round with a placement result - the sequencer (and the board of a later PR) only calls
   // miniLoad / miniStart / miniTick / miniOver / miniPlaces / miniSnap / miniView / miniDrop / miniDraw / miniHud, which
   // dispatch to each game's MINI_FN entry (거품 축구 slots in as one more entry). Guests mirror G.party / G.mini from the
   // snapshot (g.pa, g.mg); no new message type in either direction
-  // (debug only: fast - every game 12 s, card 90 f, result 40 f, the coin's play-time gate waived; force - every party
-  // from now on plays exactly this list of game ids, until cleared)
+  // (debug only: fast - every game 12 s, the card and the beats PARTY_FF, the coin's play-time gate waived; force - every
+  // party from now on plays exactly this list of game ids, until cleared)
   let PARTY_FAST = false, PARTY_FORCE = null, partySn = 0;
   const partySecs = (id) => (PARTY_FAST ? 12 : MINI[id].secs);
-  const partyCardF = () => (PARTY_FAST ? 90 : PARTY_F.card);
-  const partyResultF = () => (PARTY_FAST ? 40 : PARTY_F.result);
+  const partyF = (k) => (PARTY_FAST ? PARTY_FF : PARTY_F)[k];
+  // a moment of a beat given in PARTY_F frames, scaled to this party's beat length (the fast party's beats are shorter)
+  const beatAt = (f, k) => Math.round(f * partyF(k) / PARTY_F[k]);
+  // the last 판's multiplier (a guest: the host's X)
+  const partyX = () => { const P = G.party; if (!P) return 1; if (G.online && G.role === 'guest') return P.X > 1 ? P.X : 1; return P.i === P.n - 1 ? PARTY_LAST_X : 1; };
   // competition ranking: rows [{slot, k}] (bigger k is better) -> Map slot -> place; equal k share the best place
   function rankBy(rows) {
     const s = rows.slice().sort((a, b) => b.k - a.k || a.slot - b.slot), out = new Map();
@@ -4192,7 +4252,7 @@ window.PG = window.PG || {};
   function partyRoundTx(count) {
     const P = G.party; if (!P) return '';
     const i = clamp(P.i, 0, Math.max(0, P.n - 1)) + 1, last = i === P.n, base = i + '판 / ' + P.n + '판';
-    return count ? base + (last ? ' · ' + PARTY_TX.last : '') : (last ? PARTY_TX.last + ' ' : '') + base;
+    return count ? base + (last ? ' · ' + PARTY_TX.last + (partyX() > 1 ? ' · ' + PARTY_TX.x2.replace('!', '') : '') : '') : (last ? PARTY_TX.last + ' ' : '') + base;
   }
   // a new party (host / offline): opts {perks, rapid, rounds, plan (debug)}; list as newBattle's
   function newParty(list, opts) {
@@ -4202,9 +4262,13 @@ window.PG = window.PG || {};
     resetGame('battle', list);
     G.lives = 0; G.matchNo = 0;
     const n = G.players.length, forced = partyForced(opts.plan, n) || partyForced(PARTY_FORCE, n);
-    // (sn: this page's party serial - the card's bar restarts for each card of each party)
+    // (sn: this page's party serial - the card's bar restarts for each card of each party; the polish's state, 3.10:
+    // rdy / allAt / auto / cl the card's 준비 and its auto start; b / bt / bk the result beat, frames into it, the award
+    // index; caps / esc the award counters (wins exists), bonus the awards' points by seat, A the awards, given the
+    // awards already paid)
     G.party = { n: forced ? forced.length : rounds, opts: { perks: G.opts.perks, rapid: G.opts.rapid, rounds }, i: -1, plan: forced || partyPlan(n, rounds),
-      pts: {}, wins: {}, last: {}, gain: {}, t: 0, fin: false, done: false, walk: false, crownAr: -1, res: null, sn: 'h' + (++partySn) };
+      pts: {}, wins: {}, last: {}, gain: {}, t: 0, fin: false, done: false, walk: false, crownAr: -1, res: null, sn: 'h' + (++partySn),
+      rdy: {}, allAt: -1, auto: PARTY_F.auto, cl: PARTY_F.auto, b: '', bt: 0, bk: 0, caps: {}, esc: {}, bonus: {}, A: null, given: {} };
     for (const p of G.players) { p.score = 0; G.party.pts[p.slot] = 0; G.party.wins[p.slot] = 0; }
     coinPartyStart();
     partyNext();
@@ -4212,49 +4276,155 @@ window.PG = window.PG || {};
   // the next 판: its arena behind the shut doors and its card (the last one played: the final podium)
   function partyNext() {
     const P = G.party; if (!P) return;
-    P.i++; P.res = null;
+    P.i++; P.res = null; P.b = ''; P.bt = 0; P.bk = 0;
     if (P.i >= P.n) { partyFinal(false); return; }
     miniLoad(P.plan[P.i]);
-    G.mode = 'card'; P.t = 0; G.countNext = null;
-    G.banner = null; G.bannerQ = [];
-    setMusic('lobby'); Snd.sfx('door');
+    partyCardStart();
+    setMusic('party'); Snd.sfx('door');
     // (an open online menu stays open; the first card of an online party is shown by netAgain, once G.online is set)
     showOverlay(G.menuOpen ? 'pause' : 'party'); fillParty();
   }
-  // the card (no input skips it), then the usual 3-2-1
-  function updateCard() {
+  // a card (again: a replan drew another game): nobody ready yet, its auto start - shorter for a game this party played
+  function partyCardStart() {
+    const P = G.party;
+    G.mode = 'card'; P.t = 0; G.countNext = null; G.banner = null; G.bannerQ = [];
+    P.rdy = {}; P.allAt = -1; P.auto = partyF(P.plan.slice(0, P.i).includes(P.plan[P.i]) ? 'autoRe' : 'auto'); P.cl = P.auto;
+    // (a re-drawn card keeps its 판 index: a guest's pr for the game drawn before still says it - each such seat counts
+    // again only after a state without it, updateCard)
+    P.prOld = {};
+    for (const p of G.players) { const rem = p.local === false && NET.remote.get(p.id), st = rem && rem.st; if (st && st.gid === NET.gid && st.pr === P.i) P.prOld[p.slot] = 1; }
+  }
+  // my own 준비 (the card's button, Enter, a jump / shoot press - never in the first 12 frames: a press held from the
+  // beat before): a guest says it in its body state (pr, guestSend), the host / an offline screen marks its own seat
+  function partyReadyMe() {
+    const P = G.party; if (!P || G.mode !== 'card' || P.t < 12 || G.menuOpen) return;
+    if (G.online && G.role === 'guest') { if (NET.partyReady !== P.i) { NET.partyReady = P.i; fillParty(); } return; }   // (its 'ready': the host's echo)
+    partyReadySet(G.localSlot);
+  }
+  function partyReadySet(slot) {
+    const P = G.party; if (!P || P.rdy[slot] || !G.players.some((p) => p.slot === slot)) return;
+    P.rdy[slot] = 1; Snd.sfx('ready');
+    partyAllCheck();
+    if (shownOverlay === 'party') fillParty();
+  }
+  // everyone present ready: the frame of the card it happened on (the card ends allIn later, never before cardMin)
+  function partyAllCheck() { const P = G.party; if (P && G.mode === 'card' && P.allAt < 0 && G.players.length && G.players.every((p) => P.rdy[p.slot])) P.allAt = P.t; }
+  // the card (3.2): its title splash, then the how-to; each present player's 준비 (a local one's jump / shoot press, a
+  // remote one's pr); everyone ready -> it ends allIn later (never before cardMin), else at the auto start; then 3-2-1
+  function updateCard(ins) {
     const P = G.party; if (!P) return;
     P.t++;
     updateFx();
-    if (P.t >= partyCardF()) { if (!G.menuOpen) showOverlay(null); beginCountdown(); }
+    if (P.t === 6) Snd.sfx('mg_title');
+    if (P.t === partyF('splash') && shownOverlay === 'party') fillParty();
+    if (P.t >= 12) for (const p of G.players) {
+      if (P.rdy[p.slot]) continue;
+      if (p.local !== false) { const i = ins && ins[p.slot]; if (i && (i.jumpP || i.shootP) && !G.menuOpen) partyReadySet(p.slot); }
+      else {
+        const rem = NET.remote.get(p.id), st = rem && rem.st, pr = !!st && st.gid === NET.gid && st.pr === P.i;
+        if (P.prOld && P.prOld[p.slot]) { if (!pr) delete P.prOld[p.slot]; } else if (pr) partyReadySet(p.slot);
+      }
+    }
+    partyAllCheck();
+    const end = P.allAt >= 0 ? Math.max(partyF('cardMin'), P.allAt + partyF('allIn')) : P.auto;
+    if (P.t >= end) { if (!G.menuOpen) showOverlay(null); beginCountdown(); }
   }
-  // a 판 ended (miniOver): its places -> points (the table of the players at its 시작!), the result beat
+  // a 판 ended (miniOver): its places -> points (the table of the players at its 시작!, x PARTY_LAST_X on the last 판),
+  // the world frozen, then the beats from 끝!
   function partyResult() {
     const P = G.party, M = G.mini; if (!P || !M) return;
-    const places = miniPlaces(), tbl = PARTY_PTS[clamp(M.n0 | 0, 2, 4)];
+    const places = miniPlaces(), tbl = PARTY_PTS[clamp(M.n0 | 0, 2, 4)], x = partyX();
     P.gain = {};
     for (const p of G.players) {
-      const pl = places.get(p.slot) || G.players.length, gain = tbl[pl - 1] || 0;
+      const pl = places.get(p.slot) || G.players.length, gain = (tbl[pl - 1] || 0) * x;
       P.pts[p.slot] = (P.pts[p.slot] | 0) + gain; p.score = P.pts[p.slot];
       P.wins[p.slot] = (P.wins[p.slot] | 0) + (pl === 1 ? 1 : 0); P.last[p.slot] = pl; P.gain[p.slot] = gain;
     }
     P.res = places;
     coinPartyRound();
     G.mode = 'result'; P.t = 0;
-    // (the world freezes: every prison opens, the bubbles burst away)
+    // (the world freezes: every prison opens, the bubbles burst away; every animal stays where the 판 ended)
     for (const p of G.players) if (p.trap) releasePlayer(p);
     for (const b of G.bubbles) if (!b.dead && b.state !== 'pop') burst(b.x + 8, b.y + 8, 5, BUBBLE_COLS, 1.1, 12);
     G.bubbles = []; G.bannerQ = [];
-    const firsts = G.players.filter((p) => places.get(p.slot) === 1), F = MINI_FN[M.id], won = F.win ? F.win(M) : '';
-    showBanner(won || (firsts.length === 1 ? '1등 ' + nameOf(firsts[0]) + '!' : PARTY_TX.winShared), P.i + 1 >= P.n ? PARTY_TX.lastEnd : MINI[M.id].name + ' ' + PARTY_TX.next, partyResultF(), 'clear');
-    for (const p of G.players) wordPop(p.x + 8, headTop(p) - (crownHolder(p) ? 24 : 16), places.get(p.slot) + '등 +' + P.gain[p.slot], p.color); // (above the name tag)
-    Snd.sfx('win');
+    partyBeat('f');
   }
-  function updateResult() {
+  // ---- the result's beats (3.4 - 3.9): f 끝! -> w the winner stage -> t the tally -> [s 마지막 판!, after the
+  // second-to-last 판] -> the next card; the last 판's tally -> a 보너스상! -> A each award (bk) -> z 최종 순위 -> the
+  // podium (no awards to give: t -> z). The host runs them (P.b / P.bt / P.bk ride in g.pa); every page draws them
+  const BEAT_LEN = { f: 'finish', w: 'win', t: 'tally', s: 'stand', a: 'awardIn', A: 'award', z: 'final' };
+  const beatLen = (b) => partyF(BEAT_LEN[b] || 'finish');
+  // the overlay view a beat shows ('': none - 끝! and the winner stage are drawn over the arena)
+  const beatView = (b) => (b === 't' || b === 'z' ? 'tally' : b === 's' ? 'stand' : b === 'a' || b === 'A' ? 'award' : '');
+  function partyBeat(b, k) {
+    const P = G.party, M = G.mini;
+    P.b = b; P.bt = 0; P.bk = k | 0;
+    if (b === 'f') { showBanner(PARTY_TX.finish, '', beatLen('f'), 'finish'); Snd.sfx('mg_finish'); setMusic(null); }
+    else if (b === 'w') {
+      // (the winner line as it was: 1등 방장! / 공동 1등! / a team game's own - 왼쪽 팀 승리!, 무승부!)
+      const pl = P.res, firsts = G.players.filter((p) => pl && pl.get(p.slot) === 1), F = M && MINI_FN[M.id], won = F && F.win ? F.win(M) : '';
+      showBanner(won || (firsts.length === 1 ? '1등 ' + nameOf(firsts[0]) + '!' : PARTY_TX.winShared), P.i + 1 >= P.n ? PARTY_TX.lastEnd : (M ? MINI[M.id].name + ' ' : '') + PARTY_TX.next, beatLen('w'), 'clear');
+      Snd.sfx('mg_win'); P.wAt = G.frame;
+    } else if (b === 't') setMusic('party');
+    else if (b === 's' || b === 'a') Snd.sfx('drumroll');
+    if (beatView(b)) { if (!G.menuOpen) showOverlay('party'); fillParty(); } else if (shownOverlay === 'party') showOverlay(null);
+  }
+  function partyBeatNext() {
     const P = G.party; if (!P) return;
-    P.t++;
+    const last = P.i + 1 >= P.n;
+    if (P.b === 'f') partyBeat('w');
+    else if (P.b === 'w') partyBeat('t');
+    else if (P.b === 't' && !last) { if (P.i === P.n - 2) partyBeat('s'); else partyNext(); }
+    else if (P.b === 't') { P.A = partyAwards(); P.given = {}; partyBeat(P.A.length ? 'a' : 'z'); }
+    else if (P.b === 'a') partyBeat('A', 0);
+    else if (P.b === 'A') { partyAwardGive(P.bk); if (P.A && P.bk + 1 < P.A.length) partyBeat('A', P.bk + 1); else partyBeat('z'); }
+    else if (P.b === 'z') partyFinal(false);
+    else partyNext();
+  }
+  // a result frame: the world frozen (fx only); the stand's and the awards' timed moments; the host's skip
+  function updateResult(ins) {
+    const P = G.party; if (!P) return;
+    P.t++; P.bt++;
     updateFx();
-    if (P.t >= partyResultF()) partyNext();
+    if (P.b === 's' && P.bt === beatAt(54, 'stand')) Snd.sfx('mg_title');
+    if (P.b === 'A' && P.bt === beatAt(18, 'award')) partyAwardGive(P.bk);
+    if (P.b === 'w') partyWinFx();
+    // (the host's own press, offline any local player's: the next beat - partySkip)
+    if (ins && !G.menuOpen) for (const p of G.players) {
+      if (p.local === false || (G.online && p.slot !== G.localSlot)) continue;
+      const i = ins[p.slot]; if (i && (i.jumpP || i.shootP) && partySkip()) break;
+    }
+    if (G.mode === 'result' && P.bt >= beatLen(P.b)) partyBeatNext();
+  }
+  // who can speed what (3.9): the host (offline: any local player) jumps a result beat - never 끝! - to the next one's
+  // start, skipMin frames into it at the earliest (an award jumped past still pays); guests follow the host's beats
+  function partySkip() {
+    const P = G.party; if (!P || G.mode !== 'result' || (G.online && G.role !== 'host')) return false;
+    if (!P.b || 'wtsaAz'.indexOf(P.b) < 0 || P.bt < partyF('skipMin')) return false;
+    partyBeatNext(); return true;
+  }
+  // the 보너스상 (3.8): [code, top value, [slots]] in AWARDS' order, over the players present - an award only when its
+  // top value is >= 1 and not everyone has it; ties share it
+  function partyAwards() {
+    const P = G.party, slots = G.players.map((p) => p.slot), out = [];
+    for (const a of AWARDS) {
+      const cnt = P[a.k] || {}, top = Math.max(0, ...slots.map((s) => cnt[s] | 0));
+      if (top < 1) continue;
+      const who = slots.filter((s) => (cnt[s] | 0) === top);
+      if (who.length < slots.length) out.push([a.c, top, who]);
+    }
+    return out;
+  }
+  // award k pays its winners AWARD_PTS each (once, at its reveal or when skipped past)
+  function partyAwardGive(k) {
+    const P = G.party, a = P && P.A && P.A[k]; if (!a || P.given[k]) return;
+    P.given[k] = 1;
+    for (const s of a[2]) {
+      P.pts[s] = (P.pts[s] | 0) + AWARD_PTS; P.bonus[s] = (P.bonus[s] | 0) + AWARD_PTS;
+      const p = G.players.find((q) => q.slot === s); if (p) p.score = P.pts[s];
+    }
+    Snd.sfx('award');
+    if (shownOverlay === 'party') fillParty();
   }
   // the final standing: total points; then more 1등; then the better place in the last 판; still tied: a shared place
   function partyStandings(P, slots) {
@@ -4269,15 +4439,16 @@ window.PG = window.PG || {};
     const P = G.party; if (!P) return;
     const st = partyStandings(P, G.players.map((p) => p.slot));
     for (const p of G.players) {
-      // (p.out back to false: drawPlayer draws nothing for an out animal - one out in the last 물 stands on the podium too)
+      // (p.out back to false: drawPlayer draws nothing for an out animal - one out in the last 물 stands on the podium too;
+      // a 오리 튜브 stands there as an animal again)
       if (p.trap) releasePlayer(p);
-      p.koT = 0; p.stunT = 0; p.dead = false; p.ghost = null; p.out = false; p.invuln = 0; p.vx = 0; p.vy = 0; p.shield = 0; p.power = null;
+      p.koT = 0; p.stunT = 0; p.dead = false; p.ghost = null; p.out = false; p.raft = false; p.invuln = 0; p.vx = 0; p.vy = 0; p.shield = 0; p.power = null;
       const r = st.find((q) => q.slot === p.slot); p.rank = r ? r.place : 0;
       bumpEp(p);
     }
     G.podium = { order: st.map((r) => r.slot), t: 0, te: 0, pl: st.map((r) => r.place) };
     if (G.battle) G.battle.left = 0;
-    G.mode = 'podium'; P.fin = true; P.done = !walk; P.walk = !!walk; P.res = null;
+    G.mode = 'podium'; P.fin = true; P.done = !walk; P.walk = !!walk; P.res = null; P.b = ''; P.bt = 0;
     G.mini = null; G.boss = null; G.hazards = []; G.drops = []; G.bubbles = []; G.bolts = []; G.pickup = null;
     G.bannerQ = []; G.banner = null;
     setMusic('podium'); Snd.sfx('win');
@@ -4285,31 +4456,42 @@ window.PG = window.PG || {};
     coinPartyNow(G.podium.order.length, !walk, place, place ? G.podium.pl.filter((q) => q === place).length : 1);
     showOverlay('podium');
   }
-  // a player left (its animal is gone already): its game lets go of it; < 2 left -> a walkover podium; else the plan is
-  // drawn again where a game no longer fits (during the card / 3-2-1: this 판 too)
+  // a player left (its animal is gone already): its game lets go of it; < 2 left -> a walkover podium (no awards); else
+  // the plan is drawn again where a game no longer fits (during the card / 3-2-1: this 판 too) and the card's 준비 is
+  // tested again against the players left; the result's beats go on with them
   function partyDrop(slot) {
     const P = G.party; if (!P || G.mode === 'podium') return;
     if (G.mini && MINI_FN[G.mini.id]) MINI_FN[G.mini.id].drop(slot, G.mini);
+    if (P.rdy) delete P.rdy[slot];
     if (G.players.length < 2) { partyFinal(true); return; }
     partyReplan();
+    partyAllCheck();
+    if (shownOverlay === 'party') fillParty();   // (the card's ready row, a result view's rows: without the leaver)
   }
   function partyReplan() {
     const P = G.party, n = G.players.length, pre = G.mode === 'card' || G.mode === 'countdown', keep = pre ? P.i : P.i + 1;
     if (P.plan.slice(keep).every((id) => MINI[id] && MINI[id].fits(n))) return;
     const cur = P.plan[P.i];
     P.plan = partyPlan(n, P.n, P.plan.slice(0, keep));
-    if (pre && P.plan[P.i] !== cur) { miniLoad(P.plan[P.i]); G.mode = 'card'; P.t = 0; G.countNext = null; showOverlay(G.menuOpen ? 'pause' : 'party'); fillParty(); }
+    if (pre && P.plan[P.i] !== cur) { miniLoad(P.plan[P.i]); partyCardStart(); showOverlay(G.menuOpen ? 'pause' : 'party'); fillParty(); }
   }
-  // the host's snapshot part (6.4): n, i, the plan's codes, [slot, points, 1등 count, last place, last gain (-1: none)],
-  // t (frames into the card / result), ft (this 판's playing frames in all), cl (the card's frames), F (final), W (walkover),
-  // T (a team game: the team by seat, -1 none)
+  // the host's snapshot part (6.4, polish 6.3): n, i, the plan's codes, [slot, points, 1등 count, last place, last gain
+  // (-1: none)], t (frames into the card / result), ft (this 판's playing frames in all), cl (the card's auto start: the
+  // bar), F (final), W (walkover), T (a team game: the team by seat, -1 none); b / bt / bk the result beat, frames into
+  // it, the award index; R the card's ready seats (a bit per seat); X the last 판's multiplier; A the awards [[code,
+  // value, [slots]]] from beat a on; B the bonuses by seat from the first award on
   function partySnap() {
     const P = G.party;
-    const o = { n: P.n, i: P.i, L: P.plan.map((id) => MINI[id].c).join(''), t: P.t | 0, ft: G.battle ? G.battle.total | 0 : 0, cl: partyCardF(),
+    const o = { n: P.n, i: P.i, L: P.plan.map((id) => MINI[id].c).join(''), t: P.t | 0, ft: G.battle ? G.battle.total | 0 : 0, cl: P.cl | 0 || PARTY_F.auto,
       P: G.players.map((p) => [p.slot, P.pts[p.slot] | 0, P.wins[p.slot] | 0, P.last[p.slot] | 0, P.gain[p.slot] === undefined ? -1 : P.gain[p.slot]]) };
     if (P.fin) o.F = 1;
     if (P.walk) o.W = 1;
     if (G.mini && G.mini.team) { const T = G.mini.team; o.T = [0, 1, 2, 3].map((s) => (T[s] === 0 || T[s] === 1 ? T[s] : -1)); }
+    if (G.mode === 'result' && P.b) { o.b = P.b; o.bt = P.bt | 0; o.bk = P.bk | 0; }
+    if (G.mode === 'card') { let R = 0; for (const s of Object.keys(P.rdy || {})) R |= 1 << (s | 0); o.R = R; }
+    if (partyX() > 1) o.X = partyX();
+    if (P.A) o.A = P.A.map((a) => [a[0], a[1], a[2].slice()]);
+    if (Object.keys(P.bonus || {}).length) o.B = [0, 1, 2, 3].map((s) => P.bonus[s] | 0);
     return o;
   }
   // guest: G.party / G.mini as the host's snapshot says (before guestPhase: the card is filled from this snapshot)
@@ -4317,18 +4499,35 @@ window.PG = window.PG || {};
     const pa = g.pa; if (!pa || typeof pa !== 'object') return;
     const plan = (typeof pa.L === 'string' ? pa.L.slice(0, 5) : '').split('').map((c) => MINI_IDS.find((id) => MINI[id].c === c) || MINI_IDS[0]);
     const P = G.party || (G.party = { opts: { perks: G.opts.perks, rapid: G.opts.rapid, rounds: G.opts.rounds }, crownAr: -1, res: null });
+    const i0 = P.plan ? P.i : -1, id0 = P.plan ? P.plan[P.i] : null;
     P.n = nInt(pa.n, 1, 5, 3); P.i = nInt(pa.i, -1, 4, 0); P.plan = plan.length ? plan : [MINI_IDS[0]]; P.t = nInt(pa.t, 0, 1e5, 0);
-    P.cl = nInt(pa.cl, 1, 1e4, PARTY_F.card); P.ft = nInt(pa.ft, 0, 1e6, 0);
+    // (a re-drawn card - a leaver: the same 판 index, another game: my 준비 was for the game before, press again)
+    if (g.ph === 'a' && P.i === i0 && id0 && P.plan[P.i] !== id0 && NET.partyReady === P.i) NET.partyReady = -1;
+    P.cl = nInt(pa.cl, 1, 1e4, PARTY_F.auto); P.auto = P.cl; P.ft = nInt(pa.ft, 0, 1e6, 0);
     P.pts = {}; P.wins = {}; P.last = {}; P.gain = {};
     for (const r of Array.isArray(pa.P) ? pa.P.slice(0, MAX_PLAYERS) : []) {
       if (!Array.isArray(r)) continue;
       const s = nInt(r[0], -1, MAX_PLAYERS - 1, -1); if (s < 0) continue;
-      P.pts[s] = nInt(r[1], 0, 99, 0); P.wins[s] = nInt(r[2], 0, 9, 0); const l = nInt(r[3], 0, 4, 0); if (l) P.last[s] = l;
-      const gn = nInt(r[4], -1, 4, -1); if (gn >= 0) P.gain[s] = gn;
+      P.pts[s] = nInt(r[1], 0, 999, 0); P.wins[s] = nInt(r[2], 0, 9, 0); const l = nInt(r[3], 0, 4, 0); if (l) P.last[s] = l;
+      const gn = nInt(r[4], -1, 99, -1); if (gn >= 0) P.gain[s] = gn;
     }
     P.fin = pa.F === 1; P.walk = pa.W === 1; P.done = P.fin && !P.walk;
+    // (the polish, 6.3: the beat, the card's ready seats, x2, the awards and the bonuses - each one read within bounds)
+    const ph = PH_NAME[g.ph] || 'playing', b0 = P.b, k0 = P.bk;
+    P.b = ph === 'result' && typeof pa.b === 'string' && /^[fwtsaAz]$/.test(pa.b) ? pa.b : ''; P.bt = nInt(pa.bt, 0, 1e4, 0); P.bk = nInt(pa.bk, 0, 2, 0);
+    P.rdy = {}; const R = nInt(pa.R, 0, 15, 0); for (let s = 0; s < MAX_PLAYERS; s++) if (R & (1 << s)) P.rdy[s] = 1;
+    P.X = nInt(pa.X, 1, 9, 1);
+    P.A = Array.isArray(pa.A) ? pa.A.slice(0, AWARDS.length).filter((a) => Array.isArray(a) && AWARDS.some((w) => w.c === a[0]) && Array.isArray(a[2]))
+      .map((a) => [a[0], nInt(a[1], 1, 999, 1), a[2].slice(0, MAX_PLAYERS).map((v) => nInt(v, -1, MAX_PLAYERS - 1, -1)).filter((v) => v >= 0)]) : null;
+    P.bonus = {}; if (Array.isArray(pa.B)) for (let s = 0; s < MAX_PLAYERS; s++) { const v = nInt(pa.B[s], 0, 99, 0); if (v) P.bonus[s] = v; }
     G.mini = Array.isArray(g.mg) ? miniView(g.mg, g1 && Array.isArray(g1.mg) && g1.mg[0] === g.mg[0] ? g1.mg : null, t, g) : null;
-    if (shownOverlay === 'party') fillParty();
+    // (a new beat: its view now - before guestPhase, which keeps a result view up; 끝! / the winner stage hide it)
+    if (P.b === 'w' && b0 !== 'w') P.wAt = G.frame - P.bt;
+    // (끝!: a line of my own - my 탈락 - gives way, so the host's 끝! shows here from the next snapshot)
+    if (P.b === 'f' && b0 !== 'f' && G.banner && String(G.banner.id).charAt(0) === 'l') G.banner.end = G.frame;
+    if (ph === 'result' && G.mode === 'result' && (P.b !== b0 || P.bk !== k0)) {
+      if (beatView(P.b)) { showOverlay(G.menuOpen ? 'pause' : 'party'); fillParty(); } else if (shownOverlay === 'party') showOverlay(null);
+    } else if (shownOverlay === 'party') fillParty();
   }
 
   // ---- the minigame layer (2): load / start / tick / over / places / snap / view / drop / draw / hud
@@ -4368,7 +4567,8 @@ window.PG = window.PG || {};
     M.t = G.battle.total - G.battle.left;
     MINI_FN[M.id].tick(M);
   }
-  const miniOver = () => !!G.mini && !!G.battle && (G.battle.left <= 0 || (G.mini.endAt >= 0 && G.frame >= G.mini.endAt));
+  // (time-up ends it unless the game's over hook plays on - 거품 축구's 골든 골; the game's own early end endAt)
+  const miniOver = () => { const M = G.mini, F = M && MINI_FN[M.id]; return !!M && !!G.battle && ((G.battle.left <= 0 && (!F || !F.over || F.over(M))) || (M.endAt >= 0 && G.frame >= M.endAt)); };
   // the clock stands still (the host's world: a playing frame the game holds; a guest: the snapshot's g.mg says so)
   const miniHold = () => { const M = G.mini, F = M && MINI_FN[M.id]; return !!F && !!F.hold && G.mode === 'playing' && F.hold(M); };
   function miniHeldWire(g) { const id = g.m === 'p' && Array.isArray(g.mg) ? MINI_IDS.find((q) => MINI[q].c === g.mg[0]) : null; return !!id && !!MINI_FN[id].held && MINI_FN[id].held(g.mg); }
@@ -4391,24 +4591,36 @@ window.PG = window.PG || {};
   }
   const mineHere = (p) => !!p && p.local !== false && (!G.online || isMe(p));
 
-  // ---- 물 차오르기 (4.1): the water is a full-width layer whose surface wl follows the arena's rise schedule (waterAt,
-  // pure: the guest draws it from the host's clock). Out once the feet are WATER_SLACK under it - every animal, the
-  // duck too (no tile water: nothing floats); a prison sinks (floatMove) and puts its animal out the same way. The last
-  // one standing ends it PARTY_F.early later; places: the later out the better, every survivor shares 1st
-  // the surface at frame f of the 판: linear inside a step, flat between, y0 before the first; k: the time scale (the
-  // debug fast party runs the schedule in 12 s)
+  // ---- 물 차오르기 v2 (4.1, polish 4.1): the water is a full-width layer whose surface wl follows the arena's rise
+  // schedule (waterAt, pure: the guest draws it from the host's clock) - 5 steps (each drowns one tier), 2 surges (a
+  // short wave over the next tier: jump or climb) and the 마지막 물결 (the flood over the top shelves: everybody goes out,
+  // the last one out wins). Out once the feet are WATER_SLACK under it - every animal, the duck too (no tile water:
+  // nothing floats); a prison sinks (floatMove) and puts its animal out the same way. 비누 방울 float over the surface: one
+  // held is one save from the water, each one picked breaks a same-frame tie. Out = a 오리 튜브: a live, free animal
+  // riding the surface in a duck ring (its own page moves it, plain bubbles only, never caught, never judged by the
+  // water); its bubble's capture of a dry friend that then drowns is 역전 - the rafter is back on a top shelf, once a 판,
+  // never during the flood. The last one dry ends it PARTY_F.early later; places: the later out the better, then more
+  // 비누, still equal: shared
+  // the surface at frame f of the 판: linear inside a step, flat between, y0 before the first; then the flood after the
+  // last step; a surge adds a half sine up from that level and back; k: the time scale (the debug fast party runs the
+  // schedule in 12 s)
   function waterAt(f, R, k) {
     if (!R) return PF_BOT;
     const s = f / 60 / (k || 1);
     let y = R.y0;
     for (const q of R.steps) {
       if (s <= q[0]) break;
-      if (s < q[1]) return y + (q[2] - y) * (s - q[0]) / (q[1] - q[0]);
+      if (s < q[1]) { y += (q[2] - y) * (s - q[0]) / (q[1] - q[0]); break; }
       y = q[2];
     }
+    const F = R.flood;
+    if (F && s > F[0]) y = s < F[1] ? y + (F[2] - y) * (s - F[0]) / (F[1] - F[0]) : F[2];
+    for (const q of R.surges || []) if (s > q[0] && s < q[0] + q[1]) y += (q[2] - y) * Math.sin(Math.PI * (s - q[0]) / q[1]);
     return y;
   }
   const waterK = () => (G.battle && G.battle.total > 0 ? G.battle.total / (MINI.water.secs * 60) : 1);
+  // a schedule moment (s) as a frame of this 판 (k: waterK)
+  const waterF = (s, k) => Math.round(Math.max(0, s) * 60 * k);
   // which body the host judges (4.1): its own animals and a trapped one (its prison) exactly; a free remote one by its
   // latest state of the current epoch only (right after a release the host's copy sits frozen until the guest's first
   // state of the new epoch arrives) - one stale for longer than REWIND is judged anyway (null: not judged this frame)
@@ -4419,38 +4631,140 @@ window.PG = window.PG || {};
     if (!(p.wsAt >= 0)) p.wsAt = G.frame;
     return G.frame - p.wsAt > REWIND ? p.y : null;
   }
+  // a 비누 방울's centre y at frame t: SOAP.hover over the surface, bobbing - pure, so a guest draws it exactly
+  const soapY = (q, t, R, k) => clamp(waterAt(t, R, k) - SOAP.hover + Math.sin((t - q.t0) / 12) * SOAP.bob, CEIL_Y + 4, PF_BOT - 4);
   function waterTick(M) {
     const R = LV && LV.rise, k = waterK();
     M.wl = M.over !== null && M.over !== undefined ? M.over : waterAt(M.t, R, k);
-    if (R) R.steps.forEach((q, j) => {
-      if (M.t !== Math.round(Math.max(0, q[0] - R.warn) * 60 * k)) return;
-      showBanner(j === R.steps.length - 1 ? PARTY_TX.waterLast : PARTY_TX.water1, PARTY_TX.water2, 100, 'hurry'); Snd.sfx('hurry');
-      if (j === 3) setMusic('hurry');
-    });
+    if (R) {
+      // (the warnings at exact frames: a step 2 s before - the last one is 마지막 물결! only without a flood -, a surge
+      // SURGE_WARN before with the rush, the flood 2 s before; the music hurries at the 4th step's)
+      R.steps.forEach((q, j) => {
+        if (M.t !== waterF(q[0] - R.warn, k)) return;
+        showBanner(j === R.steps.length - 1 && !R.flood ? PARTY_TX.waterLast : PARTY_TX.water1, PARTY_TX.water2, 100, 'hurry'); Snd.sfx('hurry');
+        if (j === 3) setMusic('hurry');
+      });
+      for (const q of R.surges || []) if (M.t === waterF(q[0] - SURGE_WARN, k)) { showBanner(PARTY_TX.surge1, PARTY_TX.surge2, 90, 'hurry'); Snd.sfx('steam'); }
+      if (R.flood && M.t === waterF(R.flood[0] - R.warn, k)) { showBanner(PARTY_TX.waterLast, PARTY_TX.flood2, 100, 'hurry'); Snd.sfx('hurry'); }
+      for (const s of R.soaps || []) if (M.t === waterF(s, k)) soapSpawn(M);
+      soapTick(M, R, k);
+    }
+    // (the out check: every dry present player - a held 비누 saves it once, a fresh save is not judged for SOAP.grace)
     const now = [];
-    for (const p of G.players) { if (p.out) continue; const y = waterBody(p); if (y !== null && y + 16 > M.wl + WATER_SLACK) now.push(p); }
+    for (const p of G.players) {
+      if (p.out || p.raft || (M.safe[p.slot] | 0) > G.frame) continue;
+      const y = waterBody(p); if (y === null || y + 16 <= M.wl + WATER_SLACK) continue;
+      if (M.sh[p.slot]) soapSave(p, M); else now.push(p);
+    }
     for (const p of now) waterOut(p, M);
-    if (now.length) { const pl = miniPlaces(); for (const p of now) if (mineHere(p)) partyMyLine(PARTY_TX.out + ' ' + pl.get(p.slot) + '등', PARTY_TX.watch); }
-    if (M.endAt < 0 && M.n0 >= 2 && G.players.filter((p) => !p.out).length <= 1) M.endAt = G.frame + PARTY_F.early;
+    if (now.length) { const pl = miniPlaces(); for (const p of now) if (mineHere(p) && p.raft) partyMyLine(PARTY_TX.out + ' ' + pl.get(p.slot) + '등', PARTY_TX.raftMe); }
+    if (M.endAt < 0 && M.n0 >= 2 && G.players.filter((p) => !p.out && !p.raft).length <= 1) M.endAt = G.frame + PARTY_F.early;
   }
+  // a 비누 방울 (host, at each rise.soaps second): when fewer than SOAP.max float, one appears over the water at least
+  // SOAP.gap px from the others
+  let partyNoSoap = false;   // (debug: tests that park animals by the water turn the soaps off)
+  function soapSpawn(M) {
+    if (partyNoSoap || M.soaps.length >= SOAP.max) return;
+    let x = ri(WALL_L + 8, WALL_R - 24);
+    for (let i = 0; i < 12 && M.soaps.some((q) => Math.abs(q.x - x) < SOAP.gap); i++) x = ri(WALL_L + 8, WALL_R - 24);
+    if (M.soaps.some((q) => Math.abs(q.x - x) < SOAP.gap)) return;
+    M.soaps.push({ id: ++M.sid, x, t0: M.t });
+  }
+  // the soaps' life, then the first touch takes one (a host-local body exactly, a remote one with SOAP.slack px; never a
+  // raft or a trapped animal: canTouch): got +1, and a save when it holds none
+  function soapTick(M, R, k) {
+    const life = Math.round(SOAP.life * k);   // (the debug fast party's soaps live as much shorter as its schedule)
+    for (const q of M.soaps) if (M.t - q.t0 >= life) burst(q.x + 4, soapY(q, M.t, R, k), 6, ['#ffffff', '#ffc9dc'], 1, 10);
+    M.soaps = M.soaps.filter((q) => M.t - q.t0 < life);
+    for (const q of M.soaps.slice()) {
+      const y = soapY(q, M.t, R, k), p = G.players.find((pl) => { const s = pl.local !== false ? 0 : SOAP.slack; return canTouch(pl) && overlap(pl.x + 2 - s, pl.y + 2 - s, 12 + 2 * s, 14 + 2 * s, q.x, y - 4, 8, 8); });
+      if (!p) continue;
+      M.soaps = M.soaps.filter((o) => o !== q);
+      M.got[p.slot] = (M.got[p.slot] | 0) + 1;
+      if (!M.sh[p.slot]) M.sh[p.slot] = 1;
+      burst(q.x + 4, y, 8, ['#ffffff', '#ffc9dc', p.color], 1.2, 12);
+      wordPop(p.x + 8, p.y - 6, PARTY_TX.soapGot, p.color); Snd.sfx('item');
+    }
+  }
+  // the save (instead of out): its prison bursts, a hop up out of the water at SOAP.saveUp over the surface (a new epoch:
+  // a guest's page takes its animal back there and springs on with its own physics), not judged for SOAP.grace
+  function soapSave(p, M) {
+    M.sh[p.slot] = 0; M.safe[p.slot] = G.frame + SOAP.grace;
+    if (p.trap) { const b = p.trap.b; if (b) burst(b.x + 8, b.y + 8, 10, ['#ffffff', '#ffc9dc', p.color], 1.5, 14); releasePlayer(p); }
+    p.y = Math.max(CEIL_Y, M.wl - SOAP.saveUp); p.vy = SOAP.saveVy; p.vx = 0; p.onGround = false; clearMoves(p); bumpEp(p);
+    splash(p.x + 8, M.wl, 2, 10);
+    wordPop(p.x + 8, p.y - 4, PARTY_TX.saved, p.color); Snd.sfx('extend');
+  }
+  // out: its prison released, its out frame, the splash, then a 오리 튜브 on the surface (4.1.4) - and the 역전 check:
+  // the bubble that held it was a rafter's (by), that rafter has not come back this 판 and the flood has not begun
   function waterOut(p, M) {
+    const by = p.trap ? p.trap.by : -1;
     if (p.trap) { const b = p.trap.b; if (b) burst(b.x + 8, b.y + 8, 10, ['#ffffff', '#c8f4ff', p.color], 1.5, 14); releasePlayer(p); }
-    p.out = true; p.vx = 0; p.vy = 0; p.invuln = 0; p.shootAnim = 0; clearMoves(p); bumpEp(p);
     M.outs.push([p.slot, G.frame]);
     splash(p.x + 8, M.wl, 2, 12);
     wordPop(p.x + 8, M.wl - 10, PARTY_TX.out, p.color);
     Snd.sfx('splash'); // (NO_ECHO: each guest plays its own when the slot shows up in its outs)
+    raftOn(p, M);
+    const R = LV && LV.rise, r = by >= 0 && by !== p.slot ? G.players.find((q) => q.slot === by) : null;
+    if (r && r.raft && !M.rv[by] && !(R && R.flood && M.t >= waterF(R.flood[0], waterK()))) raftBack(r, M);
+  }
+  // a 오리 튜브: alive and free (its page keeps control), on the surface line, P flag 512
+  function raftOn(p, M) {
+    Object.assign(p, { raft: true, out: false, vx: 0, vy: 0, invuln: 0, shootAnim: 0, onGround: true, water: 0 });
+    p.y = clamp(M.wl - RAFT.dy, CEIL_Y, PF_BOT - 16);
+    clearMoves(p); bumpEp(p);
+  }
+  // 역전: the rafter back on the revive spot farther from the dry animals, blinking RAFT.inv, its out entry gone
+  function raftBack(p, M) {
+    const spots = (LV && LV.rise && LV.rise.revive && LV.rise.revive.length) ? LV.rise.revive : [spawnOf(p.slot)];
+    let best = spots[0], bd = -1;
+    for (const sp of spots) {
+      const x = sp.col * TS - 4, y = (sp.row + 1) * TS;
+      let d = 1e9; for (const q of G.players) if (q !== p && !q.out && !q.raft) d = Math.min(d, Math.hypot(q.x - x, q.y - y));
+      if (d > bd) { bd = d; best = sp; }
+    }
+    p.raft = false;
+    placePlayer(p, best);
+    p.invuln = RAFT.inv;
+    M.outs = M.outs.filter((o) => o[0] !== p.slot); M.rv[p.slot] = 1;
+    burst(p.x + 8, p.y + 8, 12, STAR_COLS, 1.6, 16);
+    wordPop(p.x + 8, p.y - 6, PARTY_TX.revive, p.color); Snd.sfx('revive');
+    if (mineHere(p)) partyMyLine(PARTY_TX.revive, PARTY_TX.reviveMe);
+  }
+  // a raft's own physics (updatePlayer's first branch, on its own page, from that page's wl): a slow walk, the walls, a
+  // hop of RAFT.hop back down to the surface line (it rides the rising water, under the ceiling); the plain bubble
+  // through the magazine (kitOf / perk give a raft no kit)
+  function raftMove(p, inp) {
+    const M = G.mini, base = clamp((M && M.wl !== undefined ? M.wl : PF_BOT) - RAFT.dy, CEIL_Y, PF_BOT - 16), k = KIT_BASE;
+    if (p.invuln > 0) p.invuln--;
+    const dir = (inp.right ? 1 : 0) - (inp.left ? 1 : 0);
+    p.vx = dir * WALK * RAFT.walk; if (dir) p.facing = dir;
+    p.x = clamp(p.x + p.vx, WALL_L - 2, WALL_R - 14);
+    if (p.onGround && inp.jumpP) { p.vy = RAFT.hop; p.onGround = false; Snd.sfx('jump'); }
+    if (!p.onGround) { p.vy = Math.min(p.vy + GRAV, MAX_FALL); p.y += p.vy; if (p.y < CEIL_Y) { p.y = CEIL_Y; p.vy = Math.max(0, p.vy); } }
+    if (p.onGround || p.y >= base) { p.y = base; p.vy = 0; p.onGround = true; }
+    p.water = 0; p.mvA = false; p.mvB = false;
+    if (p.shootCd > 0) p.shootCd--;
+    if (p.autoCd > 0) p.autoCd--;
+    if (inp.shootP) p.shootBuf = 6; else if (p.shootBuf > 0) p.shootBuf--;
+    if (p.shootCd === 0 && (p.shootBuf > 0 || (inp.shoot && p.autoCd === 0))) {
+      if (!shotCapped(p) && !ammoTake(p)) { if (inp.shootP) Snd.sfx('dry'); p.autoCd = 0; }
+      else { p.shootBuf = 0; if (shotCapped(p)) Snd.sfx('dry'); else fire(p, false); p.shootCd = k.cd[0]; p.autoCd = k.cd[1]; }
+    }
+    if (p.shootAnim > 0) p.shootAnim--;
+    p.walkT += Math.abs(p.vx);
   }
   // guest: the water at its estimate of the host's NOW (the newest snapshot's clock + the ticks since it was sent, at
-  // most WATER_LEAD), not at its view's delay; outs as the host decided them (a new one splashes; mine says my place)
+  // most WATER_LEAD), not at its view's delay; outs as the host decided them (a new one splashes; mine says my place);
+  // the soaps from that clock; sh / got / rv (a slot that left outs with rv set came back: mine says 역전!)
   function waterView(mg, mg1, t, g, M) {
     const R = LV && LV.rise, B = NET.buf, last = B && B.list.length ? B.list[B.list.length - 1].d : null;
     const gn = last && last.pa && g.pa && last.pa.i === g.pa.i && Array.isArray(last.mg) && last.mg[0] === 'w' ? last : g;
     const ft = nInt(gn.pa && gn.pa.ft, 1, 1e6, MINI.water.secs * 60), tl = nInt(gn.tl, 0, 1e6, ft);
     const lead = gn.ph === 'p' && B && B.off !== null ? clamp(nowTicks() + B.off - nInt(gn.k, 0, 1e12, 0), 0, WATER_LEAD) : 0;
-    M.tt = Math.max(0, ft - tl) + lead; // (the host's playing frame as this screen estimates it now)
-    M.wl = R ? waterAt(M.tt, R, ft / (MINI.water.secs * 60)) : nNum(mg[1], 0, 3000, PF_BOT * 10) / 10;
-    const outs = [], seen = new Set(M.outs.map((o) => o[0]));
+    M.tt = Math.max(0, ft - tl) + lead; M.k = ft / (MINI.water.secs * 60); // (the host's playing frame as this screen estimates it now)
+    M.wl = R ? waterAt(M.tt, R, M.k) : nNum(mg[1], 0, 3000, PF_BOT * 10) / 10;
+    const outs = [], seen = new Set((M.outs || []).map((o) => o[0])), rv0 = M.rv || {};
     for (const o of Array.isArray(mg[2]) ? mg[2].slice(0, MAX_PLAYERS) : []) {
       if (!Array.isArray(o)) continue;
       const s = nInt(o[0], -1, MAX_PLAYERS - 1, -1), pl = nInt(o[1], 1, 4, 4); if (s < 0 || outs.some((q) => q[0] === s)) continue;
@@ -4459,26 +4773,63 @@ window.PG = window.PG || {};
         const p = G.players.find((q) => q.slot === s);
         if (p) splash(p.x + 8, M.wl, 2, 12);
         Snd.sfx('splash');
-        if (s === G.localSlot) partyMyLine(PARTY_TX.out + ' ' + pl + '등', PARTY_TX.watch);
+        if (s === G.localSlot) partyMyLine(PARTY_TX.out + ' ' + pl + '등', PARTY_TX.raftMe);
       }
     }
+    M.soaps = []; for (const q of Array.isArray(mg[3]) ? mg[3].slice(0, 4) : []) if (Array.isArray(q)) M.soaps.push({ id: nInt(q[0], 0, 1e6, 0), x: nNum(q[1], WALL_L, WALL_R - 8, 128), t0: nInt(q[2], 0, 1e6, 0) });
+    const bits = (v) => { const o = {}, n = nInt(v, 0, 15, 0); for (let s = 0; s < MAX_PLAYERS; s++) if (n & (1 << s)) o[s] = 1; return o; };
+    M.sh = bits(mg[4]); M.rv = bits(mg[6]); M.got = {};
+    if (Array.isArray(mg[5])) for (let s = 0; s < MAX_PLAYERS; s++) { const v = nInt(mg[5][s], 0, 99, 0); if (v) M.got[s] = v; }
+    if (M.seeded && M.rv[G.localSlot] && !rv0[G.localSlot] && seen.has(G.localSlot) && !outs.some((o) => o[0] === G.localSlot)) partyMyLine(PARTY_TX.revive, PARTY_TX.reviveMe);
     M.outs = outs; M.seeded = true; // (the first mirror of a 판 only records who is out already)
     return M;
   }
   function waterDraw(M, front) {
     if (!front) return;
-    const y = Math.round(M.wl); if (y >= PF_BOT - 1) return;
-    ctx.fillStyle = 'rgba(63,191,224,0.35)'; ctx.fillRect(WALL_L, y + 3, WALL_R - WALL_L, PF_BOT - y - 3);
-    ctx.globalAlpha = 0.82;
-    const fr = (G.frame / 14) | 0;
-    for (let x = WALL_L; x < WALL_R; x += TS) { const f = frameOf('water_cold_top', fr + x / TS); if (f) ctx.drawImage(f.c, x, y, TS, TS); else { ctx.fillStyle = '#8fdcff'; ctx.fillRect(x, y, TS, 2); } }
-    ctx.globalAlpha = 1;
+    const R = LV && LV.rise, now = M.tt !== undefined ? M.tt : M.t, k = M.k || waterK();
+    const y = Math.round(M.wl);
+    if (y < PF_BOT - 1) {
+      ctx.fillStyle = 'rgba(63,191,224,0.35)'; ctx.fillRect(WALL_L, y + 3, WALL_R - WALL_L, PF_BOT - y - 3);
+      ctx.globalAlpha = 0.82;
+      const fr = (G.frame / 14) | 0;
+      for (let x = WALL_L; x < WALL_R; x += TS) { const f = frameOf('water_cold_top', fr + x / TS); if (f) ctx.drawImage(f.c, x, y, TS, TS); else { ctx.fillStyle = '#8fdcff'; ctx.fillRect(x, y, TS, 2); } }
+      ctx.globalAlpha = 1;
+    }
+    // (a surge coming: a blinking row of small up-arrows 6 px over the surface, for its SURGE_WARN)
+    if (R && (R.surges || []).some((q) => now >= waterF(q[0] - SURGE_WARN, k) && now < waterF(q[0], k)) && ((G.frame >> 3) & 1)) {
+      ctx.globalAlpha = 0.7; ctx.fillStyle = '#ffffff';
+      for (let x = WALL_L + 12; x < WALL_R - 8; x += 24) { const ay = y - 6; ctx.fillRect(x, ay - 3, 1, 1); ctx.fillRect(x - 1, ay - 2, 3, 1); ctx.fillRect(x - 2, ay - 1, 5, 1); ctx.fillRect(x, ay, 1, 2); }
+      ctx.globalAlpha = 1;
+    }
+    // (the 비누 방울: the pink soap disc in a ring, bobbing over the water; blinking in its last second)
+    for (const q of M.soaps || []) {
+      if (now - q.t0 > SOAP.life * k - 60 && ((G.frame >> 2) & 1)) continue;
+      const sy = Math.round(soapY(q, now, R, k)), cx = Math.round(q.x + 4);
+      ctx.globalAlpha = 0.25; ctx.fillStyle = '#ffc9dc'; ctx.beginPath(); ctx.arc(cx, sy, 6, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 0.9; ctx.strokeStyle = '#ffc9dc'; ctx.lineWidth = 1; ctx.stroke(); ctx.globalAlpha = 1;
+      const f = frameOf('coin', ((G.frame >> 4) & 7) === 0 ? 1 : 0); if (f) ctx.drawImage(f.c, cx - 4, sy - 4, 8, 8);
+    }
   }
+  // a seat's 2nd line: dry - the soap disc and its 비누 count; out / a raft - the water icon and its place
   function waterHud(M, p, x) {
-    const o = M.outs.find((q) => q[0] === p.slot); if (!o) return;
+    const o = (M.outs || []).find((q) => q[0] === p.slot);
+    if (!o) { const f = frameOf('coin', 0); if (f) ctx.drawImage(f.c, x + 17, 8, 8, 8); text(String((M.got && M.got[p.slot]) | 0), x + 27, 9, '#ffc9dc'); return; }
     const place = G.role === 'guest' && G.online ? o[1] : (miniPlaces().get(p.slot) | 0);
     const f = frameOf('water_cold_top', 0); if (f) ctx.drawImage(f.c, x + 17, 8);
     text(String(place), x + 27, 9, '#8fdcff');
+  }
+  // a held save: the capy shield's ring in the soap's pink round the animal (every page, from M.sh); a raft: its body's
+  // bottom rows clipped under the duck ring (frame by G.frame >> 4, bobbing 1 px - drawPlayer's raft branch)
+  function drawSoapRing(p, bob) {
+    const M = G.mini; if (!M || M.id !== 'water' || !M.sh || !M.sh[p.slot] || p.raft) return;
+    const r = 10.5 + Math.sin(G.frame * 0.15) * 0.6;
+    ctx.globalAlpha = 0.16; ctx.fillStyle = '#ffc9dc'; ctx.beginPath(); ctx.arc(p.x + 8, p.y + 8 + bob, r, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 0.85; ctx.strokeStyle = '#ffc9dc'; ctx.lineWidth = 1; ctx.stroke(); ctx.globalAlpha = 1;
+  }
+  function drawRaftRing(p, bob) {
+    const f = frameOf('duck_ring', (G.frame >> 4) & 1), x = Math.round(p.x), y = Math.round(p.y + bob) + 6;
+    if (f) { drawRaw('duck_ring', (G.frame >> 4) & 1, x, y, p.facing < 0); return; }
+    ctx.strokeStyle = '#ffd23c'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(x + 8, y + 4, 8, 3, 0, 0, Math.PI * 2); ctx.stroke(); ctx.lineWidth = 1;
   }
 
   // ---- 왕관 뺏기 (4.2): a 16x16 crown falls from the gather onto the centre stage at 시작!; the first free player to
@@ -4487,10 +4838,13 @@ window.PG = window.PG || {};
   const crownHolder = (p) => !!p && !!G.mini && G.mini.id === 'crown' && !!G.mini.cr && G.mini.cr.holder === p.slot;
   function crownTick(M) {
     const cr = M.cr; if (cr.holder < -1) return;
+    // (왕관이 날아가요, polish 4.2: at 15 / 30 / 45 s of the clock the crown leaves its holder; the 45 s one is gold)
+    const k = G.battle && G.battle.total > 0 ? G.battle.total / 3600 : 1;
+    for (let s = CROWN2.every; s < MINI.crown.secs; s += CROWN2.every) if (M.t === Math.round(s * 60 * k)) crownFly(M, s >= CROWN2.goldAt);
     if (cr.holder >= 0) {
       const p = G.players.find((q) => q.slot === cr.holder);
       if (!p) { cr.holder = -1; cr.vx = 0; cr.vy = 0; cr.onGround = false; }   // (its holder left: it drops where it was)
-      else { cr.x = clamp(p.x, WALL_L - 2, WALL_R - 14); cr.y = p.y - 8; M.held[p.slot] = (M.held[p.slot] | 0) + 1; return; }
+      else { cr.x = clamp(p.x, WALL_L - 2, WALL_R - 14); cr.y = p.y - 8; M.held[p.slot] = (M.held[p.slot] | 0) + (M.gold ? CROWN2.goldX : 1); return; }
     }
     if (cr.onGround) cr.vx *= 0.8;
     physBody(cr);
@@ -4508,6 +4862,16 @@ window.PG = window.PG || {};
       wordPop(best.x + 8, best.y - 6, PARTY_TX.crownGot, best.color); Snd.sfx('stamp');
     }
   }
+  // a flight: a sparkle where the crown is, then it falls again from the gather exactly as at 시작! - nobody waits (the
+  // old holder may race too); gold: 황금 왕관! - from now held time counts CROWN2.goldX and the music hurries
+  function crownFly(M, gold) {
+    const cr = M.cr;
+    burst(cr.x + 8, cr.y + 8, 14, STAR_COLS, 1.8, 18);
+    Object.assign(cr, { x: G.gather.x - 8, y: G.gather.y - 8, vx: 0, vy: 0, onGround: false, holder: -1, noPick: -1, noUntil: 0 });
+    M.fl = (M.fl | 0) + 1;
+    if (gold) { M.gold = 1; showBanner(PARTY_TX.gold1, PARTY_TX.gold2, 90, 'victory'); Snd.sfx('promote'); setMusic('hurry'); }
+    else { showBanner(PARTY_TX.crownFly, '', 80, 'round'); Snd.sfx('powerup'); }
+  }
   // trapPlayer on the holder: the crown flies out, away from the bubble (a capy's shield taking the capture keeps it)
   function crownDrop(v, b) {
     const cr = G.mini && G.mini.cr; if (!cr || cr.holder !== v.slot) return;
@@ -4520,19 +4884,20 @@ window.PG = window.PG || {};
     const h0 = nInt(mg[1], -2, MAX_PLAYERS - 1, -2), q = mg1 && nInt(mg1[1], -2, 3, -2) === h0 && h0 < 0 ? mg1 : null;
     cr.holder = h0; cr.x = lx(mg[2], q && q[2], t); cr.y = ly(mg[3], q && q[3], t); cr.noPick = nInt(mg[8], -1, 3, -1);
     M.held = {}; for (let s = 0; s < MAX_PLAYERS; s++) { const f = nInt(mg[4 + s], 0, 1e6, 0); if (f) M.held[s] = f; }
+    M.gold = nInt(mg[9], 0, 1, 0); // (an older host's row has none: 0)
     return M;
   }
   function crownDraw(M, front) {
     const cr = M.cr; if (!front || !cr || cr.holder !== -1) return;   // (worn: drawPlayer draws it on the holder's head)
-    const f = frameOf(SPR_CROWN, 0); if (!f) return;
-    const glint = !reducedMotion() && ((G.frame >> 3) & 3) === 0, c = glint ? tintOf(f, '#ffffff', 0.5) : f;
+    const f0 = frameOf(SPR_CROWN, 0); if (!f0) return;
+    const f = M.gold ? tintOf(f0, '#ffd447', 0.6) : f0, glint = !reducedMotion() && ((G.frame >> (M.gold ? 2 : 3)) & 3) === 0, c = glint ? tintOf(f, '#ffffff', 0.5) : f;
     wrapDraw(cr.y, (y) => ctx.drawImage(c.c, Math.round(cr.x), Math.round(y), 16, 16));
   }
-  function crownOn(p) { const f = frameOf(SPR_CROWN, 0); if (f) ctx.drawImage(f.c, Math.round(p.x + 4), Math.round(headTop(p) - 9)); }
+  function crownOn(p) { const f0 = frameOf(SPR_CROWN, 0), f = f0 && G.mini && G.mini.gold ? tintOf(f0, '#ffd447', 0.6) : f0; if (f) ctx.drawImage(f.c, Math.round(p.x + 4), Math.round(headTop(p) - 9)); }
   function crownHud(M, p, x) {
     const f = frameOf(SPR_CROWN, 0), on = M.cr && M.cr.holder === p.slot;
-    if (f && !(on && ((G.frame >> 3) & 1))) ctx.drawImage((on ? f : tintOf(f, '#8a9b98', 0.8)).c, x + 17, 8);
-    text(String(Math.floor((M.held[p.slot] | 0) / 60)), x + 27, 9, on ? '#ffd447' : '#9fb8b4');
+    if (f && !(on && ((G.frame >> 3) & 1))) ctx.drawImage((on ? (M.gold ? tintOf(f, '#ffd447', 0.6) : f) : tintOf(f, M.gold ? '#ffd447' : '#8a9b98', M.gold ? 0.5 : 0.8)).c, x + 17, 8);
+    text(String(Math.floor((M.held[p.slot] | 0) / 60)), x + 27, 9, on || M.gold ? '#ffd447' : '#9fb8b4');
   }
 
   // ---- 거품 축구 (4.3): a big bubble ball (centre x / y, radius BALL.r) on a closed field, a goal under a crossbar on
@@ -4569,7 +4934,9 @@ window.PG = window.PG || {};
     }
     return out;
   }
-  const ballLive = (M) => !!M && !!M.ball && M.goalT <= 0 && M.ball.kick === 0;
+  // (a ball in play: not hanging before a kickoff / a re-drop, no 골! cheer running; B: M.ball, or 공이 2개's M.ball2)
+  const ballLive = (M, B) => { B = B || (M && M.ball); return !!M && !!B && M.goalT <= 0 && B.kick === 0; };
+  const ballsOf = (M) => (M.ball2 ? [M.ball, M.ball2] : [M.ball]);
   const ballCap = (B) => { const v = Math.hypot(B.vx, B.vy); if (v > BALL.maxV) { B.vx *= BALL.maxV / v; B.vy *= BALL.maxV / v; } };
   // a bounce off a surface with the outward normal n (e: what is kept of the speed into it) -> that speed (< 0: it hit)
   function ballHit(B, nx, ny, e) {
@@ -4595,8 +4962,9 @@ window.PG = window.PG || {};
   // the floor (or a bar's top) under 0.6 px/f: it rests there (and rolls; a bar's top sheds it toward the middle of the
   // field, BALL.tilt - a ball parked on a crossbar against the wall would be out of play for good). again: the second
   // pass of a frame (after the pushes, which clear rest themselves) keeps what the first one found
-  function ballField(M, again) {
-    const B = M.ball, r = BALL.r, floor = PF_BOT - TS;
+  function ballField(M, again, B) {
+    B = B || M.ball;
+    const r = BALL.r, floor = PF_BOT - TS;
     if (!again) B.rest = false;
     if (B.x < WALL_L + r) { B.x = WALL_L + r; ballHit(B, 1, 0, BALL.wall); } else if (B.x > WALL_R - r) { B.x = WALL_R - r; ballHit(B, -1, 0, BALL.wall); }
     if (B.y < CEIL_Y + r) { B.y = CEIL_Y + r; ballHit(B, 0, 1, BALL.wall); }
@@ -4615,8 +4983,9 @@ window.PG = window.PG || {};
   }
   // a body on the ball (x + 2, y + 2, 12 x 14; a remote one BALL.slack px bigger): the ball out along the normal, then
   // its closing speed x BALL.body + BALL.nudge along it. Fast kits kick hard by themselves (a sliding penguin, a dash)
-  function ballBody(M, p) {
-    const B = M.ball, s = p.local === false ? BALL.slack : 0;
+  function ballBody(M, p, B) {
+    B = B || M.ball;
+    const s = p.local === false ? BALL.slack : 0;
     const n = ballOut(B, p.x + 2 - s, p.y + 2 - s, 12 + 2 * s, 14 + 2 * s); if (!n) return;
     const k = Math.max(0, (p.vx - B.vx) * n[0] + (p.vy - B.vy) * n[1]) * BALL.body + BALL.nudge;
     B.vx += n[0] * k; B.vy += n[1] * k; B.rest = false;
@@ -4625,9 +4994,10 @@ window.PG = window.PG || {};
   }
   // a bubble on the ball (dist < r + 7): it pops in its kit colours (a spend: a guest's later claim for it gets 'spent')
   // and pushes - in flight along its flight (an otter droplet / a hanging egg softer), a floating one along the centre line
-  function ballBubble(M, b) {
-    if (!ballLive(M) || b.kind !== 'empty' || b.dead || b.state === 'pop') return false;
-    const B = M.ball, dx = B.x - (b.x + 8), dy = B.y - (b.y + 8), d = Math.hypot(dx, dy);
+  function ballBubble(M, b, B) {
+    B = B || M.ball;
+    if (!ballLive(M, B) || b.kind !== 'empty' || b.dead || b.state === 'pop') return false;
+    const dx = B.x - (b.x + 8), dy = B.y - (b.y + 8), d = Math.hypot(dx, dy);
     if (d >= BALL.r + 7) return false;
     const v = Math.hypot(b.vx || 0, b.vy || 0), fly = b.state === 'shot' && v > 0.05;
     const ux = fly ? b.vx / v : d > 1e-6 ? dx / d : 0, uy = fly ? b.vy / v : d > 1e-6 ? dy / d : -1;
@@ -4638,44 +5008,87 @@ window.PG = window.PG || {};
     if (b.owner >= 0) ballPush(M, b.owner);
     return true;
   }
-  // shotHits: a capture-phase bubble of the host's world meets the ball first -> spent on it
-  const ballShot = (bb) => !!G.mini && G.mini.id === 'ball' && !(G.online && G.role === 'guest') && ballBubble(G.mini, bb);
-  // quake (a capy's slam, host world): the ball in its box gets a header for free
+  // shotHits: a capture-phase bubble of the host's world meets a ball first -> spent on it (공이 2개: either)
+  const ballShot = (bb) => !!G.mini && G.mini.id === 'ball' && !(G.online && G.role === 'guest') && ballsOf(G.mini).some((B) => ballBubble(G.mini, bb, B));
+  // quake (a capy's slam, host world): a ball in its box gets a header for free (both of 공이 2개)
   function ballSlam(pl, inBox) {
-    const M = G.mini; if (!M || M.id !== 'ball' || !ballLive(M) || !inBox(M.ball.x, M.ball.y + BALL.r)) return;
-    M.ball.vy = Math.min(M.ball.vy, BALL.slam); M.ball.rest = false;
-    ballPush(M, pl.slot);
+    const M = G.mini; if (!M || M.id !== 'ball') return;
+    for (const B of ballsOf(M)) {
+      if (!ballLive(M, B) || !inBox(B.x, B.y + BALL.r)) continue;
+      B.vy = Math.min(B.vy, BALL.slam); B.rest = false;
+      ballPush(M, pl.slot);
+    }
   }
-  // one playing frame: the goal's cheer (then the kickoff), the hanging ball, else gravity / drag, the field, the
-  // bodies, the floating bubbles, the field again, the goals; never outside the field, never NaN, never past BALL.maxV
+  // one playing frame: the goal's cheer (then the kickoff), else each ball's step (공이 2개 from BALL2.twoAt s of the
+  // clock - the 골! freezes do not count - once no cheer runs), the two pushed apart; 골든 골's overtime counts on
   function ballTick(M) {
-    const B = M.ball, A = LV.ball || { x: W / 2, y: 64 }, r = BALL.r;
     if (M.goalT > 0) { if (--M.goalT <= 0) ballKickoff(M, false); return; }
-    if (B.kick < 0) return;                              // (before 시작!)
+    if (M.ball.kick < 0) return;                              // (before 시작!)
+    if (M.gg >= 0) M.gg++;
+    const k = G.battle && G.battle.total > 0 ? G.battle.total / 3600 : 1;
+    if (!M.ball2 && M.t >= Math.round(BALL2.twoAt * 60 * k)) ballTwo(M);
+    for (const B of ballsOf(M)) { ballStep(M, B); if (M.goalT > 0) return; }
+    if (M.ball2) ballApart(M);
+  }
+  // one ball's frame: hanging (a kickoff / a re-drop), else gravity / drag, the field, the bodies, the floating bubbles,
+  // the field again, the goals; never outside the field, never NaN, never past BALL.maxV
+  function ballStep(M, B) {
+    const A = LV.ball || { x: W / 2, y: 64 }, r = BALL.r;
     if (B.kick > 0) { if (--B.kick > 0) return; B.vx = 0; B.vy = 0; }
     B.vy = Math.min(B.vy + BALL.g, BALL.maxFall);
     B.vx *= B.rest ? BALL.drag * BALL.roll : BALL.drag;
     B.x += B.vx; B.y += B.vy;
-    ballField(M);
-    for (const p of G.players) if (canTouch(p)) ballBody(M, p);
-    for (const b of G.bubbles) if (b.state === 'float') ballBubble(M, b);
-    ballField(M, true);
+    ballField(M, false, B);
+    for (const p of G.players) if (canTouch(p)) ballBody(M, p, B);
+    for (const b of G.bubbles) if (b.state === 'float') ballBubble(M, b, B);
+    ballField(M, true, B);
     if (!Number.isFinite(B.x + B.y + B.vx + B.vy)) Object.assign(B, { x: A.x, y: A.y, vx: 0, vy: 0 });
     ballCap(B);
     B.x = clamp(B.x, WALL_L + r, WALL_R - r); B.y = clamp(B.y, CEIL_Y + r, PF_BOT - TS - r);
     const Gs = LV.goals;
-    if (Gs && B.y > PF_TOP + Gs[0].r0 * TS) {
-      if (B.x < Gs[0].line - BALL.deep) ballGoal(M, 1);        // (the left goal: a point for the right team)
-      else if (B.x > Gs[1].line + BALL.deep) ballGoal(M, 0);
+    if (Gs && M.endAt < 0 && B.y > PF_TOP + Gs[0].r0 * TS) {
+      if (B.x < Gs[0].line - BALL.deep) ballGoal(M, 1, B);        // (the left goal: a point for the right team)
+      else if (B.x > Gs[1].line + BALL.deep) ballGoal(M, 0, B);
     }
   }
-  // a goal for team t: the ball bursts, the clock stops while 골! shows, then the kickoff
-  function ballGoal(M, t) {
-    const B = M.ball;
-    M.goals[t]++; M.goalT = BALL.goalF; B.vx = 0; B.vy = 0;
+  // 공이 2개 (polish 4.3): a second ball hangs at the centre top and drops like a kickoff's
+  function ballTwo(M) {
+    const A = LV.ball || { x: W / 2, y: 64 };
+    M.ball2 = { x: A.x, y: A.y, vx: 0, vy: 0, kick: BALL.kickF, rest: false };
+    showBanner(PARTY_TX.two1, PARTY_TX.two2, 90, 'round'); Snd.sfx('powerup');
+  }
+  // two balls in touch: pushed out along the line between them (a hanging one never moves; no bounce maths)
+  function ballApart(M) {
+    const a = M.ball, b = M.ball2, r = BALL.r;
+    if (a.kick !== 0 && b.kick !== 0) return;
+    const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy); if (d >= 2 * r) return;
+    const nx = d > 1e-6 ? dx / d : 1, ny = d > 1e-6 ? dy / d : 0, push = 2 * r - d, both = a.kick === 0 && b.kick === 0;
+    if (a.kick === 0) { a.x -= nx * push * (both ? 0.5 : 1); a.y -= ny * push * (both ? 0.5 : 1); }
+    if (b.kick === 0) { b.x += nx * push * (both ? 0.5 : 1); b.y += ny * push * (both ? 0.5 : 1); }
+    for (const B of [a, b]) { B.x = clamp(B.x, WALL_L + r, WALL_R - r); B.y = clamp(B.y, CEIL_Y + r, PF_BOT - TS - r); B.rest = false; }
+  }
+  // a goal for team t (ball B): it bursts; with one ball the clock stops while 골! shows, then the kickoff; with two (or
+  // in 골든 골) no freeze, no kickoff - that ball hangs again at the centre top BALL2.redrop frames; 골든 골's goal ends
+  // the 판 BALL2.cheer frames later
+  function ballGoal(M, t, B) {
+    B = B || M.ball;
+    const A = LV.ball || { x: W / 2, y: 64 }, quick = !!M.ball2 || M.gg >= 0;
+    M.goals[t]++; B.vx = 0; B.vy = 0;
     burst(B.x, B.y, 18, ['#ffffff', '#c8f4ff', BALL_TEAM[t]], 2, 18); burst(B.x, B.y, 8, STAR_COLS, 1.4, 16);
     shake(3); Snd.sfx('clear');
-    showBanner(PARTY_TX.goal, (t ? PARTY_TX.teamR : PARTY_TX.teamL) + ' ' + M.goals[0] + ' : ' + M.goals[1], BALL.goalF, 'victory');
+    showBanner(PARTY_TX.goal, (t ? PARTY_TX.teamR : PARTY_TX.teamL) + ' ' + M.goals[0] + ' : ' + M.goals[1], quick ? BALL2.cheer : BALL.goalF, 'victory');
+    if (M.gg >= 0) M.endAt = G.frame + BALL2.cheer;
+    if (quick) Object.assign(B, { x: A.x, y: A.y, vx: 0, vy: 0, kick: BALL2.redrop, rest: false });
+    else M.goalT = BALL.goalF;
+  }
+  // 골든 골 (the over hook, polish 4.3): at time-up with the goals equal and both teams present the 판 plays on - the
+  // first call starts the overtime; then the next goal's cheer (endAt) or BALL2.golden s (a draw) ends it
+  function ballOver(M) {
+    const k = G.battle && G.battle.total > 0 ? G.battle.total / 3600 : 1;
+    if (M.gg >= 0) return M.endAt < 0 && M.gg >= Math.round(BALL2.golden * 60 * k);
+    if (ballSides(M).length < 2 || M.goals[0] !== M.goals[1]) return true;
+    M.gg = 0; showBanner(PARTY_TX.golden1, PARTY_TX.golden2, 100, 'hurry'); Snd.sfx('hurry');
+    return false;
   }
   // the teams with somebody still here (a leaver stays in team: 2v2 plays on short-handed)
   const ballSides = (M) => [0, 1].filter((t) => G.players.some((p) => M.team[p.slot] === t));
@@ -4719,21 +5132,37 @@ window.PG = window.PG || {};
     const live = (q) => nInt(q[7], 0, 999, 0) === 0 && nInt(q[8], -1, 999, -1) === 0, q = mg1 && live(mg) && live(mg1) ? mg1 : null;
     // (clamped to the field and to BALL.maxV as the host's own ball is: a junk row never draws it in a wall or the HUD)
     const r = BALL.r, px = (a, i, d) => nNum(a[i], -400, 3000, d) / 10, vv = (a, i) => clamp(nNum(a[i], -1000, 1000, 0) / 100, -BALL.maxV, BALL.maxV);
+    const k0 = B.kick, b0 = { x: B.x, y: B.y };
     B.x = clamp(lx(px(mg, 1, 1280), q ? px(q, 1, 1280) : null, t), WALL_L + r, WALL_R - r); B.y = clamp(ly(px(mg, 2, 640), q ? px(q, 2, 640) : null, t), CEIL_Y + r, PF_BOT - TS - r);
     B.vx = vv(mg, 3); B.vy = vv(mg, 4); B.kick = nInt(mg[8], -1, 999, -1);
+    // (공이 2개: the second ball as the first - tweened while in play in both snapshots; kick2 -2: none, an older host
+    // sends none either)
+    const k2 = nInt(mg[14], -2, 999, -2), M2 = M.ball2, k20 = M2 ? M2.kick : -2, b20 = M2 ? { x: M2.x, y: M2.y } : null;
+    if (k2 > -2) {
+      const B2 = M.ball2 || (M.ball2 = { x: W / 2, y: 64, vx: 0, vy: 0, kick: k2, rest: false });
+      const q2 = mg1 && k2 === 0 && nInt(mg1[14], -2, 999, -2) === 0 && nInt(mg[7], 0, 999, 0) === 0 ? mg1 : null;
+      B2.x = clamp(lx(px(mg, 10, 1280), q2 ? px(q2, 10, 1280) : null, t), WALL_L + r, WALL_R - r); B2.y = clamp(ly(px(mg, 11, 640), q2 ? px(q2, 11, 640) : null, t), CEIL_Y + r, PF_BOT - TS - r);
+      B2.vx = vv(mg, 12); B2.vy = vv(mg, 13); B2.kick = k2;
+    } else M.ball2 = null;
+    M.gg = nInt(mg[15], -1, 1e5, -1);
     const goals = [nInt(mg[5], 0, 99, 0), nInt(mg[6], 0, 99, 0)], kn = nInt(mg[9], 0, 1e9, 0), T = g.pa && Array.isArray(g.pa.T) ? g.pa.T : [];
     M.team = {}; for (let s = 0; s < MAX_PLAYERS; s++) { const v = nInt(T[s], -1, 1, -1); if (v >= 0) M.team[s] = v; }
     if (M.seeded) {
       if (kn > M.kn && G.frame - (M.knAt ?? -1e9) >= BALL.sfxGap) { M.knAt = G.frame; Snd.sfx('bounce'); }
-      if (goals[0] + goals[1] > M.goals[0] + M.goals[1]) { const k = goals[1] > M.goals[1] ? 1 : 0; burst(B.x, B.y, 18, ['#ffffff', '#c8f4ff', BALL_TEAM[k]], 2, 18); burst(B.x, B.y, 8, STAR_COLS, 1.4, 16); }
+      if (goals[0] + goals[1] > M.goals[0] + M.goals[1]) {
+        // (the ball that scored bursts here: one whose kick turned from 0 to a re-drop - else the one ball, under 골!)
+        const tm = goals[1] > M.goals[1] ? 1 : 0, at = k20 === 0 && k2 > 0 && b20 ? b20 : k0 === 0 && B.kick > 0 ? b0 : B;
+        burst(at.x, at.y, 18, ['#ffffff', '#c8f4ff', BALL_TEAM[tm]], 2, 18); burst(at.x, at.y, 8, STAR_COLS, 1.4, 16);
+      }
     }
     M.goals = goals; M.goalT = nInt(mg[7], 0, 999, 0); M.kn = kn; M.kickBy = M.kickBy || {}; M.seeded = true;
     const ko = goals[0] + goals[1], me = myPlayer();
-    if (B.kick > 0 && M.koSeen !== ko && me && M.team[me.slot] !== undefined) { M.koSeen = ko; ballCall(me, M.team[me.slot]); }
+    if (B.kick > 0 && !M.ball2 && M.koSeen !== ko && me && M.team[me.slot] !== undefined) { M.koSeen = ko; ballCall(me, M.team[me.slot]); }
     return M;
   }
   // behind the animals: the goal nets (the mouth's back, a grid in the defending team's colour, the goal line dashed) and
-  // each animal's team colour under its feet; in front: the ball (it hangs blinking before a kickoff; gone during 골!)
+  // each animal's team colour under its feet; in front: the ball (it hangs blinking before a kickoff; gone during 골!) and
+  // 공이 2개's pink one
   function ballDraw(M, front) {
     if (!front) {
       (LV.goals || []).forEach((q, k) => {
@@ -4751,14 +5180,18 @@ window.PG = window.PG || {};
       }
       return;
     }
-    const B = M.ball; if (!B || M.goalT > 0) return;
+    if (M.goalT > 0) return;
+    if (M.ball) ballDrawOne(M.ball, null);
+    if (M.ball2) ballDrawOne(M.ball2, '#ff8fb1');
+  }
+  function ballDrawOne(B, tint) {
     const x = Math.round(B.x), y = Math.round(B.y), dim = B.kick > 0 && ((G.frame >> 2) & 1);
-    ctx.globalAlpha = dim ? 0.08 : 0.16; ctx.fillStyle = '#c8f4ff';
+    ctx.globalAlpha = dim ? 0.08 : tint ? 0.24 : 0.16; ctx.fillStyle = tint || '#c8f4ff';
     ctx.beginPath(); ctx.arc(x, y, BALL.r, 0, Math.PI * 2); ctx.fill();
     ctx.globalAlpha = dim ? 0.55 : 1;
-    const f = frameOf('giant_bubble', (G.frame / 10) | 0);
+    const f0 = frameOf('giant_bubble', (G.frame / 10) | 0), f = f0 && tint ? tintOf(f0, tint, 0.35) : f0;
     if (f) ctx.drawImage(f.c, x - 12, y - 12, 24, 24);
-    else { ctx.strokeStyle = '#bdf0ff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, BALL.r - 1, 0, Math.PI * 2); ctx.stroke(); }
+    else { ctx.strokeStyle = tint || '#bdf0ff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, BALL.r - 1, 0, Math.PI * 2); ctx.stroke(); ctx.lineWidth = 1; }
     ctx.globalAlpha = 1;
   }
   // a seat's 2nd line: the team's goals (in its colour, after a small ball) and the team's bar along the panel's top
@@ -4769,6 +5202,90 @@ window.PG = window.PG || {};
     text(String((M.goals && M.goals[t]) | 0), x + 27, 9, BALL_TEAM[t]);
   }
 
+  // ---- the card's animated how-to (polish 3.2.1, MINI_FN[id].demo): each screen draws its own 96x32 loop into
+  // #pg-party-demo (never on the wire) from renderScene while the card shows - a pure function of f (P.t % 240), with my
+  // animal a (slot 0's offline) and the next seat's b, so a page drawing it late or skipping frames is still right
+  const dLerp = (p, q, u) => p + (q - p) * clamp(u, 0, 1);
+  const dArc = (p, q, u, h) => dLerp(p, q, u) - Math.sin(Math.PI * clamp(u, 0, 1)) * h;   // (a hop from p to q, h px high)
+  // a frame drawn at s px (16 px frames halve cleanly to 8), mirrored when flip
+  function demoSpr(dx, name, i, x, y, s, flip, alpha) {
+    const f = frameOf(name, i); if (!f) return;
+    const w = s || f.w, hh = s ? Math.round(f.h * s / f.w) : f.h;
+    dx.globalAlpha = alpha === undefined ? 1 : alpha;
+    if (flip) { dx.save(); dx.translate(Math.round(x) + w, Math.round(y)); dx.scale(-1, 1); dx.drawImage(f.c, 0, 0, w, hh); dx.restore(); }
+    else dx.drawImage(f.c, Math.round(x), Math.round(y), w, hh);
+    dx.globalAlpha = 1;
+  }
+  function demoTiles(dx, x, y, n, s) { const t = themeOf(LV || { theme: 1 }).tile; for (let k = 0; k < n; k++) demoSpr(dx, t, 0, x + k * (s || 8), y, s || 8); }
+  function demoRing(dx, x, y, r, col) { dx.globalAlpha = 0.9; dx.strokeStyle = col; dx.lineWidth = 1; dx.beginPath(); dx.arc(x, y, r, 0, Math.PI * 2); dx.stroke(); dx.globalAlpha = 1; }
+  // 물: three 3-tile tiers (tops y 28 / 20 / 12); the water band rises 32 -> 22 over 0-150; a hops tier to tier (at 30,
+  // 90) and takes a 비누 floating over the water at 110 (its pink ring shows); b is caught by a bubble at 60, its prison
+  // sinks into the water at 100, and from 140 it bobs on a duck ring and blows a bubble toward a
+  function waterDemo(dx, f, a, b) {
+    for (const [x, y] of [[4, 28], [36, 20], [68, 12]]) demoTiles(dx, x, y, 3);
+    const wl = Math.round(dLerp(32, 22, f / 150));
+    const ax = f < 30 ? 12 : f < 50 ? dLerp(12, 44, (f - 30) / 20) : f < 90 ? 44 : f < 110 ? dLerp(44, 76, (f - 90) / 20) : 76;
+    const ay = f < 30 ? 20 : f < 50 ? dArc(20, 12, (f - 30) / 20, 8) : f < 90 ? 12 : f < 110 ? dArc(12, 4, (f - 90) / 20, 8) : 4;
+    const hop = (f >= 30 && f < 50) || (f >= 90 && f < 110);
+    demoSpr(dx, a + (hop ? '_jump' : '_idle'), 0, ax, ay, 8, false);
+    if (f < 110) { const sy = wl - 7 + Math.round(Math.sin(f / 10)); demoRing(dx, 62, sy, 4, '#ffc9dc'); demoSpr(dx, 'coin', 0, 60, sy - 2, 4); }
+    else demoRing(dx, ax + 4, ay + 4, 6, '#ffc9dc');
+    if (f < 60) demoSpr(dx, b + '_walk', (f / 8) | 0, dLerp(4, 16, f / 60), 20, 8, false);
+    else if (f < 140) {
+      const py = f < 100 ? 18 : dLerp(18, wl - 2, (f - 100) / 30);
+      demoSpr(dx, b + '_idle', 0, 16, py + 2, 8, false, 0.8); demoSpr(dx, 'bubble', 0, 14, py, 12, false, 0.85);
+    } else {
+      const by = wl - 6 + Math.round(Math.sin(f / 8));
+      dx.save(); dx.beginPath(); dx.rect(0, 0, 96, by + 6); dx.clip(); demoSpr(dx, b + '_idle', 0, 16, by, 8, false); dx.restore();
+      demoSpr(dx, 'duck_ring', (f >> 4) & 1, 14, by + 4, 12);
+      if (f >= 170) demoSpr(dx, 'bubble', 0, dLerp(26, 70, (f - 170) / 70), dLerp(by - 2, 8, (f - 170) / 70), 8);
+    }
+    dx.globalAlpha = 0.45; dx.fillStyle = '#3fbfe0'; dx.fillRect(0, wl, 96, 32 - wl); dx.globalAlpha = 0.9; dx.fillStyle = '#8fdcff'; dx.fillRect(0, wl, 96, 1); dx.globalAlpha = 1;
+  }
+  // 왕관: a floor and a centre stage; b walks wearing the crown (0-60); at 60 a sparkle and the crown flies up (an arc,
+  // 60-110) and falls on the stage; a jumps and takes it at 120; from 170 it blinks gold
+  function crownDemo(dx, f, a, b) {
+    demoTiles(dx, 0, 28, 12, 8); demoTiles(dx, 40, 20, 2, 8);
+    const bx = f < 60 ? dLerp(4, 22, f / 60) : 22, ax = f < 100 ? 72 : f < 120 ? dLerp(72, 44, (f - 100) / 20) : 44, ay = f < 100 ? 12 : f < 120 ? dArc(12, 4, (f - 100) / 20, 10) : 4;
+    demoSpr(dx, b + (f < 60 ? '_walk' : '_idle'), (f / 8) | 0, bx, 12, 16, false);
+    demoSpr(dx, a + (f >= 100 && f < 120 ? '_jump' : '_idle'), 0, ax, ay, 16, true);
+    const gold = f >= 170, cr = frameOf(SPR_CROWN, 0), cf = cr && gold && ((f >> 2) & 1) ? tintOf(cr, '#ffd447', 0.6) : cr;
+    let cx = bx + 4, cy = 4;
+    if (f >= 60 && f < 110) { const u = (f - 60) / 50; cx = dLerp(bx + 4, 44, u); cy = dLerp(4, 12, u) - Math.sin(Math.PI * u) * 10; }
+    else if (f >= 110 && f < 120) { cx = 44; cy = 12; }
+    else if (f >= 120) { cx = ax + 4; cy = ay - 4; }
+    if (cf) { dx.drawImage(cf.c, Math.round(cx), Math.round(cy), 8, 8); }
+    if (f >= 60 && f < 72) for (let k = 0; k < 4; k++) { dx.fillStyle = STAR_COLS[k % STAR_COLS.length]; dx.fillRect(Math.round(bx + 8 + Math.cos(k * 1.6 + f / 3) * (f - 58)), Math.round(4 + Math.sin(k * 1.6 + f / 3) * (f - 58) / 2), 1, 1); }
+  }
+  // 축구: the field with the right goal net; a walks into the ball (0-80), the ball rolls into the net (80-120, the net
+  // wobbles, star sparkles); at 150 a second, pink ball drops from the top
+  function ballDemo(dx, f, a) {
+    demoTiles(dx, 0, 28, 12, 8);
+    const nx = 80 + (f >= 116 && f < 140 ? Math.round(Math.sin(f) * 1) : 0);
+    dx.globalAlpha = 0.5; dx.fillStyle = BALL_TEAM[1];
+    for (let x = nx + 2; x < 96; x += 3) dx.fillRect(x, 12, 1, 16);
+    for (let y = 14; y < 28; y += 3) dx.fillRect(nx, y, 96 - nx, 1);
+    dx.globalAlpha = 1; dx.fillStyle = '#ffffff'; dx.fillRect(nx, 11, 16, 1);
+    const ax = f < 80 ? dLerp(4, 40, f / 80) : 40;
+    demoSpr(dx, a + (f < 80 ? '_walk' : '_idle'), (f / 8) | 0, ax, 12, 16, false);
+    const bxp = f < 80 ? 58 : f < 120 ? dLerp(58, 86, (f - 80) / 40) : 86;
+    if (f < 140) demoSpr(dx, 'giant_bubble', (f / 10) | 0, bxp - 8, 12, 16);
+    if (f >= 116 && f < 140) for (let k = 0; k < 5; k++) { dx.fillStyle = STAR_COLS[k % STAR_COLS.length]; dx.fillRect(Math.round(86 + Math.cos(k * 1.3 + f / 4) * (f - 112) / 2), Math.round(18 + Math.sin(k * 1.3 + f / 4) * (f - 112) / 3), 1, 1); }
+    if (f >= 150) { const y = Math.min(12, dLerp(-16, 12, (f - 150) / 30)), g = frameOf('giant_bubble', 0); if (g) { const t = tintOf(g, '#ff8fb1', 0.35); dx.drawImage(t.c, 40, Math.round(y), 16, 16); } }
+  }
+  // renderScene's end: the card's demo canvas (cleared and drawn each frame it shows)
+  function drawPartyDemo() {
+    const P = G.party, cv = $('pg-party-demo');
+    if (!P || !cv || cv.hidden || shownOverlay !== 'party' || G.mode !== 'card' || P.t < partyF('splash')) return;
+    const id = P.plan[clamp(P.i, 0, P.plan.length - 1)], F = MINI_FN[id]; if (!F || !F.demo) return;
+    const dx = cv._dx || (cv._dx = cv.getContext('2d')); if (!dx) return;
+    dx.setTransform(1, 0, 0, 1, 0, 0); dx.imageSmoothingEnabled = false; dx.globalAlpha = 1;
+    dx.fillStyle = '#0c2629'; dx.fillRect(0, 0, 96, 32);
+    const me = myPlayer() || G.players.find((p) => p.slot === 0) || G.players[0], seats = G.players.slice().sort((x, y) => x.slot - y.slot);
+    const nb = me ? seats[(seats.indexOf(me) + 1) % Math.max(1, seats.length)] : null;
+    const ca = me && isChar(me.char) ? me.char : 'duck', cb = nb && nb !== me && isChar(nb.char) ? nb.char : ca === 'cat' ? 'duck' : 'cat';
+    try { F.demo(dx, P.t % 240, ca, cb); } catch (e) { /* a demo never breaks the card */ }
+  }
   // each minigame's hooks: spawns (the k-th player's spawn, from its fresh state), init (its state), start (시작!), tick (a
   // playing frame), key (the place key, bigger is better), snap / view (its wire array, 6.4), drop (a leaver), draw, hud
   // (a seat's 2nd line); optional: hold (the clock stands still this frame) / held (a snapshot's g.mg says so), win (the
@@ -4776,44 +5293,52 @@ window.PG = window.PG || {};
   const MINI_FN = {
     water: {
       spawns: () => (LV.players || []).slice(0, MAX_PLAYERS),               // (the k-th present player in slot order)
-      init: () => ({ wl: LV && LV.rise ? LV.rise.y0 : PF_BOT, outs: [], over: null }),
+      init: () => ({ wl: LV && LV.rise ? LV.rise.y0 : PF_BOT, outs: [], over: null, soaps: [], sid: 0, sh: {}, got: {}, safe: {}, rv: {} }),
       start() {},
       tick: waterTick,
-      key: (p, M) => { const o = M.outs.find((q) => q[0] === p.slot); return o ? o[1] : 1e12; },
-      snap: (M) => { const pl = miniPlaces(); return ['w', Math.round(M.wl * 10), M.outs.map((o) => [o[0], pl.get(o[0]) | 0])]; },
+      // (the later out the better, then more 비누 - a same frame and the same 비누 share the place)
+      key: (p, M) => { const o = M.outs.find((q) => q[0] === p.slot); return (o ? o[1] : 1e9) * 100 + Math.min((M.got && M.got[p.slot]) | 0, 99); },
+      // (['w', wl x10, [[slot, place]], [[soap id, x, t0]], sh (a bit per seat), [got by seat], rv (a bit per seat)])
+      snap: (M) => { const pl = miniPlaces(), bits = (o) => [0, 1, 2, 3].reduce((n, s) => n | (o[s] ? 1 << s : 0), 0); return ['w', Math.round(M.wl * 10), M.outs.map((o) => [o[0], pl.get(o[0]) | 0]), M.soaps.map((q) => [q.id, R0(q.x), q.t0]), bits(M.sh), [0, 1, 2, 3].map((s) => M.got[s] | 0), bits(M.rv)]; },
       view: waterView,
       drop() {},
       draw: waterDraw,
       hud: waterHud,
+      demo: waterDemo,
     },
     crown: {
       // (the battle arena's spawns with startArena's swap by 판: G.matchNo = the 판 index)
       spawns: () => { const pss = LV.players || [], rot = (G.matchNo | 0) % 2 ? [2, 3, 0, 1] : [0, 1, 2, 3]; return G.players.map((p) => pss[rot[p.slot]]); },
-      init: () => ({ cr: { x: G.gather.x - 8, y: G.gather.y - 8, vx: 0, vy: 0, onGround: false, holder: -2, noPick: -1, noUntil: 0 }, held: {} }),
+      init: () => ({ cr: { x: G.gather.x - 8, y: G.gather.y - 8, vx: 0, vy: 0, onGround: false, holder: -2, noPick: -1, noUntil: 0 }, held: {}, gold: 0, fl: 0 }),
       start(M) { Object.assign(M.cr, { x: G.gather.x - 8, y: G.gather.y - 8, vx: 0, vy: 0, holder: -1 }); queueBanner(PARTY_TX.crownIn, '', 80, 'round'); Snd.sfx('powerup'); },
       tick: crownTick,
       key: (p, M) => M.held[p.slot] | 0,
-      snap: (M) => { const cr = M.cr; return ['c', cr.holder, R0(cr.x), R0(cr.y), M.held[0] | 0, M.held[1] | 0, M.held[2] | 0, M.held[3] | 0, cr.noPick]; },
+      snap: (M) => { const cr = M.cr; return ['c', cr.holder, R0(cr.x), R0(cr.y), M.held[0] | 0, M.held[1] | 0, M.held[2] | 0, M.held[3] | 0, cr.noPick, M.gold | 0]; },
       view: crownView,
       drop(slot, M) { if (M.cr && M.cr.holder === slot) { M.cr.holder = -1; M.cr.vx = 0; M.cr.vy = 0; M.cr.onGround = false; } },
       draw: crownDraw,
       hud: crownHud,
+      demo: crownDemo,
     },
     ball: {
       spawns: (ini) => ballSpawns(ini.team),
-      init: () => ({ ball: { x: (LV.ball || {}).x || W / 2, y: (LV.ball || {}).y || 64, vx: 0, vy: 0, kick: -1, rest: false }, goals: [0, 0], team: ballTeams(), goalT: 0, kickBy: {}, kn: 0, ko: 0, bars: ballBars() }),
+      init: () => ({ ball: { x: (LV.ball || {}).x || W / 2, y: (LV.ball || {}).y || 64, vx: 0, vy: 0, kick: -1, rest: false }, ball2: null, gg: -1, goals: [0, 0], team: ballTeams(), goalT: 0, kickBy: {}, kn: 0, ko: 0, bars: ballBars() }),
       start: (M) => ballKickoff(M, true),
       tick: ballTick,
       hold: (M) => M.goalT > 0,
       held: (mg) => nInt(mg[7], 0, 999, 0) > 0,
       key: (p, M) => M.goals[M.team[p.slot] | 0] | 0,
       win: ballWin,
-      // (['b', x x10, y x10, vx x100, vy x100, goals left, goals right, goalT, kick (-1: before 시작!), kn])
-      snap: (M) => { const B = M.ball; return ['b', R0(B.x * 10), R0(B.y * 10), R0(B.vx * 100), R0(B.vy * 100), M.goals[0], M.goals[1], M.goalT, B.kick, M.kn]; },
+      over: ballOver,
+      // (['b', x x10, y x10, vx x100, vy x100, goals left, goals right, goalT, kick (-1: before 시작!), kn, then 공이 2개's x2,
+      // y2, vx2, vy2, kick2 (-2: no second ball) and 골든 골's gg (-1: no overtime)])
+      snap: (M) => { const B = M.ball, C = M.ball2; return ['b', R0(B.x * 10), R0(B.y * 10), R0(B.vx * 100), R0(B.vy * 100), M.goals[0], M.goals[1], M.goalT, B.kick, M.kn,
+        C ? R0(C.x * 10) : 0, C ? R0(C.y * 10) : 0, C ? R0(C.vx * 100) : 0, C ? R0(C.vy * 100) : 0, C ? C.kick : -2, M.gg === undefined ? -1 : M.gg]; },
       view: ballView,
       drop: ballDrop,
       draw: ballDraw,
       hud: ballHud,
+      demo: ballDemo,
     },
   };
 
@@ -4821,13 +5346,15 @@ window.PG = window.PG || {};
   // crown: it would read as 왕관 뺏기's)
   function drawHUDParty() {
     const bt = G.battle, left = bt ? bt.left : 0, secs = Math.ceil(left / 60), m = Math.floor(secs / 60), s = secs % 60;
-    const warn = G.mode === 'playing' && secs <= 10 && ((G.frame >> 3) & 1);
-    text(m + ':' + (s < 10 ? '0' : '') + s, 128, 1, warn ? '#ff7a6b' : '#fbf0d9', { align: 'center', scale: 2, shadow: '#16363a' });
+    const warn = G.mode === 'playing' && secs <= 10 && ((G.frame >> 3) & 1), gg = G.mini && G.mini.gg >= 0 ? G.mini.gg : -1;
+    // (거품 축구's 골든 골: the overtime counting up, +0:07, in gold)
+    if (gg >= 0) { const os = Math.floor(gg / 60); text('+' + Math.floor(os / 60) + ':' + (os % 60 < 10 ? '0' : '') + (os % 60), 128, 1, '#ffd447', { align: 'center', scale: 2, shadow: '#16363a' }); }
+    else text(m + ':' + (s < 10 ? '0' : '') + s, 128, 1, warn ? '#ff7a6b' : '#fbf0d9', { align: 'center', scale: 2, shadow: '#16363a' });
     const X = [1, 53, 153, 205];
     for (const p of G.players) {
       const x = X[p.slot]; if (x === undefined) continue;
       hudPanel(x, 0, 50, 16, p, isMe(p));
-      if (p.out || p.trap) ctx.globalAlpha = 0.45;
+      if (p.out || p.trap) ctx.globalAlpha = 0.45; else if (p.raft) ctx.globalAlpha = 0.7;
       drawRawTwin('life_' + p.char, p.twin ? p.slot : 0, x + 8, 0);
       text(String(p.score), x + 17, 1, p.color);
       ctx.globalAlpha = 1;
@@ -4835,41 +5362,233 @@ window.PG = window.PG || {};
       drawMagHud(p, x);
     }
   }
-  // ---- the card (9.2, #pg-party): the 판 line, the game's name, its one-line how-to (and its rule line where the screen
-  // is tall enough: CSS), the keys, a team game's team line, the running scoreboard (best first, +N of the last 판), the
-  // bar over the 5 s. (asMe: debug only - the card as that seat's screen shows it)
+  // ---- the winner stage (beat w, 3.5): drawn on every page from synced data only (the places, this page's own clock of
+  // the beat). The 1st-place animals dance on a small stage at feet y 132 (20 px apart), everybody else stands in a row
+  // at feet y 196 facing it (a draw: everyone on the stage). A draw-time swap - no body moves, no epoch changes
+  const partyWinOn = () => G.mode === 'result' && !!G.party && G.party.b === 'w';
+  function partyWinFx() {
+    if (reducedMotion() || G.frame % 3 || G.parts.length >= 200) return;
+    G.parts.push({ x: WALL_L + fxr() * (WALL_R - WALL_L), y: PF_TOP + 2, vx: (fxr() - 0.5) * 0.6, vy: 0.4 + fxr() * 0.5, life: 120, max: 120, c: STAR_COLS[(fxr() * STAR_COLS.length) | 0], sz: fxr() < 0.3 ? 2 : 1, g: 0.01 });
+  }
+  function drawPartyWin() {
+    const P = G.party; if (!P) return;
+    const t = Math.max(0, G.frame - (P.wAt | 0)), pl = (s) => (P.res && P.res.get ? P.res.get(s) : P.last[s]) || 4;
+    ctx.fillStyle = 'rgba(6,20,24,0.55)'; ctx.fillRect(0, PF_TOP, W, PF_H);
+    const gl = ctx.createRadialGradient(128, 100, 4, 128, 100, 70);
+    gl.addColorStop(0, 'rgba(255,240,180,0.24)'); gl.addColorStop(1, 'rgba(255,240,180,0)');
+    ctx.fillStyle = gl; ctx.fillRect(40, 30, 176, 150);
+    const order = G.players.slice().sort((a, b) => a.slot - b.slot), top = order.filter((p) => pl(p.slot) === 1), rest = order.filter((p) => pl(p.slot) !== 1);
+    const hw = top.length * 10 + 8;
+    ctx.fillStyle = '#0c2629'; ctx.fillRect(128 - hw - 1, 131, hw * 2 + 2, 8);
+    ctx.fillStyle = '#2f7f78'; ctx.fillRect(128 - hw, 132, hw * 2, 6);
+    ctx.fillStyle = '#ffd447'; ctx.fillRect(128 - hw, 132, hw * 2, 1);
+    ctx.fillStyle = '#123236'; ctx.fillRect(WALL_L, 196, WALL_R - WALL_L, 2);
+    const spots = [];
+    top.forEach((p, i) => {
+      const ph = t * 0.12 + i * 1.7, hop = Math.abs(Math.sin(ph)) * 6, cx = 128 + (i - (top.length - 1) / 2) * 20;
+      spots.push([p, cx - 8, 132 - 16 - hop, ((t / 50) | 0) % 2 ? -1 : 1, hop < 0.5]);
+    });
+    rest.forEach((p, i) => { const cx = 48 + (208 - 48) * (i + 0.5) / rest.length; spots.push([p, cx - 8, 196 - 16, cx < 128 ? 1 : -1, true]); });
+    for (const [p, x, y, f, gr] of spots) {
+      const keep = { x: p.x, y: p.y, facing: p.facing, onGround: p.onGround, vx: p.vx, vy: p.vy, raft: p.raft, out: p.out, trap: p.trap, invuln: p.invuln };
+      Object.assign(p, { x, y, facing: f, onGround: gr, vx: 0, vy: gr ? 0 : -0.5, raft: false, out: false, trap: null, invuln: 0 });
+      try { drawPlayer(p); } finally { Object.assign(p, keep); }
+    }
+    for (const q of G.parts) partDraw(ctx, q);
+    ctx.globalAlpha = 1;
+  }
+  // ---- the party overlay (9.2, polish 3.2 / 3.6 - 3.8 / 7.2): one #pg-party, four views (data-view) - card: the 판
+  // line (+ 점수 2배! on the last), the name (a zooming title splash first), the demo, the one-line how-to (the rule line
+  // where the screen is tall enough: CSS), the keys, a team game's team line, the ready row, 준비 완료! and the bar to the
+  // auto start; tally (N판 결과 / 최종 순위), stand (마지막 판!), award (보너스상! / each award). Keyed: a call each
+  // snapshot writes nothing new; partyLiveTick moves the bar line and the tally from the clocks. (asMe: debug only - the
+  // view as that seat's screen shows it)
   function fillParty(asMe) {
     const P = G.party, el = dom.party; if (!el || !P) return;
+    const view = G.mode === 'result' ? beatView(P.b) || 'tally' : 'card', me = asMe >= 0 ? asMe : G.online ? G.localSlot : -1;
+    if (el.dataset.view !== view) el.dataset.view = view;
+    const card = el.querySelector('.pg-party-card'), splash = view === 'card' && P.t < partyF('splash');
+    if (card && card.classList.contains('is-splash') !== splash) card.classList.toggle('is-splash', splash);
+    if (view === 'card') partyCardView(P, me); else partyResultView(P, view, me);
+  }
+  // do I count as ready on this screen (a guest: from my own press on, before the host's R says so)
+  const partyMeReady = (P, me) => (me >= 0 && !!P.rdy[me]) || (G.online && G.role === 'guest' && NET.partyReady === P.i);
+  function partyCardView(P, me) {
     const id = P.plan[clamp(P.i, 0, P.plan.length - 1)], D = MINI[id] || MINI.water;
-    setTxt($('pg-party-round'), partyRoundTx(false)); setTxt($('pg-party-name'), D.name);
+    setTxt($('pg-party-rt'), partyRoundTx(false)); setTxt($('pg-party-name'), D.name);
+    const x2 = $('pg-party-x2'), dbl = partyX() > 1; if (x2 && x2.hidden === dbl) x2.hidden = !dbl;
     setTxt($('pg-party-how'), D.how); setTxt($('pg-party-rule'), D.rule);
-    setTxt($('pg-party-keys'), touchMode ? PARTY_TX.keysT : PARTY_TX.keys);
-    const box = $('pg-party-board'), st = partyStandings(P, G.players.map((p) => p.slot)), me = asMe >= 0 ? asMe : G.online ? G.localSlot : -1;
+    setTxt($('pg-party-keys'), touchMode ? D.keysT || PARTY_TX.keysT : D.keys || PARTY_TX.keys);
+    const demo = $('pg-party-demo'), dm = !!(MINI_FN[id] && MINI_FN[id].demo); if (demo && demo.hidden === dm) demo.hidden = !dm;
     const team = $('pg-party-team'), M = G.mini, teams = !!D.team && !!M && M.id === id && !!M.team;
     if (team) { if (teams) partyTeamLine(team, M.team, me); if (team.hidden === teams) team.hidden = !teams; }
-    const key = JSON.stringify([st, st.map((r) => [P.pts[r.slot] | 0, P.gain[r.slot]]), G.players.map((p) => [p.slot, p.nick, p.char, p.look, p.twin]), me]);
+    // the ready row: each present player's bust in slot order, the room's ready mark once ready; my chip outlined
+    const mine = me >= 0 ? me : G.localSlot, meOk = partyMeReady(P, mine);
+    const okOf = (p) => !!P.rdy[p.slot] || (p.slot === mine && meOk);
+    const box = $('pg-party-ready'), key = JSON.stringify([G.players.map((p) => [p.slot, p.nick, p.char, p.look, p.twin, okOf(p)]), me]);
     if (box && box._key !== key) {
       box._key = key; box.textContent = '';
-      for (const r of st) {
-        const p = G.players.find((q) => q.slot === r.slot); if (!p) continue;
-        const li = h('li', 'pg-party-row' + (p.slot === me ? ' is-me' : '')), g = P.gain[r.slot], pts = P.pts[r.slot] | 0;
-        li.style.setProperty('--slot', p.color);
+      for (const p of G.players.slice().sort((a, b) => a.slot - b.slot)) {
+        const ok = okOf(p), li = h('li', 'pg-party-chip' + (p.slot === me ? ' is-me' : '') + (ok ? ' is-ok' : ''));
         const cv = portraitCanvas(p.char, 'portrait_', 16, p.look, p.twin ? p.slot : 0); cv.className = 'pg-party-cv'; cv.setAttribute('aria-hidden', 'true');
-        li.append(h('b', 'pg-party-pl', String(r.place)), cv, h('span', 'pg-party-nick', nameOf(p)));
-        if (p.slot === me) li.appendChild(h('i', 'pg-party-me', PARTY_TX.me));
-        li.appendChild(h('span', 'pg-party-pts', pts + '점'));
-        const gn = h('span', 'pg-party-gain', g >= 0 ? '+' + g : ''); gn.hidden = !(g >= 0); li.appendChild(gn);
-        li.setAttribute('aria-label', r.place + '등 ' + nameOf(p) + ' ' + pts + '점' + (g >= 0 ? ', 지난 판 +' + g : ''));
+        const ck = portraitCanvas('', SPR_READY, 8); ck.className = 'pg-party-ck'; ck.setAttribute('aria-hidden', 'true');
+        li.append(cv, ck); li.setAttribute('aria-label', nameOf(p) + ' ' + (ok ? '준비 완료' : '기다리는 중'));
         box.appendChild(li);
       }
     }
-    // (the bar: from the card's own clock - a guest's first card starts part-way - to full over what is left of it)
-    const fill = $('pg-party-fill'), cl = P.cl || partyCardF(), bk = (P.sn || 'g' + NET.gid) + ':' + P.i;
+    const go = $('pg-party-go');
+    if (go) { setTxt(go, meOk ? PARTY_TX.readyDone : touchMode ? PARTY_TX.ready : PARTY_TX.readyK); if (go.disabled !== meOk) go.disabled = meOk; }
+    // (the bar: from the card's own clock - a guest's first card starts part-way - to full at the auto start; full at
+    // once when everyone is ready)
+    const all = G.players.length > 0 && G.players.every((p) => P.rdy[p.slot]);
+    const fill = $('pg-party-fill'), cl = P.cl || PARTY_F.auto, bk = (P.sn || 'g' + NET.gid) + ':' + P.i + ':' + cl + ':' + (all ? 1 : 0);
     if (fill && fill._k !== bk) {
       fill._k = bk;
-      const u = clamp(P.t / cl, 0, 1);
+      const u = all ? 1 : clamp(P.t / cl, 0, 1);
       fill.style.transition = 'none'; fill.style.transform = 'scaleX(' + (reducedMotion() ? 1 : u).toFixed(3) + ')';
-      if (!reducedMotion()) { void fill.offsetWidth; fill.style.transition = 'transform ' + Math.round((cl - P.t) * STEP_MS) + 'ms linear'; fill.style.transform = 'scaleX(1)'; }
+      if (!all && !reducedMotion()) { void fill.offsetWidth; fill.style.transition = 'transform ' + Math.round(Math.max(0, cl - P.t) * STEP_MS) + 'ms linear'; fill.style.transform = 'scaleX(1)'; }
+    }
+    setTxt($('pg-party-bart'), all ? PARTY_TX.allReady : partyAutoTx(P));
+  }
+  const partyAutoTx = (P) => ptx('autoIn', Math.max(1, Math.ceil(Math.max(0, (P.auto || P.cl || PARTY_F.auto) - P.t) / 60)));
+  // one board row: the place, the bust, the nick, 나, the points, the gain (or a gap line), the move mark
+  function partyRow(p, place, pts, me) {
+    const li = h('li', 'pg-party-row' + (p.slot === me ? ' is-me' : ''));
+    li.style.setProperty('--slot', p.color);
+    const cv = portraitCanvas(p.char, 'portrait_', 16, p.look, p.twin ? p.slot : 0); cv.className = 'pg-party-cv'; cv.setAttribute('aria-hidden', 'true');
+    li.append(h('b', 'pg-party-pl', String(place)), cv, h('span', 'pg-party-nick', nameOf(p)));
+    if (p.slot === me) li.appendChild(h('i', 'pg-party-me', PARTY_TX.me));
+    const pe = h('span', 'pg-party-pts', pts + '점'); pe.setAttribute('aria-hidden', 'true'); li.appendChild(pe);
+    const gn = h('span', 'pg-party-gain', ''); gn.hidden = true; li.appendChild(gn);
+    const mv = h('span', 'pg-party-mv', ''); mv.hidden = true; mv.setAttribute('aria-hidden', 'true'); li.appendChild(mv);
+    return li;
+  }
+  // the tally's timeline (3.6) in its beat's own frames: row k's +N pops in at pop(k), its total counts up a point every
+  // step frames, the rows re-sort at sort. t: the 판's tally (168 f); z: 최종 순위 (96 f) - the bonuses
+  function tallyTimes(b) {
+    const z = b === 'z', u = beatLen(b) / (z ? PARTY_F.final : PARTY_F.tally);
+    return { pop: (k) => Math.round((z ? 6 + 4 * k : 12 + 10 * k) * u), step: Math.max(1, Math.round((z ? 4 : 5) * u)), sort: Math.round((z ? 40 : 96) * u) };
+  }
+  function partyResultView(P, view, me) {
+    const slots = G.players.map((p) => p.slot), dbl = partyX() > 1;
+    const sub = $('pg-party-sub'), aw = $('pg-party-award'), box = $('pg-party-board');
+    let h2 = '', sl = '';
+    if (view === 'tally') { h2 = P.b === 'z' ? PARTY_TX.finalH : ptx('resultH', P.i + 1); sl = P.b !== 'z' && dbl ? PARTY_TX.x2 : ''; }
+    else if (view === 'stand') {
+      const n = clamp(slots.length, 2, 4), tbl = PARTY_PTS[n].map((v) => v * PARTY_LAST_X).filter((v) => v > 0);
+      h2 = PARTY_TX.lastH; sl = PARTY_TX.lastSub + tbl.map((v, i) => (i + 1) + '등 ' + v + '점').join(' · ');
+    } else if (P.b !== 'A' || !P.A || !P.A[P.bk]) { h2 = PARTY_TX.awardsH; sl = PARTY_TX.awardsSub; }
+    else h2 = (AWARDS.find((a) => a.c === P.A[P.bk][0]) || AWARDS[0]).name;
+    setTxt($('pg-party-name'), h2);
+    if (sub) { setTxt(sub, sl); if (sub.hidden === !!sl) sub.hidden = !sl; }
+    if (view === 'award') { partyAwardView(P, aw, me); return; }
+    if (!box) return;
+    if (view === 'stand') {
+      // (마지막 판!: the standing with 선두 on the leaders and 1위와 N점 차 on the others)
+      const st = partyStandings(P, slots), top = st.length ? P.pts[st[0].slot] | 0 : 0;
+      const key = JSON.stringify(['s', P.i, st, slots.map((s) => P.pts[s] | 0), me, G.players.map((p) => [p.slot, p.nick, p.look])]);
+      if (box._key === key) return;
+      box._key = key; box._tally = null; box.textContent = '';
+      for (const r of st) {
+        const p = G.players.find((q) => q.slot === r.slot); if (!p) continue;
+        const pts = P.pts[r.slot] | 0, li = partyRow(p, r.place, pts, me), gn = li.querySelector('.pg-party-gain'), lead = r.place === 1;
+        gn.textContent = lead ? PARTY_TX.lead : ptx('gap', top - pts); gn.className = 'pg-party-gain is-gap' + (lead ? ' is-lead' : ''); gn.hidden = false;
+        li.setAttribute('aria-label', r.place + '등 ' + nameOf(p) + ' ' + pts + '점, ' + gn.textContent);
+        box.appendChild(li);
+      }
+      return;
+    }
+    // (the tally: the rows in the standing before this 판 - before the awards for 최종 순위 - each counting its gain in)
+    const z = P.b === 'z', gainOf = (s) => (z ? P.bonus[s] | 0 : Math.max(0, P.gain[s] | 0));
+    // (최종 순위: the awards change only the points - the last 판's places still break ties, as after its tally)
+    const before = { pts: {}, wins: {}, last: z ? P.last : {} };
+    for (const s of slots) { before.pts[s] = (P.pts[s] | 0) - gainOf(s); before.wins[s] = z ? P.wins[s] | 0 : Math.max(0, (P.wins[s] | 0) - (P.last[s] === 1 ? 1 : 0)); }
+    const st0 = partyStandings(before, slots), st1 = partyStandings(P, slots);
+    const key = JSON.stringify([P.b, P.i, st0, st1, slots.map((s) => [P.pts[s] | 0, gainOf(s)]), me, G.players.map((p) => [p.slot, p.nick, p.look])]);
+    if (box._key === key) return;
+    box._key = key; box.textContent = '';
+    const T = { b: P.b, rows: [], sorted: false, me };
+    st0.forEach((r, k) => {
+      const p = G.players.find((q) => q.slot === r.slot); if (!p) return;
+      const g = gainOf(r.slot), li = partyRow(p, r.place, before.pts[r.slot], me), r1 = st1.find((q) => q.slot === r.slot);
+      li.setAttribute('aria-label', (r1 ? r1.place : r.place) + '등 ' + nameOf(p) + ' ' + (P.pts[r.slot] | 0) + '점, ' + (z ? '보너스 +' : '지난 판 +') + g);
+      T.rows.push({ slot: r.slot, li, k, b0: before.pts[r.slot], g, pl0: r.place, pl1: r1 ? r1.place : r.place, shown: -1, gainOn: false });
+      box.appendChild(li);
+    });
+    box._tally = T;
+    partyTallyTick(true);
+  }
+  // the tally from bt (each page from the synced clock; DOM writes only when a shown number changes): the +N pops in,
+  // the total counts up with this page's own 'tally' tick (NO_ECHO), then the FLIP re-sort - rows that moved get ▲N /
+  // ▼N, my row moving up plays rank_up (NO_ECHO). quiet: a rebuild - no sounds, no slide for what already happened
+  function partyTallyTick(quiet) {
+    const P = G.party, box = $('pg-party-board'), T = box && box._tally; if (!P || !T || T.b !== P.b) return;
+    const tm = tallyTimes(P.b), bt = P.bt;
+    for (const r of T.rows) {
+      const on = bt >= tm.pop(r.k) && r.g > 0;
+      if (on !== r.gainOn) { r.gainOn = on; const gn = r.li.querySelector('.pg-party-gain'); gn.textContent = '+' + r.g; gn.hidden = !on; }
+      const n = on ? clamp(Math.floor((bt - tm.pop(r.k)) / tm.step) + 1, 0, r.g) : 0;
+      if (n !== r.shown) {
+        if (!quiet && n > r.shown && r.shown >= 0) uiSfx('tally', { n });
+        r.shown = n; setTxt(r.li.querySelector('.pg-party-pts'), (r.b0 + n) + '점');
+      }
+    }
+    if (T.sorted || bt < tm.sort) return;
+    T.sorted = true;
+    const tops = new Map(T.rows.map((r) => [r.slot, r.li.getBoundingClientRect().top]));
+    for (const r of T.rows) { r.shown = r.g; setTxt(r.li.querySelector('.pg-party-pts'), (r.b0 + r.g) + '점'); }
+    const order = T.rows.slice().sort((a, b) => a.pl1 - b.pl1 || a.pl0 - b.pl0 || a.slot - b.slot);
+    for (const r of order) {
+      box.appendChild(r.li);
+      setTxt(r.li.querySelector('.pg-party-pl'), String(r.pl1));
+      const d = r.pl0 - r.pl1, mv = r.li.querySelector('.pg-party-mv');
+      if (d) { mv.textContent = (d > 0 ? '▲' : '▼') + Math.abs(d); mv.className = 'pg-party-mv' + (d > 0 ? ' is-up' : ''); mv.hidden = false; }
+      if (d > 0 && r.slot === T.me && !quiet) uiSfx('rank_up');
+    }
+    if (quiet || reducedMotion()) return;
+    for (const r of order) {
+      const dy = tops.get(r.slot) - r.li.getBoundingClientRect().top; if (!dy) continue;
+      r.li.style.transition = 'none'; r.li.style.transform = 'translateY(' + dy.toFixed(1) + 'px)';
+      void r.li.offsetWidth; r.li.style.transition = 'transform 0.4s ease'; r.li.style.transform = '';
+    }
+  }
+  // an award (3.8): its icon, its line, its winners (two or more: 공동 수상!), the value and +2점
+  function partyAwardView(P, el, me) {
+    if (!el) return;
+    const a = P.b === 'A' && P.A ? P.A[P.bk] || null : null, key = JSON.stringify([P.b, P.bk, a, me]);
+    if (el._key === key) return;
+    el._key = key; el.textContent = ''; el.hidden = !a;
+    if (!a) return;
+    const W = AWARDS.find((q) => q.c === a[0]) || AWARDS[0], ic = document.createElement('canvas');
+    ic.width = 16; ic.height = 16; ic.className = 'pg-party-aw-ic'; ic.setAttribute('aria-hidden', 'true');
+    const x = ic.getContext('2d'), f = frameOf(W.icon, 0);
+    x.imageSmoothingEnabled = false;
+    if (f) { const w = Math.min(16, f.w), hh = Math.min(16, f.h); x.drawImage(f.c, 0, 0, w, hh, (16 - w) >> 1, (16 - hh) >> 1, w, hh); }
+    el.append(ic, h('span', 'pg-party-aw-line', W.line));
+    if (a[2].length > 1) el.appendChild(h('span', 'pg-party-aw-tie', PARTY_TX.awardTie));
+    const who = h('span', 'pg-party-aw-who');
+    for (const s of a[2]) {
+      const p = G.players.find((q) => q.slot === s); if (!p) continue;
+      const it = h('span', 'pg-party-aw-p'), cv = portraitCanvas(p.char, 'portrait_', 16, p.look, p.twin ? p.slot : 0);
+      cv.className = 'pg-party-cv'; cv.setAttribute('aria-hidden', 'true');
+      it.style.color = p.color; it.append(cv, h('span', '', nameOf(p))); if (s === me) it.appendChild(h('i', 'pg-party-me', PARTY_TX.me));
+      who.appendChild(it);
+    }
+    const v = h('span', 'pg-party-aw-v', a[1] + PARTY_TX.times); v.appendChild(h('b', '', PARTY_TX.awardPts));
+    el.append(who, v);
+  }
+  // each frame the overlay shows (syncDOM): the card's splash -> how-to switch and its bar line; a result view's tally
+  // and the host's 눌러서 넘기기 line (from skipMin into a beat)
+  function partyLiveTick() {
+    const P = G.party; if (!P || shownOverlay !== 'party' || !dom.party) return;
+    if (G.mode === 'card') {
+      const card = dom.party.querySelector('.pg-party-card');
+      if (card && card.classList.contains('is-splash') !== P.t < partyF('splash')) fillParty();
+      else if (!G.players.every((p) => P.rdy[p.slot])) setTxt($('pg-party-bart'), partyAutoTx(P));
+    } else if (G.mode === 'result') {
+      partyTallyTick(false);
+      const sk = $('pg-party-skip'), on = !(G.online && G.role === 'guest') && !!P.b && 'tsaAz'.indexOf(P.b) >= 0 && P.bt >= partyF('skipMin');
+      if (sk && sk.hidden === on) sk.hidden = !on;
     }
   }
   // a team game's line on the card: 왼쪽 팀: 방장 · 냥냥 / 오른쪽 팀: 까삐 · 펭펭 (1v1: 왼쪽: 방장 / 오른쪽: 까삐), each half
@@ -9363,8 +10082,8 @@ window.PG = window.PG || {};
       case 'transition': updateTransition(); break;
       case 'countdown': updateCountdown(); break;
       case 'podium': updatePodium(); break;
-      case 'card': updateCard(); break;     // (파티: a minigame's card, then its result beat - nothing moves)
-      case 'result': updateResult(); break;
+      case 'card': updateCard(ins); break;     // (파티: a minigame's card, then its result beats - nothing moves)
+      case 'result': updateResult(ins); break;
       default: updateFx(); break;
     }
     if (G.bannerQ.length && (!G.banner || G.frame >= G.banner.end) && (G.mode === 'playing' || G.mode === 'dying')) {
@@ -9880,7 +10599,7 @@ window.PG = window.PG || {};
     if (p.stunT > 0 && ((G.frame >> 2) & 1)) o.white = 0.45;
     if (p.dead && dieT < 10) o.white = (dieT >> 1) & 1 ? 0.9 : 0;
     // floating on the water: a gentle bob
-    const bob = p.water && !p.dead && G.mode !== 'transition' ? Math.round(Math.sin(G.frame * 0.09) * 1.1) : 0;
+    const bob = p.raft ? Math.round(Math.sin(G.frame * 0.09)) : p.water && !p.dead && G.mode !== 'transition' ? Math.round(Math.sin(G.frame * 0.09) * 1.1) : 0;
     if (lk && lk.after) drawAfterimages(p, name, fi, flip, bob);
     if (lk && lk.lines) {
       // the slam's two speed lines above it
@@ -9890,7 +10609,10 @@ window.PG = window.PG || {};
       ctx.globalAlpha = 1;
     }
     const dy = lk && lk.dy ? lk.dy : 0;
+    // (a 오리 튜브: the body's bottom 6 rows under the ring, clipped)
+    if (p.raft) { ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, Math.round(p.y + bob) + 10); ctx.clip(); }
     wrapDraw(p.y + bob + dy, (y) => (lk && lk.q ? drawTurned(name, fi, p.x, y, flip, lk.q, o) : drawEnt(name, fi, p.x, y, flip, o)));
+    if (p.raft) { ctx.restore(); drawRaftRing(p, bob); }
     if (crownHolder(p) && G.mode !== 'podium') crownOn(p); // (왕관 뺏기: the worn crown, 8 px over the head)
     if (p.dead && dieT > 8) {
       for (let i = 0; i < 3; i++) {
@@ -9910,6 +10632,7 @@ window.PG = window.PG || {};
         ctx.globalAlpha = 1; ctx.fillStyle = '#ffffff'; ctx.fillRect(Math.round(p.x + 2), Math.round(p.y + bob), 2, 2);
       }
     }
+    if (!p.dead) drawSoapRing(p, bob); // (파티 물 차오르기: a held 비누 save)
   }
   // co-op ghost bubble: pale, floating; a ring in the slot colour shows the time left to be revived
   function drawGhost(p) {
@@ -9932,7 +10655,7 @@ window.PG = window.PG || {};
       ctx.drawImage(tf.c, Math.round(p.x + 8 - f.w / 2), Math.round(headTop(p) - f.h - 2 - lift));
     }
   }
-  const tagsOn = () => multi() && (G.mode === 'playing' || G.mode === 'transition' || G.mode === 'countdown' || G.mode === 'paused' || G.mode === 'podium' || G.mode === 'result');
+  const tagsOn = () => multi() && (G.mode === 'playing' || G.mode === 'transition' || G.mode === 'countdown' || G.mode === 'paused' || G.mode === 'podium' || (G.mode === 'result' && !partyWinOn()));
   function drawEnemy(e) {
     if (e.state === 'trapped' || e.state === 'frozen') return;
     if (e.state === 'dead') {
@@ -10651,7 +11374,8 @@ window.PG = window.PG || {};
     drawKfx(true); // (v4 rings lying on the floor: the capy's slam splash, the frog's lily pads)
     miniDraw(false); // (파티: a minigame's layer behind the animals)
     for (const p of G.players) drawDucklings(p);   // (v4 뽑기 e7: under every animal)
-    for (let k = G.players.length - 1; k >= 0; k--) drawPlayer(G.players[k]);
+    const stage = partyWinOn();   // (파티: the winner stage draws the animals itself, over the dimmed arena)
+    if (!stage) for (let k = G.players.length - 1; k >= 0; k--) drawPlayer(G.players[k]);
     drawWater();
     miniDraw(true);  // (파티: the rising water over the animals, the free crown in front)
     drawMarkers(true); // (the ripples beside floating animals, markers on a water surface)
@@ -10676,12 +11400,14 @@ window.PG = window.PG || {};
       if (q.combo) text(q.combo, q.x, q.y - 9, '#ffffff', { align: 'center', outline: '#2a0f1c' });
       text(q.txt, q.x, q.y, q.color, { align: 'center', scale: q.scale, outline: '#2a0f1c' });
     }
-    if (!inTrans) { drawMeSpot(); drawMagFeet(); drawTagArrows(); }
+    if (stage) drawPartyWin();
+    else if (!inTrans) { drawMeSpot(); drawMagFeet(); drawTagArrows(); }
     if (inTrans && G.trans) drawDoors(G.trans.door);
     if (G.mode === 'card' || (G.mode === 'paused' && G.pausedFrom === 'card')) drawDoors(1); // (파티: the doors stay shut over the next arena while its card shows)
     ctx.restore();
     drawHUD();
     if (G.boss && !inTrans) drawBossBar();
+    drawPartyDemo(); // (파티: the card's how-to loop, its own canvas)
     syncDOM();
   }
 
@@ -10777,6 +11503,7 @@ window.PG = window.PG || {};
     }
     syncTags();
     syncWords();
+    partyLiveTick();
   }
   // ---- v3 DOM: the animal picker (title), co-op results, the podium card, name tags and word pops
   const OVERLAYS = ['title', 'pause', 'over', 'ending', 'podium', 'friends', 'room', 'rec', 'hub', 'login', 'pal', 'party'];
@@ -10963,7 +11690,7 @@ window.PG = window.PG || {};
   const tagHi = (p) => isMe(p) && spotAge() >= 0 && spotAge() < SPOT_HI_F; // (the big 나 after a spotlight trigger)
   function syncTags() {
     if (!dom.tags) return;
-    const on = multi() && (G.mode === 'playing' || G.mode === 'countdown' || G.mode === 'podium' || G.mode === 'result' || (G.mode === 'paused' && G.pausedFrom !== 'transition' && G.pausedFrom !== 'card'));
+    const on = multi() && (G.mode === 'playing' || G.mode === 'countdown' || G.mode === 'podium' || (G.mode === 'result' && !partyWinOn()) || (G.mode === 'paused' && G.pausedFrom !== 'transition' && G.pausedFrom !== 'card'));
     const me = G.online ? myPlayer() : null, self = G.players.find((q) => q.slot === G.localSlot) || null; // (self: the hint chips, offline too)
     const k = screenScale || 1;
     const order = G.players.slice(0, MAX_PLAYERS).sort((a, b) => (b === me) - (a === me) || a.slot - b.slot);
@@ -11091,12 +11818,14 @@ window.PG = window.PG || {};
   }
   function resumeGame() {
     // (파티: back onto its card when the menu was opened over it)
-    if (G.menuOpen) { G.menuOpen = false; showOverlay(G.mode === 'card' ? 'party' : null); if (G.mode === 'card') fillParty(); return; }
+    if (G.menuOpen) { G.menuOpen = false; showOverlay(partyOverlayOn() ? 'party' : null); if (partyOverlayOn()) fillParty(); return; }
     if (G.mode !== 'paused') return;
     G.mode = G.pausedFrom || 'playing'; G.pausedFrom = null;
     if (G.music !== 'clear' && G.music !== 'gameover') Snd.music(G.music); else Snd.cur = G.music;
-    showOverlay(G.mode === 'card' ? 'party' : null);
+    showOverlay(partyOverlayOn() ? 'party' : null); if (partyOverlayOn()) fillParty();
   }
+  // (파티: the card, or a result beat with a view, shows #pg-party - the menu closing returns to it)
+  const partyOverlayOn = () => !!G.party && (G.mode === 'card' || (G.mode === 'result' && !!beatView(G.party.b)));
   function togglePause() { if (G.mode === 'paused' || G.menuOpen) resumeGame(); else pauseGame(); }
   function updateMuteUI() {
     if (!dom.soundBtn) return;
@@ -11112,13 +11841,15 @@ window.PG = window.PG || {};
     if (shownOverlay === 'hub' || shownOverlay === 'login' || shownOverlay === 'pal') return;   // (the 상점 / 마이페이지 / the login screen / 친구 순위: nothing starts a game behind it)
     if (shownOverlay === 'rec') { closeRec(); return; } // (내 기록 over the title: never a solo start)
     if (G.menuOpen) { resumeGame(); return; }
-    // online: only the host picks what comes next (guests wait on the result screens)
-    if (G.online && G.role === 'guest') return;
+    // online: only the host picks what comes next (guests wait on the result screens; a guest's card press is its 준비)
+    if (G.online && G.role === 'guest') { if (G.mode === 'card') partyReadyMe(); return; }
     if (G.mode === 'title') startGame();
     else if (G.mode === 'gameover') { firstGesture(); retry(); }
     else if (G.mode === 'ending') netAgain(continueLoop);
     else if (G.mode === 'paused') resumeGame();
     else if (G.mode === 'podium') { if (!troCanRematch()) return; firstGesture(); netAgain(rematch); }
+    else if (G.mode === 'card') partyReadyMe();   // (파티: 준비 완료 - the button, Enter)
+    else if (G.mode === 'result') partySkip();    // (the host's 눌러서 넘기기)
   }
   // 다시 하기: the same game again (co-op keeps its team; online: a new game for everyone in the room)
   function retry() {
@@ -11183,6 +11914,8 @@ window.PG = window.PG || {};
     if (code === 'KeyP' || code === 'Escape') { e.preventDefault(); if (!e.repeat) togglePause(); return; }
     const act = KEYMAP[code];
     const inMenu = G.mode === 'title' || G.mode === 'gameover' || G.mode === 'ending' || G.mode === 'paused' || G.mode === 'podium' || G.menuOpen;
+    // (파티: Enter on the card is 준비 완료, on a result view the host's 넘기기 - jump / shoot reach them as game input)
+    if (!inMenu && (G.mode === 'card' || G.mode === 'result') && (code === 'Enter' || code === 'NumpadEnter')) { e.preventDefault(); if (!e.repeat) primaryAction(); return; }
     if (inMenu) {
       // title: left / right pick the animal
       if (G.mode === 'title' && shownOverlay === 'title' && (act === 'left' || act === 'right') && !onPickerInput(e)) {
@@ -11314,6 +12047,7 @@ window.PG = window.PG || {};
     }
     // phones: never below ~12.5 px so overlay text stays readable at 1.2-1.3x canvas scale
     dom.screen.style.setProperty('--fs', clamp(s * 6, touchMode ? 12.5 : 11, 22).toFixed(2) + 'px');
+    dom.screen.style.setProperty('--pg-px', (Math.floor(W * s) / W).toFixed(3)); // (파티's card demo: one canvas pixel)
     shopBtnFit();          // (v4 shop: the 상점 button's label only where it fits)
     hubTopFit();           // (the hub's tab row and coin chip on one line where they fit)
   }
@@ -11360,6 +12094,9 @@ window.PG = window.PG || {};
     // (한 판 더 after a staked result waits for every guest's new count and for everyone to still cover the stake)
     click('pg-podium-again', () => { if (!troCanRematch()) return; firstGesture(); netAgain(rematch); });
     click('pg-podium-room', netToRoom);
+    // (파티: the card's 준비 완료!; a tap on a result view is the host's 넘기기)
+    click('pg-party-go', () => { firstGesture(); partyReadyMe(); });
+    if (dom.party) listen(dom.party, 'click', (e) => { if (G.mode === 'result' && !(e.target && e.target.closest && e.target.closest('button'))) partySkip(); });
     // an online host: these end the game for everyone - a second tap within 2.5 s confirms (no window.confirm)
     click('pg-podium-lobby', () => confirmTwice('pg-podium-lobby', '한 번 더 누르면 방이 닫혀요', toLobby));
     buildPicker();
@@ -11623,11 +12360,12 @@ window.PG = window.PG || {};
   // a player's own movement sounds are played by that player's engine only (v4: the moves and the kit shoot sounds;
   // 'quake' and 'pop' are echoed)
   const NO_ECHO = { jump: 1, shoot: 1, bounce: 1, splash: 1, pause: 1, start: 1,
-    flap: 1, slam: 1, dash: 1, slide: 1, djump: 1, hop: 1, b_echo: 1, b_onsen: 1, b_splash: 1, b_icicle: 1, b_yarn: 1, b_egg: 1, dry: 1, reload: 1 };
+    flap: 1, slam: 1, dash: 1, slide: 1, djump: 1, hop: 1, b_echo: 1, b_onsen: 1, b_splash: 1, b_icicle: 1, b_yarn: 1, b_egg: 1, dry: 1, reload: 1,
+    tally: 1, rank_up: 1 };   // (파티: the tally's ticks and my row's rise are each page's own)
   // (파티's card 'a' and result 'r': only pages that said pa in their hi ever get them)
   const PH_CODE = { playing: 'p', countdown: 'c', transition: 't', gameover: 'o', ending: 'e', podium: 'd', dying: 'p', paused: 'p', title: 'p', card: 'a', result: 'r' };
   const PH_NAME = { p: 'playing', c: 'countdown', t: 'transition', o: 'gameover', e: 'ending', d: 'podium', a: 'card', r: 'result' };
-  const MUSICS = [null, 'main', 'hurry', 'boss', 'final', 'clear', 'victory', 'battle', 'podium', 'gameover', 'ending', 'title', 'lobby'];
+  const MUSICS = [null, 'main', 'hurry', 'boss', 'final', 'clear', 'victory', 'battle', 'podium', 'gameover', 'ending', 'title', 'lobby', 'party']; // (13 party: PARTY_V 3)
   const E_STATES = ['descend', 'active', 'trapped', 'frozen', 'dead'];
   const U_KINDS = ['empty', 'trapped', 'player', 'stamp', 'steam'];
   const U_STATES = ['float', 'shot', 'pop'];
@@ -11707,6 +12445,8 @@ window.PG = window.PG || {};
     sess: null, role: null, code: '', selfId: null, hostId: null, screen: null, unsubs: [],
     // (rounds: 파티's 판 수, 3 | 5; partyU: a guest's copy of the host's R.u - the seats whose page cannot play the party)
     mode: 'coop', opts: { arena: -1, time: 3, perks: true, monsters: true, intrusion: true, rapid: false, bet: 0, rounds: 3 }, partyU: [],
+    // (partyReady: the 판 index my 준비 is for, -1 none - sent as pr in my body state while the card shows)
+    partyReady: -1,
     roster: [], slots: new Map(), gid: 0, ph: 'room', hostPh: 'room', ready: false, nick: '', busy: false, err: '', status: '',
     // (v4 trophies: ms the host session's series id - match id = ms + '.' + gid; q 0 = 트로피 경기, 1 / 2 = 연습 경기)
     ms: '', q: 1,
@@ -12266,7 +13006,8 @@ window.PG = window.PG || {};
       x: nNum(st.x, WALL_L - 4, WALL_R - 12, 120), y: nNum(st.y, PF_TOP - 24, PF_BOT, 100),
       vx: nNum(st.vx, -6, 6, 0), vy: nNum(st.vy, -8, 8, 0), f: st.f < 0 ? -1 : 1, fl: nInt(st.fl, 0, 1023, 0), sh: nInt(st.sh, 0, 600, 0), bb,
       ny: nInt(st.ny, 0, 1e9, 0), rt: nInt(st.rt, 0, 1e12, 0), lc: st.lc === 1 ? 1 : 0, // (lc: it claims its own catches)
-      dp: nInt(st.dp, 0, 1e9, 0) }; // (dp: its 내려가기 count - only a rise shows, as dust; an older guest never sends it: 0)
+      dp: nInt(st.dp, 0, 1e9, 0), // (dp: its 내려가기 count - only a rise shows, as dust; an older guest never sends it: 0)
+      pr: nInt(st.pr, -1, 9, -1) }; // (pr: 파티 - the 판 index its 준비 is for, -1 none)
   }
   function hostBodyIn(from, st) {
     const r = NET.roster.find((q) => q.id === from); if (!r || from === NET.selfId) return;
@@ -12588,6 +13329,7 @@ window.PG = window.PG || {};
       if (free(p)) fl |= 64;
       if (p.mvA) fl |= 128;   // (v4 move pose bits: see updatePlayer / hostInputs)
       if (p.mvB) fl |= 256;
+      if (p.raft) fl |= 512;  // (파티 물 차오르기: a 오리 튜브)
       return [p.slot, p.ep | 0, r1(p.x), r1(p.y), Math.round(p.vx * 10), Math.round(p.vy * 10), p.facing < 0 ? -1 : 1, fl,
         p.score | 0, p.kills | 0, p.revives | 0, p.kos | 0, p.koed | 0, p.invuln | 0, p.stunT | 0, p.shield | 0,
         p.power ? POWER_TYPES.indexOf(p.power.type) : -1, p.power ? p.power.t | 0 : 0,
@@ -12792,6 +13534,7 @@ window.PG = window.PG || {};
       updatePredicted();
       if (G.mode === 'podium') updatePodium(); else updateFx();
       if (G.mode === 'playing') updateWaterFx();
+      if (partyWinOn()) partyWinFx();
       guestSend(ins);
     } else updateFx();
   }
@@ -12828,7 +13571,7 @@ window.PG = window.PG || {};
     if (idx !== NET.viewIdx || kind !== NET.viewKind || pi !== NET.viewPi) {
       const fresh = g.m === 'p' && pi !== NET.viewPi;
       loadView(idx, kind); NET.viewPi = pi;
-      if (fresh) { NET.pred = []; NET.bounces = []; const me = myPlayer(); if (me) { me.amN = undefined; me.amT = undefined; } }
+      if (fresh) { NET.pred = []; NET.bounces = []; NET.partyReady = -1; const me = myPlayer(); if (me) { me.amN = undefined; me.amT = undefined; } }
     }
     const ph = PH_NAME[g.ph] || 'playing';
     G.loop = nInt(g.lp, 0, 99, 0); G.lives = nInt(g.L, 0, 99, 0); G.score = nInt(g.S, 0, 1e10, 0); G.stamps = nInt(g.st, 0, 99, 0);
@@ -12857,6 +13600,7 @@ window.PG = window.PG || {};
     else if (ph === 'ending') showOverlay('ending');
     else if (ph === 'podium') showOverlay('podium');
     else if (ph === 'card') { showOverlay(G.menuOpen ? 'pause' : 'party'); fillParty(); } // (파티: an open menu stays open)
+    else if (ph === 'result' && G.party && beatView(G.party.b)) { showOverlay(G.menuOpen ? 'pause' : 'party'); fillParty(); } // (a result beat with a view)
     else if (results(prev) || prev === 'card' || shownOverlay === 'over' || shownOverlay === 'ending' || shownOverlay === 'podium' || shownOverlay === 'party') showOverlay(G.menuOpen ? 'pause' : null);
     if (ph !== 'playing') { const me = myPlayer(); if (me && NET.ctl === 'local') { me.vx = 0; me.shootAnim = 0; } }
   }
@@ -12900,7 +13644,7 @@ window.PG = window.PG || {};
         if (NET.ctl === 'local') continue;
       }
       p.ep = ep;
-      p.dead = !!(fl & 8); p.out = !!(fl & 16);
+      p.dead = !!(fl & 8); p.out = !!(fl & 16); p.raft = !!(fl & 512);
       p.koT = nInt(r[21], 0, 9999, 0); p.dieT = nInt(r[22], 0, 9999, 0) + (p.dead && !p.ghost ? el : 0);
       const gt = nInt(r[18], -1, 99999, -1);
       p.ghost = gt >= 0 ? { t: gt + el, x0: p.x } : null;
@@ -12945,7 +13689,7 @@ window.PG = window.PG || {};
     p.ep = ep;
     if (!(fl & 64)) { NET.ctl = 'remote'; return; }
     Object.assign(p, { x: nNum(r[2], WALL_L - 4, WALL_R - 12, p.x), y: nNum(r[3], PF_TOP - 24, PF_BOT, p.y), vx: nNum(r[4], -99, 99, 0) / 10, vy: nNum(r[5], -99, 99, 0) / 10,
-      facing: r[6] < 0 ? -1 : 1, onGround: !!(fl & 1), water: fl & 2 ? 1 : fl & 4 ? 2 : 0, dead: false, ghost: null, trap: null, koT: 0, out: false, dieT: 0,
+      facing: r[6] < 0 ? -1 : 1, onGround: !!(fl & 1), water: fl & 2 ? 1 : fl & 4 ? 2 : 0, dead: false, ghost: null, trap: null, koT: 0, out: false, raft: !!(fl & 512), dieT: 0,
       invuln: nInt(r[13], 0, 9999, 0), stunT: 0, shield: nInt(r[15], 0, 9999, 0), coyote: 0, jumpBuf: 0, shootBuf: 0, sq: 0, waterSkip: 0, splashY: undefined }, MV_BODY);
     p.hotIn = p.water === 1;
     NET.ctl = 'local';
@@ -13090,6 +13834,7 @@ window.PG = window.PG || {};
     if (G.mode === 'playing') ammoTick(me); // (AMMO: my own count, as the host keeps it)
     const inp = ins[G.localSlot] || NO_INPUT;
     NET.jumpHeld = !!inp.jump;
+    if (G.mode === 'card' && (inp.jumpP || inp.shootP)) partyReadyMe(); // (파티: my 준비 on the card - pr in my body state)
     if (NET.ctl !== 'local') {
       // trapped in a battle bubble: every jump / shoot press is a mash for the host
       if (me.trap && G.mode === 'playing' && (inp.jumpP || inp.shootP)) {
@@ -13111,7 +13856,7 @@ window.PG = window.PG || {};
     // (물 차오르기: my feet WATER_SLACK under the surface I draw - the host's clock, so the host will agree: input frozen
     // for at most 30 frames while its verdict comes - I never walk on under the water; no verdict, input comes back)
     let mi = inp;
-    if (G.mini && G.mini.id === 'water' && me.y + 16 > G.mini.wl + WATER_SLACK) { me.sinkT = (me.sinkT | 0) + 1; if (me.sinkT <= 30) { mi = NO_INPUT; me.vx = 0; } } else me.sinkT = 0;
+    if (G.mini && G.mini.id === 'water' && !me.raft && me.y + 16 > G.mini.wl + WATER_SLACK) { me.sinkT = (me.sinkT | 0) + 1; if (me.sinkT <= 30) { mi = NO_INPUT; me.vx = 0; } } else me.sinkT = 0;
     if (me.stunT > 0) { me.stunT--; updatePlayer(me, NO_INPUT); } else updatePlayer(me, mi);
     guestBounce(me, mi);
     if (G.gameMode === 'coop') guestReviveTouch(me);
@@ -13251,7 +13996,9 @@ window.PG = window.PG || {};
     NET.bounces = NET.bounces.filter((b) => b.until > G.frame);
     // rt: the host tick my view of the world shows right now (battle traps are judged against what I saw)
     NET.sess.setState({ v: NET_V, k: G.frame, gid: NET.gid, ep: me.ep, x: r1(me.x), y: r1(me.y), vx: r2(me.vx), vy: r2(me.vy), f: me.facing < 0 ? -1 : 1,
-      fl, sh: me.shield | 0, bb: NET.bounces.map((b) => b.id).slice(-6), ny: NET.nyang, rt: Math.max(0, Math.round(NET.rt || 0)), lc: 1, dp: NET.drops | 0 });
+      fl, sh: me.shield | 0, bb: NET.bounces.map((b) => b.id).slice(-6), ny: NET.nyang, rt: Math.max(0, Math.round(NET.rt || 0)), lc: 1, dp: NET.drops | 0,
+      // (파티: my 준비 for this card - the first field of a guest's own small input state, polish 5 / 6.4)
+      ...(G.mode === 'card' && G.party && NET.partyReady === G.party.i ? { pr: NET.partyReady } : {}) });
   }
 
   // ================================================================== DOM: the friends panel and the room
@@ -13658,7 +14405,7 @@ window.PG = window.PG || {};
   function partyRules(q) {
     const n = clamp(NET.roster.length, 2, 4), pts = PARTY_PTS[n].map((v, i) => (i + 1) + '등 ' + v + '점').join(' · ');
     const coin = q === 1 && !(CO.allowBc && NET.tr === 'bc') ? PARTY_TX.coin1 : q === 2 ? PARTY_TX.coin2 : PARTY_TX.coin0;
-    return ['미니게임 ' + (NET.opts.rounds === 5 ? 5 : 3) + '판! 판마다 ' + pts, PARTY_TX.tie, n === 3 ? PARTY_TX.games3 : PARTY_TX.games, coin, PARTY_TX.noTro,
+    return ['미니게임 ' + (NET.opts.rounds === 5 ? 5 : 3) + '판! 판마다 ' + pts, PARTY_TX.roomLast, PARTY_TX.roomAwards, PARTY_TX.tie, n === 3 ? PARTY_TX.games3 : PARTY_TX.games, coin, PARTY_TX.noTro,
       NET.opts.rapid ? RAPID_RULE : AMMO_RULE, PARTY_TX.trap, PARTY_TX.leave];
   }
   // 코드 복사: an invite (the code, plus this page's link with ?join= on the standalone deploy); phones get the share sheet
@@ -14078,7 +14825,10 @@ window.PG = window.PG || {};
   function partyDebugApi() {
     const miniOut = (M) => (M ? { id: M.id, t: M.t | 0, tt: M.tt === undefined ? null : M.tt, n0: M.n0 | 0, endAt: M.endAt, wl: M.wl === undefined ? null : M.wl, outs: M.outs ? M.outs.map((o) => o.slice()) : [],
       cr: M.cr ? Object.assign({}, M.cr) : null, held: M.held ? Object.assign({}, M.held) : {},
-      ball: M.ball ? Object.assign({}, M.ball) : null, goals: M.goals ? M.goals.slice() : null, team: M.team ? Object.assign({}, M.team) : null, goalT: M.goalT === undefined ? null : M.goalT, kn: M.kn | 0, ko: M.ko | 0 } : null);
+      ball: M.ball ? Object.assign({}, M.ball) : null, goals: M.goals ? M.goals.slice() : null, team: M.team ? Object.assign({}, M.team) : null, goalT: M.goalT === undefined ? null : M.goalT, kn: M.kn | 0, ko: M.ko | 0,
+      // (the polish: 물's soaps / saves / 비누 / 역전 / the rafts, 왕관's gold and flights, 축구's 2nd ball and 골든 골)
+      soaps: M.soaps ? M.soaps.map((q) => Object.assign({}, q)) : [], sh: Object.assign({}, M.sh || {}), got: Object.assign({}, M.got || {}), rv: Object.assign({}, M.rv || {}),
+      rafts: G.players.filter((p) => p.raft).map((p) => p.slot), gold: M.gold | 0, fl: M.fl | 0, ball2: M.ball2 ? Object.assign({}, M.ball2) : null, gg: M.gg === undefined ? -1 : M.gg } : null);
     const api = {
       // the 판 list for n players, rounds 3 / 5, from a seeded draw (pure: the page's own draws are put back)
       plan(n, rounds, seed, from) { const keep = rng; rng = mulberry32((seed | 0) >>> 0); try { return partyPlan(n | 0, rounds | 0, from); } finally { rng = keep; } },
@@ -14088,7 +14838,7 @@ window.PG = window.PG || {};
       coin: (n, done, act, shots, playF, place, tie) => coinParty(n, done, act, shots, playF, place, tie),
       waterAt: (f, k) => waterAt(f, PARTY_ARENAS[0] && PARTY_ARENAS[0].rise, k || 1),
       arenas: () => PARTY_ARENAS, dry: () => dryArenas(), mini: () => JSON.parse(JSON.stringify(MINI, (k, v) => (typeof v === 'function' ? undefined : v))),
-      consts: () => ({ PARTY_V, PARTY_PTS, PARTY_F, MINI_IDS: MINI_IDS.slice(), MINI_TRAP, MINI_SINK, WATER_SLACK, WATER_LEAD, CROWN_SLOW, CROWN_NOPICK, CROWN_SLACK, pBase: COIN.pBase, pRound: COIN.pRound, pPlace: COIN.pPlace, BALL: Object.assign({}, BALL), BALL_TEAM: BALL_TEAM.slice() }),
+      consts: () => ({ PARTY_V, PARTY_PTS, PARTY_F, PARTY_FF, PARTY_LAST_X, AWARD_PTS, AWARDS: AWARDS.map((q) => Object.assign({}, q)), ESC_MASH, SOAP: Object.assign({}, SOAP), RAFT: Object.assign({}, RAFT), SURGE_WARN, CROWN2: Object.assign({}, CROWN2), BALL2: Object.assign({}, BALL2), MINI_IDS: MINI_IDS.slice(), MINI_TRAP, MINI_SINK, WATER_SLACK, WATER_LEAD, CROWN_SLOW, CROWN_NOPICK, CROWN_SLACK, pBase: COIN.pBase, pRound: COIN.pRound, pPlace: COIN.pPlace, BALL: Object.assign({}, BALL), BALL_TEAM: BALL_TEAM.slice() }),
       text: () => PARTY_TEXT, tx: () => Object.assign({}, PARTY_TX),
       // this page's view: the phase, the sequencer and the minigame
       state() {
@@ -14098,18 +14848,39 @@ window.PG = window.PG || {};
           kind: G.arenaKind, arena: G.arena, left: G.battle ? G.battle.left : null, total: G.battle ? G.battle.total : null, mini: miniOut(G.mini),
           podium: G.podium ? { order: G.podium.order.slice(), pl: G.podium.pl ? G.podium.pl.slice() : null } : null, overlay: shownOverlay,
           coins: CO.pa ? { gid: CO.pa.gid, act: CO.pa.act.slice(), pf: CO.pa.pf.slice(), shots: CO.pa.shots, seen: CO.pa.seen, go: CO.pa.go, bshots: CO.bshots } : null,
-          pod: CO.pod ? Object.assign({}, CO.pod) : null };
+          pod: CO.pod ? Object.assign({}, CO.pod) : null,
+          b: P ? P.b || '' : '', bt: P ? P.bt | 0 : 0, bk: P ? P.bk | 0 : 0, rdy: P && P.rdy ? Object.assign({}, P.rdy) : {}, auto: P ? P.auto | 0 : 0, cl: P ? P.cl | 0 : 0,
+          A: P && P.A ? P.A.map((q) => [q[0], q[1], q[2].slice()]) : null, bonus: P && P.bonus ? Object.assign({}, P.bonus) : {}, x: partyX(), partyReady: NET.partyReady };
       },
       card() {
-        const q = (id) => $(id), vis = (e) => !!e && !e.hidden && getComputedStyle(e).display !== 'none';
-        return { shown: shownOverlay === 'party' && !!dom.party && !dom.party.hidden, round: q('pg-party-round') ? q('pg-party-round').textContent : '', name: q('pg-party-name') ? q('pg-party-name').textContent : '',
-          how: q('pg-party-how') ? q('pg-party-how').textContent : '', rule: q('pg-party-rule') ? q('pg-party-rule').textContent : '', ruleShown: vis(q('pg-party-rule')),
-          keys: q('pg-party-keys') ? q('pg-party-keys').textContent : '', team: vis(q('pg-party-team')),
+        const q = (id) => $(id), vis = (e) => !!e && !e.hidden && getComputedStyle(e).display !== 'none', tx = (id) => (q(id) ? q(id).textContent : '');
+        const aw = q('pg-party-award'), go = q('pg-party-go');
+        return { shown: shownOverlay === 'party' && !!dom.party && !dom.party.hidden, view: dom.party ? dom.party.dataset.view || '' : '', round: tx('pg-party-rt'), x2: vis(q('pg-party-x2')), name: tx('pg-party-name'),
+          splash: !!(dom.party && dom.party.querySelector('.pg-party-card.is-splash')), sub: vis(q('pg-party-sub')) ? tx('pg-party-sub') : '',
+          how: tx('pg-party-how'), rule: tx('pg-party-rule'), ruleShown: vis(q('pg-party-rule')), howShown: vis(q('pg-party-how')),
+          keys: tx('pg-party-keys'), team: vis(q('pg-party-team')), demo: vis(q('pg-party-demo')),
           teams: q('pg-party-team') ? [...q('pg-party-team').querySelectorAll('.pg-party-side')].map((e) => e.textContent) : [],
           mine: q('pg-party-team') && q('pg-party-team').querySelector('.pg-party-mine') ? q('pg-party-team').querySelector('.pg-party-mine').textContent : '',
-          board: q('pg-party-board') ? [...q('pg-party-board').children].map((li) => ({ place: li.querySelector('.pg-party-pl').textContent, nick: li.querySelector('.pg-party-nick').textContent,
-            pts: li.querySelector('.pg-party-pts').textContent, gain: vis(li.querySelector('.pg-party-gain')) ? li.querySelector('.pg-party-gain').textContent : '', me: li.classList.contains('is-me') })) : [] };
+          ready: q('pg-party-ready') ? [...q('pg-party-ready').children].map((li) => ({ label: li.getAttribute('aria-label'), ok: li.classList.contains('is-ok'), me: li.classList.contains('is-me') })) : [],
+          button: go && vis(go) ? { text: go.textContent, disabled: go.disabled } : null, barText: vis(q('pg-party-bart')) ? tx('pg-party-bart') : '', skip: vis(q('pg-party-skip')),
+          award: aw && vis(aw) ? { line: aw.querySelector('.pg-party-aw-line') ? aw.querySelector('.pg-party-aw-line').textContent : '', tie: !!aw.querySelector('.pg-party-aw-tie'),
+            winners: [...aw.querySelectorAll('.pg-party-aw-p > span')].map((e) => e.textContent), value: aw.querySelector('.pg-party-aw-v') ? aw.querySelector('.pg-party-aw-v').textContent : '' } : null,
+          board: q('pg-party-board') && vis(q('pg-party-board')) ? [...q('pg-party-board').children].map((li) => ({ place: li.querySelector('.pg-party-pl').textContent, nick: li.querySelector('.pg-party-nick').textContent,
+            pts: li.querySelector('.pg-party-pts').textContent, gain: vis(li.querySelector('.pg-party-gain')) ? li.querySelector('.pg-party-gain').textContent : '', me: li.classList.contains('is-me'),
+            mv: vis(li.querySelector('.pg-party-mv')) ? li.querySelector('.pg-party-mv').textContent : '' })) : [] };
       },
+      // (the polish, 10.1) that seat presses 준비 (my own: partyReadyMe; another local one: its press); the beat; the
+      // host's skip; the awards of the current state; the award counters and the bonuses
+      ready(slot) {
+        const P = G.party; if (!P || G.mode !== 'card') return false;
+        const s = slot === undefined ? G.localSlot : slot;
+        if (s === G.localSlot) partyReadyMe(); else if (P.t >= 12) partyReadySet(s);
+        return !!P.rdy[s] || NET.partyReady === P.i;
+      },
+      beat: () => (G.party ? { b: G.party.b || '', bt: G.party.bt | 0, bk: G.party.bk | 0 } : null),
+      skipBeat: () => partySkip(),
+      awards: () => (G.party ? partyAwards() : []),
+      counts: () => (G.party ? { caps: Object.assign({}, G.party.caps), esc: Object.assign({}, G.party.esc), bonus: Object.assign({}, G.party.bonus) } : null),
       fast(on) { PARTY_FAST = !!on; return PARTY_FAST; },
       force(plan) { PARTY_FORCE = Array.isArray(plan) && plan.length >= 1 && plan.length <= 5 && plan.every((id) => !!MINI[id]) ? plan.slice() : null; return PARTY_FORCE ? PARTY_FORCE.slice() : null; },
       // host: end the current 판 now
@@ -14123,10 +14894,21 @@ window.PG = window.PG || {};
         return api.state().mini;
       },
       drop(slot) { const ok = removePlayer(slot); if (ok && G.party) partyDrop(slot); return ok; },
+      // host, 물 v2: a 비누 방울 now (at x: else a random spot), that seat a 오리 튜브 now (as if it drowned: its out entry too)
+      soapsOff(on) { partyNoSoap = !!on; return partyNoSoap; },
+      soapY(i) { const M = G.mini, q = M && M.soaps && M.soaps[i]; return q ? soapY(q, M.t, LV && LV.rise, waterK()) : null; },
+      soap(x) { const M = G.mini; if (!M || M.id !== 'water') return null; M.soaps = []; const n = 0, keep = partyNoSoap; partyNoSoap = false; soapSpawn(M); partyNoSoap = keep; if (M.soaps.length > n && x !== undefined) M.soaps[M.soaps.length - 1].x = +x; return api.state().mini; },
+      raft(slot) { const M = G.mini, p = G.players.find((q) => q.slot === slot); if (!M || M.id !== 'water' || !p || p.raft) return false; waterOut(p, M); return p.raft; },
       // host, 거품 축구: the ball by hand (in play: no kickoff wait), a goal for team t, a capy's quake at its spot, a
       // capture-phase bubble of slot's kit blown at x, y (vx: its direction) - returns it
       ball(x, y, vx, vy) { const M = G.mini; if (!M || M.id !== 'ball') return null; Object.assign(M.ball, { x: +x, y: +y, vx: +vx || 0, vy: +vy || 0, kick: 0, rest: false }); M.goalT = 0; return api.state().mini; },
       goal(t) { const M = G.mini; if (!M || M.id !== 'ball') return null; ballGoal(M, t ? 1 : 0); return api.state().mini; },
+      // (the polish) 왕관: the next flight now (the 3rd is gold); 축구: the second ball now, the ball2 by hand, time-up now
+      // with the goals as they are (골든 골 when tied)
+      flight() { const M = G.mini; if (!M || M.id !== 'crown') return null; crownFly(M, (M.fl | 0) + 1 >= Math.floor((MINI.crown.secs - 1) / CROWN2.every)); return api.state().mini; },
+      two() { const M = G.mini; if (!M || M.id !== 'ball' || M.ball2) return null; ballTwo(M); return api.state().mini; },
+      ball2(x, y, vx, vy) { const M = G.mini; if (!M || !M.ball2) return null; Object.assign(M.ball2, { x: +x, y: +y, vx: +vx || 0, vy: +vy || 0, kick: 0, rest: false }); return api.state().mini; },
+      golden() { if (G.battle && G.mini && G.mode === 'playing') G.battle.left = 0; return api.state().mini; },
       quake(slot) { const p = G.players.find((q) => q.slot === slot); if (!p) return false; quake(p, p.x, p.y); return true; },
       shot(slot, x, y, dir) {
         const p = G.players.find((q) => q.slot === slot); if (!p) return null;
@@ -14136,6 +14918,14 @@ window.PG = window.PG || {};
         G.bubbles.push(b); return b;
       },
       fill(slot) { fillParty(slot); return api.card(); },
+      // (unit) a game's card demo over its 240-frame loop into a fresh 96x32 canvas: the frames drawn, an error, the pixels left
+      demo(id) {
+        const F = MINI_FN[id]; if (!F || !F.demo) return null;
+        const cv = mk(96, 32), dx = cv.getContext('2d'); let err = null, lit = 0;
+        dx.imageSmoothingEnabled = false;
+        try { for (let f = 0; f < 240; f++) { dx.clearRect(0, 0, 96, 32); F.demo(dx, f, 'duck', 'cat'); if (f % 40 === 39) { const px = dx.getImageData(0, 0, 96, 32).data; for (let i = 3; i < px.length; i += 4) if (px[i]) lit++; } } } catch (e) { err = String(e && e.message || e); }
+        return { err, lit };
+      },
       // (unit) a guest's ball as ballView reads it off a g.mg row (clamped to the field and BALL.maxV)
       view: (mg) => Object.assign({}, ballView(mg, null, 0, { pa: {} }, { id: 'ball' }).ball),
       // (unit tests) a capture through catchPlayer (a capy's shield takes it); a seat made remote with a reported state st
@@ -14154,6 +14944,9 @@ window.PG = window.PG || {};
       },
       reload(list) { const keep = PG.PARTY_ARENAS; PG.PARTY_ARENAS = list; try { loadPartyArenas(); return PARTY_ARENAS.map((A) => ({ key: A.key, name: A.name, closed: A.closed, rise: A.rise, goals: A.goals, sides: A.sides, ball: A.ball, gapX: A.gapX, floor: A.map[ROWS - 1], ceil: A.map[0], bar: A.map[20] })); } finally { PG.PARTY_ARENAS = keep; loadPartyArenas(); } },
       result: () => partyResult(), next: () => partyNext(), final: (walk) => partyFinal(!!walk), places: () => (G.mini ? Array.from(miniPlaces().entries()) : []),
+      // (unit) a seat's snapshot row (its flags: 512 a 오리 튜브), the game's wire array, the sequencer's g.pa
+      prow: (slot) => { const r = snapPlayers().find((q) => q[0] === slot); return r ? r.slice() : null; },
+      mg: () => (G.mini ? JSON.parse(JSON.stringify(miniSnap())) : null), pa: () => (G.party ? JSON.parse(JSON.stringify(partySnap())) : null),
     };
     return api;
   }
