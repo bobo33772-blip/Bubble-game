@@ -72,7 +72,7 @@
     const [A, B] = await Promise.all([frame(0, 'net=bc'), frame(1, 'net=bc')]);
     const tr = await A.Net.transports();
     ok('A: iframes on http expose PG.Net with BroadcastChannel', tr.bc === true && tr.room === false && tr.peer === false, tr);
-    ok('A: ?net=bc -> fromQuery transport bc, no simulation', same(A.Net.fromQuery(), { transport: 'bc', net: null }), A.Net.fromQuery());
+    ok('A: ?net=bc -> fromQuery transport bc, no simulation', same(A.Net.fromQuery(), { transport: 'bc', net: null, relay: null }), A.Net.fromQuery());
     const h = await A.Net.host({ transport: 'bc' });
     ok('A: host gets a 4-char code', /^[a-z0-9]{4}$/.test(h.code), h.code);
     const t0 = clock();
@@ -100,7 +100,7 @@
     const Q = 'net=bc&lat=60&jit=40&drop=0.2';
     const F = await Promise.all([frame(2, Q), frame(3, Q), frame(4, Q), frame(5, Q), frame(6, Q)]);
     const [FH, F1, F2, F3, F5] = F;
-    ok('B: ?net=bc&lat=60&jit=40&drop=0.2 parsed in every frame', F.every((f) => same(f.Net.fromQuery(), { transport: 'bc', net: { latency: 60, jitter: 40, drop: 0.2 } })), FH.Net.fromQuery());
+    ok('B: ?net=bc&lat=60&jit=40&drop=0.2 parsed in every frame', F.every((f) => same(f.Net.fromQuery(), { transport: 'bc', net: { latency: 60, jitter: 40, drop: 0.2 }, relay: null })), FH.Net.fromQuery());
     const h = await FH.Net.host({ transport: 'bc' });
     const hr = rec(h);
     const gs = [], rs = [];
