@@ -22,7 +22,9 @@ const SFX_V6 = ['coin', 'arm', 'buy', 'equip'];
 // v4 뽑기 (design/gacha.md §9): the crank, a capsule landing, a capsule opening, the fanfare (local, never echoed)
 const SFX_V7 = ['gacha_roll', 'gacha_drop', 'gacha_pop', 'gacha_win'];
 const SFX_V8 = ['dry', 'reload']; // (battle: an empty press; the magazine refilled)
-const SFX_NAMES = SFX_V1.concat(SFX_V2, SFX_V3, SFX_V4, SFX_V5, SFX_V6, SFX_V7, SFX_V8);
+// 파티 다듬기 (design/party-polish.md §8.2): the minigame show's stings (tally / rank_up local, the rest echoed)
+const SFX_V9 = ['mg_title', 'mg_go', 'mg_finish', 'mg_win', 'tally', 'rank_up', 'drumroll', 'award'];
+const SFX_NAMES = SFX_V1.concat(SFX_V2, SFX_V3, SFX_V4, SFX_V5, SFX_V6, SFX_V7, SFX_V8, SFX_V9);
 const V5_SOUNDS = [['stake', null], ['tro_fly', 0], ['tro_fly', 1], ['tro_fly', 2], ['tro_fly', 3], ['tro_fly', 4], ['tro_fly', 5], ['tro_up', null], ['tro_down', null], ['promote', null]];
 // every distinct v4 sound as [name, n]: n-variants per the spec, pop n 1..6 per animal (null = no opts)
 const V4_SOUNDS = [['pop', 1], ['pop', 2], ['pop', 3], ['pop', 4], ['pop', 5], ['pop', 6],
@@ -34,8 +36,9 @@ const V4_LOCAL = SFX_V4.filter((n) => n !== 'quake');
 const BACKUP = path.join(__dirname, '..', 'src-v3-backup', 'audio.js');
 const TRACKS_V2 = ['title', 'main', 'hurry', 'clear', 'gameover', 'ending', 'boss', 'final', 'victory'];
 const TRACKS_V3 = ['lobby', 'battle', 'podium'];
-const TRACKS = TRACKS_V2.concat(TRACKS_V3);
-const LOOPS = ['title', 'main', 'hurry', 'boss', 'final', 'lobby', 'battle'];
+const TRACKS_V9 = ['party']; // (파티 다듬기: between the minigames)
+const TRACKS = TRACKS_V2.concat(TRACKS_V3, TRACKS_V9);
+const LOOPS = ['title', 'main', 'hurry', 'boss', 'final', 'lobby', 'battle', 'party'];
 const JINGLES = ['clear', 'gameover', 'ending', 'victory', 'podium'];
 
 let failures = 0, passes = 0;
