@@ -201,6 +201,8 @@
     // (파티, design/party.md 9.2 / 11: its card hidden at boot; every party string warmed, none with the retired syllables)
     ok('the 파티 card is hidden at boot; its texts are warmed and free of the retired title', $('pg-party') && $('pg-party').hidden && PG.debug.party.text().indexOf(OLD_NAME) < 0 &&
       [...PG.debug.party.text()].every((ch) => !/[가-힣]/.test(ch) || $('pg-fontwarm').textContent.indexOf(ch) >= 0));
+    // (party-polish.md 7.2: the card's demo, ready row, button and bar line; the result views' sub line, award, skip line)
+    ok('the 파티 overlay has the polish parts (demo, ready row, 준비 완료!, bar line, x2 chip, sub line, award, skip line)', ['pg-party-rt', 'pg-party-x2', 'pg-party-sub', 'pg-party-demo', 'pg-party-ready', 'pg-party-go', 'pg-party-award', 'pg-party-bart', 'pg-party-skip'].every((id) => !!$(id)) && $('pg-party').dataset.view === 'card');
     ok('no external scripts / only Google Fonts links', !document.querySelector('script[src]') &&
       [...document.querySelectorAll('link[href]')].every((l) => /^https:\/\/fonts\.(googleapis|gstatic)\.com/.test(l.href)));
     ok('24 entries, bosses at 5/11/17/23 with soap 8/10/12/14', LV.length === 24 && LV.filter((L) => L.boss).length === 4 &&

@@ -4294,7 +4294,7 @@ window.PG = window.PG || {};
   // beat before): a guest says it in its body state (pr, guestSend), the host / an offline screen marks its own seat
   function partyReadyMe() {
     const P = G.party; if (!P || G.mode !== 'card' || P.t < 12 || G.menuOpen) return;
-    if (G.online && G.role === 'guest') { if (NET.partyReady !== P.i) { NET.partyReady = P.i; Snd.sfx('ready'); fillParty(); } return; }
+    if (G.online && G.role === 'guest') { if (NET.partyReady !== P.i) { NET.partyReady = P.i; fillParty(); } return; }   // (its 'ready': the host's echo)
     partyReadySet(G.localSlot);
   }
   function partyReadySet(slot) {

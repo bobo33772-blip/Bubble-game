@@ -1,7 +1,8 @@
 # 뽀득뽀득 목욕탕: 파티 다듬기 (party polish) v1 — design spec
 
-Status: **design only** on `feat/party-polish` (worktree `bogeul-polish`, from `origin/main` c71e3ee = PR #21 merged), not
-built. It builds on the party as built in design/party.md sections 18 (PR A) and 18.1 (PR B): the sequencer `G.party`,
+Status: **built** on `feat/party-polish` (worktree `bogeul-polish`, from `origin/main` c71e3ee = PR #21 merged) - every
+step of section 12, nothing cut; section 14 records what was built and where it differs from the text above (not pushed).
+It builds on the party as built in design/party.md sections 18 (PR A) and 18.1 (PR B): the sequencer `G.party`,
 the minigame contract `MINI` / `MINI_FN`, the card / result / podium, the coins and the host-driven sync. Code is
 referenced by function name and section, never by line number. Every function named here exists today unless it is
 marked **new**.
@@ -797,3 +798,64 @@ Build order (each step leaves the party playable), with cut lines if it runs lon
 3. Only the host may speed up the result screens: OK, or should everyone's press count as a "다음" vote?
 4. A new between-판 music loop `party`, or keep the room's `lobby` music?
 5. Auto start after 10 s (6 s for a game already played): too long / too short for the friends?
+
+Built with the defaults the lead confirmed (2026-10-29): the x2 and the 보너스상 always on (no room option); 역전 once per
+판 per rafter; only the host speeds up the result screens; the new `party` loop between 판; the auto start 10 s / 6 s.
+All five stay tuning questions for the friends' next play.
+
+---
+
+## 14. As built
+
+Every step of section 12 is in (Musts, Shoulds and Coulds): the card's splash / demo / 준비 완료 / auto start, the beats
+(`f w t s a A z`), the x2, the tally's count-up and FLIP, the host skip, the 8 sfx and the `party` loop, the wire
+(`PARTY_V` 3), 물 v2 (60 s, surges, the flood, 비누, 오리 튜브, 역전), 왕관's flights and gold, 축구's second ball and 골든
+골, the awards and the winner stage, the three demos. Nothing was cut.
+
+### 14.1 Where the code differs from the text above
+
+| Spec | As built | Why |
+|---|---|---|
+| 3.2: `P.allAt = G.frame` | `P.allAt` is the card's own frame (`P.t`) when the last present player became ready, checked by `partyAllCheck()` after every 준비 (`partyReadySet`, inside or outside `updateCard`) and after a leaver (`partyDrop`) | the card's end is `max(cardMin, allAt + allIn)` in card frames; a ready set between two frames (the button, a test) must not slip a frame |
+| 3.2: the guest's 준비 sound | the guest's own press flips its button (`준비됐어요!`) and its chip at once; the `'ready'` sound comes from the host's echo only | one sound per ready, as the spec's "plays 'ready' (echoed) once" |
+| 3.6: the 최종 순위 timeline | `tallyTimes(b)`: a 판's tally pops row k's `+N` at `12 + 10k`, counts a point every 5 f, sorts at 96 (of 168); 최종 순위 pops at `6 + 4k`, a point every 4 f, sorts at 40 (of 96); both scale with the beat's length (`PARTY_FF`) | the spec gave 최종 순위's sort only; 4 rows of bonuses must finish counting before 40 |
+| 3.6: the standing before this 판 | `pts - gain`, `wins` minus this 판's 1등; the last-판 tie-break is left out of the "before" order | the place before the previous 판 is not kept anywhere |
+| 3.4: my own `탈락!` line | on a guest, the beat `f` ends a live line of its own (`partyView`), so the host's `끝!` shows from the next snapshot | a guest that went out in the last second of 물 never saw `끝!` (party-net caught it) |
+| 4.1.1: the warnings | the steps say `물이 차올라요!` / `더 높이!`; `마지막 물결!` / `계속 점프!` is the flood's (the last step keeps `마지막 물결!` only on an arena without a flood) | the flood is the last wave now |
+| 4.1.3: `SOAP.life` 480 f | `SOAP.life x k` (the debug fast party's soaps live as much shorter as its schedule) | with 12 s games two soaps were always up and none could spawn |
+| 4.1.3: the pickup | the first `canTouch` player in seat order whose box (remote: +`SOAP.slack`) touches the soap's 8x8 box | - |
+| 4.1.4: the raft | `raftOn` / `raftBack` / `raftMove` / `drawRaftRing` (new); `kitOf` also gives a raft `KIT_BASE` (besides `perk`), so `newShot` / `hostShot` blow the plain bubble; the duck ring is mirrored by the rafter's facing; `drawSoapRing` draws the held save | `kitOf` is what picks the shot |
+| 4.3: goals | no goal is counted once `M.endAt` is set (a golden goal's cheer, a team gone) | a second goal in the cheer could flip the golden goal's winner |
+| 4.3: the second ball's tween | `ballView` tweens it only while `kick2` is 0 in both snapshots and no 골! runs; the bursting ball is the one whose kick turned from 0 to a re-drop | - |
+| 6.3: `X` | sent only when the multiplier is above 1 | - |
+| 7.3: fit | measured (party.js INFO): the 1x card 181 px tall for 물 / 왕관 and 206 px for 축구 (of the 224 px screen, content 177 / 202 px, no scroll); tally / 마지막 판! 113 px; an award 138 px; at 2x and on the 568x320 phone everything fits with the rule line | - |
+| 8.1: the demos | 물's animals at 8 px (three tiers in 32 px), 왕관's and 축구's at 16 px with the crown at 8 px and the balls at 16 px; each script a pure function of `f` | three 16 px tiers do not fit in 32 px |
+| 9: `CROWN2` | the flights run from `CROWN2.every` while under `MINI.crown.secs` (15 / 30 / 45), gold from `CROWN2.goldAt` | - |
+| 10.4: the flood's end | `validate-levels` errs when the flood ends after `secs - 1` (59 s for the 60 s game) | the schedule's flood is 52-59 s |
+
+### 14.2 New code (game.js unless named)
+
+- Constants (section 9) as written, plus `PARTY_FF` (the fast party's frames) and `AWARDS[k].k` (the counter it reads).
+- Sequencer: `partyF`, `beatAt`, `partyX`, `partyCardStart`, `partyReadyMe`, `partyReadySet`, `partyAllCheck`, `partyBeat`,
+  `partyBeatNext`, `partySkip`, `partyAwards`, `partyAwardGive`, `partyOverlayOn`; `updateCard(ins)` / `updateResult(ins)`.
+- Views: `fillParty` (four views), `partyCardView`, `partyResultView`, `partyRow`, `tallyTimes`, `partyTallyTick`,
+  `partyAwardView`, `partyLiveTick` (from `syncDOM`), `partyWinOn` / `partyWinFx` / `drawPartyWin`, `drawPartyDemo` with
+  `waterDemo` / `crownDemo` / `ballDemo`; `fit()` sets `--pg-px`.
+- 물 v2: `waterAt` (surges, flood), `waterF`, `soapY`, `soapSpawn`, `soapTick`, `soapSave`, `waterOut` (raft + 역전),
+  `raftOn`, `raftBack`, `raftMove`, `drawSoapRing`, `drawRaftRing`; `riseOf` reads `surges`, `flood`, `soaps`, `revive`.
+- 왕관: `crownFly`; 축구: `ballsOf`, `ballStep`, `ballTwo`, `ballApart`, `ballOver`, `ballDrawOne`; `miniOver` calls `over`.
+- Wire: `g.pa` `b bt bk R X A B`; `g.mg` 물 `[.., soaps, sh, got, rv]`, 왕관 `[.., gold]`, 축구 `[.., x2, y2, vx2, vy2, kick2,
+  gg]`; the body state `pr`; `P` flag 512; `MUSICS[13]` `party`; `NO_ECHO` `tally`, `rank_up`.
+- `audio.js`: `mg_title`, `mg_go`, `mg_finish`, `mg_win`, `tally`, `rank_up`, `drumroll`, `award`, the `PARTY` song.
+- `sprites.js`: `duck_ring` (16x8, 2 frames; optional - `OPT_SPR`, sized in `sizeOf`).
+- `levels.js`: the v2 `rise` of 물 차는 대욕장; `page.html`: the overlay's new parts and views, the `finish` banner.
+- Debug (`PG.debug.party`): `ready`, `beat`, `skipBeat`, `awards`, `counts`, `soap`, `soapY`, `soapsOff`, `raft`, `flight`,
+  `two`, `ball2`, `golden`, `demo`, `prow`, `mg`, `pa`; `state()` / `card()` / `consts()` / `mini` as in 10.1.
+
+### 14.3 Tests
+
+`src/tests/party.js` (virtual time, 296 checks) covers every item of 10.2; `src/tests/party-net.js` (4 bc frames, real
+time, 85 checks) every item of 10.3 (the 축구 part at real lengths, with the host's `two()` / `golden()` instead of
+waiting 45 / 60 s; the 역전 through a host-made prison of the rafter's, the shooter-judged claim being battle's own path);
+`tools/validate-levels.js` the v2 schedule rules of 10.4; `tools/audio-node-test.js` the new sfx and loop; `final-e2e2`
+the overlay's new parts.
