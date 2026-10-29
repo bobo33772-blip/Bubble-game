@@ -3,11 +3,11 @@
 //   node tools/run-chrome.js http://localhost:8765/test-party-net.html - 1200 900 rt420000 "PARTYNET DONE"
 // Every frame: tro.ns('f' + i), tro.allowBc(true) (bc is practice otherwise), party.fast(true) (every game 12 s, the card
 // and the result beats PARTY_FF). host = slot 0 (꽥꽥이), A = slot 1 (까삐), B = slot 2 (펭펭), C = slot 3 (냥냥).
-//   1  the room: hi carries pa: 3 (PARTY_V); a party room's R says m 'p' and o[7] = the 판 수, its o[0..6] as a battle
-//      room's; a new page joining never shows 새로고침 필요 (sampled from the join on); a crafted older guest (PR B's hi,
-//      pa 2) is never ready - its seat says 새로고침 필요 on the host and on the other guests (R.u), its R.p ready flag is
-//      0, 시작 is off, the room line says why; switched to 배틀 it is ready again with no new 준비; mp.guestRoom reads o[7]
-//      5 / missing / junk as 5 / 3 / 3
+//   1  the room: hi carries pa: 4 (PARTY_V); a party room's R says m 'p' and o[7] = the 판 수, its o[0..6] as a battle
+//      room's; a new page joining never shows 새로고침 필요 (sampled from the join on); a crafted older guest (the polish
+//      PR's hi, pa 3) is never ready - its seat says 새로고침 필요 on the host and on the other guests (R.u), its R.p
+//      ready flag is 0, 시작 is off, the room line says why; switched to 배틀 it is ready again with no new 준비;
+//      mp.guestRoom reads o[7] 5 / missing / junk as 5 / 3 / 3
 //   2  a 3판 party (물 · 왕관 · 물, forced): the first card shows on the host and every guest, the same round lines, names
 //      and ready rows everywhere (my chip outlined on each page); each guest's 준비 (a jump press) reaches the host as pr
 //      and the ready rows agree everywhere; all ready -> the 3-2-1 on every page well before the auto start; the phases a /
@@ -20,7 +20,8 @@
 //   4  the beats: f w t (s) reach every page in order, 끝! and the winner line on every page; a guest's press skips
 //      nothing, the host's skip moves every page; the tally's final rows agree everywhere
 //   5  왕관: a guest's claim (tp) on the holder drops the crown on every screen; a flight frees the holder everywhere, the
-//      gold crown on every page; the held seconds agree at the result
+//      gold crown on every page; at the result the 1st on every page is the one wearing it at time-up (over a longer
+//      holder, who is 2nd everywhere), and the held seconds agree
 //   6  the final podium (order, places, points - the 보너스상 in them) and the awards agree everywhere; each page's
 //      coins are coinParty of its own counters (through coinGive: + the day bonus); trophies unchanged everywhere
 //   7  거품 축구 (forced, 2v2, real lengths): the card on every page with the same teams and each page's own side line;
@@ -116,7 +117,7 @@
     for (const g of [A, B]) await join(g);
     await until(() => N(H).roster.length === 3 && N(H).party.seats.every((s) => s.slot === 0 || s.hi), 4000);
     const PV = H.P.consts().PARTY_V;
-    ok('hi: every new page says pa: ' + PV + ' (3: the polish - 물 v2, the beats, the card\'s 준비; the host records hi and pa)', PV === 3 && N(H).party.seats.filter((s) => s.slot).every((s) => s.hi && s.pa === PV), N(H).party.seats);
+    ok('hi: every new page says pa: ' + PV + ' (4: 왕관\'s 1st wears it at time-up; 3 was the polish; the host records hi and pa)', PV === 4 &&N(H).party.seats.filter((s) => s.slot).every((s) => s.hi && s.pa === PV), N(H).party.seats);
     const R0 = N(H).tro.R;
     ok('R: m \'p\', o[7] = 3 (the 판 수), the seats\' ready flags', R0 && R0.m === 'p' && R0.o.length === 8 && R0.o[7] === 3, R0);
     ok('guests read the party room (mode party, 3판)', [A, B].every((g) => N(g).mode === 'party' && N(g).opts.rounds === 3 && N(g).party.u.length === 0), [A, B].map((g) => N(g).party));
@@ -128,16 +129,16 @@
     await until(() => N(H).roster.length === 4 && N(H).party.seats.find((s) => s.slot === 3 && s.hi), 4000);
     await sleep(300); clearInterval(sampler);
     ok('a new page joining never shows 새로고침 필요 (the r.hi gate: not before its hi, not after)', !flicker && N(H).party.seats.find((s) => s.slot === 3).pa === PV, N(H).party.seats);
-    // a crafted older guest: C says hi again with pa 2 (PR B's page: no beats, no 물 v2 - it would read them as noise);
-    // a page older still sends a smaller pa or none: the same gate
+    // a crafted older guest: C says hi again with pa 3 (the polish PR's page: its card would teach 왕관's old rule, the
+    // longest hold and the gold x2); a page older still sends a smaller pa or none: the same gate
     C.mp.ready(true); await until(() => N(H).party.seats.find((s) => s.slot === 3).ready, 3000);
-    C.mp.session().send(hostIdOf(C), { t: 'hi', n: NICKS[3], c: CHARS[3], cu: 100, d: N(H).roster[3].d || 'abcdef', z: 1, pa: 2 });
+    C.mp.session().send(hostIdOf(C), { t: 'hi', n: NICKS[3], c: CHARS[3], cu: 100, d: N(H).roster[3].d || 'abcdef', z: 1, pa: PV - 1 });
     await until(() => N(H).party.seats.find((s) => s.slot === 3).old, 3000);
     A.mp.ready(true); B.mp.ready(true);
     await until(() => N(B).party.u.includes(3) && N(H).tro.R.p.find((e) => e[0] === 1)[3] === 1, 3000);
     const tagOf = (f, k) => { const li = doc(f, 'pg-room-players').children[k]; const t = li && li.querySelector('.pg-pc-tag'); return t ? t.textContent : ''; };
     const R1 = N(H).tro.R;
-    ok('old page (pa 2): its seat says 새로고침 필요 on the host, R.u = [3], its R.p ready flag 0, 시작 off', tagOf(H, 3) === '새로고침 필요' && JSON.stringify(R1.u) === '[3]' && R1.p.find((e) => e[0] === 3)[3] === 0 && !N(H).canStart && doc(H, 'pg-go').disabled,
+    ok('old page (pa ' + (PV - 1) + '): its seat says 새로고침 필요 on the host, R.u = [3], its R.p ready flag 0, 시작 off', tagOf(H, 3) === '새로고침 필요' && JSON.stringify(R1.u) === '[3]' && R1.p.find((e) => e[0] === 3)[3] === 0 && !N(H).canStart && doc(H, 'pg-go').disabled,
       [tagOf(H, 3), R1.u, R1.p, N(H).canStart]);
     ok('old page: ... the other guests see the tag and the room line (R.u)', [A, B].every((g) => tagOf(g, 3) === '새로고침 필요' && doc(g, 'pg-room-msg').textContent === '새로고침이 필요한 친구가 있어요 · 파티는 새 버전에서만 해요'), [A, B].map((g) => [tagOf(g, 3), doc(g, 'pg-room-msg').textContent]));
     ok('old page: ... and the host\'s room line says why', doc(H, 'pg-room-msg').textContent === '새로고침이 필요한 친구가 있어요 · 파티는 새 버전에서만 해요', doc(H, 'pg-room-msg').textContent);
@@ -250,8 +251,9 @@
     ok('skip: the host\'s skip (the tally past 30 f) moves every page to the next card within 0.5 s', sk && allCard, [sk, F.map((f) => [PS(f).ph, PS(f).i])]);
     const res1 = F.map((f) => JSON.stringify([PS(f).pts, PS(f).last]));
     ok('result: 물 points and places agree on every page; A (back by 역전) is not last', res1.every((r) => r === res1[0]) && PS(H).last[1] < 4 && PS(H).last[0] === 4, res1);
-    // ---- 5. 왕관: a guest's claim on the holder drops the crown everywhere; a flight frees it, the gold crown
-    ok('2nd card: 2판 / 3판 · 왕관 뺏기 on every page', F.every((f) => f.P.card().round === '2판 / 3판' && f.P.card().name === '왕관 뺏기'), F.map((f) => f.P.card()));
+    // ---- 5. 왕관: a guest's claim on the holder drops the crown everywhere; a flight frees it, the gold crown; the one
+    // wearing it at time-up is 1st everywhere
+    ok('2nd card: 2판 / 3판 · 왕관 뺏기 on every page, its how line 끝날 때 왕관을 쓴 사람이 1등', F.every((f) => f.P.card().round === '2판 / 3판' && f.P.card().name === '왕관 뺏기' && f.P.card().how === '끝날 때 왕관을 쓴 사람이 1등'), F.map((f) => f.P.card()));
     await readyCard(F);
     await until(() => F.every((f) => PS(f).ph === 'playing'), 6000);
     await Promise.all([place(A, 40, 200, 'right'), place(B, 80, 200, 'right')]);
@@ -274,10 +276,17 @@
     while ((PS(H).mini.fl | 0) < 3) H.P.flight();
     const gold = await until(() => F.every((f) => PS(f).mini.gold === 1), 600, 5);
     ok('왕관: the 황금 왕관 (the 3rd flight) on every page', gold, F.map((f) => PS(f).mini.gold));
+    // the end: B wears it through the last flights (given back after each), C takes it 1 s before time-up
+    const T = PS(H).total;
+    while (PS(H).ph === 'playing' && PS(H).mini.t < T - 60) { if (PS(H).mini.cr.holder !== 2) H.P.crown(2); await sleep(5); }
+    H.P.crown(3);
     await until(() => F.every((f) => PS(f).ph === 'result'), 15000);
     await sleep(100);
     const held = F.map((f) => JSON.stringify([PS(f).mini.held, PS(f).mini.gold]));
     ok('왕관: the held times (and the gold) agree on every page at the result', held.every((h) => h === held[0]), held);
+    const lasts = F.map((f) => JSON.stringify(PS(f).last)), hH = PS(H).mini.held;
+    ok('왕관: the 1st on every page is C, who wore it at time-up, over B\'s longer hold (B 2nd on every page)', PS(H).mini.cr.holder === 3 && lasts.every((l) => l === lasts[0])
+      && PS(H).last[3] === 1 && PS(H).last[2] === 2 && (hH[2] | 0) > (hH[3] | 0), [lasts, hH, PS(H).mini.cr.holder]);
     // the tally's final rows agree everywhere (each page past the re-sort)
     const tallies = await Promise.all(F.map(async (f) => { await until(() => PS(f).b === 't' && PS(f).bt >= 42, 3000, 5); return JSON.stringify(f.P.card().board.map((r) => [r.place, r.nick, r.pts, r.gain])); }));
     ok('tally: the final rows (places, order, points, +N) agree on every page', tallies.every((t) => t === tallies[0]) && JSON.parse(tallies[0]).length === 4, tallies);

@@ -278,7 +278,7 @@ window.PG = window.PG || {};
   // 오리 튜브: its walk (x WALK), its body's top dy px over the surface, its hop's vy, a comeback's blink frames
   const RAFT = { walk: 0.75, dy: 12, hop: -3.0, inv: 90 };
   const SURGE_WARN = 1.5;                 // s of warning before a surge (the steps / the flood: rise.warn)
-  const CROWN2 = { every: 15, goldAt: 45 };                         // 왕관: a flight every 15 s; the 45 s one gold (the last race)
+  const CROWN2 = { every: 15, goldAt: 45 };                         // 왕관: a flight every 15 s; gold from 45 s (the last race)
   const BALL2 = { twoAt: 45, redrop: 45, golden: 20, cheer: 60 };   // 축구: the 2nd ball at 45 s; 골든 골 at most 20 s
   // each minigame: c its wire code, secs, ar the arena (['p', i] PG.PARTY_ARENAS[i], ['b'] a dry battle arena), fits(n),
   // team (two sides: the card's team line), and the card texts: name; how - the ONE-LINE how-to, which also says how to
