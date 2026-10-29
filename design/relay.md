@@ -1,9 +1,10 @@
 # 뽀득뽀득 목욕탕: 온라인 중계 서버 (WebSocket relay) v1 — design spec
 
-Status: **design only** on `feat/ws-relay` (2026-10-27). The branch starts from the stopped WIP commit `8236a8d`
-(`feat/cf-turn`: a Cloudflare Worker that minted TURN credentials). Nothing in this spec is built yet. Code is referenced
-by function name, never by line number. Every function named here exists today (in `src/net.js`, `src/game.js`,
-`build.js`, or the WIP's `cloudflare/`) unless it is marked **new**.
+Status: **built** on `feat/ws-relay` (2026-10-28, not pushed, not deployed: the owner's part is section 12). The branch
+starts from the stopped WIP commit `8236a8d` (`feat/cf-turn`: a Cloudflare Worker that minted TURN credentials). The body
+below is the design; where the build differs it now says the built thing, and **section 19 is the as-built log** (what
+changed while building and why, the tests and their counts, what is still open). Code is referenced by function name,
+never by line number. Functions marked **new** were new in this spec and exist now.
 
 The owner picked option ② ("그냥 2번으로 가자 오늘 온라인 없어도되니까"): a WebSocket relay becomes the **default**
 online path of the standalone deploy. There is no rush (online play can stay broken today), so v1 is built and tested
@@ -198,7 +199,10 @@ request. A plain HTTP error would reach the page only as an anonymous 1006.
 - **Message rate**: a token bucket per socket, **100 tokens, refilled at 50 per second**; every frame takes one. When the
   bucket is empty, an `s` frame is **dropped** (latest wins: the next state replaces it anyway), while `r`, `m` and
   `bye` still go through (they are reliable and must arrive exactly once). Only a bucket that has stayed empty for
-  **`OVER_MS` 5 s** in a row (more than 50 frames/s sustained) closes the socket with 4429. A real page sends at most
+  **`OVER_MS` 5 s** in a row (more than 50 frames/s sustained) closes the socket with 4429. *As built (19.1)*: "empty
+  in a row" is a run of frames that found no token with **no gap of more than `OVER_GAP` 1 s** between two of them, so
+  TCP's bursty delivery cannot reset the run with a lucky refill; 150 frames/s closes at about 6 s, 70 frames/s at about
+  10 s (5 s to empty the bucket, then 5 s over). A real page sends at most
   about 46 frames/s (a guest: 30 bodies, a ping every 2 s, shots and up to about 15 mash taps; the host: 20 snapshots,
   pongs, room messages), and a burst after an LTE stall is mostly old states that may be dropped. So a legit player is
   never closed by the bucket, which the first version (close on an empty bucket) did not guarantee: 5 s of uplink stall
@@ -380,10 +384,11 @@ core.info() -> {host: id|null, seats: n, members: [ids]}       // tests and the 
 ```
 
 Constants at the top of `room.js`: `RELAY_V = 1`, `MAX_SOCKS = 6`, `MAX_MEMBERS = 3`, `FRAME_MAX = 4096`,
-`BUCKET = 100`, `REFILL = 50`, `OVER_MS = 5000`, `JUNK_BIG = 3`, `JUNK_ANY = 8`, `JUNK_MS = 60000`,
-`STRANGER_MAX = 8`, `STRANGER_MS = 20000`, `DEAD_MS = 150000`, `IDLE_RATE = 10`, `IDLE_MS = 1800000`, and the close
-codes of 2.5 as named constants (`C_TAKEN = 4409`, `C_GONE = 4408`, ...). The 2.3 table is the whole routing logic.
-`closed()` on a socket whose seat already said `bye` does nothing more.
+`BUCKET = 100`, `REFILL = 50`, `OVER_MS = 5000`, `OVER_GAP = 1000`, `JUNK_BIG = 3`, `JUNK_ANY = 8`, `JUNK_MS = 60000`,
+`STRANGER_MAX = 8`, `STRANGER_MS = 20000`, `DEAD_MS = 150000`, `IDLE_RATE = 10`, `IDLE_MS = 1800000`, `IDLE_GAP = 60000`,
+and the close codes of 2.5 as named constants (`C_TAKEN = 4409`, `C_GONE = 4408`, ...). The 2.3 table is the whole
+routing logic. `closed()` on a socket whose seat already said `bye` does nothing more. *As built*: `closed(sock, att)`
+also takes the socket's attachment, for a socket a woken core never saw (19.1).
 
 ### 3.7 Restarts, evictions, the cap
 
@@ -447,7 +452,7 @@ TUNE.ws = { stateMs: 30, pingMs: 2000, unstableMs: 3000, lostMs: 12000, joinMs: 
 | incoming `r` | `t` must be `'*'` or my id, then `h.rel(f, d)`. |
 | incoming `gone` | `h.gone(f, why === 'left' ? 'left' : 'lost')`. |
 | incoming `P` | Ignored (the keepalive's answer). |
-| `health()` | `false` while the socket is not `OPEN`, while I am leaving or re-seating (8.1), or while `bufferedAmount` has stayed above 8 KB for over 2 s (states have been skipped that long: a stalled uplink, the core shows 연결이 불안정해요). Else `true`. |
+| `health()` | `false` while the socket is not `OPEN`, while I am leaving or re-seating (8.1), or while every state has been skipped for over 2 s (*as built, 19.1*: since the first skip after the last state that went out, cleared once the socket has drained below 8 KB - a slow uplink that still sends some states is healthy; a stalled one shows 연결이 불안정해요). Else `true`. |
 | keepalive | When nothing was sent for `quietMs` (45 s), send `{"k":"p"}` (a timer checked from the link's own 5 s interval). |
 | `close(fast)` | Mark leaving (incoming frames ignored from now on). Send `{k:'bye'}`. `fast` (pagehide): `ws.close(1000)` at once (frames queued before the close frame still go out first while the page lives). Slow: close once `bufferedAmount` is 0 or after `byeMs` 150 ms, whichever comes first. |
 | unexpected close after `hi` | 4001 → `h.gone(hostId, 'left')` (normally the `gone` frame already ended the session). A host whose member list is empty re-seats (8.1) on any other code but 4409 / 4400 / 4413 / 4429. Anything else → `h.fatal('lost')`. |
@@ -475,10 +480,12 @@ array is tried in order, each entry with its own `makeCore` and its own timers:
 - **A `'peer'` entry after another entry** waits up to 5 s for `window.Peer` (`waitUntil`) when it is not there yet, so a
   deferred PeerJS that is still loading can still serve as the fallback (5.1 lists `'peer'` while its tag is loading).
 - **The final error**, when every entry failed, is the most telling one: `full` > `timeout` > `not_found` >
-  `unavailable`. It carries `.transport` (who said it) and `.relay` (`'cap'`, `'down'` or `null`, 5.3). One exception:
-  on a join, when the `'ws'` entry failed `unavailable` (the relay could not be reached or refused) and a later entry
-  said `not_found`, the final error is `unavailable` with `.reason 'relay'`, because the room may well be on the relay
-  this page could not reach. `game.js` shows `joinDown` for it (5.3).
+  `unavailable` (*as built*: the later entry's on a tie - the last word). It carries `.transport` (who said it) and
+  `.relay` (`'cap'`, `'down'` or `null`, 5.3). One exception: on a join, when the `'ws'` entry failed `unavailable` for
+  a `'down'` reason (the relay could not be reached or refused) and a later entry said `not_found`, the final error is
+  `unavailable` with `.reason 'relay'`, because the room may well be on the relay this page could not reach. `game.js`
+  shows `joinDown` for it (5.3). *As built (19.1)*: a capped relay (4503 `cap`) did answer, and no new room can be on
+  it, so there `not_found` stands, with `.relay 'cap'`: 방을 찾을 수 없어요 + `capTail`.
 - **The session** carries `s.transport` (the one that worked, as today) and **new** `s.fallback`: `null`, or `'cap'` /
   `'down'` when an earlier `'ws'` entry was skipped or failed for that reason (every other `unavailable` reason counts
   as `'down'` here, so a misconfigured `ORIGINS` (4403) shows the fallback hint instead of failing silently).
@@ -842,7 +849,8 @@ Prints `RELAY-NODE PASS/FAIL <name>` and `RELAY-NODE OK|FAIL: N passed, M failed
   - junk (oversize ×3 → 4413, binary, bad JSON ×8 within 60 s → 4400; 8 spread over 10 minutes → still open); an `r` to
     a well-formed id nobody holds is dropped and is **not** junk (20 of them in a row from the host: still open);
   - the bucket: a burst of 100 passes; 300 states in one instant → 100 forwarded, the rest dropped, the socket open, and
-    an `r` among them still forwarded; 70 frames/s for 6 s → 4429;
+    an `r` among them still forwarded; 150 frames/s → 4429 at about 6 s (evenly or in TCP-like bursts), 70 frames/s at
+    about 10 s, 49 frames/s never; two LTE stall bursts 6 s apart with 46 frames/s between → never (as built, 19.1);
   - a stranger: its 9th frame → 4408; not admitted 20 s after `hi` (checked on the next frame) → 4408;
   - the dead-seat sweep: a guest silent 151 s → `gone(lost)` + 4408 on the next frame; a host alone whose only sign is
     a recent auto-response timestamp (`heard`) is **not** swept; a half-open host swept on a guest's `open` → that guest
@@ -1223,3 +1231,83 @@ What the adversarial review changed, and why (the body above already says the co
 | 2.6, risk 6 | "Many IPs could burn the cap" | One IP can, in about 7 minutes; IPv6 keyed per /64 | 30 connects a minute keep adding self-made rooms of 4 sockets at 50 frames/s: the billed rate grows by about 70 req/s every minute. Free never bills, so the honest answer is "a day of fallback". |
 | 11.6 | Every test ran `RoomCore` in Node or behind the Node relay | Optional `ws-workerd`: `net-ws` through `wrangler dev` (local workerd, no login), when wrangler is installed | The fakes are written from the same reading of the docs as the code, so they could not catch a wrong reading. |
 | 15 | — | Notes for `feat/toss`: `check-toss.js` must allowlist the relay host computed from `PG_RELAY_URL`; no new host literals in `net.js` / `game.js` | Toss's build scans every host in the bundle. |
+
+---
+
+## 19. As built (2026-10-28, `feat/ws-relay`, local only)
+
+The build agent finished the stopped WIP `225529f` (it had `cloudflare/`, the start of `wsLink` and the local relay; its
+two relay-URL regexes in `net.js` had lost their backslashes, so the file did not parse) and squashed it into the
+commits below. Nothing is pushed or deployed; no account, login or token was touched.
+
+### 19.1 Where the build differs from the body above, and why
+
+| Where | Design said | Built | Why |
+|---|---|---|---|
+| 2.6 bucket close | Close when the bucket "stayed empty for 5 s in a row" (the WIP: a run reset once 5 tokens were back) | A run of frames that found no token, with **no gap over `OVER_GAP` 1 s**; 5 s of such a run closes 4429 | TCP delivers in bursts: at a sustained 150 frames/s, a 112 ms gap refilled 5.6 tokens and reset the WIP's run, so an abuser was sometimes never closed (seed-dependent in `net-node`). The gap rule closes 150/s at about 6 s however it arrives, 70/s at about 10 s, and never a page below 50/s or a legit LTE burst (each burst is its own short run). The test line "70 frames/s for 6 s" became "about 10 s". |
+| 2.4 idle close | A room below 10 frames/s for 30 min is closed | Plus `IDLE_GAP` 60 s: a minute in which nothing arrived restarts the forgotten-room clock | A host alone sends nothing (no audience, the keepalive is the runtime's), so a friend joining 40 minutes later would have met the idle rule on its first frame where the object did not hibernate (the local relay, `wrangler dev`). A woken object starts fresh clocks anyway. |
+| 3.5 / 3.6 woken object | The core is rebuilt from `getWebSockets()` | Also: guests without a host seat are closed 4408 on the rebuild; `closed(sock, attachment)` tells the room about a socket the woken core never saw | The runtime does not list a socket that is already closing, so a socket that closed while the object slept would otherwise vanish silently (its seat never `gone`). |
+| 4.3 `health()` | false while `bufferedAmount` stayed above 8 KB for 2 s | false once every state has been skipped for 2 s (from the first skip after the last state that went out; cleared when the socket drains below 8 KB) | With latest-wins skipping, a slow uplink hovers right at 8 KB and "stayed above" never held. A slow link that still sends some states is healthy; a stalled one shows 연결이 불안정해요. |
+| 4.5 final error | `full` > `timeout` > `not_found` > `unavailable` | The later entry's error on a tie | The last word: a list `['ws', 'peer']` that both said `not_found` reports `peer`'s. |
+| 4.5 / 5.3 capped join | `ws` unavailable + `not_found` later → `joinDown` | Only for a `'down'` relay. A capped relay (4503 `cap`) answered, and no new room is on it: `not_found` stays, with `.relay 'cap'`; `game.js` shows 방을 찾을 수 없어요 + `capTail` | "중계 서버에 닿지 않아" would be wrong there, and 5.3 already asked for `capTail` on a failed join while capped. |
+| 6.4 `?netinfo=1` | The readout ends the room hint | Also when the room is full (the hint is then just the readout, `ws 84ms` or `ws -` before the first round trip) | The owner measures with full rooms too. |
+| 8.1 / 3.7 restart | A deploy ends every room | Rooms with players end (연결이 끊겼어요); a host still alone re-seats into the new object with its old id | 1012 is not one of the codes that stop a re-seat; the watch list already says "hosts alone re-seat". `net-ws` phase C asserts both. |
+| 11.3 local relay | The real gate, loopback origins allowed | The same, with the per-IP connect limiter **off** (`create({limit: true})` turns it on) | Every test page shares one address, and a suite opens far more than 30 rooms a minute. |
+| 11.2 `TUNE.ws` check | A test asserts `joinMs > connectMs` | Read from `net.js`'s source (no new `PG.Net` export) | Keeps the API surface as specified. |
+| 12 step 2 | `npx wrangler` uses the pinned version | `npx wrangler` downloads the newest 4.x unless `npm install` ran in `cloudflare/` (then `wrangler` 4.150.0 from `package.json`) | Either is above 4.36 (the `[[ratelimits]]` floor). The pin matters for `ws-workerd`, which stays skipped until open question 7. |
+| 10.3 artifact | No `new WebSocket` in the artifact | `wsLink` builds its socket with `new WSC(...)` where `WSC = window.WebSocket`, read only when `relayInfo()` found a relay (never in the artifact) | `check-pages` keeps its literal check and says why the inlined `wsLink` is unreachable there. |
+
+Everything else is as the body says: the wire (2), the routing table (2.3), the close codes (2.5), the caps (2.6),
+`gate()` and the Worker refusals (3.3), the spaces (3.4), hibernation with the auto-response (3.5), `TUNE.ws` (4.1),
+`relayInfo` (4.2), the transport lists and the relay memory (4.5, 4.6), `netOrder()` / `codeTr()` and the texts (5, 6),
+the build injection, the preview's `space:"p"`, the itch strip and the checks (10), the TURN pieces dropped (13).
+
+### 19.2 Files
+
+| File | What |
+|---|---|
+| `cloudflare/src/room.js` | `RoomCore` (2, 3.6): seats, routing, caps, junk, the bucket with `OVER_GAP`, strangers, the dead-seat sweep, the idle close with `IDLE_GAP`, the host re-seat, the rebuild from attachments, `closed(sock, att)` |
+| `cloudflare/src/room-do.js` | `class Room` (3.5): `acceptWebSocket`, the auto-response pair, `wake()`, the attachment on close |
+| `cloudflare/src/relay.js`, `index.js` | The route table (`/`, `/r/<space>/<code>`), `gate()`, `parseOrigins` / `originAllowed` per space, `makeLimiter`, `ipKey` (/64), the refusal sockets, 4503 `cap` / `busy`; `/turn` and its helpers gone |
+| `cloudflare/wrangler.toml`, `package.json` | As 3.2 (`ROOMS`, `new_sqlite_classes`, `ORIGINS`, `ALLOW_LOCALHOST = "0"`, `CONNECT_RATE`, observability off); wrangler pinned to 4.150.0 (not installed) |
+| `src/net.js` | `'ws'` in `TRANSPORTS`, `TUNE.ws`, `relayInfo`, the relay memory, `wsLink` (with the re-seat), `fifo()` shared with `bcLink`, `host()` / `join()` with transport lists, `PG.Net.relay()`, `_relayReset()`; the header's `'ws'` section |
+| `src/game.js` | `netOrder()` (the one place), `codeTr()`, `relayCapped()`, the six texts, `errText(e, join)`, `NET.str` / `NET.fb`, the `?netinfo=1` readout, the hooks' `str` / `fb`; the WIP's TURN hunks reverted |
+| `build.js`, `tools/pack-itch.js` | The one-line `window.PG_RELAY={url}` tag, the preview's checked `space:"p"`, the checks, the itch strip; `deploy-relay/` at `http://127.0.0.1:9` |
+| `tools/ws-relay.js`, `tools/serve.js` | The local RFC 6455 relay on `/ws` with `/ws-admin/kill / restart / cap / info` |
+| `tools/relay-node-test.js` | 11.1 (renamed from `relay-worker-test.js`; `relay-client-test.js`'s build cases moved in) |
+| `tools/net-node-test.js` | `testWs()` (11.2): a fake WebSocket in front of the real `room.js` + `gate()`; `NET_ONLY=ws` runs one group |
+| `src/tests/net-ws.js`, `review-ws-deploy.js`, `battle-net.js` (`?tr=ws`) | The real-socket jobs (11.3) |
+| `tools/ws-workerd.js` | 11.6; prints `WS-WORKERD SKIP (cd cloudflare; npm install)` while wrangler is not installed (run-all counts it as skipped) |
+| `tools/relay-check.js` | 11.5 (it also warns when the answering data center is not ICN) |
+| `CLOUDFLARE-SETUP.md`, `README.md`, CI | 12, 10.2 |
+| Deleted | `src/relay/ice.js`, `tools/ice-check.js`, `tools/relay-client-test.js` (13) |
+
+### 19.4 Still open (the owner's part, and what no test here can answer)
+
+- **Day one, the most important check (risk 0, guide step 7)**: does Cloudflare Free count incoming WebSocket messages at
+  20:1 against the 100,000 a day? After a 15-minute 2-phone round, billed DO usage should be about 2,300, not about
+  45,000. If it is about 45,000, the plan is about 14 min a day for 4 players: do not retire PeerJS (open question 8).
+- The first `npx wrangler deploy` may refuse the `[[ratelimits]]` block on Free (Free availability is not documented; it
+  needs wrangler 4.36+). The fix is to delete the block (guide step 3); the isolate limiter takes over.
+- What an exhausted free tier really returns to the Worker (a throw, or a non-101 answer, and its text): the `cap` regex
+  `/exceed|limit|quota/i` is a guess; a miss shows `hintDown` instead of `hintCap`.
+- Phones on SKT, KT and LGU+ LTE: `colo=ICN` in `/cdn-cgi/trace`, and the `?netinfo=1` rtt (aim under about 150 ms). One
+  room much slower than the others: suspect a Durable Object placed abroad (`locationHint` is the knob).
+- The host re-seat during the KakaoTalk app switch on iOS, Android and the Toss WebView: the room must survive and the
+  friend must get in with the code (tested here only with sockets cut by the local relay).
+- False positives of the lazy rules on real devices: the 150 s dead-seat sweep on hidden tabs with throttled timers, the
+  30-minute idle close ending a lobby the friends really use (open question 6), the stranger limits (8 frames, 20 s).
+- A round left running with nobody playing is never "idle" (risk 12): about 9,400 requests an hour for 2 players.
+- Toss (`feat/toss`): whether the WebView sends `Origin: https://ppodeuk-bath.apps.tossmini.com` on the handshake,
+  whether Toss must allowlist the workers.dev host, and `check-toss.js` needing the relay host computed from
+  `PG_RELAY_URL`. `netOrder()` is the one place to change there (`['ws']` or `['ws', 'peer']`), plus `tossOf()`'s
+  `space:"t"` swap.
+- Abuse: one IP can burn the day's free requests in about 7 minutes (2.6). It never bills; the cost is a day on the
+  `peer` fallback. Watch the Metrics page for sudden spikes.
+- Every `wrangler deploy` ends the open rooms with players (a host alone re-seats). Deploy outside play time.
+- Installed PWAs on pre-relay builds are `peer`-only until their service worker updates, so they cannot find new ws
+  rooms; a reload fixes it.
+- Not run here: `ws-workerd` (wrangler is not installed: open question 7 - `npm install` in `cloudflare/`, about 100 MB,
+  no login), and `test-mp-net.html?tr=ws` (the 15-minute manual run; its bc-only lines such as the 연습 경기 kind differ).
+- Open questions for the owner: 1-5 as in 17, plus 6 (the idle close length), 7 (install wrangler for `ws-workerd`) and
+  8 (the plan if Free counts every message).
