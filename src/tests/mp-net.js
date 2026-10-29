@@ -19,7 +19,8 @@
   const Q = new URLSearchParams(location.search);
   const LINK = Q.get('link') || 'lat=25&jit=30&drop=0.025';
   // ?tr=ws: the same game over the WebSocket relay (serve.js's local relay, design/relay.md 11.3) - a manual run before a
-  // release that touches the link (not a run-all job: some bc-only lines, the 연습 경기 kind, differ there)
+  // release that touches the link (not a run-all job: about 5 minutes more, and battle-net-ws already plays rounds on ws):
+  //   node tools/run-chrome.js "http://localhost:<port>/test-mp-net.html?tr=ws" - 1200 900 rt900000 "MPNET DONE"
   const TR = Q.get('tr') === 'ws' ? 'ws' : 'bc';
   const NETQ = 'net=' + TR + (TR === 'ws' ? '&relay=' + encodeURIComponent('ws://' + location.host + '/ws') : '');
   const ONLY = (Q.get('only') || '').split(',').filter(Boolean);

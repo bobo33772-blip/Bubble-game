@@ -1,6 +1,6 @@
 # 뽀득뽀득 목욕탕: 온라인 중계 서버 (WebSocket relay) v1 — design spec
 
-Status: **built** on `feat/ws-relay` (2026-10-28, not pushed, not deployed: the owner's part is section 12). The branch
+Status: **built** on `feat/ws-relay` (2026-10-28/29, not pushed, not deployed: the owner's part is section 12). The branch
 starts from the stopped WIP commit `8236a8d` (`feat/cf-turn`: a Cloudflare Worker that minted TURN credentials). The body
 below is the design; where the build differs it now says the built thing, and **section 19 is the as-built log** (what
 changed while building and why, the tests and their counts, what is still open). Code is referenced by function name,
@@ -967,8 +967,8 @@ The server is the real `cloudflare/src/room.js` loaded in-process (`await import
     It also covers, on the real deploy page: a host that stays alone while admin `kill` cuts its socket re-seats and a
     joiner then gets in; a preview copy (`space:"p"`) whose room a `w` page cannot find; the test hook's `str` / `fb`
     after the capped fallback.
-- `mp-net` over `ws` (`test-mp-net.html?tr=ws`, 15 minutes) is not in the default list. It can be run by name before a
-  release that touches the link.
+- `mp-net` over `ws` (`test-mp-net.html?tr=ws`, *as built* about 5 minutes) is not in the default list. It can be run
+  by name before a release that touches the link (19.3 has the command and its last result).
 - Every existing `bc` job (`net-bc`, `mp-net`, `battle-net`, `trophies-net`, `party-net`, ...) and `peer-deploy` stay
   exactly as they are.
 
@@ -1238,7 +1238,8 @@ What the adversarial review changed, and why (the body above already says the co
 
 The build agent finished the stopped WIP `225529f` (it had `cloudflare/`, the start of `wsLink` and the local relay; its
 two relay-URL regexes in `net.js` had lost their backslashes, so the file did not parse) and squashed it into the
-commits below. Nothing is pushed or deployed; no account, login or token was touched.
+commits of 19.3. A second stop (`9e447e7`, this section and `mp-net ?tr=ws`) was split into `08a61f3` and the doc
+commits, then the suite of 19.3 ran. Nothing is pushed or deployed; no account, login or token was touched.
 
 ### 19.1 Where the build differs from the body above, and why
 
@@ -1282,6 +1283,41 @@ the build injection, the preview's `space:"p"`, the itch strip and the checks (1
 | `CLOUDFLARE-SETUP.md`, `README.md`, CI | 12, 10.2 |
 | Deleted | `src/relay/ice.js`, `tools/ice-check.js`, `tools/relay-client-test.js` (13) |
 
+### 19.3 Commits and tests
+
+The commits on `feat/ws-relay`, after the design commits `06c7c06` / `d8aac6f` (all local):
+
+| Commit | What |
+|---|---|
+| `a2138c4` | The relay: the Worker and one Durable Object per room (`room.js`, `room-do.js`, `relay.js`, `wrangler.toml`), the local relay `tools/ws-relay.js`, `relay-node-test.js`, `build.js`'s one-line tag and the itch strip; the TURN pieces deleted (13) |
+| `6ca0754` | `net.js`: the `'ws'` transport (`wsLink` with the host re-seat, `relayInfo`, `TUNE.ws`), transport lists in `host()` / `join()`, the relay memory and `PG.Net.relay()`; `net-node` `testWs()` |
+| `bc4c0b3` | `game.js`: `netOrder()`, `codeTr()`, the six texts, `errText(e, join)`, `NET.str` / `NET.fb`, `?netinfo=1`; the WIP's TURN hunks reverted; `check-pages` |
+| `2040de4` | The real-socket jobs: `serve.js`'s local relay and admin, `net-ws`, `battle-net ?tr=ws` (`battle-net-ws`), `ws-deploy`, `ws-workerd`; run-all's skip result and relay check |
+| `55d8982` | `CLOUDFLARE-SETUP.md` (rewritten, 12), `README.md`, `tools/relay-check.js`, the CI comments |
+| `08a61f3` | `net-bc` knows `fromQuery().relay`; `test-mp-net.html?tr=ws` (the manual run) |
+| `8522316` and the next | This document as built (19) |
+
+The last run (2026-10-29, this worktree, `PG_BUILD_TEMP=C:/Temp/bogeul-ws PG_HTTP_PORT=8798`, headless Chrome always
+with `--mute-audio`): the relay's own jobs, the game's core, the online `bc` flows and the two platform jobs that
+`netOrder()` reaches (the deploy page without a relay, the artifact). Not the whole run-all list that 11.4 asked for:
+the jobs left out are forced `?net=bc` pages, where `netOrder()` is `['bc']` as before, or offline. Every job green:
+
+| Job | Checks | What it covers here |
+|---|---|---|
+| `relay-node` | 206 | 11.1: `RoomCore`, the Worker's `gate()`, the DO with a fake `ctx`, the shipped `wrangler.toml`, the local relay over real sockets, `build.js`'s relay URL |
+| `net-node` | 268 (88 in its `ws` group) | 11.2 (`NET_ONLY=ws` runs the group alone) and every older transport |
+| `net-ws` | 36 | 11.3: `PG.Net` over real sockets through the local relay |
+| `battle-net-ws` | 28 | `battle-net`'s scenes over `ws` |
+| `ws-deploy` | 25 | The deploy page with a relay: no PeerJS wait, the host re-seat, the capped fallback, space `p` |
+| `ws-workerd` | skipped | wrangler is not installed in `cloudflare/` (open question 7) |
+| `check-pages` | 44 | 10.1 / 10.3: the tag, the preview's `space:"p"`, nothing of the relay in the artifact |
+| `smoke` / `final-e2e` / `final-e2e2` | 35 / 35 / 258 | The game itself, unchanged |
+| `pwa` / `check-cloud` / `cloud` | 122 / 72 / 534 | The service worker (no `sw.js` change), the cloud saves |
+| `net-bc` / `mp-net` / `battle-net` | 33 / 103 / 28 | The `bc` jobs, unchanged (11.3: they stay exactly as they were) |
+| `party-net` / `trophies-net` / `shop-net` | 61 / 99 / 52 | The online flows on `bc`, unchanged |
+| `peer-deploy` / `room-platform` | 22 / 90 | The deploy page without a relay (`netOrder()` `['peer']`, today's behaviour) and the artifact (`['room']`) |
+| `test-mp-net.html?tr=ws` (manual, not a job) | 103 | All of `mp-net` over the local relay (24 sockets): the same 103 checks as on `bc`. The WIP's note that its `bc`-only lines would differ there was wrong: its one `bc` assertion is a `?shot=friendsnote` scene on a frame with its own query |
+
 ### 19.4 Still open (the owner's part, and what no test here can answer)
 
 - **Day one, the most important check (risk 0, guide step 7)**: does Cloudflare Free count incoming WebSocket messages at
@@ -1308,6 +1344,6 @@ the build injection, the preview's `space:"p"`, the itch strip and the checks (1
 - Installed PWAs on pre-relay builds are `peer`-only until their service worker updates, so they cannot find new ws
   rooms; a reload fixes it.
 - Not run here: `ws-workerd` (wrangler is not installed: open question 7 - `npm install` in `cloudflare/`, about 100 MB,
-  no login), and `test-mp-net.html?tr=ws` (the 15-minute manual run; its bc-only lines such as the 연습 경기 kind differ).
+  no login). (`test-mp-net.html?tr=ws`, the manual run, did run once: 19.3.)
 - Open questions for the owner: 1-5 as in 17, plus 6 (the idle close length), 7 (install wrangler for `ws-workerd`) and
   8 (the plan if Free counts every message).
