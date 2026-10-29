@@ -11651,6 +11651,14 @@ window.PG = window.PG || {};
     hostOff: '이 링크로는 방을 만들 수 없어요 · 게임을 보내 준 사람에게 이메일 초대를 부탁해요', peerHead: '온라인 연결 도구를 불러오지 못했어요',
     peerHow: '인터넷을 확인하고 새로고침해 주세요', joinOffPeer: '온라인 연결 도구가 없어요 · 새로고침해 주세요', hostOffPeer: '온라인 연결 도구가 없어요 · 새로고침해 주세요',
     reload: '새로고침',
+    // the online relay (design/relay.md 5.3): its free daily allowance used up (it refills at 00:00 UTC = 오전 9시), a host
+    // that fell back to direct connections, a joiner the relay could not answer
+    relayCap: '오늘 무료 중계를 다 써서 오전 9시까지는 직접 연결만 돼요',
+    hintCap: '오늘 무료 중계를 다 써서 직접 연결로 열었어요 · 오전 9시에 다시 채워져요',
+    hintDown: '중계 서버에 닿지 않아 직접 연결로 열었어요 · 친구가 못 들어오면 잠시 뒤 다시 만들어 주세요',
+    capTail: ' · 오늘 무료 중계는 오전 9시에 다시 채워져요',
+    joinQuiet: '방장 기기가 대답하지 않아요 · 잠시 뒤 다시 해 주세요',
+    joinDown: '중계 서버에 닿지 않아 방을 찾지 못했어요 · 인터넷을 확인하고 다시 해 주세요',
   };
   const MODE_DESC = { coop: '2~4명이 힘을 합쳐 모든 탕을 청소해요', battle: '거품으로 친구를 가두고 터뜨려 점수를 겨뤄요', party: PARTY_TX.desc };
   // (a mode with the kit options - 능력 끄기, 연사, the magazine line: battle and party)
@@ -11674,16 +11682,28 @@ window.PG = window.PG || {};
     return n;
   }
   const netText = (code) => (PG.Net && PG.Net.TEXT && PG.Net.TEXT[code]) || NET_TEXT[code] || NET_TEXT.lost;
-  function errText(e) {
+  function errText(e, join) {
     const c = e && e.code;
-    if (c === 'full' && e.reason === 'playing') return netText('playing');
-    if (c === 'timeout') return netText('joinFail');   // ("연결이 끊겼어요" read as a dropped game; it never connected)
-    return netText(c === 'not_found' || c === 'full' || c === 'timeout' || c === 'unavailable' ? c : 'unavailable');
+    // (a join: the relay could not be reached and nobody else had the code - design/relay.md 5.3; its 'ws' timeout: the
+    // relay found the room, the host's device never answered - not joinFail's same-Wi-Fi advice, which is about direct links)
+    let t = c === 'full' && e.reason === 'playing' ? netText('playing') : c === 'unavailable' && e.reason === 'relay' ? NET_TEXT.joinDown
+      : c === 'timeout' && e.transport === 'ws' ? NET_TEXT.joinQuiet
+      : c === 'timeout' ? netText('joinFail')   // ("연결이 끊겼어요" read as a dropped game; it never connected)
+        : netText(c === 'not_found' || c === 'full' || c === 'timeout' || c === 'unavailable' ? c : 'unavailable');
+    if (join && relayCapped()) t += NET_TEXT.capTail;
+    return t;
   }
+  // the relay's free allowance is used up today (PG.Net's memory: until 00:00 UTC)
+  const relayCapped = () => { try { return !!(PG.Net && PG.Net.relay && PG.Net.relay().state === 'cap'); } catch (e) { return false; } };
+  // ?netinfo=1 (the owner's phone test, design/relay.md 6.4): the room hint ends with the transport and the round trip
+  const NET_INFO = (() => { try { return new URLSearchParams(location.search).get('netinfo') === '1'; } catch (e) { return false; } })();
   const nowTicks = () => { const p = window.performance; return (p && p.now ? p.now() : Date.now()) * 0.06; };
 
   const NET = {
     tr: null, trForced: false, trInfo: null, trP: null, trDone: false,
+    // (str: the transport this session really uses, fb: why an earlier 'ws' entry did not serve - 'cap' | 'down' | null;
+    // NET.tr stays this page's first choice: the friends panel, localOnly)
+    str: null, fb: null,
     sess: null, role: null, code: '', selfId: null, hostId: null, screen: null, unsubs: [],
     // (rounds: 파티's 판 수, 3 | 5; partyU: a guest's copy of the host's R.u - the seats whose page cannot play the party)
     mode: 'coop', opts: { arena: -1, time: 3, perks: true, monsters: true, intrusion: true, rapid: false, bet: 0, rounds: 3 }, partyU: [],
@@ -11772,16 +11792,34 @@ window.PG = window.PG || {};
       let q = null; try { q = Net.fromQuery(); } catch (e) { q = null; }
       if (q && q.transport) { NET.trForced = true; NET.tr = q.transport; return NET.tr; }
       // the standalone page loads PeerJS deferred: while it is still on its way (DOMContentLoaded not yet fired),
-      // wait for it instead of deciding on 'bc' (the panel says 연결 도구를 불러오는 중…)
-      if (peerTag() && typeof window.Peer !== 'function' && !domReady) await new Promise((res) => { domWaiters.push(res); setTimeout(res, 20000); });
+      // wait for it instead of deciding on 'bc' (the panel says 연결 도구를 불러오는 중…) - unless the page has the relay:
+      // 'ws' comes first then, and PeerJS joins netOrder()'s list whenever it arrives
+      let relayOn = false; try { relayOn = typeof window.WebSocket === 'function' && !!(Net.relay && Net.relay().on); } catch (e) { relayOn = false; }
+      if (!relayOn && peerTag() && typeof window.Peer !== 'function' && !domReady) await new Promise((res) => { domWaiters.push(res); setTimeout(res, 20000); });
       let t = null; try { t = await Net.transports(); } catch (e) { t = null; }
       NET.trInfo = t;
-      NET.tr = t && t.room ? 'room' : t && t.peer ? 'peer' : t && t.bc ? 'bc' : null;
+      NET.tr = t && t.room ? 'room' : t && t.ws ? 'ws' : t && t.peer ? 'peer' : t && t.bc ? 'bc' : null;
       return NET.tr;
     })().then((tr) => { NET.trDone = true; return tr; }, () => { NET.trDone = true; return null; });
     return NET.trP;
   }
   const peerTag = () => !!document.querySelector('script[src*="peerjs"]');
+  // THE transport choice (design/relay.md 5.1): the list 방 만들기 / 참여 try in order. Forced (?net=x, tests) = [x];
+  // the artifact's room; the deploy: the relay first (window.PG_RELAY), PeerJS behind it while it still ships (also while
+  // its deferred tag is still loading: net.js waits for it); only this browser's tabs last.
+  // (feat/toss: an AIT.on branch here, e.g. ['ws'] or ['ws', 'peer'] - nowhere else)
+  function netOrder() {
+    if (NET.trForced) return NET.tr ? [NET.tr] : [];
+    const t = NET.trInfo || {};
+    if (t.room) return ['room'];
+    const out = [];
+    if (t.ws) out.push('ws');
+    if (typeof window.Peer === 'function' || (t.ws && peerTag())) out.push('peer');
+    if (!out.length && t.bc) out.push('bc');
+    return out;
+  }
+  // rooms shared by their code (and the ?join= link): the relay's and PeerJS's
+  const codeTr = (tr) => tr === 'peer' || tr === 'ws';
   // DOMContentLoaded: every deferred script (PeerJS on the standalone page) has run or failed by then
   let domReady = document.readyState === 'complete';
   const domWaiters = [];
@@ -11910,7 +11948,7 @@ window.PG = window.PG || {};
   }
 
   // a standalone deploy may set window.PG_PEER_OPTIONS (TURN servers, its own PeerServer): handed to PG.Net when it
-  // is a plain object
+  // is a plain object ('peer' alone reads it)
   function peerOpts(o) {
     let po = null; try { po = window.PG_PEER_OPTIONS; } catch (e) { po = null; }
     if (po && typeof po === 'object' && Object.getPrototypeOf(po) === Object.prototype) o.peerOptions = po;
@@ -11927,7 +11965,9 @@ window.PG = window.PG || {};
       // (only this browser's tabs - a public link, PeerJS missing: never a room nobody can enter. 방 만들기 is disabled
       // then; this answers a tap made while detection was still pending, and the test API)
       if (roomOffKind()) { netOffAnswer(false); return null; }
-      const o = peerOpts({ transport: tr });
+      const order = netOrder();
+      if (!order.length) throw Object.assign(new Error('x'), { code: 'unavailable' });
+      const o = peerOpts({ transport: order });
       if (net) o.net = net;
       s = await PG.Net.host(o);
     } catch (e) { NET.err = errText(e); }
@@ -11951,10 +11991,12 @@ window.PG = window.PG || {};
       // (only this browser's tabs: the host's room cannot be reached from here - say why at once, with no bc search
       // that would end in a false 방을 찾을 수 없어요; also when 참여 was tapped while detection was pending)
       if (roomOffKind()) return { ok: false, code: 'room_off', text: netOffAnswer(true) };
-      const o = peerOpts({ transport: tr, code });
+      const order = netOrder();
+      if (!order.length) throw Object.assign(new Error('x'), { code: 'unavailable' });
+      const o = peerOpts({ transport: order, code });
       if (net) o.net = net;
       s = await PG.Net.join(o);
-    } catch (e) { err = e; NET.err = errText(e); }
+    } catch (e) { err = e; NET.err = errText(e, true); }
     // (the room died under the attempt - not_granted on the join's presence: that, not 연결이 끊겼어요 / 방을 찾을 수
     // 없어요; detection runs again (-> this browser's tabs) and the card is up by the time this answers)
     if (!s && tr === 'room' && PG.Net.roomDead && PG.Net.roomDead()) { netRoomDead(); await netTransport(); return { ok: false, code: 'room_off', text: netOffAnswer(true) }; }
@@ -11967,7 +12009,7 @@ window.PG = window.PG || {};
   function netAttach(s, role) {
     netUnsub();
     netNick();
-    Object.assign(NET, { sess: s, role, code: s.code, selfId: s.selfId, err: '', gid: 0, ph: 'room', hostPh: 'room', ready: false, status: '',
+    Object.assign(NET, { sess: s, role, code: s.code, selfId: s.selfId, str: s.transport || NET.tr, fb: s.fallback || null, err: '', gid: 0, ph: 'room', hostPh: 'room', ready: false, status: '',
       remote: new Map(), others: new Map(), buf: mkBuf(), evQ: [], evs: [], rec: false, ctl: 'remote', pred: [], bounces: [], rvSent: {}, outR: 0, outP: 0, predLife: 0 });
     let peers = [];
     try { peers = s.peers(); } catch (e) { peers = []; }
@@ -11995,6 +12037,8 @@ window.PG = window.PG || {};
     showOverlay('room');
     setMusic('lobby');
     uiSfx('join');
+    // (?netinfo=1: the readout at the end of the room hint follows the measured round trip)
+    if (NET_INFO && !NET.infoT) NET.infoT = setInterval(() => { if (NET.screen === 'room') renderRoom(); }, 1000);
     renderRoom();
   }
   function netUnsub() { for (const u of NET.unsubs) { try { u(); } catch (e) { /* ignore */ } } NET.unsubs = []; }
@@ -12007,7 +12051,8 @@ window.PG = window.PG || {};
     // (a guest's NET.opts mirrored the host's room: its stake is never carried into a room this player hosts later)
     if (NET.role === 'guest') NET.opts.bet = 0;
     netUnsub();
-    NET.sess = null; NET.role = null; NET.rec = false; NET.roster = []; NET.screen = null; NET.code = '';
+    NET.sess = null; NET.role = null; NET.rec = false; NET.roster = []; NET.screen = null; NET.code = ''; NET.str = null; NET.fb = null;
+    if (NET.infoT) { clearInterval(NET.infoT); NET.infoT = null; }
     NET.remote = new Map(); NET.others = new Map(); NET.pred = []; NET.evQ = []; NET.buf = null;
     if (s) { try { s.leave(); } catch (e) { /* ignore */ } }
     if (G.online) { G.online = false; G.role = 'host'; G.menuOpen = false; G.localSlot = 0; }
@@ -13412,7 +13457,7 @@ window.PG = window.PG || {};
     else if (!tr) card = [why, [NET_TEXT.noNet], NET_TEXT.offSolo, false];
     else if (offK === 'peer') card = [NET_TEXT.peerHead, [NET_TEXT.peerHow], '', true];
     else if (offK) card = [NET_TEXT.offHead, [NET_TEXT.roomOff, NET_TEXT.offHow], NET_TEXT.offSolo, false];
-    else if (tr === 'peer') note = NET_TEXT.peer;
+    else if (codeTr(tr)) note = tr === 'ws' && relayCapped() ? NET_TEXT.relayCap : NET_TEXT.peer;
     else if (tr === 'room') note = NET_TEXT.room;
     // (an off answer from before is stale once online works here: PeerJS arrived late and the panel switched)
     if (NET.trDone && tr && !offK && OFF_ERRS.some((k) => NET.err === NET_TEXT[k])) NET.err = '';
@@ -13554,10 +13599,16 @@ window.PG = window.PG || {};
     if (dom.roomHint) {
       const C = (NET.code || '').toUpperCase();
       let hint = '';
+      const str = NET.str || NET.tr;
       if (NET.roster.length < MAX_PLAYERS) {
-        if (NET.tr === 'room') hint = '친구가 이 게임을 열면 ‘열린 방’에 이 방이 보여요 (Claude 로그인·초대 필요)';
-        else if (NET.tr === 'peer') hint = '친구에게 이 게임 링크와 방 코드 ' + C + '를 보내 주세요 (코드 복사에 링크도 담겨요)';
+        if (str === 'room') hint = '친구가 이 게임을 열면 ‘열린 방’에 이 방이 보여요 (Claude 로그인·초대 필요)';
+        // (a host whose relay entry did not serve says why it opened a direct room: design/relay.md 5.3)
+        else if (codeTr(str)) hint = host && NET.fb ? NET_TEXT[NET.fb === 'cap' ? 'hintCap' : 'hintDown'] : '친구에게 이 게임 링크와 방 코드 ' + C + '를 보내 주세요 (코드 복사에 링크도 담겨요)';
         else hint = localOnly() ? '이 브라우저의 다른 탭에서만 들어올 수 있어요' : '다른 탭의 친구와 하기에서 방 코드 ' + C + '로 참여해요';
+      }
+      if (NET_INFO) {
+        let rt = null; try { rt = NET.sess ? NET.sess.stats().rttMs : null; } catch (e) { rt = null; }
+        hint = (hint ? hint + ' · ' : '') + (str || '-') + ' ' + (typeof rt === 'number' ? rt + 'ms' : '-');
       }
       if (dom.roomHint.textContent !== hint) dom.roomHint.textContent = hint;
       dom.roomHint.hidden = !hint;
@@ -13613,7 +13664,7 @@ window.PG = window.PG || {};
   // 코드 복사: an invite (the code, plus this page's link with ?join= on the standalone deploy); phones get the share sheet
   function inviteText() {
     let t = GAME_NAME + ' 같이 해요! 방 코드 ' + (NET.code || '').toUpperCase();
-    if (NET.tr === 'peer') {
+    if (codeTr(NET.str || NET.tr)) {
       try { const u = new URL(location.href); u.search = ''; u.hash = ''; u.searchParams.set('join', NET.code); t += ' ' + u.toString(); } catch (e) { /* ignore */ }
     }
     return t;
@@ -13673,14 +13724,14 @@ window.PG = window.PG || {};
 
   // ================================================================== test / debug view of the online layer
   function netBrief() {
-    return { screen: NET.screen, role: NET.role, code: NET.code, transport: NET.tr, gid: NET.gid, ctl: NET.ctl, mySlot: G.localSlot,
+    return { screen: NET.screen, role: NET.role, code: NET.code, transport: NET.tr, str: NET.str, fb: NET.fb, gid: NET.gid, ctl: NET.ctl, mySlot: G.localSlot,
       snapMax: NET.snapMax, snapBytes: NET.snapBytes, renderTick: Math.round(NET.rt || 0) };
   }
   function netState() {
     const s = NET.sess;
     let stats = null; try { stats = s ? s.stats() : null; } catch (e) { stats = null; }
     return {
-      screen: NET.screen, role: NET.role, code: NET.code, transport: NET.tr, forced: NET.trForced, gid: NET.gid, ph: NET.role === 'host' ? NET.ph : NET.hostPh,
+      screen: NET.screen, role: NET.role, code: NET.code, transport: NET.tr, str: NET.str, fb: NET.fb, forced: NET.trForced, gid: NET.gid, ph: NET.role === 'host' ? NET.ph : NET.hostPh,
       mode: NET.mode, opts: Object.assign({}, NET.opts), nick: NET.nick, ready: NET.ready, canStart: canStart(), error: NET.err, status: NET.status,
       chip: dom.netChip && !dom.netChip.hidden ? dom.netChip.textContent : '', overlay: shownOverlay,
       gated: netGated(), gate: !!dom.netGate && !dom.netGate.hidden, // (손님은 온라인 불가: the deploy's sign-in card)
