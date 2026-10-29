@@ -1,7 +1,8 @@
 # 뽀득뽀득 목욕탕: 파티 다듬기 (party polish) v1 — design spec
 
 Status: **built** on `feat/party-polish` (worktree `bogeul-polish`, from `origin/main` c71e3ee = PR #21 merged) - every
-step of section 12, nothing cut; section 14 records what was built and where it differs from the text above (not pushed).
+step of section 12, nothing cut; section 14 records what was built and where it differs from the text above, 14.4 the
+audit before the PR.
 It builds on the party as built in design/party.md sections 18 (PR A) and 18.1 (PR B): the sequencer `G.party`,
 the minigame contract `MINI` / `MINI_FN`, the card / result / podium, the coins and the host-driven sync. Code is
 referenced by function name and section, never by line number. Every function named here exists today unless it is
@@ -859,3 +860,35 @@ time, 85 checks) every item of 10.3 (the 축구 part at real lengths, with the h
 waiting 45 / 60 s; the 역전 through a host-made prison of the rafter's, the shooter-judged claim being battle's own path);
 `tools/validate-levels.js` the v2 schedule rules of 10.4; `tools/audio-node-test.js` the new sfx and loop; `final-e2e2`
 the overlay's new parts.
+
+### 14.4 Audit before the PR (2026-10-29)
+
+Against sections 3-6 and the diff, every new path read on the host and on a guest:
+- **A re-drawn card kept a guest's old 준비.** A leaver on a 축구 card (4 -> 3) draws another game at the same 판
+  index, so a guest's `pr` (the index) still said "ready" and the host counted it on the new card at `P.t` 12 - the
+  new game's card could start after 2.5 s with nobody having seen it. Now `partyCardStart` notes each remote seat whose
+  latest state already carries `pr === P.i` (`P.prOld`); `updateCard` counts it only after a state without it, and the
+  guest clears its own `NET.partyReady` when the game at its index changes on the card (`partyView`). party.js checks the
+  host side with a fake remote seat.
+- **A leaver during a result view** stayed in the host's tally / 마지막 판! / award rows until the next beat (the guests
+  rebuild theirs every snapshot): `partyDrop` now refills whatever view `#pg-party` shows. party.js: the tally's rows
+  drop to 2 on the next frame.
+- **최종 순위's "before" order** left out the last 판's places as a tie-break (as the 판 tally does, 14.1), so two
+  players tied on points and 1등 that the last 판 had already split showed a false `▼1` with no bonus at all. The
+  awards change only the points: the "before" of 최종 순위 now uses `P.last`. party.js checks it.
+- Checked and unchanged: a guest that misses 끝! / the winner stage (its first result snapshot is the tally) shows the
+  tally from `guestPhase`; a beat or award change switches the view before `guestPhase`; the winner stage and the tally
+  are drawn from synced data only (`P.last`, `bt`); the echoed sounds (`mg_*`, `ready`, `drumroll`, `award`, the games')
+  and the local ones (`tally`, `rank_up`, in `NO_ECHO`); the soap / save / raft / 역전 decisions all on the host, a guest
+  only drawing them (the water, the surges and the soaps' y pure from the host's clock) and taking its animal back
+  through `takeOver` (flag 512); a raft never judged by the water, never caught, never touching (`canTouch`,
+  `trappable`), plain bubbles on both sides (`kitOf`); 역전 once per rafter, never from the flood; the flights at exact
+  clock frames, gold x2; the second ball only after a running 골! (the clock does not count it), two balls into goals on
+  one frame count once each, in 골든 골 only the first (`M.endAt`), a time-up with tied goals starts it only with both
+  teams present; `miniOver` runs on the host only; `PARTY_V` 3 through the existing `seatReady` / `seatOld`; the coins'
+  paths (`coinPartyRound`, `coinPartyNow` with the bonuses in the place); every new branch in solo / co-op / battle is
+  behind `G.party`, `G.mini` or `p.raft`.
+- Open, not built: a fresh page (pa 3) in the room of a host whose page is older (pa 2) is let in by that host's own
+  gate and would draw 물 from its own v2 schedule (the reverse of 6.1). Every page deploys together, so only a stale
+  PWA host meets it; the fix (the host's party version in `R`, the guest showing 새로고침 필요 for the host) is the
+  next PR's if friends hit it.
