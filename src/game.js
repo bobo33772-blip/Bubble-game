@@ -249,9 +249,10 @@ window.PG = window.PG || {};
   // ---- 파티 (design/party.md): constants up here - PARTY_TEXT and the font warm-up read them at load (the sequencer and
   // the minigames are their own section after rematch)
   // hi's pa: the minigames this page plays - 1 물 + 왕관, 2 + 거품 축구, 3 the polish (물 v2, the beats, the card's 준비 -
-  // design/party-polish.md); a seat under it is never ready in a party room (a page with pa 2 would read the beats and
-  // 물 v2's wire as noise), so it is told to refresh; the board PR takes the next number
-  const PARTY_V = 3;
+  // design/party-polish.md), 4 왕관's 1st is the one wearing it at time-up (a pa 3 page's card would still teach the
+  // longest hold and the gold x2); a seat under it is never ready in a party room (a page with pa 2 would read the beats
+  // and 물 v2's wire as noise), so it is told to refresh; the board PR takes the next number
+  const PARTY_V = 4;
   const PARTY_ROUNDS = [3, 5];
   const PARTY_PTS = { 2: [4, 0], 3: [4, 2, 0], 4: [4, 2, 1, 0] };   // by place; n = players at that 판's 시작!
   // frames (polish 3.1): early - last one standing; the card: the title splash, the earliest start, everyone ready ->
@@ -277,7 +278,7 @@ window.PG = window.PG || {};
   // 오리 튜브: its walk (x WALK), its body's top dy px over the surface, its hop's vy, a comeback's blink frames
   const RAFT = { walk: 0.75, dy: 12, hop: -3.0, inv: 90 };
   const SURGE_WARN = 1.5;                 // s of warning before a surge (the steps / the flood: rise.warn)
-  const CROWN2 = { every: 15, goldAt: 45, goldX: 2 };               // 왕관: a flight every 15 s; gold from 45 s, x2
+  const CROWN2 = { every: 15, goldAt: 45 };                         // 왕관: a flight every 15 s; the 45 s one gold (the last race)
   const BALL2 = { twoAt: 45, redrop: 45, golden: 20, cheer: 60 };   // 축구: the 2nd ball at 45 s; 골든 골 at most 20 s
   // each minigame: c its wire code, secs, ar the arena (['p', i] PG.PARTY_ARENAS[i], ['b'] a dry battle arena), fits(n),
   // team (two sides: the card's team line), and the card texts: name; how - the ONE-LINE how-to, which also says how to
@@ -287,7 +288,7 @@ window.PG = window.PG || {};
     water: { c: 'w', secs: 60, ar: ['p', 0], fits: (n) => n >= 2, name: '물 차오르기',
       how: '물이 차올라요! 가장 늦게 젖으면 1등', rule: '비누 방울을 먹으면 한 번 살아나요 · 빠지면 오리 튜브로 친구를 맞혀 역전!' },
     crown: { c: 'c', secs: 60, ar: ['b'], fits: (n) => n >= 2, name: '왕관 뺏기',
-      how: '왕관을 쓰고 가장 오래 버티면 1등', rule: '15초마다 왕관이 날아가요 · 마지막 15초는 황금 왕관 2배!' },
+      how: '끝날 때 왕관을 쓴 사람이 1등', rule: '15초마다 왕관이 날아가요 · 2등부터는 쓴 시간 순서' },
     // (not for 3 players: the screen has two sides - a third goal would sit in the ceiling or the floor, and 2v1 needs a
     // handicap kids cannot read off the screen; 3.2)
     ball: { c: 'b', secs: 60, ar: ['p', 1], fits: (n) => n === 2 || n === 4, team: true, name: '거품 축구',
@@ -333,7 +334,7 @@ window.PG = window.PG || {};
     x2: '점수 2배!', finish: '끝!', resultH: '{0}판 결과', lastH: '마지막 판!', lastSub: '점수 2배 · ', lead: '선두', gap: '1위와 {0}점 차',
     awardsH: '보너스상!', awardsSub: '상마다 +2점', times: '번', awardPts: '+2점', awardTie: '공동 수상!', finalH: '최종 순위', skip: '방장: 눌러서 넘기기',
     surge1: '큰 물결!', surge2: '점프로 피해요!', flood2: '계속 점프!', soapGot: '비누!', saved: '살았다!', raftMe: '오리 튜브로 친구를 맞혀요!',
-    revive: '역전!', reviveMe: '다시 올라왔어요!', crownFly: '왕관이 날아가요!', gold1: '황금 왕관!', gold2: '2배!',
+    revive: '역전!', reviveMe: '다시 올라왔어요!', crownFly: '왕관이 날아가요!', gold1: '황금 왕관!', gold2: '끝날 때 쓴 사람이 1등!',
     two1: '공이 하나 더!', two2: '골을 넣으면 공이 다시 떨어져요', golden1: '골든 골!', golden2: '먼저 넣는 팀이 이겨요!',
     roomLast: '마지막 판은 점수 2배!', roomAwards: '끝나면 보너스상 3개 · 상마다 +2점',
   };
@@ -4834,7 +4835,8 @@ window.PG = window.PG || {};
 
   // ---- 왕관 뺏기 (4.2): a 16x16 crown falls from the gather onto the centre stage at 시작!; the first free player to
   // touch it wears it (CROWN_SLOW), held frames count, a capture of the holder drops it (its dropper waits CROWN_NOPICK);
-  // places by time held (nobody touched it: all share 1st). holder -2: not out yet, -1: free
+  // places: the one wearing it at time-up 1st, the others by time held (flying or free at time-up: everyone by time held;
+  // nobody touched it: all share 1st). holder -2: not out yet, -1: free
   const crownHolder = (p) => !!p && !!G.mini && G.mini.id === 'crown' && !!G.mini.cr && G.mini.cr.holder === p.slot;
   function crownTick(M) {
     const cr = M.cr; if (cr.holder < -1) return;
@@ -4844,7 +4846,7 @@ window.PG = window.PG || {};
     if (cr.holder >= 0) {
       const p = G.players.find((q) => q.slot === cr.holder);
       if (!p) { cr.holder = -1; cr.vx = 0; cr.vy = 0; cr.onGround = false; }   // (its holder left: it drops where it was)
-      else { cr.x = clamp(p.x, WALL_L - 2, WALL_R - 14); cr.y = p.y - 8; M.held[p.slot] = (M.held[p.slot] | 0) + (M.gold ? CROWN2.goldX : 1); return; }
+      else { cr.x = clamp(p.x, WALL_L - 2, WALL_R - 14); cr.y = p.y - 8; M.held[p.slot] = (M.held[p.slot] | 0) + 1; return; }
     }
     if (cr.onGround) cr.vx *= 0.8;
     physBody(cr);
@@ -4863,7 +4865,8 @@ window.PG = window.PG || {};
     }
   }
   // a flight: a sparkle where the crown is, then it falls again from the gather exactly as at 시작! - nobody waits (the
-  // old holder may race too); gold: 황금 왕관! - from now held time counts CROWN2.goldX and the music hurries
+  // old holder may race too); gold: 황금 왕관! / 끝날 때 쓴 사람이 1등! - the last race (whoever wears it at time-up is
+  // 1st), drawn gold, and the music hurries
   function crownFly(M, gold) {
     const cr = M.cr;
     burst(cr.x + 8, cr.y + 8, 14, STAR_COLS, 1.8, 18);
@@ -5243,7 +5246,8 @@ window.PG = window.PG || {};
     dx.globalAlpha = 0.45; dx.fillStyle = '#3fbfe0'; dx.fillRect(0, wl, 96, 32 - wl); dx.globalAlpha = 0.9; dx.fillStyle = '#8fdcff'; dx.fillRect(0, wl, 96, 1); dx.globalAlpha = 1;
   }
   // 왕관: a floor and a centre stage; b walks wearing the crown (0-60); at 60 a sparkle and the crown flies up (an arc,
-  // 60-110) and falls on the stage; a jumps and takes it at 120; from 170 it blinks gold
+  // 60-110) and falls on the stage; a jumps and takes it at 120 and wears it to the loop's end (the 1st); from 170 it
+  // blinks gold
   function crownDemo(dx, f, a, b) {
     demoTiles(dx, 0, 28, 12, 8); demoTiles(dx, 40, 20, 2, 8);
     const bx = f < 60 ? dLerp(4, 22, f / 60) : 22, ax = f < 100 ? 72 : f < 120 ? dLerp(72, 44, (f - 100) / 20) : 44, ay = f < 100 ? 12 : f < 120 ? dArc(12, 4, (f - 100) / 20, 10) : 4;
@@ -5312,7 +5316,8 @@ window.PG = window.PG || {};
       init: () => ({ cr: { x: G.gather.x - 8, y: G.gather.y - 8, vx: 0, vy: 0, onGround: false, holder: -2, noPick: -1, noUntil: 0 }, held: {}, gold: 0, fl: 0 }),
       start(M) { Object.assign(M.cr, { x: G.gather.x - 8, y: G.gather.y - 8, vx: 0, vy: 0, holder: -1 }); queueBanner(PARTY_TX.crownIn, '', 80, 'round'); Snd.sfx('powerup'); },
       tick: crownTick,
-      key: (p, M) => M.held[p.slot] | 0,
+      // (wearing it at time-up: above any held count; the others - everyone while it flies or lies free - by held frames)
+      key: (p, M) => (M.cr && M.cr.holder === p.slot ? 1e7 : 0) + (M.held[p.slot] | 0),
       snap: (M) => { const cr = M.cr; return ['c', cr.holder, R0(cr.x), R0(cr.y), M.held[0] | 0, M.held[1] | 0, M.held[2] | 0, M.held[3] | 0, cr.noPick, M.gold | 0]; },
       view: crownView,
       drop(slot, M) { if (M.cr && M.cr.holder === slot) { M.cr.holder = -1; M.cr.vx = 0; M.cr.vy = 0; M.cr.onGround = false; } },
