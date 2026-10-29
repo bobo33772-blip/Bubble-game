@@ -8,6 +8,8 @@
 // session stored there would be readable by any other itch game - the zip's page never signs in (itchPage): with
 // `home` its PG_CLOUD is marked away (내 기록 offers 새 창에서 열기 to the game's own address, nothing loads), without
 // `home` it has no PG_CLOUD at all (no login UI on itch; trophies stay in that browser as on a deploy without a config).
+// The online relay (a deploy built with PG_RELAY_URL, design/relay.md 10.1): the zip's page has no window.PG_RELAY - the
+// relay lets no itch.io page in (one origin serves every itch game), so the itch build plays online over PeerJS only.
 // Every other file is deploy/'s, byte for byte.
 // A tiny dependency-free zip writer: one local header + data per file, the central directory, the end record; each
 // entry deflated (raw, zlib) when that is smaller, else stored; CRC-32; UTF-8 names; times from the files. The
@@ -95,8 +97,14 @@ function verify(buf, entries) {
 // the deploy page as the itch zip carries it (see the header): build.js writes PG_CLOUD as
 // <script>window.PG_CLOUD=Object.freeze({...});(function(c){...})(window.PG_CLOUD);</script>
 const CLOUD_TAG = /<script>window\.PG_CLOUD=Object\.freeze\((\{[\s\S]*?\})\);(\(function\(c\)\{[^<]*)<\/script>\n?/;
+// build.js's relay line (relayTag): <script id="pg-relay">window.PG_RELAY={url:"..."};</script>
+const RELAY_TAG = /<script id="pg-relay">[^<]*<\/script>\n?/g;
 function itchPage(html) {
-  const m = String(html).match(CLOUD_TAG);
+  html = String(html);
+  const relays = (html.match(/<script id="pg-relay">/g) || []).length;
+  html = html.replace(RELAY_TAG, '');
+  if (relays > 1 || /pg-relay|PG_RELAY\s*=/.test(html)) throw new Error('the itch page: the relay tag could not be stripped');
+  const m = html.match(CLOUD_TAG);
   if (!m) return html;
   const c = JSON.parse(m[1]);
   if (!c || typeof c !== 'object' || typeof c.home !== 'string' || !/^https:\/\//.test(c.home)) return html.replace(m[0], () => '');
@@ -113,6 +121,7 @@ function pack(out) {
     return { name, data, mtime: fs.statSync(f).mtime };
   });
   if (/window\.PG_CLOUD=/.test(entries[0].data.toString('utf8')) && !/"away":1/.test(entries[0].data.toString('utf8'))) throw new Error('the itch page must never sign in (PG_CLOUD without away)');
+  if (/pg-relay|PG_RELAY\s*=/.test(entries[0].data.toString('utf8'))) throw new Error('the itch page must not carry the relay');
   const buf = zip(entries);
   verify(buf, entries);
   fs.writeFileSync(out, buf);

@@ -1,4 +1,4 @@
-// Battle catches + the shot cap ONLINE, in real time: same-origin iframes of preview.html on PG.Net's 'bc' transport
+// Battle catches + the shot cap ONLINE, in real time: same-origin iframes of preview.html on PG.Net's 'bc' transport (?tr=ws: 'ws')
 // at lat=60&jit=0 per page (applied on both ends: ~120 ms one way, a phone on TURN), built to test-battle-net.html:
 //   node tools/run-chrome.js http://localhost:8775/test-battle-net.html - 1200 900 rt300000 "BNET DONE"
 // A hit that looks like a hit on the SHOOTER's screen is a hit (design: lag-compensated catches, game.js lagClaims):
@@ -27,6 +27,10 @@
   'use strict';
   const Q = new URLSearchParams(location.search);
   const LINK = Q.get('link') || 'lat=60&jit=0';
+  // ?tr=ws: the same scenarios over the WebSocket relay (tools/serve.js's local relay, design/relay.md 11.3) - the link
+  // simulation is then each page's own delay in front of its socket (in order, never dropped)
+  const TR = Q.get('tr') === 'ws' ? 'ws' : 'bc';
+  const NETQ = 'net=' + TR + (TR === 'ws' ? '&relay=' + encodeURIComponent('ws://' + location.host + '/ws') : '');
   const ONLY = (Q.get('only') || '').split(',').filter(Boolean);
   let pass = 0, fail = 0;
   const log = (s) => console.log(s);
@@ -40,7 +44,7 @@
   function frame(i) {
     return new Promise((resolve, reject) => {
       const f = document.createElement('iframe');
-      f.src = 'preview.html?net=bc&' + LINK + '&frame=' + i;
+      f.src = 'preview.html?' + NETQ + '&' + LINK + '&frame=' + i;
       f.style.cssText = 'position:fixed;left:' + (i % 2) * 600 + 'px;top:' + (i >> 1) * 450 + 'px;width:600px;height:450px;border:0';
       const t = setTimeout(() => reject(new Error('frame ' + i + ' did not load')), 30000);
       f.onload = async () => {
