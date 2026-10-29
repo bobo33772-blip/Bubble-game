@@ -13,8 +13,8 @@
 // the tie-break; 오리 튜브 - not out, flag 512, on the surface, slow, a small hop, plain bubbles, never caught, never
 // judged; its bubble's capture; 역전 once a 판 and never from the flood), 왕관 뺏기 (it falls onto the centre stage, the
 // first touch takes it, held time, a capture drops it, the dropper waits, a capy's shield keeps it, the holder is
-// slower, a leaver drops it, places - 1st wearing it at time-up, a capture at the buzzer, the rest and a free crown by
-// held time; the flights at 15 / 30 / 45 s and the gold, held time no longer doubled), 거품 축구 (the field, the teams by
+// slower, a leaver drops it, places - 1st wearing it at time-up, a capture / a pick-up at the buzzer, the rest and a
+// free crown by held time; the flights at 15 / 30 / 45 s and the gold, held time no longer doubled), 거품 축구 (the field, the teams by
 // standing, the kickoff, body pushes, shots, a capy's slam, goals, the clock stopping for 골!, the kickoff opening every
 // prison, team places; the second ball at 45 s, its goals with no freeze and a re-drop, 골든 골 and its draw, 60 s of
 // random kicks), no KO in a party, the card (the splash, 준비 완료 and its timings, the auto start, a leaver), the result
@@ -438,6 +438,13 @@
     D.trapPlayer(1, 2); until(() => G.mode === 'result', 20);
     const ra = PS();
     ok('crown: caught 4 frames before time-up and still flying at the buzzer -> nobody wears it: places by time held (1 1st, 2 2nd, 0 3rd)', G.mode === 'result' && ra.mini.cr.holder === -1 && !ra.mini.cr.onGround && ra.last[1] === 1 && ra.last[2] === 2 && ra.last[0] === 3, [ra.mini.cr, ra.last, ra.mini.held]);
+    // a pick-up on the very last frame (the crown free on 0 with 1 frame left): the grabber is 1st with no held time
+    lateHolder(); until(() => G.battle.left <= 1, 1000);
+    put(0, 20, 40); put(1, 200, 40); put(2, 220, 40);
+    Object.assign(G.mini.cr, { holder: -1, x: pl(0).x, y: pl(0).y, vx: 0, vy: 0, onGround: false, noPick: -1, noUntil: 0 });
+    const left1 = G.battle.left; step(1);
+    const rl = PS();
+    ok('crown: picked up on the very last frame -> the grabber is 1st with 0 held (0 1st, 1 ~15 s 2nd, 2 5 s 3rd)', left1 === 1 && G.mode === 'result' && rl.mini.cr.holder === 0 && (rl.mini.held[0] | 0) === 0 && rl.last[0] === 1 && rl.last[1] === 2 && rl.last[2] === 3, [left1, G.mode, rl.mini.cr, rl.last, rl.mini.held]);
     // nobody touched it: everyone shares 1st
     party(['duck', 'cat', 'frog', 'otter'], { plan: ['crown'] });
     toPlaying(); P.skip();
