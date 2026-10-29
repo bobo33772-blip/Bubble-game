@@ -738,6 +738,17 @@
     until(() => PS().t >= 200, 200); P.drop(2);
     until(() => G.mode !== 'card', 100);
     ok('card: the last one not ready leaves at 200 f -> the 3-2-1 at 230', G.mode === 'countdown' && PS().t === 230, [G.mode, PS().t]);
+    // a re-drawn card (4 -> 3 on a 축구 card: another game, the same 판 index): a remote seat's pr for the game before
+    // does not count on it; a press after a state without it does
+    party(['duck', 'cat', 'frog', 'penguin'], { plan: ['ball', 'water', 'crown'] });
+    const gid = D.mp && D.mp.state ? D.mp.state().gid : 0;
+    P.fakeRemote(1, { gid, pr: 0 }); until(() => PS().t >= 14, 30);
+    const rd0 = !!PS().rdy[1];
+    P.drop(3); step(1);
+    const id1 = PS().mini.id; until(() => PS().t >= 20, 40);
+    const stale = !!PS().rdy[1];
+    P.fakeRemote(1, { gid, pr: -1 }); step(2); P.fakeRemote(1, { gid, pr: 0 }); step(2);
+    ok('card: a re-drawn card (4 -> 3 on 축구) - a remote seat\'s 준비 for the game before does not count; a press after a state without it does', rd0 && id1 !== 'ball' && !stale && !!PS().rdy[1], [rd0, id1, stale, PS().rdy]);
     // the countdown's 2 / 1 on the last 판 say 점수 2배; 시작! plays mg_go
     party(['duck', 'cat'], { plan: ['crown'] }); readyAll();
     until(() => G.mode === 'countdown' && G.banner && G.banner.main === '2', 300);
@@ -826,6 +837,12 @@
     party(['duck', 'cat'], { plan: ['crown'] }); toPlaying(); P.skip();
     toBeat('t'); until(() => !beatIs('t'), 300);
     ok('awards: no award to give (nobody won more, trapped or escaped) -> the tally goes straight to 최종 순위', beatIs('z') && (!PS().A || PS().A.length === 0), [P.beat(), PS().A]);
+    // 최종 순위's "before" standing keeps the last 판's tie-break (only the bonuses move a row): equal points and 1등,
+    // the last places 1 / 2, no bonus -> the rows stay 1 / 2 with no ▲ / ▼
+    Object.assign(G.party, { pts: { 0: 8, 1: 8 }, wins: { 0: 1, 1: 1 }, last: { 0: 1, 1: 2 }, bonus: {} }); P.fill(-1);
+    until(() => P.beat().bt >= 50, 60);
+    const zb = P.card().board;
+    ok('awards: 최종 순위 keeps the last 판\'s tie-break in the standing before the awards - no bonus, no ▲ / ▼', zb.length === 2 && same(zb.map((r) => r.place), ['1', '2']) && zb.every((r) => !r.mv), zb);
     // 탈출: escapes by mashing (>= 3 presses) count, a friend's touch does not
     party(['duck', 'cat', 'frog'], { plan: ['crown'] }); toPlaying();
     for (const p of G.players) p.invuln = 0;
@@ -887,7 +904,8 @@
     // a leaver during the beats: they go on with the players left; < 2 left: the walkover
     party(['duck', 'cat', 'frog'], { plan: ['crown', 'water'] });
     toPlaying(); P.skip(); toBeat('t'); P.drop(2);
-    ok('leavers: one leaves during the tally (3 -> 2) - the beats go on', G.mode === 'result' && beatIs('t') && G.players.length === 2, [G.mode, P.beat()]);
+    step(1);
+    ok('leavers: one leaves during the tally (3 -> 2) - the beats go on, the tally\'s rows without the leaver at once', G.mode === 'result' && beatIs('t') && G.players.length === 2 && P.card().board.length === 2, [G.mode, P.beat(), P.card().board.length]);
     P.drop(1);
     ok('leavers: ... down to 1 during the beats -> the walkover podium (no awards)', G.mode === 'podium' && PS().walk, [G.mode, PS().walk]);
 

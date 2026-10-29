@@ -4289,6 +4289,10 @@ window.PG = window.PG || {};
     const P = G.party;
     G.mode = 'card'; P.t = 0; G.countNext = null; G.banner = null; G.bannerQ = [];
     P.rdy = {}; P.allAt = -1; P.auto = partyF(P.plan.slice(0, P.i).includes(P.plan[P.i]) ? 'autoRe' : 'auto'); P.cl = P.auto;
+    // (a re-drawn card keeps its 판 index: a guest's pr for the game drawn before still says it - each such seat counts
+    // again only after a state without it, updateCard)
+    P.prOld = {};
+    for (const p of G.players) { const rem = p.local === false && NET.remote.get(p.id), st = rem && rem.st; if (st && st.gid === NET.gid && st.pr === P.i) P.prOld[p.slot] = 1; }
   }
   // my own 준비 (the card's button, Enter, a jump / shoot press - never in the first 12 frames: a press held from the
   // beat before): a guest says it in its body state (pr, guestSend), the host / an offline screen marks its own seat
@@ -4316,7 +4320,10 @@ window.PG = window.PG || {};
     if (P.t >= 12) for (const p of G.players) {
       if (P.rdy[p.slot]) continue;
       if (p.local !== false) { const i = ins && ins[p.slot]; if (i && (i.jumpP || i.shootP) && !G.menuOpen) partyReadySet(p.slot); }
-      else { const rem = NET.remote.get(p.id), st = rem && rem.st; if (st && st.gid === NET.gid && st.pr === P.i) partyReadySet(p.slot); }
+      else {
+        const rem = NET.remote.get(p.id), st = rem && rem.st, pr = !!st && st.gid === NET.gid && st.pr === P.i;
+        if (P.prOld && P.prOld[p.slot]) { if (!pr) delete P.prOld[p.slot]; } else if (pr) partyReadySet(p.slot);
+      }
     }
     partyAllCheck();
     const end = P.allAt >= 0 ? Math.max(partyF('cardMin'), P.allAt + partyF('allIn')) : P.auto;
@@ -4459,7 +4466,7 @@ window.PG = window.PG || {};
     if (G.players.length < 2) { partyFinal(true); return; }
     partyReplan();
     partyAllCheck();
-    if (G.mode === 'card' && shownOverlay === 'party') fillParty();
+    if (shownOverlay === 'party') fillParty();   // (the card's ready row, a result view's rows: without the leaver)
   }
   function partyReplan() {
     const P = G.party, n = G.players.length, pre = G.mode === 'card' || G.mode === 'countdown', keep = pre ? P.i : P.i + 1;
@@ -4492,7 +4499,10 @@ window.PG = window.PG || {};
     const pa = g.pa; if (!pa || typeof pa !== 'object') return;
     const plan = (typeof pa.L === 'string' ? pa.L.slice(0, 5) : '').split('').map((c) => MINI_IDS.find((id) => MINI[id].c === c) || MINI_IDS[0]);
     const P = G.party || (G.party = { opts: { perks: G.opts.perks, rapid: G.opts.rapid, rounds: G.opts.rounds }, crownAr: -1, res: null });
+    const i0 = P.plan ? P.i : -1, id0 = P.plan ? P.plan[P.i] : null;
     P.n = nInt(pa.n, 1, 5, 3); P.i = nInt(pa.i, -1, 4, 0); P.plan = plan.length ? plan : [MINI_IDS[0]]; P.t = nInt(pa.t, 0, 1e5, 0);
+    // (a re-drawn card - a leaver: the same 판 index, another game: my 준비 was for the game before, press again)
+    if (g.ph === 'a' && P.i === i0 && id0 && P.plan[P.i] !== id0 && NET.partyReady === P.i) NET.partyReady = -1;
     P.cl = nInt(pa.cl, 1, 1e4, PARTY_F.auto); P.auto = P.cl; P.ft = nInt(pa.ft, 0, 1e6, 0);
     P.pts = {}; P.wins = {}; P.last = {}; P.gain = {};
     for (const r of Array.isArray(pa.P) ? pa.P.slice(0, MAX_PLAYERS) : []) {
@@ -5490,7 +5500,8 @@ window.PG = window.PG || {};
     }
     // (the tally: the rows in the standing before this 판 - before the awards for 최종 순위 - each counting its gain in)
     const z = P.b === 'z', gainOf = (s) => (z ? P.bonus[s] | 0 : Math.max(0, P.gain[s] | 0));
-    const before = { pts: {}, wins: {}, last: {} };
+    // (최종 순위: the awards change only the points - the last 판's places still break ties, as after its tally)
+    const before = { pts: {}, wins: {}, last: z ? P.last : {} };
     for (const s of slots) { before.pts[s] = (P.pts[s] | 0) - gainOf(s); before.wins[s] = z ? P.wins[s] | 0 : Math.max(0, (P.wins[s] | 0) - (P.last[s] === 1 ? 1 : 0)); }
     const st0 = partyStandings(before, slots), st1 = partyStandings(P, slots);
     const key = JSON.stringify([P.b, P.i, st0, st1, slots.map((s) => [P.pts[s] | 0, gainOf(s)]), me, G.players.map((p) => [p.slot, p.nick, p.look])]);
