@@ -4300,8 +4300,11 @@ window.PG = window.PG || {};
   function partyReadySet(slot) {
     const P = G.party; if (!P || P.rdy[slot] || !G.players.some((p) => p.slot === slot)) return;
     P.rdy[slot] = 1; Snd.sfx('ready');
+    partyAllCheck();
     if (shownOverlay === 'party') fillParty();
   }
+  // everyone present ready: the frame of the card it happened on (the card ends allIn later, never before cardMin)
+  function partyAllCheck() { const P = G.party; if (P && G.mode === 'card' && P.allAt < 0 && G.players.length && G.players.every((p) => P.rdy[p.slot])) P.allAt = P.t; }
   // the card (3.2): its title splash, then the how-to; each present player's 준비 (a local one's jump / shoot press, a
   // remote one's pr); everyone ready -> it ends allIn later (never before cardMin), else at the auto start; then 3-2-1
   function updateCard(ins) {
@@ -4315,7 +4318,7 @@ window.PG = window.PG || {};
       if (p.local !== false) { const i = ins && ins[p.slot]; if (i && (i.jumpP || i.shootP) && !G.menuOpen) partyReadySet(p.slot); }
       else { const rem = NET.remote.get(p.id), st = rem && rem.st; if (st && st.gid === NET.gid && st.pr === P.i) partyReadySet(p.slot); }
     }
-    if (P.allAt < 0 && G.players.length && G.players.every((p) => P.rdy[p.slot])) { P.allAt = P.t; if (shownOverlay === 'party') fillParty(); }
+    partyAllCheck();
     const end = P.allAt >= 0 ? Math.max(partyF('cardMin'), P.allAt + partyF('allIn')) : P.auto;
     if (P.t >= end) { if (!G.menuOpen) showOverlay(null); beginCountdown(); }
   }
@@ -4455,6 +4458,7 @@ window.PG = window.PG || {};
     if (P.rdy) delete P.rdy[slot];
     if (G.players.length < 2) { partyFinal(true); return; }
     partyReplan();
+    partyAllCheck();
     if (G.mode === 'card' && shownOverlay === 'party') fillParty();
   }
   function partyReplan() {
@@ -4646,8 +4650,9 @@ window.PG = window.PG || {};
   }
   // a 비누 방울 (host, at each rise.soaps second): when fewer than SOAP.max float, one appears over the water at least
   // SOAP.gap px from the others
+  let partyNoSoap = false;   // (debug: tests that park animals by the water turn the soaps off)
   function soapSpawn(M) {
-    if (M.soaps.length >= SOAP.max) return;
+    if (partyNoSoap || M.soaps.length >= SOAP.max) return;
     let x = ri(WALL_L + 8, WALL_R - 24);
     for (let i = 0; i < 12 && M.soaps.some((q) => Math.abs(q.x - x) < SOAP.gap); i++) x = ri(WALL_L + 8, WALL_R - 24);
     if (M.soaps.some((q) => Math.abs(q.x - x) < SOAP.gap)) return;
@@ -5184,6 +5189,90 @@ window.PG = window.PG || {};
     text(String((M.goals && M.goals[t]) | 0), x + 27, 9, BALL_TEAM[t]);
   }
 
+  // ---- the card's animated how-to (polish 3.2.1, MINI_FN[id].demo): each screen draws its own 96x32 loop into
+  // #pg-party-demo (never on the wire) from renderScene while the card shows - a pure function of f (P.t % 240), with my
+  // animal a (slot 0's offline) and the next seat's b, so a page drawing it late or skipping frames is still right
+  const dLerp = (p, q, u) => p + (q - p) * clamp(u, 0, 1);
+  const dArc = (p, q, u, h) => dLerp(p, q, u) - Math.sin(Math.PI * clamp(u, 0, 1)) * h;   // (a hop from p to q, h px high)
+  // a frame drawn at s px (16 px frames halve cleanly to 8), mirrored when flip
+  function demoSpr(dx, name, i, x, y, s, flip, alpha) {
+    const f = frameOf(name, i); if (!f) return;
+    const w = s || f.w, hh = s ? Math.round(f.h * s / f.w) : f.h;
+    dx.globalAlpha = alpha === undefined ? 1 : alpha;
+    if (flip) { dx.save(); dx.translate(Math.round(x) + w, Math.round(y)); dx.scale(-1, 1); dx.drawImage(f.c, 0, 0, w, hh); dx.restore(); }
+    else dx.drawImage(f.c, Math.round(x), Math.round(y), w, hh);
+    dx.globalAlpha = 1;
+  }
+  function demoTiles(dx, x, y, n, s) { const t = themeOf(LV || { theme: 1 }).tile; for (let k = 0; k < n; k++) demoSpr(dx, t, 0, x + k * (s || 8), y, s || 8); }
+  function demoRing(dx, x, y, r, col) { dx.globalAlpha = 0.9; dx.strokeStyle = col; dx.lineWidth = 1; dx.beginPath(); dx.arc(x, y, r, 0, Math.PI * 2); dx.stroke(); dx.globalAlpha = 1; }
+  // 물: three 3-tile tiers (tops y 28 / 20 / 12); the water band rises 32 -> 22 over 0-150; a hops tier to tier (at 30,
+  // 90) and takes a 비누 floating over the water at 110 (its pink ring shows); b is caught by a bubble at 60, its prison
+  // sinks into the water at 100, and from 140 it bobs on a duck ring and blows a bubble toward a
+  function waterDemo(dx, f, a, b) {
+    for (const [x, y] of [[4, 28], [36, 20], [68, 12]]) demoTiles(dx, x, y, 3);
+    const wl = Math.round(dLerp(32, 22, f / 150));
+    const ax = f < 30 ? 12 : f < 50 ? dLerp(12, 44, (f - 30) / 20) : f < 90 ? 44 : f < 110 ? dLerp(44, 76, (f - 90) / 20) : 76;
+    const ay = f < 30 ? 20 : f < 50 ? dArc(20, 12, (f - 30) / 20, 8) : f < 90 ? 12 : f < 110 ? dArc(12, 4, (f - 90) / 20, 8) : 4;
+    const hop = (f >= 30 && f < 50) || (f >= 90 && f < 110);
+    demoSpr(dx, a + (hop ? '_jump' : '_idle'), 0, ax, ay, 8, false);
+    if (f < 110) { const sy = wl - 7 + Math.round(Math.sin(f / 10)); demoRing(dx, 62, sy, 4, '#ffc9dc'); demoSpr(dx, 'coin', 0, 60, sy - 2, 4); }
+    else demoRing(dx, ax + 4, ay + 4, 6, '#ffc9dc');
+    if (f < 60) demoSpr(dx, b + '_walk', (f / 8) | 0, dLerp(4, 16, f / 60), 20, 8, false);
+    else if (f < 140) {
+      const py = f < 100 ? 18 : dLerp(18, wl - 2, (f - 100) / 30);
+      demoSpr(dx, b + '_idle', 0, 16, py + 2, 8, false, 0.8); demoSpr(dx, 'bubble', 0, 14, py, 12, false, 0.85);
+    } else {
+      const by = wl - 6 + Math.round(Math.sin(f / 8));
+      dx.save(); dx.beginPath(); dx.rect(0, 0, 96, by + 6); dx.clip(); demoSpr(dx, b + '_idle', 0, 16, by, 8, false); dx.restore();
+      demoSpr(dx, 'duck_ring', (f >> 4) & 1, 14, by + 4, 12);
+      if (f >= 170) demoSpr(dx, 'bubble', 0, dLerp(26, 70, (f - 170) / 70), dLerp(by - 2, 8, (f - 170) / 70), 8);
+    }
+    dx.globalAlpha = 0.45; dx.fillStyle = '#3fbfe0'; dx.fillRect(0, wl, 96, 32 - wl); dx.globalAlpha = 0.9; dx.fillStyle = '#8fdcff'; dx.fillRect(0, wl, 96, 1); dx.globalAlpha = 1;
+  }
+  // 왕관: a floor and a centre stage; b walks wearing the crown (0-60); at 60 a sparkle and the crown flies up (an arc,
+  // 60-110) and falls on the stage; a jumps and takes it at 120; from 170 it blinks gold
+  function crownDemo(dx, f, a, b) {
+    demoTiles(dx, 0, 28, 12, 8); demoTiles(dx, 40, 20, 2, 8);
+    const bx = f < 60 ? dLerp(4, 22, f / 60) : 22, ax = f < 100 ? 72 : f < 120 ? dLerp(72, 44, (f - 100) / 20) : 44, ay = f < 100 ? 12 : f < 120 ? dArc(12, 4, (f - 100) / 20, 10) : 4;
+    demoSpr(dx, b + (f < 60 ? '_walk' : '_idle'), (f / 8) | 0, bx, 12, 16, false);
+    demoSpr(dx, a + (f >= 100 && f < 120 ? '_jump' : '_idle'), 0, ax, ay, 16, true);
+    const gold = f >= 170, cr = frameOf(SPR_CROWN, 0), cf = cr && gold && ((f >> 2) & 1) ? tintOf(cr, '#ffd447', 0.6) : cr;
+    let cx = bx + 4, cy = 4;
+    if (f >= 60 && f < 110) { const u = (f - 60) / 50; cx = dLerp(bx + 4, 44, u); cy = dLerp(4, 12, u) - Math.sin(Math.PI * u) * 10; }
+    else if (f >= 110 && f < 120) { cx = 44; cy = 12; }
+    else if (f >= 120) { cx = ax + 4; cy = ay - 4; }
+    if (cf) { dx.drawImage(cf.c, Math.round(cx), Math.round(cy), 8, 8); }
+    if (f >= 60 && f < 72) for (let k = 0; k < 4; k++) { dx.fillStyle = STAR_COLS[k % STAR_COLS.length]; dx.fillRect(Math.round(bx + 8 + Math.cos(k * 1.6 + f / 3) * (f - 58)), Math.round(4 + Math.sin(k * 1.6 + f / 3) * (f - 58) / 2), 1, 1); }
+  }
+  // 축구: the field with the right goal net; a walks into the ball (0-80), the ball rolls into the net (80-120, the net
+  // wobbles, star sparkles); at 150 a second, pink ball drops from the top
+  function ballDemo(dx, f, a) {
+    demoTiles(dx, 0, 28, 12, 8);
+    const nx = 80 + (f >= 116 && f < 140 ? Math.round(Math.sin(f) * 1) : 0);
+    dx.globalAlpha = 0.5; dx.fillStyle = BALL_TEAM[1];
+    for (let x = nx + 2; x < 96; x += 3) dx.fillRect(x, 12, 1, 16);
+    for (let y = 14; y < 28; y += 3) dx.fillRect(nx, y, 96 - nx, 1);
+    dx.globalAlpha = 1; dx.fillStyle = '#ffffff'; dx.fillRect(nx, 11, 16, 1);
+    const ax = f < 80 ? dLerp(4, 40, f / 80) : 40;
+    demoSpr(dx, a + (f < 80 ? '_walk' : '_idle'), (f / 8) | 0, ax, 12, 16, false);
+    const bxp = f < 80 ? 58 : f < 120 ? dLerp(58, 86, (f - 80) / 40) : 86;
+    if (f < 140) demoSpr(dx, 'giant_bubble', (f / 10) | 0, bxp - 8, 12, 16);
+    if (f >= 116 && f < 140) for (let k = 0; k < 5; k++) { dx.fillStyle = STAR_COLS[k % STAR_COLS.length]; dx.fillRect(Math.round(86 + Math.cos(k * 1.3 + f / 4) * (f - 112) / 2), Math.round(18 + Math.sin(k * 1.3 + f / 4) * (f - 112) / 3), 1, 1); }
+    if (f >= 150) { const y = Math.min(12, dLerp(-16, 12, (f - 150) / 30)), g = frameOf('giant_bubble', 0); if (g) { const t = tintOf(g, '#ff8fb1', 0.35); dx.drawImage(t.c, 40, Math.round(y), 16, 16); } }
+  }
+  // renderScene's end: the card's demo canvas (cleared and drawn each frame it shows)
+  function drawPartyDemo() {
+    const P = G.party, cv = $('pg-party-demo');
+    if (!P || !cv || cv.hidden || shownOverlay !== 'party' || G.mode !== 'card' || P.t < partyF('splash')) return;
+    const id = P.plan[clamp(P.i, 0, P.plan.length - 1)], F = MINI_FN[id]; if (!F || !F.demo) return;
+    const dx = cv._dx || (cv._dx = cv.getContext('2d')); if (!dx) return;
+    dx.setTransform(1, 0, 0, 1, 0, 0); dx.imageSmoothingEnabled = false; dx.globalAlpha = 1;
+    dx.fillStyle = '#0c2629'; dx.fillRect(0, 0, 96, 32);
+    const me = myPlayer() || G.players.find((p) => p.slot === 0) || G.players[0], seats = G.players.slice().sort((x, y) => x.slot - y.slot);
+    const nb = me ? seats[(seats.indexOf(me) + 1) % Math.max(1, seats.length)] : null;
+    const ca = me && isChar(me.char) ? me.char : 'duck', cb = nb && nb !== me && isChar(nb.char) ? nb.char : ca === 'cat' ? 'duck' : 'cat';
+    try { F.demo(dx, P.t % 240, ca, cb); } catch (e) { /* a demo never breaks the card */ }
+  }
   // each minigame's hooks: spawns (the k-th player's spawn, from its fresh state), init (its state), start (시작!), tick (a
   // playing frame), key (the place key, bigger is better), snap / view (its wire array, 6.4), drop (a leaver), draw, hud
   // (a seat's 2nd line); optional: hold (the clock stands still this frame) / held (a snapshot's g.mg says so), win (the
@@ -5202,6 +5291,7 @@ window.PG = window.PG || {};
       drop() {},
       draw: waterDraw,
       hud: waterHud,
+      demo: waterDemo,
     },
     crown: {
       // (the battle arena's spawns with startArena's swap by 판: G.matchNo = the 판 index)
@@ -5215,6 +5305,7 @@ window.PG = window.PG || {};
       drop(slot, M) { if (M.cr && M.cr.holder === slot) { M.cr.holder = -1; M.cr.vx = 0; M.cr.vy = 0; M.cr.onGround = false; } },
       draw: crownDraw,
       hud: crownHud,
+      demo: crownDemo,
     },
     ball: {
       spawns: (ini) => ballSpawns(ini.team),
@@ -5234,6 +5325,7 @@ window.PG = window.PG || {};
       drop: ballDrop,
       draw: ballDraw,
       hud: ballHud,
+      demo: ballDemo,
     },
   };
 
@@ -11301,6 +11393,7 @@ window.PG = window.PG || {};
     ctx.restore();
     drawHUD();
     if (G.boss && !inTrans) drawBossBar();
+    drawPartyDemo(); // (파티: the card's how-to loop, its own canvas)
     syncDOM();
   }
 
@@ -11940,6 +12033,7 @@ window.PG = window.PG || {};
     }
     // phones: never below ~12.5 px so overlay text stays readable at 1.2-1.3x canvas scale
     dom.screen.style.setProperty('--fs', clamp(s * 6, touchMode ? 12.5 : 11, 22).toFixed(2) + 'px');
+    dom.screen.style.setProperty('--pg-px', (Math.floor(W * s) / W).toFixed(3)); // (파티's card demo: one canvas pixel)
     shopBtnFit();          // (v4 shop: the 상점 button's label only where it fits)
     hubTopFit();           // (the hub's tab row and coin chip on one line where they fit)
   }
@@ -14246,7 +14340,7 @@ window.PG = window.PG || {};
   function partyRules(q) {
     const n = clamp(NET.roster.length, 2, 4), pts = PARTY_PTS[n].map((v, i) => (i + 1) + '등 ' + v + '점').join(' · ');
     const coin = q === 1 && !(CO.allowBc && NET.tr === 'bc') ? PARTY_TX.coin1 : q === 2 ? PARTY_TX.coin2 : PARTY_TX.coin0;
-    return ['미니게임 ' + (NET.opts.rounds === 5 ? 5 : 3) + '판! 판마다 ' + pts, PARTY_TX.tie, n === 3 ? PARTY_TX.games3 : PARTY_TX.games, coin, PARTY_TX.noTro,
+    return ['미니게임 ' + (NET.opts.rounds === 5 ? 5 : 3) + '판! 판마다 ' + pts, PARTY_TX.roomLast, PARTY_TX.roomAwards, PARTY_TX.tie, n === 3 ? PARTY_TX.games3 : PARTY_TX.games, coin, PARTY_TX.noTro,
       NET.opts.rapid ? RAPID_RULE : AMMO_RULE, PARTY_TX.trap, PARTY_TX.leave];
   }
   // 코드 복사: an invite (the code, plus this page's link with ?join= on the standalone deploy); phones get the share sheet
@@ -14736,7 +14830,9 @@ window.PG = window.PG || {};
       },
       drop(slot) { const ok = removePlayer(slot); if (ok && G.party) partyDrop(slot); return ok; },
       // host, 물 v2: a 비누 방울 now (at x: else a random spot), that seat a 오리 튜브 now (as if it drowned: its out entry too)
-      soap(x) { const M = G.mini; if (!M || M.id !== 'water') return null; const n = M.soaps.length; soapSpawn(M); if (M.soaps.length > n && x !== undefined) M.soaps[M.soaps.length - 1].x = +x; return api.state().mini; },
+      soapsOff(on) { partyNoSoap = !!on; return partyNoSoap; },
+      soapY(i) { const M = G.mini, q = M && M.soaps && M.soaps[i]; return q ? soapY(q, M.t, LV && LV.rise, waterK()) : null; },
+      soap(x) { const M = G.mini; if (!M || M.id !== 'water') return null; const n = M.soaps.length, keep = partyNoSoap; partyNoSoap = false; soapSpawn(M); partyNoSoap = keep; if (M.soaps.length > n && x !== undefined) M.soaps[M.soaps.length - 1].x = +x; return api.state().mini; },
       raft(slot) { const M = G.mini, p = G.players.find((q) => q.slot === slot); if (!M || M.id !== 'water' || !p || p.raft) return false; waterOut(p, M); return p.raft; },
       // host, 거품 축구: the ball by hand (in play: no kickoff wait), a goal for team t, a capy's quake at its spot, a
       // capture-phase bubble of slot's kit blown at x, y (vx: its direction) - returns it
@@ -14757,6 +14853,14 @@ window.PG = window.PG || {};
         G.bubbles.push(b); return b;
       },
       fill(slot) { fillParty(slot); return api.card(); },
+      // (unit) a game's card demo over its 240-frame loop into a fresh 96x32 canvas: the frames drawn, an error, the pixels left
+      demo(id) {
+        const F = MINI_FN[id]; if (!F || !F.demo) return null;
+        const cv = mk(96, 32), dx = cv.getContext('2d'); let err = null, lit = 0;
+        dx.imageSmoothingEnabled = false;
+        try { for (let f = 0; f < 240; f++) { dx.clearRect(0, 0, 96, 32); F.demo(dx, f, 'duck', 'cat'); if (f % 40 === 39) { const px = dx.getImageData(0, 0, 96, 32).data; for (let i = 3; i < px.length; i += 4) if (px[i]) lit++; } } } catch (e) { err = String(e && e.message || e); }
+        return { err, lit };
+      },
       // (unit) a guest's ball as ballView reads it off a g.mg row (clamped to the field and BALL.maxV)
       view: (mg) => Object.assign({}, ballView(mg, null, 0, { pa: {} }, { id: 'ball' }).ball),
       // (unit tests) a capture through catchPlayer (a capy's shield takes it); a seat made remote with a reported state st
@@ -14775,6 +14879,9 @@ window.PG = window.PG || {};
       },
       reload(list) { const keep = PG.PARTY_ARENAS; PG.PARTY_ARENAS = list; try { loadPartyArenas(); return PARTY_ARENAS.map((A) => ({ key: A.key, name: A.name, closed: A.closed, rise: A.rise, goals: A.goals, sides: A.sides, ball: A.ball, gapX: A.gapX, floor: A.map[ROWS - 1], ceil: A.map[0], bar: A.map[20] })); } finally { PG.PARTY_ARENAS = keep; loadPartyArenas(); } },
       result: () => partyResult(), next: () => partyNext(), final: (walk) => partyFinal(!!walk), places: () => (G.mini ? Array.from(miniPlaces().entries()) : []),
+      // (unit) a seat's snapshot row (its flags: 512 a 오리 튜브), the game's wire array, the sequencer's g.pa
+      prow: (slot) => { const r = snapPlayers().find((q) => q[0] === slot); return r ? r.slice() : null; },
+      mg: () => (G.mini ? JSON.parse(JSON.stringify(miniSnap())) : null), pa: () => (G.party ? JSON.parse(JSON.stringify(partySnap())) : null),
     };
     return api;
   }
