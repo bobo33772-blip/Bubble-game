@@ -42,7 +42,7 @@ the same game three times. The genres offered were 연타, 반응속도, 기억�
 | Rotation | **Owner: draw freely from all six.** One shuffled no-repeat bag of the games that fit n (6 for 2 / 4 players, 5 for 3: no 축구, unchanged), never the same game twice in a row across a refill; a replan's bag leaves out what was already played (3.6). 3판 and 5판 are always all distinct. |
 | Points | Unchanged: places → 4 / 2 / 1 / 0 (x2 on the last 판). Every new game ranks by a key with a measured tie-break (ms, pops, frames), so shared places are rare. |
 | Coins | "2+ bubbles blown in a 판" becomes **"2+ actions in a 판"**: **new** `coinAct()` counts a game's action into `CO.bshots` on my own page (a valid grab; a finished bubble; an arrival, a survived look with progress, or a chant). The arena games keep `coinShot`. Nothing else in `coinParty` changes. |
-| Awards | Unchanged. 최다 1등상 always works; 최다 가두기상 / 최다 탈출상 come from the arena games **and from 술래** (its catches are prisons owned by the 술래, its escapes are mash-outs). The family rotation puts at least one arena 판 in every party; a party where nobody trapped skips those awards by the existing top-0 rule. |
+| Awards | Unchanged. 최다 1등상 always works; 최다 가두기상 / 최다 탈출상 come from the arena games **and from 술래** (its catches are prisons owned by the 술래, its escapes are mash-outs). A party where nobody trapped (no arena 판, no 술래: possible with the free draw) skips those awards by the existing top-0 rule. |
 | Network | Host-authoritative over the existing transports. `g.mg` per game (at most ~120 bytes), the body state gains `mi` (~20 bytes). **`PARTY_V` 4**: a polish page (pa 3) in a party room is never ready and shows `새로고침 필요` (the existing gate). |
 | Sprites / sound | **No new sprite** (items, `lg_2`, `giant_bubble`, `bubble_pop`, `shower`, `item_towel_hat`, tints). **One new sfx** `puff` (local). Everything else reused. |
 
@@ -229,7 +229,7 @@ victim) and `esc` (`escapeTrap` with ≥ `ESC_MASH` presses) only where prisons 
 
 ## 4. 바나나우유 잡기 (반응속도)
 
-`MINI.milk = { c: 'm', fam: 'n', secs: 75, fastSecs: 30, ar: ['p', 2], world: false, noFire: true, cues: false, fits: (n) => n >= 2, ... }`
+`MINI.milk = { c: 'm', secs: 75, fastSecs: 30, ar: ['p', 2], world: false, noFire: true, cues: false, fits: (n) => n >= 2, ... }`
 
 ### 4.1 Rules
 
@@ -374,7 +374,7 @@ of the same round.
 
 ## 5. 펑! 비눗방울 (연타 + push-your-luck)
 
-`MINI.puff = { c: 'f', fam: 'n', secs: 45, ar: ['p', 2], world: false, noFire: true, cues: false, fits: (n) => n >= 2, ... }`
+`MINI.puff = { c: 'f', secs: 45, ar: ['p', 2], world: false, noFire: true, cues: false, fits: (n) => n >= 2, ... }`
 
 ### 5.1 Rules
 
@@ -488,7 +488,7 @@ About 80 bytes at 4 players (a seed instead of the 40-entry list the first draft
 
 ## 6. 살금살금 술래 (1대N) — behind the cut line
 
-`MINI.sneak = { c: 's', fam: 'n', secs: 80, fastSecs: 30, ar: ['p', 3], noFire: true, cues: false, fits: (n) => n >= 2, ... }`
+`MINI.sneak = { c: 's', secs: 80, fastSecs: 30, ar: ['p', 3], noFire: true, cues: false, fits: (n) => n >= 2, ... }`
 (a normal world: bodies move; `frozen` parks the 술래 and the arrived).
 
 A stop-and-go creeping game with the structure of the playground game 무궁화 꽃이 피었습니다, with our own chant, no doll,
@@ -844,7 +844,7 @@ Tuning knobs after the friends' next play: `MILK.wait` / the decoy counts / `nog
 
 | File | What |
 |---|---|
-| `game.js`, top constants | `PARTY_V` 4, `STAGE_X`, `MILK`, `PUFF`, `SNEAK`; `MINI.milk / puff / sneak` (with `fam`, `world`, `noFire`, `cues`, `fastSecs`, `keys`, `keysT`); `fam: 'a'` on the three old entries; `MINI_IDS`; `partySecs` reads `fastSecs`; `PARTY_TX` additions; `PARTY_TEXT` adds `keys` / `keysT`. |
+| `game.js`, top constants | `PARTY_V` 4, `STAGE_X`, `MILK`, `PUFF`, `SNEAK`; `MINI.milk / puff / sneak` (with `world`, `noFire`, `cues`, `fastSecs`, `keys`, `keysT`); `MINI_IDS`; `partySecs` reads `fastSecs`; `PARTY_TX` additions; `PARTY_TEXT` adds `keys` / `keysT`. |
 | `game.js`, input layer | `pressQ`, `evT`, `dbgPq`; `onKeyDown` / `bindTouch` push (and `'down'` from a fresh ↓ and from `stickMove`'s down edge, which takes the event time from its two callers); `readInputs` sets `pq` (all entries, none while the menu is open or outside 'playing') / `downP`; `loop` keeps `frameT`, `render` sets `G.drawT`; `pageNow`. |
 | `game.js`, world | `updateBody` / `guestSelf` early return (`miniParked`; a guest's own arrival by its own x); `fire()` guard (`noFire`) and `hostShot` drops a `'shot'` while `noFire`; `updatePlayer` walk factor `SNEAK.walk` for a runner; `kitOf` → `KIT_BASE` in a 술래 판; `floatMove` 술래 branch; `updateWorld` → `updateBattle(ins)` → `miniTick(ins)`; `updateBattle` skips the cues (`cues === false`). |
 | `game.js`, party section | the `partyPlan` replan fix (3.6); `miniLoad` (`G.mloc`, the seed, stage spots); `miniTick(ins)` → `local` / `input`; `miniParked`; `coinAct`; `partyTeamLine`'s 술래 branch; `troCountSub`'s 술래 line; the stale-seat test (`MILK.staleF`) shared by 바나나우유's close and 펑's `over`. |
@@ -1013,7 +1013,7 @@ ends of each page's link: frame 3 to the host is about 100 + 8 ms plus up to 44 
    every branch is behind `G.mini` and a `MINI` flag; battle / co-op / kits tests must stay green.
 9. **Self-reported results** (`mi`): a modified page can lie within the clamps. The same trust as bodies, fine for 4
    friends.
-10. **Rotation change**: a party now always mixes families; a group that loved 물 sees it less. The open question 15.2.
+10. **Rotation change**: with six games in one bag a group that loved 물 sees it less often (owner: draw freely, 15.2).
     Today's rotation tests assert the old bag (each of the three once in 3판) and are rewritten (13.1).
 11. **Squid Game association** (술래): no doll, no elimination, our chant, bubbles and a towel hat - cute, not grim.
 
