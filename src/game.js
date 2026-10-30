@@ -6115,7 +6115,9 @@ window.PG = window.PG || {};
   // kept, no arrival points); before 시작! the order is drawn again from the players left
   function sneakDrop(slot, M) {
     for (const J of M.Js || []) { delete J.anchor[slot]; delete J.out[slot]; }
-    if (M.r < 1) { M.order = sneakOrder(); M.n = M.order.length; M.it = M.order[0]; return; }
+    // (before 시작!: a new first 술래 goes to its spot and the old one to the start - left on the 술래's spot, past the
+    // line, it would arrive at once; start() no longer sees the change)
+    if (M.r < 1) { const it0 = M.it; M.order = sneakOrder(); M.n = M.order.length; M.it = M.order[0]; if (M.it !== it0) sneakPlace(M); return; }
     M.order = M.order.slice(0, M.r).concat(M.order.slice(M.r).filter((s) => s !== slot)); M.n = M.order.length;
     M.arr = (M.arr || []).filter((a) => a[0] !== slot);
     if (G.mode !== 'playing') return;

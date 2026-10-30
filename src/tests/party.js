@@ -1242,6 +1242,12 @@
     T = P.look(); at(T - 5); walk(2, true); at(T + 20); walk(2, false);
     const cb = SN().pts[0]; P.drop(0); step(1);
     ok('leaver: the 술래 leaves - its round ends at once (its catch kept, no arrival points), the swap to the next 술래 with the 2 left', SN().ph === 1 && !SN().pts[1] && cb === 1 && SN().it === 1 && G.players.length === 2, [SN().ph, SN().pts, cb, SN().it]);
+    // a leaver on the card: the order is drawn again from the 2 left (3rd 판: [2, 0, 1] -> [0, 2, 0, 2]) - the new first 술래
+    // goes to its spot and the old one back on the start (left past the line it would arrive at once: a free 3 points)
+    party(['duck', 'cat', 'frog'], { plan: ['crown', 'water', 'sneak'] }, 41); toPlaying(); P.skip(); toCard(); toPlaying(); P.skip(); toCard();
+    const oc = SN().order.slice(); P.drop(1); step(1); toPlaying(); step(3);
+    ok('leaver on the card: the 술래 order drawn again from the 2 left - the new first 술래 on its spot (x 212), the old one on the start (x 20), nobody arrived', same(oc, [2, 0, 1]) && same(SN().order, [0, 2, 0, 2]) && SN().it === 0 && pl(0).x === 212 && pl(2).x === 20 && !SN().arr.length && !SN().pts[2],
+      [oc, SN().order, SN().it, pl(0) && pl(0).x, pl(2) && pl(2).x, SN().arr, SN().pts]);
     // the 4-player 판: every round at its cap and every wait at lagMax still plays its 4th round (before the 80 s cap)
     party(['duck', 'cat', 'frog', 'otter'], { plan: ['sneak'] }, 41); toPlaying(); remote(1, 2, 3);
     const rr = []; const done4 = until(() => { const m = SN(); if (m && rr[rr.length - 1] !== m.r) rr.push(m.r); return G.mode !== 'playing'; }, 80 * 60 + 100);

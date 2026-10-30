@@ -1369,3 +1369,12 @@ before (`tagAnchor`). Fixed: 21.1, the staked 술래 3-2-1 line, the rules line 
   host skipped every beat (4 s at the natural pace), with no line saying why (guests cannot tell a held beat from a long
   one). A `트로피 정산까지 N초` line would need a field in `g.pa`.
 - 20.4 stands (real phones: the 술래 pips and red edge at 568x320, whether stopping in time feels fair with a thumb).
+
+### 21.7 Review (before the PR)
+
+- **A leaver on a 술래 card moved the 술래 without moving the animals.** `sneakDrop` before 시작! draws the order again
+  from the players left (`sneakOrder` rotates by `P.i % n`, so the first 술래 can change: 3 players on the 3rd 판 are
+  `[2, 0, 1]`, slot 1 leaves -> `[0, 2, 0, 2]`), but it set `M.it` without `sneakPlace`, and `start()` then saw no
+  change. The old 술래 stood on the 술래's spot (x 212, past the line) as a runner: it arrived on the first frame (3
+  points, the round over at once) while the new 술래 stood on the start. Fixed: `sneakDrop` places everyone when the
+  first 술래 changes. Test: party.js `leaver on the card`.
