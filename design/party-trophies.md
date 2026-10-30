@@ -1,7 +1,7 @@
 # 뽀득뽀득 목욕탕: 파티 트로피 (party trophies) v1 — design spec
 
-Status: design, ready to build on `feat/party-trophies` (worktree `bogeul-ptro`, from `origin/main` d7e065a = PR #23,
-파티 다듬기, merged). It reverses design/party.md section 0 "Reward" and 8.4 "No trophies": a party room can now stake
+Status: **built** on `feat/party-trophies` (worktree `bogeul-ptro`, from `origin/main` d7e065a = PR #23, 파티 다듬기,
+merged) with the owner's decision below - **section 14 is the as-built record** (what differs from the body, tests). It reverses design/party.md section 0 "Reward" and 8.4 "No trophies": a party room can now stake
 trophies like a battle, and the pot is split by the final party standing. Everything else of trophies.md (the store, the
 holds, 안 걸고 참여, 꼴등 빼고, the cloud) and of the party (design/party.md 18, design/party-polish.md 14) is reused as built.
 Code is referenced by function name, never by line number. Every function named here exists on main unless it is marked
@@ -783,3 +783,51 @@ the time rule handled by `clStep`).
 | `renderRoom`: rules | battle `tro` lines / `partyRules(q)` | **`partyRules` trophy lines** (7.1) |
 | `renderRoom`: refresh message | `=== 'party'` | none |
 | `PG.debug.mp` state / decode | reports the mode | none (`state()` gains `pv`) |
+
+---
+
+## 14. As built (feat/party-trophies, 2026-10-30)
+
+Built in the order of section 10 with the owner's decision applied everywhere: **a party at 안 걸기 is exactly today's
+party** (coins only - no hold, no place points, no +5, no `tro`, 내 기록 untouched, the same room rules, summary, 3-2-1, card
+and podium); only a party at 5 / 10 / 20 / 50 is a 트로피 경기. About 310 changed lines in `game.js`, 9 in `page.html`.
+
+### 14.1 What differs from the body
+
+| Where | As built |
+|---|---|
+| Versions | `PARTY_V` **5** (not 4: fix/crown-last takes 4) and `PARTY_TRO_V` 5. The verify step sets the final value after merging main (both must be the `PARTY_V` of the release that ships party trophies; feat/party-games bumps it too). |
+| `troPartyOn()` | `NET.mode === 'party' && stakeNow() > 0 && (host \|\| NET.pv >= PARTY_TRO_V)` - the stake test is the owner's decision. It gates the rules, the summary item, the 3-2-1 part, the card chip, the wait line and the practice pod. |
+| Hold | `troHostGo` returns for a party at 안 걸기 (`G.party && !(stakeNow() > 0)`); the guest's line in `guestHostIn` also needs `stakeNow() > 0`. Everything else as 3.1 (`f0`, the mid test first, `troGuestGo(id, party)`, the 105 s `min`, the mode in the consent test, `TRO.live`'s `pa`). |
+| Settle | `troPartyResult(walk)` as 3.2, called in `partyFinal` right after `setMusic` / before `coinPartyNow` and `showOverlay('podium')`. `troPartyReal`, `troPartyMinF` (`TRO.pmin`: the debug override) as written. |
+| `troResultIn` | As 3.2; the display's replay guard also keeps a `'short'` pod (`P.t0 < 0 && P.kind !== 'short'`): a short pod has no rows, so its `t0` stays -1 and a later normal result would otherwise redraw it. |
+| Strings dropped | The stake-0 ones: `troZero` survives only for a staked room where every seat plays without the stake (`트로피 경기: 최종 1등 +16 ...`), `countTro` (` · 트로피 경기`) is gone. ` · 연습 경기` shows on a staked practice party only. New: `chipBetA` / `chipFreeA` (the chip's aria-labels `트로피 10개씩 걸어요` / `안 걸고 참여해요`). |
+| Rules | `PARTY_TX.noTro` is replaced in place (after the coin line, before the magazine line): 13 lines for a staked 4-player room (the free line replaces `트로피가 모자라면 ...`, so a free seat keeps 13). The room panel scrolls on a phone (its ready row is sticky), so the tie line stays. |
+| Card chip | `<b id="pg-party-bet">` beside `#pg-party-x2`, its cup 0.9em (no taller than the text: the round line keeps its height). Shown only on the first card of a ranked staked party (each page by its own stake, `NET.q` and consent: `partyCardBet`; a 1판 debug party's only card is also its last: 14.3). |
+| Podium | `troPodiumUI`: the practice pod for a party only when `troPartyOn()` (a practice party at 안 걸기 still has no trophy line), and a new practice pod refills the sr line at once (`fillPodium`: a party's podium is filled before it). `partyPodiumUI`: `troPodiumTag` (party: 승급 or `N판`), `troPodBonus` (the short line at once), the note in the order of 7.3 (walk void / 기권승 / the plain walk at 안 걸기, the blocked gate, the ties, the next-party lines), 파티 한 번 더 disabled while `!troCanRematch()`, the wait line with ` · 다음 파티도 10개씩`. |
+| Cups | `TRO.pod.party` (`!!G.party` in `troPodium`): to every block with a gain, best first; a battle keeps "to whoever took the pot". A party where nobody finishing loses (a 3-finisher party with a gg leaver: +26 / +10 / 0) flies no cups. |
+| Network | As section 4: `R.pv` in a party room (room and game phase), `NET.pv` (0 in `netAttach` and for a non-party R), `rd.md` (`modeCode()`), `TRO.agreedM` (reset with `TRO.agreed`), the un-ready on a mode change with a stake, the guest's `파티로 / 배틀로 바뀌었어요: 10개씩 · 다시 준비해 주세요`. |
+| Debug | `PG.debug.tro`: `ptable`, `partyMin(f)`, `preal(nf)`, `gg(on)`, `hold(..., pa)`, `apply(m, slot)` (offline unit tests read `troResultIn` as that seat), `state()` + `agreedM`, `pv`, `match.f0`, `livePa`. `PG.debug.party`: `rules(o)` (a fake roster's room rules), `count(o)` (the 3-2-1 sub / class and the chip as an online host), `coinPa(o)` (the party coin counters by hand). `PG.debug.mp.state().party.pv`, `mp.guestRoom(R).pv`. |
+| Apps in Toss | Not on main yet (feat/toss unmerged): nothing to gate. When it lands: `troPartyOn()` false and `troPartyResult` returning on `AIT.on`, `stakeNow` keeps `&& !AIT.on` (risk 4). |
+
+### 14.2 Tests (all green on this branch)
+
+| Driver | Added |
+|---|---|
+| `trophies.js` | `partyTableTests`: every distinct row of 2.2 (stake 0 as 안 걸고 참여's place points), the shares, every tie row at 0 / 5 / 10 / 50, the leaver / 안 걸고 rows, void, the rotation of the tie's extra trophy by game id, 4000 random tables (pot paid out exactly, -(s + 6)..+150; seen: finished +108, 기권승 +150). `partyApplyTests`: the +5 once / 꼴등 빼고 / none in a 기권승, a hostile row clamped, `row[5] === 0`, `troPartyReal` over crafted counters (an open 판's blows count), `v: 1` (battle hold untouched, party hold refunded once, no restart, none after an applied result), the quick-rematch race (the OLD party's +5, the new `CO.pa` untouched). 내 기록's `배틀·파티` and the new note. |
+| `trophies-net.js` §14 | 배틀 → 파티 at 10 un-readies (both sides, the message), a late `rd` with `md: 'b'` or without `md` refused; a party room's R (`o[4]`, `pv`, `f`), the 트로피 걸기 row, the rules, the guest summary; 안 걸기 exactly as before and 파티 → 배틀 at 안 걸기 un-readies nobody; an older host (no `R.pv`): no trophy line, summary item, chip or hold for its guests. |
+| `party.js` | `troTests`: the rules by n / stake / free seat / q / older host (13 lines, 안 걸기 unchanged), the 3-2-1 sub and class and the chip of the first 판 only (안 걸고 참여 when short), the 7.4 strings verbatim and warmed; the fit test shows the chip in the round line at 1x, 2x and 568x320 (one line, no scroll). |
+| `party-net.js` §10 | A staked 3판 party of 4 with a known standing (the host hands the crown and ends each 판): the chip, nothing held on the card / 3-2-1, the 3-2-1 text, one hold of 16 (none at 2판 / 3판), +26 / +10 / 0 / -16 and the +5 only for a real party (B never blows) and not the last, one `tro` per guest, `cup` + `m`, the rows, 2 cups to the gains, the bonus line, the sr line, the gate; 파티 한 번 더 holds again: B away + cut (forfeit, in the pot), C's 나가기 at the 2판 card, A's gg on / off, the n 4 table with two gg leavers (+34 / +10), A by the real clock (refused before 105 s → wait → refund); too short (`v: 1`, refund at once, the short line, the gate open, the next party holds); the host's 방으로 in a result beat; down to one (기권승 the pot only / void); a staked practice party. The crafted older guest now says `pa: 4`; the host leaving mid-party is staked (guests refunded, the host forfeits). Budget rt600000 (≈ 280 s here). |
+
+### 14.3 Not built / open
+
+- Not built (the owner's decision): every stake-0 rule, line and test of the body (risk 11.1 is now "a party with a stake
+  costs trophies").
+- `party.js` does not craft the podium pieces offline (9.4's third bullet): `party-net` checks them live (bonus line, short
+  line, notes for 기권승 / void, cups, gate); the party's 승급 tag and the older-guest gate note are not tested for a party
+  (the code is the battle's).
+- A 1판 debug party shows the chip next to `점수 2배!` on its only card: the round line then wraps at 1x (real parties have 3
+  or 5 판, so the first card is never the last).
+- Open: the final `PARTY_V` / `PARTY_TRO_V` after merging main (crown-last 4, party-games' own bump); re-check
+  `PARTY_TRO_MINF` against a 3판 of feat/party-games' shorter games (risk 3); the Apps in Toss gates when feat/toss lands
+  (risk 4).
