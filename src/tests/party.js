@@ -13,7 +13,8 @@
 // the tie-break; 오리 튜브 - not out, flag 512, on the surface, slow, a small hop, plain bubbles, never caught, never
 // judged; its bubble's capture; 역전 once a 판 and never from the flood), 왕관 뺏기 (it falls onto the centre stage, the
 // first touch takes it, held time, a capture drops it, the dropper waits, a capy's shield keeps it, the holder is
-// slower, a leaver drops it, places; the flights at 15 / 30 / 45 s and the gold x2), 거품 축구 (the field, the teams by
+// slower, a leaver drops it, places - 1st wearing it at time-up, a capture / a pick-up at the buzzer, the rest and a
+// free crown by held time; the flights at 15 / 30 / 45 s and the gold, held time no longer doubled), 거품 축구 (the field, the teams by
 // standing, the kickoff, body pushes, shots, a capy's slam, goals, the clock stopping for 골!, the kickoff opening every
 // prison, team places; the second ball at 45 s, its goals with no freeze and a re-drop, 골든 골 and its draw, 60 s of
 // random kicks), no KO in a party, the card (the splash, 준비 완료 and its timings, the auto start, a leaver), the result
@@ -92,12 +93,13 @@
     ok('standings: then the better place in the last 판', same(s3.map((q) => [q.slot, q.place]), [[1, 1], [0, 2], [2, 3]]), s3);
     const s4 = St({ 0: 8, 1: 8, 2: 8, 3: 0 }, { 0: 1, 1: 1, 2: 2, 3: 0 }, { 0: 2, 1: 2, 2: 1, 3: 4 });
     ok('standings: still tied -> a shared place (공동 2등), the next skipped', same(s4.map((q) => [q.slot, q.place]), [[2, 1], [0, 2], [1, 2], [3, 4]]), s4);
-    // the last 판 pays PARTY_LAST_X (a 1-판 plan's only 판 is its last): 2 / 3 / 4 players by 왕관 held time
+    // the last 판 pays PARTY_LAST_X (a 1-판 plan's only 판 is its last): 2 / 3 / 4 players by 왕관 held time (the crown
+    // put back free at the gather before time-up: nobody wears it, so every place is by held time)
     K = P.consts();
     const crownPts = (chars, order) => {
       party(chars, { plan: ['crown'] }); toPlaying();
       order.forEach((s, i) => { P.crown(s); step(60 * (order.length - i)); });
-      P.skip(); return chars.map((c, s) => PS().pts[s]);
+      P.crown(-1); P.skip(); return chars.map((c, s) => PS().pts[s]);
     };
     ok('x2: PARTY_LAST_X 2 and AWARD_PTS 2', K.PARTY_LAST_X === 2 && K.AWARD_PTS === 2, [K.PARTY_LAST_X, K.AWARD_PTS]);
     const p2 = crownPts(['duck', 'cat'], [1, 0]), p3 = crownPts(['duck', 'cat', 'frog'], [2, 0, 1]), p4 = crownPts(['duck', 'cat', 'frog', 'otter'], [3, 1, 2, 0]);
@@ -404,14 +406,45 @@
     toPlaying(); P.crown(0); pl(0).shield = 100;
     const caught = P.catch(0, 1);
     ok('crown: a capy\'s shield takes the capture - the crown stays on', !caught && PS().mini.cr.holder === 0 && !pl(0).trap, [caught, PS().mini.cr.holder]);
-    // places by held time; a leaver holding it drops it where it was
+    // a leaver holding it drops it where it was; nobody wears it at time-up -> every place by time held
     party(['duck', 'cat', 'frog'], { plan: ['crown'] });
     toPlaying(); P.crown(2); step(120); P.crown(0); step(60); P.crown(1); step(2);
     const x1 = pl(1).x; P.drop(1); step(1);
     ok('crown: a leaver holding it drops it where it was (free, near its last spot)', PS().mini.cr.holder === -1 && Math.abs(PS().mini.cr.x - x1) < 4, PS().mini.cr);
     P.skip();
     const rs = PS();
-    ok('crown: places by time held - 2 s 1st, 1 s 2nd (n0 3, the last 판: 8 / 4), the leaver gone from the standings', rs.last[2] === 1 && rs.last[0] === 2 && rs.pts[2] === 8 && rs.pts[0] === 4 && G.players.length === 2, rs);
+    ok('crown: nobody wears it at time-up (its holder left) -> places by time held - 2 s 1st, 1 s 2nd (n0 3, the last 판: 8 / 4), the leaver gone from the standings', rs.last[2] === 1 && rs.last[0] === 2 && rs.pts[2] === 8 && rs.pts[0] === 4 && G.players.length === 2, rs);
+    // the one wearing it at time-up is 1st, over a longer holder; 2nd and on by time held
+    party(['duck', 'cat', 'frog'], { plan: ['crown'] });
+    toPlaying(); P.crown(2); step(300); P.crown(1); step(60); P.crown(0); step(30); P.skip();
+    const rw = PS();
+    ok('crown: wearing it at time-up is 1st over a longer holder (0 0.5 s over 2 5 s), then by time held (2 2nd, 1 1 s 3rd: 8 / 4 / 0)', rw.last[0] === 1 && rw.last[2] === 2 && rw.last[1] === 3 && rw.pts[0] === 8 && rw.pts[2] === 4 && rw.pts[1] === 0 && rw.mini.held[0] < rw.mini.held[2], [rw.last, rw.pts, rw.mini.held]);
+    // a capture just before the buzzer (the real clock, past the gold flight): 2 held 5 s early, 1 wears it from 45 s
+    const lateHolder = () => {
+      party(['duck', 'cat', 'frog'], { plan: ['crown'] });
+      toPlaying(); P.crown(2); step(300); P.crown(-1);
+      until(() => PS().mini.t >= 45 * 60 + 2, 3000);
+      P.crown(1);
+    };
+    lateHolder(); until(() => PS().mini.t >= 3600 - 30, 1000);
+    put(2, 220, 40); step(1);
+    D.trapPlayer(1, 2); const fly = PS().mini.cr;
+    put(0, fly.x, fly.y); until(() => PS().mini.cr.holder === 0, 20);
+    const grab = PS().mini.cr.holder; until(() => G.mode === 'result', 60);
+    const rg = PS();
+    ok('crown: caught 0.5 s before time-up, it flies out; whoever grabs it before the buzzer is 1st (0, under 0.5 s held), the others by time held (1 ~14.5 s 2nd, 2 5 s 3rd)', fly.holder === -1 && fly.noPick === 1 && grab === 0 && G.mode === 'result' && rg.last[0] === 1 && rg.last[1] === 2 && rg.last[2] === 3 && rg.mini.held[0] < 30, [fly, grab, rg.last, rg.mini.held]);
+    lateHolder(); until(() => PS().mini.t >= 3600 - 4, 1000);
+    put(0, 20, 40); put(2, 220, 40);
+    D.trapPlayer(1, 2); until(() => G.mode === 'result', 20);
+    const ra = PS();
+    ok('crown: caught 4 frames before time-up and still flying at the buzzer -> nobody wears it: places by time held (1 1st, 2 2nd, 0 3rd)', G.mode === 'result' && ra.mini.cr.holder === -1 && !ra.mini.cr.onGround && ra.last[1] === 1 && ra.last[2] === 2 && ra.last[0] === 3, [ra.mini.cr, ra.last, ra.mini.held]);
+    // a pick-up on the very last frame (the crown free on 0 with 1 frame left): the grabber is 1st with no held time
+    lateHolder(); until(() => G.battle.left <= 1, 1000);
+    put(0, 20, 40); put(1, 200, 40); put(2, 220, 40);
+    Object.assign(G.mini.cr, { holder: -1, x: pl(0).x, y: pl(0).y, vx: 0, vy: 0, onGround: false, noPick: -1, noUntil: 0 });
+    const left1 = G.battle.left; step(1);
+    const rl = PS();
+    ok('crown: picked up on the very last frame -> the grabber is 1st with 0 held (0 1st, 1 ~15 s 2nd, 2 5 s 3rd)', left1 === 1 && G.mode === 'result' && rl.mini.cr.holder === 0 && (rl.mini.held[0] | 0) === 0 && rl.last[0] === 1 && rl.last[1] === 2 && rl.last[2] === 3, [left1, G.mode, rl.mini.cr, rl.last, rl.mini.held]);
     // nobody touched it: everyone shares 1st
     party(['duck', 'cat', 'frog', 'otter'], { plan: ['crown'] });
     toPlaying(); P.skip();
@@ -430,13 +463,13 @@
     P.crown(2); const hb = PS().mini.held[2] | 0;
     until(() => PS().mini.t >= 45 * 60, 1000);
     const g45 = PS().mini;
-    ok('crown: at 45 s the 황금 왕관 - gold, 황금 왕관! / 2배!', g45.fl === 3 && g45.gold === 1 && g45.cr.holder === -1 && G.banner && G.banner.main === P.tx().gold1 && G.banner.sub === P.tx().gold2, [g45.fl, g45.gold, G.banner]);
+    ok('crown: at 45 s the 황금 왕관 - gold, 황금 왕관! / 끝날 때 쓴 사람이 1등!', g45.fl === 3 && g45.gold === 1 && g45.cr.holder === -1 && G.banner && G.banner.main === P.tx().gold1 && G.banner.sub === P.tx().gold2 && P.tx().gold1 === '황금 왕관!' && P.tx().gold2 === '끝날 때 쓴 사람이 1등!', [g45.fl, g45.gold, G.banner]);
     ok('crown: (the 15 s before it: held 1 a frame)', (g45.held[2] | 0) - hb >= 899 && (g45.held[2] | 0) - hb <= 901, (g45.held[2] | 0) - hb);
     P.crown(1); const h0 = PS().mini.held[1] | 0; step(30);
-    ok('crown: held time counts CROWN2.goldX (x2) a frame once gold', (PS().mini.held[1] | 0) - h0 === 60, (PS().mini.held[1] | 0) - h0);
+    ok('crown: once gold, held time still counts 1 a frame (no CROWN2.goldX: no doubling)', (PS().mini.held[1] | 0) - h0 === 30 && P.consts().CROWN2.goldX === undefined, [(PS().mini.held[1] | 0) - h0, P.consts().CROWN2]);
     ok('crown: the wire carries gold (its last field)', P.mg()[9] === 1, P.mg());
-    P.skip();
-    ok('crown: places by held (the gold seconds doubled: 15 s + 0.5 s gold beats 15 s)', PS().last[1] === 1 && PS().mini.held[1] > PS().mini.held[2], [PS().last, PS().mini.held]);
+    P.crown(2); step(10); P.skip();
+    ok('crown: time-up with 2 wearing the gold crown - 2 is 1st over 1, who held longer; then 1 2nd, 0 3rd by time held', PS().last[2] === 1 && PS().last[1] === 2 && PS().last[0] === 3 && PS().mini.held[1] > PS().mini.held[2] && PS().mini.held[2] > PS().mini.held[0], [PS().last, PS().mini.held]);
   }
 
   // ---------------------------------------------------------------- 5. 거품 축구 (4.3)
@@ -575,7 +608,7 @@
 
     // teams by the standing before the 판: 1st + 4th left, 2nd + 3rd right
     party(['duck', 'cat', 'frog', 'capy'], { plan: ['crown', 'ball'] }); toPlaying();
-    P.crown(2); step(120); P.crown(1); step(60); P.crown(3); step(20); P.skip();
+    P.crown(3); step(20); P.crown(1); step(60); P.crown(2); step(120); P.skip();   // (2 wears it at time-up, then by held)
     const st = PS();
     toCard();
     ok('ball: (setup) after a crown 판 the standing is 2, 1, 3, 0', same([2, 1, 3, 0].map((s) => st.last[s]), [1, 2, 3, 4]), st.last);
@@ -1003,10 +1036,11 @@
     step(80);
     let c = P.card();
     ok('card: round line, name, the one-line how-to, the rule line, the keyboard keys line (desktop); no board on the card', c.shown && c.round === '1판 / 3판' && c.name === '물 차오르기' && c.how === P.mini().water.how && c.rule === P.mini().water.rule && c.keys === P.tx().keys && !c.team && !c.board.length, c);
-    ok('card: 물 v2\'s texts - the how (가장 늦게 젖으면 1등) and the rule (비누 방울 · 오리 튜브 · 역전)', P.mini().water.how === '물이 차올라요! 가장 늦게 젖으면 1등' && P.mini().water.rule === '비누 방울을 먹으면 한 번 살아나요 · 빠지면 오리 튜브로 친구를 맞혀 역전!' && P.mini().crown.rule === '15초마다 왕관이 날아가요 · 마지막 15초는 황금 왕관 2배!' && P.mini().ball.rule === '45초부터 공이 2개! · 비기면 골든 골' && P.mini().water.secs === 60);
+    ok('card: 물 v2\'s texts - the how (가장 늦게 젖으면 1등) and the rule (비누 방울 · 오리 튜브 · 역전)', P.mini().water.how === '물이 차올라요! 가장 늦게 젖으면 1등' && P.mini().water.rule === '비누 방울을 먹으면 한 번 살아나요 · 빠지면 오리 튜브로 친구를 맞혀 역전!' && P.mini().crown.rule === '15초마다 왕관이 날아가요 · 2등부터는 쓴 시간 순서' &&P.mini().ball.rule === '45초부터 공이 2개! · 비기면 골든 골' && P.mini().water.secs === 60);
     toPlaying(); P.skip(); toCard(); step(80);
     c = P.card();
     ok('card: the 2nd card - 2판 / 3판 · 왕관 뺏기', c.round === '2판 / 3판' && c.name === '왕관 뺏기' && !c.x2, c);
+    ok('card: 왕관\'s texts - the how (끝날 때 왕관을 쓴 사람이 1등) and the rule (날아가요 · 2등부터는 쓴 시간 순서), on the card', c.how === '끝날 때 왕관을 쓴 사람이 1등' && c.rule === '15초마다 왕관이 날아가요 · 2등부터는 쓴 시간 순서' && P.mini().crown.how === c.how && P.mini().crown.rule === c.rule, [c.how, c.rule]);
     toPlaying(); for (const s of [1, 2, 3]) pl(s).invuln = 0; P.crown(1); step(30); P.skip(); toBeat('s');
     c = P.card();
     ok('마지막 판!: the stand view - 점수 2배 · 1등 8점 · 2등 4점 · 3등 2점 (4 players), 선두 on the leader, 1위와 N점 차 on the others', c.view === 'stand' && c.name === '마지막 판!' && c.sub === '점수 2배 · 1등 8점 · 2등 4점 · 3등 2점' && c.board[0].gain === '선두' && c.board[0].nick === '하늘바다구름별달해님' && c.board.slice(1).every((r) => /^1위와 \d+점 차$/.test(r.gain)), c);
@@ -1071,6 +1105,15 @@
         P.fill(-1);
       }
     }
+    // 왕관's gold banner: 황금 왕관! over 끝날 때 쓴 사람이 1등! - the sub on one line, the banner inside the screen
+    party(longNicks(), { plan: ['crown'] }); toPlaying(); step(90);
+    for (let k = 0; k < 3; k++) P.flight();
+    step(2); await sleep(120);
+    // (layout boxes, not getBoundingClientRect: the banner may still be in its pg-pop scale-in)
+    const bn = $('pg-banner'), bnIn = bn.querySelector('.pg-banner-in'), bnSub = $('pg-banner-sub'), sw = $('pg-screen').clientWidth;
+    info(label + ' gold banner: ' + bnIn.offsetWidth + 'x' + bnIn.offsetHeight + ' at x ' + bnIn.offsetLeft + ' in ' + sw + ' (sub ' + getComputedStyle(bnSub).fontSize + '), main ' + lines($('pg-banner-main')) + ' line(s), sub ' + lines(bnSub));
+    ok(label + ' gold banner: 끝날 때 쓴 사람이 1등! on one line, 황금 왕관! on one line, inside the screen', !bn.hidden && bnSub.textContent === P.tx().gold2 && lines(bnSub) === 1 && lines($('pg-banner-main')) === 1
+      && bnIn.offsetLeft >= 0 && bnIn.offsetLeft + bnIn.offsetWidth <= sw && bnSub.scrollWidth <= bnSub.clientWidth + 1, [bnSub.textContent, lines(bnSub), lines($('pg-banner-main')), bnIn.offsetLeft, bnIn.offsetWidth, sw]);
     // the result views: a 3판 so the tally, 마지막 판!, the last tally, the awards and 최종 순위 all show
     party(longNicks(), { plan: ['crown', 'water', 'crown'] });
     toPlaying(); P.crown(1); step(60); P.skip(); toBeat('t'); step(100); await sleep(80);

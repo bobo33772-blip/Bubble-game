@@ -58,7 +58,8 @@ const LIST = [
   V('v3-levels', 'test-v3-levels.html', 60000, summaryZero('V3LEVELS')),
   // battle arenas in the engine: enemy pressure per spawn (16 seeds x 60 s idle), first stun, the drain drop
   V('v3-fixes', 'test-v3-fixes.html', 60000, doneZero('FIXES')),
-  V('arena-gate', 'test-arena-gate.html#' + encodeURIComponent(JSON.stringify({ seeds: 16 })), 120000, doneZero('AGATE')),
+  // (240 s: CI's runners took 91-116 s and twice hit 120 s on 10-30; the measurement has no early exit)
+  V('arena-gate', 'test-arena-gate.html#' + encodeURIComponent(JSON.stringify({ seeds: 16 })), 240000, doneZero('AGATE')),
   // 몬스터 출현 (design/distinction.md §3): off = no arena enemies and no intruder minions, KO / power-ups / podium as
   // before, the default unchanged, an older host's R (no o[5]) reads on; online over bc below (monsters-net)
   V('monsters', 'test-monsters.html', 120000, doneZero('MON')),

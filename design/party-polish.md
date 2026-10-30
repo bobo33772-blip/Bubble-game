@@ -26,7 +26,7 @@ keeps the contract ready for them. The board (주사위, 칸, 황금 오리) is 
 | Skips | Only the **host** speeds up the result beats (winner, tally, standings, awards, final sort: its press jumps to the next beat, never before 0.5 s into a beat). Nobody skips the splash, 끝!, the 3-2-1 or someone else's 준비. |
 | Comeback in the flow | **The last 판 pays double** (`PARTY_LAST_X` 2: 1등 8점, 4 players 8 / 4 / 2 / 0), announced on the 마지막 판! screen and the card. **3 보너스상**, `+2점` each: 최다 1등상 (판 won), 최다 가두기상 (rivals trapped), 최다 탈출상 (escapes by mashing). An award goes to the top value (ties share it); none when the top is 0 or everybody shares it. |
 | 물 차오르기 v2 | 60 s (was 75). The water still rises in 5 steps (each drowns one tier) but **2 surges** (a 1.6 s wave over the next tier: jump or climb) and a **마지막 물결** (52-59 s: the water floods the top shelves - everybody goes out, the last one out wins; jumping buys time). **비누 방울** float above the waterline (7 a 판): one held = **one save** from the water (a hop out), and each one picked breaks ties. **Out = 오리 튜브**: the animal floats on the surface in a duck ring, moves, hops, blows plain bubbles - its capture of a dry friend that then drowns is **역전!** (the rafter is back on a top shelf, once a 판, never during the flood). Places: the later out the better; same frame: more 비누; still equal: shared. Section 4.1. |
-| 왕관 뺏기 | **왕관이 날아가요**: at 15 / 30 / 45 s the crown leaves its holder and falls again from the centre top (a new race each time). **황금 왕관**: from the 45 s flight it is gold and held time counts **x2**. Section 4.2. |
+| 왕관 뺏기 | **왕관이 날아가요**: at 15 / 30 / 45 s the crown leaves its holder and falls again from the centre top (a new race each time). **황금 왕관**: from the 45 s flight it is gold and held time counts **x2**. Section 4.2. **2026-10-29 owner change**: the one wearing it at time-up is 1st, 2nd and on by held time; the gold crown stays as the last race's signal, no x2 (4.2, 14.5). |
 | 거품 축구 | **공이 2개**: from 45 s a second ball drops; while there are two, a goal does not stop the clock or reset the field (that ball re-drops after 0.75 s). **골든 골**: tied at time-up → play on, the next goal wins, at most 20 s, then a draw. Section 4.3. |
 | Sounds / music | 8 new synthesized sfx in `audio.js` (`mg_title`, `mg_go`, `mg_finish`, `mg_win`, `tally`, `rank_up`, `drumroll`, `award`) and 1 new loop `party` (the between-판 screens). Everything else reused (section 8). |
 | Sprites | 1 new: `duck_ring` (the 오리 튜브, 16x8, 2 frames). The gold crown, the 2nd ball, the soap bubble, the award icons and the demos reuse existing frames (tints). |
@@ -375,6 +375,22 @@ raft → the water icon + place.
 
 **Rule line**: `15초마다 왕관이 날아가요 · 마지막 15초는 황금 왕관 2배!` (the how line is unchanged).
 
+> **2026-10-29 owner change: last holder wins** ("왕관게임 가장 마지막에 들고있는 사람이 이기는걸로 바꿔줘"). As built now:
+> - **1st** is the player wearing the crown at time-up (`MINI_FN.crown.key`: `(holder === slot ? 1e7 : 0) + held`, so
+>   the worn crown is above any held count). Places are decided on the host (`partyResult`); guests show the host's
+>   (`g.pa.P`, the winner banner in `g.bn`).
+> - **2nd and on** by held time, as before. Nobody wearing it at time-up (flying after a flight or a capture, or free on
+>   the floor): **everyone** by held time (the old rule, unchanged); nobody ever touched it: all share 1st, as before.
+> - **황금 왕관** stays as the last race's signal (the tint, the banner, `'promote'`, the `hurry` music) but held time no
+>   longer doubles: `CROWN2.goldX` is gone, `held += 1` a frame always. 1st no longer comes from time, so a x2 would only
+>   be one more rule to explain.
+> - Texts: how `끝날 때 왕관을 쓴 사람이 1등`, rule `15초마다 왕관이 날아가요 · 2등부터는 쓴 시간 순서`, the gold banner
+>   `황금 왕관!` / `끝날 때 쓴 사람이 1등!` (one line at 1x, 2x and on the 568x320 phone - party.js measures it).
+> - `PARTY_V` 3 → **4** (6.1): a pa 3 page computes nothing here (it mirrors the host's places), but its card and demo
+>   would still teach the longest hold and the x2 against the host's new 1st.
+>
+> The bullets below are the original 10-29 polish spec; where they say x2 or "places by `held`", the note above wins.
+
 - **Flights** at clock seconds 15, 30, 45 (`M.t === round(s * 60 * k)`, `k = total / 3600`): **new** `crownFly(M)` - a
   sparkle burst where the crown is, `cr = {x: gather.x - 8, y: gather.y - 8, vx: 0, vy: 0, onGround: false, holder: -1,
   noPick: -1}` (nobody waits: the old holder may race too), banner `왕관이 날아가요!` (class `round`), sfx `'powerup'`
@@ -453,6 +469,9 @@ sequencer's: a game without bubbles only feeds `wins`.
 `PARTY_V` 2 → **3** (this page plays 물 v2, the beats, `pr`). A PR-B page (`hi.pa` 2) in a party room is never ready,
 shows `새로고침 필요`, and the room says why - the existing `seatReady` / `seatOld` / `R.u` path (design/party.md 6.1), no
 new code. party-net's crafted older guest sends `pa: 2`. The board PR, when it comes back, takes the next number.
+
+2026-10-29 (14.5): `PARTY_V` 3 → **4** for 왕관's last-holder rule; party-net's crafted older guest now sends `PARTY_V - 1`
+(3, this polish's page), and the board PR takes 5.
 
 ### 6.2 Who decides what
 
@@ -534,13 +553,14 @@ Battle and co-op never see any of this (every new path checks `G.party` / `G.min
 | `raftMe` | `오리 튜브로 친구를 맞혀요!` | 물: my own out line (with `탈락! N등`; replaces `watch` in 물) |
 | `revive` / `reviveMe` | `역전!` / `다시 올라왔어요!` | 물: the word pop / my own line |
 | `crownFly` | `왕관이 날아가요!` | 왕관 flight |
-| `gold1` / `gold2` | `황금 왕관!` / `2배!` | 왕관 gold |
+| `gold1` / `gold2` | `황금 왕관!` / `2배!` (10-29, 4.2: `끝날 때 쓴 사람이 1등!`) | 왕관 gold |
 | `two1` / `two2` | `공이 하나 더!` / `골을 넣으면 공이 다시 떨어져요` | 축구 second ball |
 | `golden1` / `golden2` | `골든 골!` / `먼저 넣는 팀이 이겨요!` | 축구 overtime |
 | `roomLast` / `roomAwards` | `마지막 판은 점수 2배!` / `끝나면 보너스상 3개 · 상마다 +2점` | the room's rules (after the points line) |
 
 Changed `MINI` texts: 물 `how` `물이 차올라요! 가장 늦게 젖으면 1등`, `rule` `비누 방울을 먹으면 한 번 살아나요 · 빠지면 오리
-튜브로 친구를 맞혀 역전!`; 왕관 `rule` `15초마다 왕관이 날아가요 · 마지막 15초는 황금 왕관 2배!`; 축구 `rule`
+튜브로 친구를 맞혀 역전!`; 왕관 `rule` `15초마다 왕관이 날아가요 · 마지막 15초는 황금 왕관 2배!` (10-29, 4.2: `how`
+`끝날 때 왕관을 쓴 사람이 1등`, `rule` `15초마다 왕관이 날아가요 · 2등부터는 쓴 시간 순서`); 축구 `rule`
 `45초부터 공이 2개! · 비기면 골든 골`. The `how` lines stay one line (≤ 17 syllables: 물 15). No string uses the retired v1
 title's syllables (`final-e2e2`).
 
@@ -647,7 +667,7 @@ today), `countdown`, `door`, `win` (the podium, as today).
   const SOAP = { hover: 20, bob: 2, life: 480, max: 2, slack: 4, grace: 45, saveUp: 22, saveVy: -3.4, gap: 32 };
   const RAFT = { walk: 0.75, dy: 12, hop: -3.0, inv: 90 };
   const SURGE_WARN = 1.5;                 // s of warning before a surge (steps / the flood: rise.warn)
-  const CROWN2 = { every: 15, goldAt: 45, goldX: 2 };
+  const CROWN2 = { every: 15, goldAt: 45, goldX: 2 };   // (10-29, 4.2: goldX gone - { every: 15, goldAt: 45 })
   const BALL2 = { twoAt: 45, redrop: 45, golden: 20, cheer: 60 };
   // MINI.water.secs 60; 물 schedule: section 4.1.1 (arena data)
 ```
@@ -699,7 +719,9 @@ Add:
    90 f of invuln and no out entry, once a 판, never from the flood's start; places by the last out frame; the last one
    standing counts dry animals only; `bodyAt` / `partyFinal` clear `raft`.
 8. **왕관**: flights at 15 / 30 / 45 s (holder freed, nobody waits, the crown at the gather, lands on the centre stage);
-   gold from 45 s: `held` +2 a frame; places by held.
+   gold from 45 s: `held` +2 a frame; places by held. (10-29, 4.2: the one wearing it at time-up 1st over a longer
+   holder, a capture at the buzzer - grabbed: the grabber, still flying: by held -, the rest and a free crown by held,
+   `held` +1 a frame when gold.)
 9. **축구**: the second ball at 45 s of clock (not counting 골! freezes; waits for a running 골!); both balls pushed by
    bodies / bubbles / the slam; a goal with two balls does not stop the clock or reset anyone and re-drops that ball after
    45 f; 골든 골 only when tied with both teams present; the next goal ends it after 60 f; 20 s → a draw; 60 s of random
@@ -728,7 +750,8 @@ Add:
 4. **물 v2**: a guest's out makes it a raft on every page (flag 512), its control stays local (its raft moves on the
    host); a guest raft's bubble traps the host's animal over the water → 역전 on every page and the rafter's own page
    controls it on the shelf; a guest's 비누 pickup and its save (the hop through `takeOver`, not out during the grace).
-5. **왕관**: a flight frees the holder on every page; the gold crown and the doubled seconds agree at the result.
+5. **왕관**: a flight frees the holder on every page; the gold crown and the doubled seconds agree at the result. (10-29,
+   4.2: the held seconds agree, and the 1st on every page is the one wearing it at time-up, over a longer holder.)
 6. **축구** (2v2, forced): the second ball on every page (tweened, in step with the host's path within the existing
    tolerance); a goal with two balls counted once, no freeze; a forced tie at time-up → 골든 골 on every page, the next
    goal ends it.
@@ -892,3 +915,26 @@ Against sections 3-6 and the diff, every new path read on the host and on a gues
   gate and would draw 물 from its own v2 schedule (the reverse of 6.1). Every page deploys together, so only a stale
   PWA host meets it; the fix (the host's party version in `R`, the guest showing 새로고침 필요 for the host) is the
   next PR's if friends hit it.
+
+### 14.5 2026-10-29 owner change: last holder wins
+
+The owner, after the polish was merged: "왕관게임 가장 마지막에 들고있는 사람이 이기는걸로 바꿔줘". The lead decided the
+details (the owner was told these defaults); the rule is in 4.2's note.
+- `MINI_FN.crown.key` = `(M.cr.holder === p.slot ? 1e7 : 0) + held`: the one wearing it at time-up first, then by held
+  time; nobody wearing it (flying, free on the floor): by held time for everyone; nobody touched it: all share 1st.
+- `CROWN2.goldX` removed (`held += 1` always); the gold crown keeps its tint, banner, sfx and `hurry` music.
+- Texts: `MINI.crown.how` / `rule`, `PARTY_TX.gold2` (4.2). No other crown text said 가장 오래 or 2배 (the room's rules
+  list has no crown line; the HUD draws digits and sprites only). The card demo already ends with `a` wearing it.
+- `PARTY_V` 4 (6.1). Why: nothing on a pa 3 guest computes a crown place (`crownView` mirrors `holder` / `held` /
+  `gold`; the result beats, the tally and the awards read `g.pa.P` / `A` / `B`; the winner line rides in `g.bn`), but
+  that page's card and demo teach "가장 오래 버티면 1등" and "황금 왕관 2배!" while the host's banner says `끝날 때 쓴 사람이
+  1등!` - a kid would play for the wrong goal. The reverse (a pa 4 guest under a stale pa 3 host) is still let in by the
+  old host's gate, as in 14.4's open point.
+- Tests: party.js (305 checks) - the holder at time-up over a longer holder, a capture 0.5 s before the buzzer (the
+  grabber 1st), one 4 frames before it (still flying: by held time), a pick-up on the very last frame (1st with 0
+  held), a leaver's free crown (by held time), gold `held`
+  +1 a frame, the card texts, the gold banner's sub on one line at 1x / 2x / 568x320; the x2 points helper puts the crown
+  back free before time-up. party-net.js (86 checks) - the crafted older guest sends `PARTY_V - 1`; at the 왕관 result
+  the 1st on every page is the one the host gave the crown 1 s before time-up, over a longer holder who is 2nd
+  everywhere, and the held times agree. The full run-all (2026-10-30): 292 / 292 jobs pass (ws-workerd skipped: no
+  wrangler on that machine). PR [#24](https://github.com/bobo33772-blip/Bubble-game/pull/24).
