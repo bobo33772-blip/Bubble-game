@@ -6698,7 +6698,7 @@ window.PG = window.PG || {};
     el.append(who, v);
   }
   // each frame the overlay shows (syncDOM): the card's splash -> how-to switch and its bar line; a result view's tally
-  // and the host's 눌러서 넘기기 line (from skipMin into a beat)
+  // and the host's 눌러서 넘기기 line (from skipMin into a beat; not while a staked party's 최종 순위 waits for its floor)
   function partyLiveTick() {
     const P = G.party; if (!P || shownOverlay !== 'party' || !dom.party) return;
     if (G.mode === 'card') {
@@ -6707,7 +6707,7 @@ window.PG = window.PG || {};
       else if (!G.players.every((p) => P.rdy[p.slot])) setTxt($('pg-party-bart'), partyAutoTx(P));
     } else if (G.mode === 'result') {
       partyTallyTick(false);
-      const sk = $('pg-party-skip'), on = !(G.online && G.role === 'guest') && !!P.b && 'tsaAz'.indexOf(P.b) >= 0 && P.bt >= partyF('skipMin');
+      const sk = $('pg-party-skip'), on = !(G.online && G.role === 'guest') && !!P.b && 'tsaAz'.indexOf(P.b) >= 0 && P.bt >= partyF('skipMin') && !(P.b === 'z' && troPartyWait());
       if (sk && sk.hidden === on) sk.hidden = !on;
     }
   }
@@ -15741,7 +15741,8 @@ window.PG = window.PG || {};
     const n = clamp(NET.roster.length, 2, 4), pts = PARTY_PTS[n].map((v, i) => (i + 1) + '등 ' + v + '점').join(' · ');
     const coin = q === 1 && !(CO.allowBc && NET.tr === 'bc') ? PARTY_TX.coin1 : q === 2 ? PARTY_TX.coin2 : PARTY_TX.coin0;
     // (party-games 3.6: the new games on a line of their own - built from the ones this page has, PARTY_TX.gamesN in full)
-    const gn = MINI_IDS.slice(MINI_OLD).filter((id) => MINI[id].fits(n)).map((id) => MINI[id].name).join(' · ');
+    // (a guest of an older host - its R.pv under this page's: that host plans only the games it has - gets no such line)
+    const gn = NET.role !== 'host' && !(NET.pv >= PARTY_V) ? '' : MINI_IDS.slice(MINI_OLD).filter((id) => MINI[id].fits(n)).map((id) => MINI[id].name).join(' · ');
     const tro = !troPartyOn() ? [PARTY_TX.noTro] : q ? [PARTY_TX.troPrac] : [troRulesLine(), troFreeLine(), PARTY_TX.troPlay, PARTY_TX.troLeave].filter(Boolean);
     return ['미니게임 ' + (NET.opts.rounds === 5 ? 5 : 3) + '판! 판마다 ' + pts, PARTY_TX.roomLast, PARTY_TX.roomAwards, PARTY_TX.tie, n === 3 ? PARTY_TX.games3 : PARTY_TX.games, ...(gn ? [gn] : []), coin]
       .concat(tro, [NET.opts.rapid ? RAPID_RULE : AMMO_RULE, PARTY_TX.trap, PARTY_TX.leave]);

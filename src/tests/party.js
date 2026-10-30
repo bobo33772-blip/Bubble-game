@@ -1571,7 +1571,9 @@
     const q1 = R({ n: 3, bet: 10, q: 1 }), q2 = R({ n: 3, bet: 10, q: 2 });
     ok('rules in practice (q 1 / 2) at 10: 연습 경기라 트로피는 그대로예요 beside the coin line, no other trophy line', [q1, q2].every((r) => has(r, '연습 경기라 트로피는 그대로예요') && !r.some((l) => /최종 등수|파티마다/.test(l))) && /이 브라우저의 탭끼리는/.test(q1[6]) && /같은 기기에서/.test(q2[6]), [q1, q2]);
     const old = R({ n: 3, bet: 10, role: 'guest', pv: 0 });
+    const gnL = '바나나우유 잡기 · 펑! 비눗방울 · 살금살금 술래', new6 = R({ n: 3, bet: 0, role: 'guest', pv: K.PARTY_V - 1 }), new7 = R({ n: 3, bet: 0, role: 'guest', pv: K.PARTY_V });
     ok('rules for a guest of an older host (no R.pv): 트로피는 걸지 않아요 (its party holds nothing for it)', has(old, '트로피는 걸지 않아요') && !old.some((l) => /최종 등수|파티마다/.test(l)), old);
+    ok('rules: the new games line only from a host that plans them (a guest of a pa ' + (K.PARTY_V - 1) + ' host - or none - has none)', !has(old, gnL) && !has(new6, gnL) && has(new7, gnL) && has(r3, gnL), [old, new6, new7]);
     // the 3-2-1 of the first 판 and its card chip (each page's own stake / q; later 판 unchanged)
     party(['duck', 'cat', 'frog', 'capy'], { plan: ['crown', 'water', 'crown'] }); step(30);
     const c10 = P.count({ bet: 10 }), cp = P.count({ bet: 10, q: 1 }), c0 = P.count({ bet: 0 });
@@ -1594,11 +1596,11 @@
     // the host's skip and the beat's own end both wait for the floor, then the podium; without a hold 최종 순위 ends at 96 f
     party(['duck', 'cat', 'frog'], { plan: ['crown'] }); toPlaying(); const h0 = G.frame; D.tro.partyHold(h0, 900);
     P.skip(); toBeat('z', 1500); const zAt = G.frame; step(40); tap('jump', 0); step(1);
-    const held = G.mode === 'result' && beatIs('z'); until(() => G.mode === 'podium', 1200); const pAt = G.frame;
+    const held = G.mode === 'result' && beatIs('z') && !P.card().skip; until(() => G.mode === 'podium', 1200); const pAt = G.frame;
     D.tro.partyHold(null);
-    party(['duck', 'cat', 'frog'], { plan: ['crown'] }); toPlaying(); P.skip(); toBeat('z', 1500); const z1 = G.frame; until(() => G.mode === 'podium', 400);
-    ok('staked party floor: 최종 순위 held (a skip at 40 f waits) until its first 시작! is the floor old, then the podium; no hold: 96 f', held && zAt < h0 + 900 && Math.abs(pAt - h0 - 900) <= 1 && Math.abs(G.frame - z1 - 96) <= 1,
-      [held, zAt - h0, pAt - h0, G.frame - z1]);
+    party(['duck', 'cat', 'frog'], { plan: ['crown'] }); toPlaying(); P.skip(); toBeat('z', 1500); const z1 = G.frame; step(40); const skN = P.card().skip; until(() => G.mode === 'podium', 400);
+    ok('staked party floor: 최종 순위 held (a skip at 40 f waits, no 눌러서 넘기기 line) until its first 시작! is the floor old, then the podium; no hold: 96 f', held && skN && zAt < h0 + 900 && Math.abs(pAt - h0 - 900) <= 1 && Math.abs(G.frame - z1 - 96) <= 1,
+      [held, skN, zAt - h0, pAt - h0, G.frame - z1]);
     D.toTitle();
     // the new strings: every syllable warmed (PARTY_TEXT), 7.4 verbatim
     const tx = P.tx(), strs = [tx.troZero, tx.troAll, tx.troPot, tx.troPlay, tx.troLeave, tx.troPrac, tx.toParty, tx.toBattle, tx.countBet, tx.countPrac, tx.chipFree, tx.chipBetA, tx.chipFreeA, tx.short, tx.walkVoid, tx.walkPaid, tx.nextFreeMe, tx.nextFree, tx.waitBet, tx.recRow];

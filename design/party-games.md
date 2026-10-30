@@ -1301,3 +1301,71 @@ All three games ship: `MINI_IDS` = `water crown ball milk puff sneak`, so 2 / 4 
   #lag run the delay never left its base, so it did not show.
 - Offline (one screen, every seat local) the my-line `움직였어요!` covers the shared banner as the other games' lines do;
   the `이번엔 내가 술래!` line is online only.
+
+## 21. Verify (after the three builders, 2026-10-30)
+
+### 21.1 The look list (`M.Js`)
+
+The stopped verify step had left `M.J` (one look judged at a time) half turned into `M.Js`. It was right: a mashed chant
+turns again at T+147 at the earliest (the look ends at T+90, six syllables 6 f apart from T+96, 욕 at T+126, 탕! 21 f
+later), while the last look's remote judging stays open to T+150 (T+90 + lagMax). With one slot, the new 탕! replaced the
+old look and a late state of it (rt in T+10..T+90 reaching the host at T+148) was judged against nothing. Finished:
+every reader (`sneakRound`, `sneakChant` push, `sneakJudge` - each look closes on its own, `sneakState` - a state is
+judged against every open look whose window holds its rt, `sneakCatch`, `sneakClose`, `sneakDrop`, `init`) uses `Js`;
+`Js` never reaches the wire (`g.mg` carries `T`), so `sneakView`, the demo and the guest's draw were untouched. Test:
+the second 탕! at T+147 keeps both, a state with rt T+88 arriving at T+148 still catches, each look closes by itself.
+
+### 21.2 Merge with main (#24 왕관, #25 party trophies)
+
+- **`PARTY_V` 7** (main 6: 5 the party trophies, 6 왕관's last-holder rule; 7 the three new games). `PARTY_TRO_V` stays 5.
+  party-net: every page says pa 7; the crafted older guest sends pa 6 (the crown release: no new games) and is never
+  ready.
+- Conflicts kept both sides: `PARTY_TX` (the new games' and the trophies' lines), `NET` (`pv` and `mi` / `rtHi`), the
+  room rules (the new games' line, then the coin line and the trophy lines - 14 lines for a staked 4-player room), the
+  debug API, the test lists, party-net (both header lists; the 바나나우유 / 술래 smokes run before the staked party;
+  `lagRun` and `stakedTests` both kept), run-all (party-net `rt780000`: main's 600 s plus the two smokes).
+- **The 3-2-1 of a staked 술래 1판**: main's sub line is `1판 / 3판` + the stake (`· 트로피 10개씩 걸어요!`), ours
+  replaced the 판 line with `이번 술래: 나!` on the first 술래's screen. Now `이번 술래: 나! · 트로피 10개씩 걸어요!`; a guest
+  rebuilds its own head and keeps the host's stake tail (`sneakCountSub`).
+- **The new games' rules line only from a host that plans them**: a guest whose host's `R.pv` is under `PARTY_V` (an
+  older host plans only the games it has) gets no `바나나우유 잡기 · 펑! 비눗방울 · 살금살금 술래` line.
+
+### 21.3 Party trophies with the new games
+
+- The settle is game-blind and fine: places from each game's `key` (`miniPlaces`), the final standing from
+  `partyStandings`, the table from `G.podium`; `coinAct` feeds the +5's real test as bubbles do.
+- `PARTY_TRO_MINF` 7200 against the shortest honest party (3 players, the three new games; numbers in
+  party-trophies.md 14.5): 술래 753 f, 바나나우유 1562 f, 펑 2701 f; **6984 f (116 s)** at the natural pace, **6078 f
+  (101 s)** with the host skipping every beat - both would have been voided and refunded. Fix: a staked party's
+  **최종 순위 waits** until its first 시작! is 7200 host frames old (`troPartyWait`; the host's skip and its `눌러서 넘기기`
+  line wait too). At most 1122 f (19 s) longer, 216 f (4 s) at the natural pace; the trophy rate stays under the
+  shortest battle's. 안 걸기, practice and the fast debug party never wait.
+
+### 21.4 Audit (against this spec and the diff from main)
+
+Checked and fine: each page's own measurement (바나나우유 from its own first draw, `G.drawT` and the event's time; 펑 on
+its own clock, presses never wait for the network; 술래 by each runner's own view clock, `rtMax` monotonic, `lagMax`);
+the guests see the host's results (reveal rows, 펑 rows, arrivals, prisons in `U`); a hidden or stalled tab never stalls
+a round (`miniStale` in 바나나우유 and 펑, `lagMax` for the looks and 3초! / the cap, the auto chant for a silent 술래);
+2 / 3 / 4 players (stage spots, the 술래 order, 2 players 4 rounds); the free draw and the replan fix; `coinAct` only for
+my own seat; 최다 가두기상 / 최다 탈출상 from 술래's prisons; every shared-code change is gated by `G.party` / `G.mini`
+(`kitOf`, the walk, `fire`, `floatMove`, `releasePlayer`, `updateBattle`'s cues, `updateBody`, `guestSelf`) or adds
+fields nobody else reads (`pq`, `downP`, `G.drawT`, `mi`, `s.at`); the tag icon's height is the same expression as
+before (`tagAnchor`). Fixed: 21.1, the staked 술래 3-2-1 line, the rules line for an older host, the trophy floor.
+
+### 21.5 Tests
+
+- party.js: + two looks open at once (21.1); the rules' line counts with the new games' line; the staked 술래 3-2-1
+  (host and guest, `P.count`'s `gs`); the new games' line only from a host at this `PARTY_V`; the 최종 순위 hold
+  (`tro.partyHold`: the skip and the beat's end wait, no 눌러서 넘기기 line, then the podium; 96 f without a hold).
+- trophies-net: the `party R` check waits for the host's broadcast R (it trailed `canStart` once under the load of
+  three concurrent jobs).
+- Green (filtered, `--exact`): party, party-net, party-net-lag, party-fit-568, trophies, trophies-net, smoke,
+  check-integration, ux-roomrow, ux-roomrow-320. No full suite in this step.
+
+### 21.6 Open points
+
+- The 최종 순위 hold is felt only in a staked party of the shortest games: up to 19 s on the final standing when the
+  host skipped every beat (4 s at the natural pace), with no line saying why (guests cannot tell a held beat from a long
+  one). A `트로피 정산까지 N초` line would need a field in `g.pa`.
+- 20.4 stands (real phones: the 술래 pips and red edge at 568x320, whether stopping in time feels fair with a thumb).
