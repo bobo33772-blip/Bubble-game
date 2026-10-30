@@ -15631,7 +15631,7 @@ window.PG = window.PG || {};
       stats, snap: { count: NET.snapN, bytes: NET.snapBytes, max: NET.snapMax, trims: NET.snapTrim, refused: NET.snapFail },
       claims: { sent: NET.claimsSent | 0, refused: NET.claimNo | 0, why: Object.assign({}, NET.claimWhy || {}) },
       drops: { sent: NET.drops | 0, seen: NET.dropSeen | 0 }, // (내려가기: my own as a guest; others' shown as dust here)
-      renderTick: NET.rt, newestTick: NET.buf ? NET.buf.last : -1, viewFrames: NET.viewFrames, starvedFrames: NET.starveFrames, evQ: NET.evQ.length, pred: NET.pred.length, games: NET.games.slice(),
+      renderTick: NET.rt, rtHi: NET.rtHi || 0, delay: NET.buf ? bufDelay(NET.buf, SNAP_DELAY) : null, newestTick: NET.buf ? NET.buf.last : -1, viewFrames: NET.viewFrames, starvedFrames: NET.starveFrames, evQ: NET.evQ.length, pred: NET.pred.length, games: NET.games.slice(),
       predSplit: NET.predSplit | 0, predGiveUp: NET.predGiveUp | 0, // (v4: predictions handed to the host row by the 6 px rule / given up)
       // (파티: the room's mode and 판 수, each seat's hi / pa as the host knows them, the seats it says must refresh)
       party: { mode: NET.mode, rounds: NET.opts.rounds === 5 ? 5 : 3, seats: NET.roster.map((r) => ({ slot: r.slot, hi: !!r.hi, pa: r.pa | 0, ready: seatReady(r) || r.slot === 0, old: seatOld(r) })), u: NET.role === 'host' ? NET.roster.filter(seatOld).map((r) => r.slot) : (NET.partyU || []).slice() },

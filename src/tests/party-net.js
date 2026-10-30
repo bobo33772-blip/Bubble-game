@@ -534,6 +534,12 @@
   //   3  펑: A and C run the same press pattern from their own 시작! (puffs >= 80 ms apart as real X presses, ↓ at the
   //      tremble, then at the flash, then puff until it pops) well before their window ends: the same score, bubbles and
   //      pops; the host places by the done reports (A and C share the 1st); every page hears both pops once
+  //   4  술래 (real lengths, the order H A B C): round 1 - C walks on its own view and lets go 4 ticks after its own
+  //      탕! (right, left, right): never caught over 3 looks; walking on through the 4th it is caught - a prison owned by
+  //      the 술래 on every page; round 2 - A (a guest) chants: its mi reaches the host, T the same on every page; round
+  //      3 - A and C at the line's edge press on their OWN view ticks R + 12 / R: C's earlier stamp orders it first
+  //      though its state reached the host later; round 4 - C the 술래; the 판 ends by its rounds. INFO: each guest's
+  //      playout delay at each round's start and end
   //   5  the snapshots stay under 3400 bytes
   async function lagRun() {
     const F = [await frame(0), await frame(1), await frame(2), await frame(3)];
@@ -625,6 +631,79 @@
     const pops = F.map((f, k) => f.sfx.filter((n) => n === 'pop').length - pop0[k]);
     ok('lag 펑: every page heard both pops once (its own at once, a friend\'s when its row\'s pops rose)', pops.every((n) => n === 2), pops);
     await until(() => F.every((f) => PS(f).ph === 'podium'), 20000);
+
+    // ---- 4. 술래 (real lengths: 4 rounds, the 술래 order H A B C)
+    H.mp.toRoom(); await until(() => F.every((f) => N(f).screen === 'room'), 6000);
+    for (const f of F) f.P.fast(false);
+    H.P.force(['sneak']);
+    await readyAll(F);
+    H.mp.start();
+    await readyCard(F);
+    const sOn = await until(() => F.every((f) => PS(f).ph === 'playing' && f.P.sneak() && f.P.sneak().r === 1), 20000);
+    ok('lag 술래: the 판 plays on every page (살금살금 복도), the host the 1st 술래', sOn && F.every((f) => f.P.arenas()[PS(f).arena].key === 'sneak' && f.P.sneak().it === 0), F.map((f) => [PS(f).ph, f.P.sneak()]));
+    // (INFO: each guest's playout delay at each round's start and end - the drift that moves a stamp, 6.4)
+    const dl = []; let dr = '';
+    const dWatch = setInterval(() => { const m = H.P.sneak(); if (!m) return; const k = m.r + ':' + m.ph; if (k !== dr) { dr = k; dl.push(k + ' ' + [A, B, C].map((f) => (N(f).delay === null ? '-' : N(f).delay.toFixed(1))).join('/')); } }, 20);
+    const SNk = (f) => f.P.sneak() || {};
+    // a 술래 chants: a press about every 7 f (a syllable each 6 f) until the host lit 욕 - then 탕! 21 f later
+    const chant = async (f) => { const s = N(f).mySlot; for (let k = 0; k < 16 && SNk(H).syl < 6; k++) { f.P.press(s, 'shoot'); await sleep(110); } };
+    // C (100 ms +-40) runs on its own view: it walks once its screen shows the 3rd syllable and lets go 4 ticks after
+    // its own view's 탕! (it has stopped by T+6) - right, left, right; the 4th time it walks on 40 ticks into the look
+    const cRun = { phase: 'idle', looks: 0, T: -1, log: [] };
+    C.mp.tap(() => {
+      const m = SNk(C), now = N(C).rtHi, s = C.P.sneakSyl(), slot = 3;
+      if (m.r !== 1 || m.ph !== 0) return;
+      if (cRun.phase === 'idle' && cRun.looks < 4 && s >= 3 && s < 7) { cRun.dir = cRun.looks % 2 ? 'left' : 'right'; C.D.press(cRun.dir, true, slot); cRun.phase = 'walk'; }
+      else if (cRun.phase === 'walk' && m.T >= 0 && m.T !== cRun.T && now >= m.T + (cRun.looks === 3 ? 40 : 4)) { C.D.press(cRun.dir, false, slot); cRun.phase = 'stop'; cRun.T = m.T; cRun.log.push([m.T, now, Math.round(slotP(C, 3).x)]); cRun.looks++; }
+      else if (cRun.phase === 'stop' && now >= cRun.T + 90) cRun.phase = 'idle';
+    });
+    await place(C, 96, 200);
+    // (the host's turn when C was caught - only the 4th may catch it)
+    const trapT = []; const tWatch = setInterval(() => { const p = slotP(H, 3); if (p && p.trap && !trapT.includes(SNk(H).T)) trapT.push(SNk(H).T); }, 5);
+    for (let k = 0; k < 4; k++) {
+      await until(() => SNk(H).syl === 0 && SNk(H).ph === 0 && SNk(H).r === 1, 6000, 5);
+      await chant(H);
+      await until(() => SNk(H).syl === 7, 3000, 5);
+      await until(() => SNk(H).syl !== 7, 3000, 5);
+    }
+    const caught = await until(() => cRun.looks === 4 && F.every((f) => { const p = slotP(f, 3); return p && p.trap && f.G.bubbles.some((b) => b.kind === 'player' && b.owner === 0); }), 4000, 5);
+    ok('lag 술래: C (100 ms link) letting go 4 ticks after its own view\'s 탕! is never caught over 3 looks (it walked right, left, right)', cRun.log.length === 4 && trapT.length === 1 && trapT[0] === cRun.log[3][0], [cRun.log, trapT]);
+    ok('lag 술래: ... walking on through the 4th look it is caught - a prison owned by the 술래 on every page', caught && (SNk(H).catches || {})[0] === 1, [cRun.log, SNk(H).catches, F.map((f) => !!(slotP(f, 3) && slotP(f, 3).trap))]);
+    C.mp.tap(null);
+    info('lag 술래 C\'s looks [T, its view when it let go, x]: ' + JSON.stringify(cRun.log));
+    // round 2: A (a guest) is the 술래 - its presses reach the host as mi; T is the same on every page
+    const sr2 = await until(() => F.every((f) => SNk(f).r === 2 && SNk(f).ph === 0 && SNk(f).it === 1), 20000, 5);
+    await sleep(300);
+    const s0 = SNk(H).syl;
+    await chant(A);
+    const tSame = await until(() => SNk(H).T >= 0 && SNk(H).syl >= 6 && F.every((f) => SNk(f).T === SNk(H).T), 4000, 5);
+    ok('lag 술래: round 2 - a guest 술래\'s chant (its mi) reaches the host and T is the same on every page', sr2 && s0 === 0 && tSame, [s0, F.map((f) => [SNk(f).r, SNk(f).it, SNk(f).T, SNk(f).syl])]);
+    // (end it: once the look is over the runners H, B and C walk to the line)
+    await until(() => SNk(H).syl === 0, 4000, 5);
+    for (const f of [H, B, C]) await place(f, 186, 200);
+    await sleep(150); for (const f of [H, B, C]) f.D.press('right', true, N(f).mySlot); await sleep(400); for (const f of [H, B, C]) f.D.press('right', false, N(f).mySlot);
+    // round 3: B the 술래 - A and C at the line's edge, each pressing on its OWN view tick: C at R, A at R + 12
+    const sr3 = await until(() => F.every((f) => SNk(f).r === 3 && SNk(f).ph === 0 && SNk(f).it === 2), 20000, 5);
+    await place(A, 186, 200); await place(C, 186, 200); await sleep(200);
+    const R = H.G.frame + 60, went = {};
+    for (const [f, at] of [[A, R + 12], [C, R]]) f.mp.tap(() => { if (!went[f.i] && N(f).renderTick >= at) { went[f.i] = N(f).renderTick; f.D.press('right', true, N(f).mySlot); } });
+    const two = await until(() => (SNk(H).arr || []).length >= 2, 6000, 5);
+    for (const f of [A, C]) { f.mp.tap(null); f.D.press('right', false, N(f).mySlot); }
+    const arr = SNk(H).arr || [];
+    info('lag 술래 round 3: pressed at view ticks ' + JSON.stringify(went) + ' (R ' + R + '), arrivals ' + JSON.stringify(arr));
+    const arrAgree = await until(() => F.every((f) => JSON.stringify((SNk(f).arr || []).map((a) => a[0])) === JSON.stringify(arr.map((a) => a[0]))), 3000, 5);
+    ok('lag 술래: round 3 - A and C reach the line with stamps ~12 f apart, C (the slow link) first: C is ordered first though its state reached the host later; the order agrees on every page',
+      sr3 && two && arr[0][0] === 3 && arr[1][0] === 1 && arr[1][1] - arr[0][1] >= 6 && arr[1][1] - arr[0][1] <= 18 && arrAgree, [arr, went, arrAgree]);
+    // round 4: C (the slow link) is the 술래 - the others walk to the line, the 판 ends by its rounds
+    const sr4 = await until(() => F.every((f) => SNk(f).r === 4 && SNk(f).ph === 0 && SNk(f).it === 3), 20000, 5);
+    for (const f of [H, A, B]) await place(f, 186, 200);
+    await sleep(150); for (const f of [H, A, B]) f.D.press('right', true, N(f).mySlot); await sleep(400); for (const f of [H, A, B]) f.D.press('right', false, N(f).mySlot);
+    const sEnd = await until(() => F.every((f) => PS(f).ph === 'result' || PS(f).ph === 'podium'), 20000, 10);
+    ok('lag 술래: rounds 2-4 with each guest as the 술래, the 판 ends by its 4th round on every page (not the 80 s cap)', sr4 && sEnd && PS(H).last && Object.keys(PS(H).last).length === 4, [sr4, sEnd, F.map((f) => PS(f).ph)]);
+    clearInterval(dWatch); clearInterval(tWatch);
+    info('lag 술래 playout delay (A/B/C ticks) at each round:phase: ' + dl.join(' | '));
+    await until(() => F.every((f) => PS(f).ph === 'podium'), 30000);
+    for (const f of F) f.P.fast(true);
 
     // ---- 5. the snapshot budget
     ok('lag: snapshots under 3400 bytes throughout', N(H).snap.max > 0 && N(H).snap.max <= 3400, N(H).snap);
