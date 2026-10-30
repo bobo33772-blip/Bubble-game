@@ -6378,7 +6378,8 @@ window.PG = window.PG || {};
     partyPodiumTitle();
     if (G.online && NET.sess && NET.q !== 0 && G.podium && (!G.party || troPartyOn())) {
       const mid = NET.ms + '.' + NET.gid;
-      if (!TRO.pod || TRO.pod.mid !== mid) TRO.pod = { mid, kind: 'prac', rows: new Map(), promo: -1, at: 0, t0: -1, fl: null, flipAt: -1, landed: 0 };
+      // (the sr line says so too: a party's podium was filled before this pod existed)
+      if (!TRO.pod || TRO.pod.mid !== mid) { TRO.pod = { mid, kind: 'prac', rows: new Map(), promo: -1, at: 0, t0: -1, fl: null, flipAt: -1, landed: 0 }; if (shownOverlay === 'podium') fillPodium(); }
     }
     if (G.party) { partyPodiumUI(); return; }
     troPodiumTag(); troPodBonus();

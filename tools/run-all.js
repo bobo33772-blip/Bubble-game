@@ -222,7 +222,7 @@ const LIST = [
   V('trophies-net', HTTP + 'test-trophies-net.html', 'rt480000', doneZero('TROPHYNET'), { done: 'TROPHYNET DONE', w: 1200, h: 900 }),
   // 파티 online (design/party.md §13.2; 4 bc frames): the old-page gate, the cards on every screen, the water clock, the
   // crown's authority, the podium and the coins, leavers, 파티 한 번 더
-  V('party-net', HTTP + 'test-party-net.html', 'rt900000', doneZero('PARTYNET'), { done: 'PARTYNET DONE', w: 1200, h: 900 }),
+  V('party-net', HTTP + 'test-party-net.html', 'rt600000', doneZero('PARTYNET'), { done: 'PARTYNET DONE', w: 1200, h: 900 }),
   // v4 shop online (design/shop.md 16.2, pass S4; 3 bc frames): hi.lk / 'eq' / R index 5 in the room only, forged sets,
   // an old-page guest; in game the room's sets frozen and drawn on every page, game-phase R seats 4 long in every
   // snapshot; battle coins = the host-side coinBattle on every page (the guest's clock), a countdown leaver, co-op 탕 /
