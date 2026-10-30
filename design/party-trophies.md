@@ -850,3 +850,36 @@ and podium); only a party at 5 / 10 / 20 / 50 is a 트로피 경기. About 310 c
   line at once - text only).
 - **Known, as a battle**: a leaver's forfeit stands in a void party (too short, or a walkover nobody won): its stake is
   lost, not shared (leaving is last place either way); a pot whose finishers all played without the stake is lost.
+
+### 14.5 With the new games (feat/party-games verify, 2026-10-30)
+
+feat/party-games merged main (#24, #25): `PARTY_V` **7** (main's 6 + the three new games), `PARTY_TRO_V` stays 5. A
+staked party may now draw 바나나우유 잡기, 펑! 비눗방울 and 살금살금 술래.
+
+- **The settle with a new game**: unchanged and fine - each 판's places come from `miniPlaces` (the game's `key`), the
+  final standing from `partyStandings`, the table from `G.podium`; `coinAct` feeds `CO.bshots`, so the +5's real test
+  (`troPartyReal`) counts a new game's actions as a battle's blows.
+- **`PARTY_TRO_MINF` against the shortest honest party** (host frames from the first 시작! to the final standing, the
+  fast party off; 3 players draw from 5 games, so the three new ones can meet):
+
+  | Part | Frames | How |
+  |---|---|---|
+  | 살금살금 술래, 3 players | 753 | 3 rounds x 193 (168 px to the line at 0.875 px/f, the stools hopped on the way; an idle chant turns at 201, after every arrival) + 2 swaps x 72 + endF 30 (2 / 4 players: 4 rounds, 1018) |
+  | 바나나우유 잡기 | 1562 | 6 GO rounds x 169 (intro 30 + the shortest wait 72 + a 100 ms grab 7 + reveal 60) + 2 NO-GO x 259 (intro 30, 2 decoys at +24 and +78, end +168, reveal 60) + endF 30 |
+  | 펑! 비눗방울 | 2701 | the 45 s window (the host's own clock) |
+  | Between 판 (x2), natural | 684 / 834 | 끝! 54 + 1등 132 + tally 168 + card 150 (all ready at once) + 3-2-1 180; the second adds 마지막 판! 150 |
+  | After the last 판, natural | 450 | 끝! 54 + 1등 132 + tally 168 + 최종 순위 96 (no 보너스상: each won one 판, no prisons) |
+  | Same, the host skipping every beat at skipMin 30 | 444 / 474 / 144 | 끝! cannot be skipped |
+
+  Shortest honest party: **6984 f (116 s)** at the natural pace, **6078 f (101 s)** with the host skipping every beat -
+  both under 7200, and the second under the guests' 105 s too (2 / 4 players: 7249 / 6343). Such a party was voided and
+  refunded: wrong for players who played it out.
+- **Fix (the simplest that keeps the rate under the shortest battle's)**: the host holds the **최종 순위** beat until the
+  party's first 시작! is `PARTY_TRO_MINF` host frames old (`troPartyWait` in `partyBeatNext`; the host's skip waits too).
+  The settle then always sees at least 7200 frames, and the result reaches the guests after their 105 s. Held at most
+  1122 f (19 s) in the all-skipped case above, 216 f (4 s) at the natural pace; 안 걸기, practice, the fast debug party and
+  a test's `tro.partyMin` never hold. The void path stays for what can still be short (a debug floor). Rejected: a lower
+  floor (a party of short games would pay faster than a 2 min battle), a floor from the plan's games (the same), keeping
+  staked parties off the new games (against the owner's free draw), holding at the podium (the podium would need a
+  "trophies later" state on host and guests). Tested in party.js (`tro.partyHold`: the skip and the beat's end wait for
+  the floor, then the podium; without a hold 최종 순위 is 96 f).

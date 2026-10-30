@@ -4494,7 +4494,7 @@ window.PG = window.PG || {};
     else if (P.b === 't') { P.A = partyAwards(); P.given = {}; partyBeat(P.A.length ? 'a' : 'z'); }
     else if (P.b === 'a') partyBeat('A', 0);
     else if (P.b === 'A') { partyAwardGive(P.bk); if (P.A && P.bk + 1 < P.A.length) partyBeat('A', P.bk + 1); else partyBeat('z'); }
-    else if (P.b === 'z') partyFinal(false);
+    else if (P.b === 'z') { if (!troPartyWait()) partyFinal(false); }   // (a staked party: not before its floor)
     else partyNext();
   }
   // a result frame: the world frozen (fx only); the stand's and the awards' timed moments; the host's skip
@@ -6795,8 +6795,9 @@ window.PG = window.PG || {};
   //    everyone, never a share of the pot (only the stakes put in are in it, and only those who put one in share it)
   // (tab: this page load's id; everything else per tab lives here, never in storage. free: I readied without the stake)
   // (agreedM: the room mode my ready was for - ready means ready for that stake in that mode, design/party-trophies.md 4;
-  // pmin: the debug override of the party's void floor, null = PARTY_TRO_MINF - troPartyMinF)
-  const TRO = { s: null, key: TRO_KEY, tab: '', mem: false, ro: false, allowBc: false, fast: false, day: null, awayAt: 0, pmin: null,
+  // pmin: the debug override of the party's void floor, null = PARTY_TRO_MINF - troPartyMinF; phold: a test's hold of the
+  // 최종 순위, {f0, f} - troPartyWait)
+  const TRO = { s: null, key: TRO_KEY, tab: '', mem: false, ro: false, allowBc: false, fast: false, day: null, awayAt: 0, pmin: null, phold: null,
     seen: new Set(), live: new Map(), agreed: -1, agreedM: '', free: false, match: null, lastRes: null, last: null, run: null, pod: null, msg: null, msgT: 0, waits: new Map() };
   function troRand(n) {
     const A = '0123456789abcdefghijklmnopqrstuvwxyz';
@@ -7250,6 +7251,15 @@ window.PG = window.PG || {};
   }
   // the void floor in host frames: the debug override, else 0 in the fast debug party (12 s games), else PARTY_TRO_MINF
   const troPartyMinF = () => (TRO.pmin !== null ? TRO.pmin : PARTY_FAST ? 0 : PARTY_TRO_MINF);
+  // host: a staked party's 최종 순위 stays up (the skip waits too) until its first 시작! is PARTY_TRO_MINF host frames
+  // old - an honest party of the three short new games can finish in 101 s (design/party-games.md 21): it is held, never
+  // voided, and the trophy rate stays the shortest battle's. Not in the fast debug party, nor while a test sets the void
+  // floor (tro.partyMin); tro.partyHold(f0, f) holds any party (party.js, offline)
+  function troPartyWait() {
+    const H = TRO.phold; if (H) return G.frame - H.f0 < H.f;
+    const M = TRO.match;
+    return !!M && G.online && G.role === 'host' && M.mid === NET.ms + '.' + NET.gid && TRO.pmin === null && !PARTY_FAST && G.frame - (M.f0 | 0) < PARTY_TRO_MINF;
+  }
   // 한 판 더 after a staked result: every guest has reported its new count for it (견습 and the room chips follow it), and
   // an older guest page (no r.z) can still cover the stake - the host and every guest with 안 걸고 참여 who are short now
   // play the next match without it
@@ -16136,6 +16146,7 @@ window.PG = window.PG || {};
       // PARTY_TRO_MINF); the +5's real test over this page's CO.pa; a guest's gg on / off (an iframe cannot be hidden)
       ptable: (n, s, fin, gl, gz, rot) => troPartyTable(n, s, fin, gl | 0, gz | 0, rot | 0),
       partyMin(f) { TRO.pmin = f === null || f === undefined ? null : Math.max(0, +f || 0); return troPartyMinF(); },
+      partyHold(f0, f) { TRO.phold = f === null || f === undefined ? null : { f0: +f0 || 0, f: Math.max(0, +f || 0) }; return TRO.phold ? Object.assign({}, TRO.phold) : null; },
       preal: (nf) => troPartyReal(CO.pa, nf | 0),
       gg(on) { troGg(on ? 1 : 0); },
       // a 'tro' as if from the host (replay / hostile tests); slot: as that seat's page (offline unit tests: this page's

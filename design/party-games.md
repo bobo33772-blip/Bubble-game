@@ -1225,7 +1225,7 @@ snapshot budget.
 ## 20. As built: builder 3 (살금살금 술래 + its online checks)
 
 All three games ship: `MINI_IDS` = `water crown ball milk puff sneak`, so 2 / 4 players draw from 6 and 3 players from 5
-(3.6). `PARTY_V` stays 5 for the verify step.
+(3.6). `PARTY_V` stayed 5 for the verify step (it set 7 after merging main: section 21).
 
 ### 20.1 Where the code differs from the text above
 

@@ -1589,6 +1589,17 @@
     const c2 = P.count({ bet: 10 });
     ok('2판: the 3-2-1 and the card say nothing about the stake (the hold was at the first 시작!)', c2.sub === '2판 / 3판' && c2.cls === '' && c2.chip === null, c2);
     D.toTitle();
+    // the 최종 순위 hold (party-games 21: a staked party settles no sooner than PARTY_TRO_MINF after its first 시작! - an
+    // honest party of the short new games is held there, never voided; tro.partyHold stands in for the online host's hold):
+    // the host's skip and the beat's own end both wait for the floor, then the podium; without a hold 최종 순위 ends at 96 f
+    party(['duck', 'cat', 'frog'], { plan: ['crown'] }); toPlaying(); const h0 = G.frame; D.tro.partyHold(h0, 900);
+    P.skip(); toBeat('z', 1500); const zAt = G.frame; step(40); tap('jump', 0); step(1);
+    const held = G.mode === 'result' && beatIs('z'); until(() => G.mode === 'podium', 1200); const pAt = G.frame;
+    D.tro.partyHold(null);
+    party(['duck', 'cat', 'frog'], { plan: ['crown'] }); toPlaying(); P.skip(); toBeat('z', 1500); const z1 = G.frame; until(() => G.mode === 'podium', 400);
+    ok('staked party floor: 최종 순위 held (a skip at 40 f waits) until its first 시작! is the floor old, then the podium; no hold: 96 f', held && zAt < h0 + 900 && Math.abs(pAt - h0 - 900) <= 1 && Math.abs(G.frame - z1 - 96) <= 1,
+      [held, zAt - h0, pAt - h0, G.frame - z1]);
+    D.toTitle();
     // the new strings: every syllable warmed (PARTY_TEXT), 7.4 verbatim
     const tx = P.tx(), strs = [tx.troZero, tx.troAll, tx.troPot, tx.troPlay, tx.troLeave, tx.troPrac, tx.toParty, tx.toBattle, tx.countBet, tx.countPrac, tx.chipFree, tx.chipBetA, tx.chipFreeA, tx.short, tx.walkVoid, tx.walkPaid, tx.nextFreeMe, tx.nextFree, tx.waitBet, tx.recRow];
     ok('texts (7.4): the party trophy strings verbatim', tx.troAll === '모두 {0}개씩 걸고 최종 등수대로 나눠요: ' && tx.short === '파티가 너무 빨리 끝나서 트로피는 그대로예요' && tx.walkPaid === '친구가 나가서 일찍 끝났어요 · 기권승' && tx.toParty === '파티로 바뀌었어요: ' && tx.waitBet === ' · 다음 파티도 {0}개씩' && tx.recRow === '배틀·파티' && tx.troPlay === play && tx.troLeave === leave, strs);
