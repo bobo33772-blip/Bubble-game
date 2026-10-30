@@ -178,8 +178,9 @@ const LEVELS = ctx.PG && ctx.PG.LEVELS;
 if (!Array.isArray(LEVELS)) fatal('PG.LEVELS is not an array');
 const ARENAS = ctx.PG && ctx.PG.ARENAS;
 const PARTY_ARENAS = ctx.PG && ctx.PG.PARTY_ARENAS;
-const PARTY_KEYS = ['water', 'ball'];   // (파티: 물 차는 대욕장, 거품 축구장)
-const PARTY_NAMES = ['물 차는 대욕장', '거품 축구장'];
+const PARTY_KEYS = ['water', 'ball', 'stage'];   // (파티: 물 차는 대욕장, 거품 축구장, 무대 목욕탕)
+const PARTY_NAMES = ['물 차는 대욕장', '거품 축구장', '무대 목욕탕'];
+const STAGE_X = { 2: [100, 156], 3: [72, 128, 184], 4: [44, 100, 156, 212] };   // (game.js STAGE_X: world: false feet centres by players)
 const BALL_R = 11; // (game.js BALL.r: the 축구 ball's radius, px)
 const WATER_SLACK = 3, WATER_SECS = 60, CEIL_Y = 24; // (game.js MINI.water / WATER_SLACK; the ceiling's underside)
 
@@ -933,6 +934,21 @@ function analyse(L, idx, kind) {
     }
     if (Array.isArray(Gs) && Gs.length === 2) res.ball = Gs.map((q, k) => `${k ? 'right' : 'left'} goal cols ${q.c0}-${q.c1} rows ${q.r0}-${q.r1} line ${q.line}`).join(' · ') + (Bl ? ` · kickoff (${Bl.x}, ${Bl.y})` : '');
   }
+  // 무대 목욕탕 (design/party-games.md 3.1): a plain box - nothing solid between rows 1 and 24 (a world: false game draws
+  // its own scene over it), and every STAGE_X spot (2 / 3 / 4 players: the feet centres in px) standable on the floor
+  if (party && L.key === 'stage') {
+    for (let r = 1; r <= ROWS - 2; r++) for (let c = IN_L; c <= IN_R; c++) if (!O(r, c)) { err(`the stage is a plain box: (${c},${r}) is not open air`); r = ROWS; break; }
+    const spots = [];
+    for (const n of Object.keys(STAGE_X)) for (const cx of STAGE_X[n]) {
+      spots.push(cx);
+      if (cx - 8 < TS * IN_L || cx + 8 > TS * (IN_R + 1)) { err(`STAGE_X[${n}] spot ${cx}: the 16 px body is not inside the walls`); continue; }
+      for (let c = Math.floor((cx - 8) / TS); c <= Math.floor((cx + 7) / TS); c++) {
+        if (!O(ROWS - 2, c) || !O(ROWS - 3, c)) err(`STAGE_X[${n}] spot ${cx}: no room for the body at col ${c}`);
+        if (!B(ROWS - 1, c)) err(`STAGE_X[${n}] spot ${cx}: no floor under col ${c}`);
+      }
+    }
+    res.stage = `spots ${Object.keys(STAGE_X).map((n) => `${n}: ${STAGE_X[n].join('/')}`).join(' · ')}`;
+  }
   const tens = '    ' + Array.from({ length: COLS }, (_, c) => (c >= 10 ? String(Math.floor(c / 10)) : ' ')).join('');
   const ones = '    ' + Array.from({ length: COLS }, (_, c) => String(c % 10)).join('');
   res.lines = [tens, ones, ...grid.map((row, r) => `${String(r).padStart(2)}  ${row.join('')}`)];
@@ -1054,6 +1070,7 @@ else {
       if (!QUIET) for (const l of res.lines) console.log(l);
       if (res.rise) console.log('    rise: ' + res.rise);
       if (res.ball) console.log('    goals: ' + res.ball);
+      if (res.stage) console.log('    stage: ' + res.stage);
       for (const m of res.N) console.log(`  note:  ${m}`);
       for (const m of res.E) console.log(`  ERROR: ${m}`);
       for (const m of res.W) console.log(`  warn:  ${m}`);
