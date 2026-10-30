@@ -1,0 +1,42 @@
+# 뽀득뽀득 목욕탕 relay Worker (CLOUDFLARE-SETUP.md): one Durable Object per room code forwards the game's messages
+# between the host page and its guests (design/relay.md). No secrets: nothing here or in the repo is private.
+#   GET /                      {ok, service, v} - a health check to open in a browser after `npx wrangler deploy`
+#   GET /r/<space>/<code>      WebSocket upgrade into that room (space w = the web game, p = PR previews, t = Toss)
+# Deploy from this folder:  npx wrangler deploy      (it drops every open room: deploy outside play time)
+name = "ppodeuk-relay"
+main = "src/index.js"
+# (>= 2026-04-07: web_socket_auto_reply_to_close is on - the runtime answers a client's close frame by itself)
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+[vars]
+# which pages may enter which space: "<space>=<origin>", space- or comma-separated; '*' = one host label part
+# (never a dot), for the PR preview channels bubble-c3ad4--pr23-ab12cd34.web.app
+ORIGINS = "w=https://bubble-c3ad4.web.app w=https://bubble-c3ad4.firebaseapp.com w=https://bobo33772-blip.github.io p=https://bubble-c3ad4--*.web.app t=https://ppodeuk-bath.apps.tossmini.com t=https://ppodeuk-bath.private-apps.tossmini.com"
+# "1": also http://localhost:<port> / 127.0.0.1 / [::1], in any space (testing against the deployed Worker); "0" when live
+ALLOW_LOCALHOST = "0"
+
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "Room"
+
+# SQLite-backed classes are the ones the Workers Free plan allows (the relay stores nothing in it)
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]
+
+# a light abuse guard: at most 30 WebSocket connects a minute per client IP (per Cloudflare location, approximate).
+# Needs wrangler 4.36+. If `npx wrangler deploy` ever refuses this block on the Free plan, delete it: the Worker then
+# counts per isolate (makeLimiter), nothing else changes
+[[ratelimits]]
+name = "CONNECT_RATE"
+namespace_id = "7301"
+
+  [ratelimits.simple]
+  limit = 30
+  period = 60
+
+# off: every relayed message would be a log event (far past the free log quota, and no use).
+# Live view instead: npx wrangler tail
+[observability]
+enabled = false

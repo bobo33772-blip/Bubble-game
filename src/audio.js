@@ -314,6 +314,30 @@ window.PG = window.PG || {};
     drums: { v: 0.75, bars: rep(LDA, 7).concat([LDF], rep(LDB, 7), [LDF]) },
   };
 
+  // 'party' — 파티 쇼 (F major, 132 bpm). Between the minigames (design/party-polish.md 8.2): the card, the tally, 마지막
+  // 판!, the awards. The lobby's instruments - a plucked vibraphone lead, a triangle comp - with a bouncier octave bass, a
+  // high bell arp and a hand-clap backbeat on the bath bucket. 8 bars, loops.
+  const PTB = 'R . 8 . R 8 . 5';                      // bouncing octaves
+  const PTC = '. x . x . x . x';                      // off-beat stabs
+  const PTA = 'R 3 5 8 5 3 R 5';                      // bell arp
+  const PTD = 'k.h.s.hbk.hks.hb';
+  const PTF = 'k.h.s.hbk.s.s.ss';                     // turnaround
+  const PARTY = {
+    bpm: 132, swing: 0.2, bars: 8, loop: true,
+    chords: 'F F Dm Dm Bb C7 F F  F F Gm7 C7 Am Dm Gm7 C7',
+    lead: {
+      w: 'triangle', v: 0.19, env: { s: 0.3, dc: 0.25, r: 0.12, am: 0.12, ar: 5 }, echo: { w: 'p12', v: 0.02, d: 3 },
+      bars: [
+        'A4 . C5 F5 . A5 - G5', 'F5 . D5 . F5 A4 . .', 'Bb4 . D5 F5 G5 . E5 C5', 'F5 - - . . C5 D5 E5',
+        'F5 . A5 C6 . A5 - F5', 'G5 . Bb5 . G5 E5 . C5', 'A5 . G5 F5 D5 . F5 .', 'G5 - - . E5 - C5 .',
+      ],
+    },
+    bass: { v: 0.25, bars: rep(PTB, 8) },
+    comp: { w: 'triangle', v: 0.045, env: { s: 0.45, dc: 0.18, r: 0.06 }, bars: rep(PTC, 8) },
+    arp: { w: 'sine', v: 0.035, base: 72, bars: rep(PTA, 8) },
+    drums: { v: 0.7, bars: rep(PTD, 7).concat([PTF]) },
+  };
+
   // 'battle' — 거품 한판 승부 (A dorian/minor, 176 bpm). Sporty versus tune: a tresillo
   // octave bass, a hooky "da-da . DA" lead with a soft triangle an octave below, and
   // three sections — A riff (Am–D vamp), B climb (F–G–Em–Am…), C 3+3+2 breakdown with a
@@ -497,7 +521,7 @@ window.PG = window.PG || {};
   const DEFS = {
     title: TITLE, main: MAIN, hurry: HURRY, clear: CLEAR, gameover: GAMEOVER, ending: ENDING,
     boss: BOSS, final: FINAL, victory: VICTORY,
-    lobby: LOBBY, battle: BATTLE, podium: PODIUM,
+    lobby: LOBBY, battle: BATTLE, podium: PODIUM, party: PARTY,
   };
   for (const k of Object.keys(DEFS)) {
     try { SONGS[k] = compile(DEFS[k]); } catch (e) { try { console.warn('[audio] song ' + k + ': ' + e.message); } catch (e2) { /* ignore */ } }
@@ -1483,6 +1507,67 @@ window.PG = window.PG || {};
       [96, 100, 103].forEach((m, i) => voice(sfxBus, { w: i ? 'p12' : 'p25', f: mf(m), t: c, d: 0.6, v: i ? 0.045 : 0.09, s: 0.75, r: 0.08, vib: 0.012, vr: 6, vd: 0.1 }));
       drum(sfxBus, 'k', c, 0.35); drum(sfxBus, 'o', c, 0.45);
       voice(sfxBus, { w: 'sine', f: mf(112), t: c, d: 0.4, v: 0.05, a: 0.002, dc: 0.38, s: 0, r: 0.05 });
+    },
+
+    /* ---- 파티 다듬기 (design/party-polish.md 8.2): the minigame show's stings. All at or under the v1 levels; the
+       tally's tick and my row's rise are local (NO_ECHO in game.js), the rest echo from the host ---- */
+    // the card's title splash (0.5 s): a noise swell into a rising "따-단-딴!" (G5 C6 E6) over a triangle bass, a crash
+    mg_title(t) {
+      noise(sfxBus, { t, d: 0.22, v: 0.06, ft: 'bandpass', f: 600, f2: 4000, q: 0.8, a: 0.18, dc: 0.04, s: 0.2, r: 0.02 });
+      [[0.2, 79, 0.06], [0.28, 84, 0.06], [0.36, 88, 0.22]].forEach(([dt, m, d]) => {
+        voice(sfxBus, { w: 'p25', f: mf(m), t: t + dt, d, v: 0.11, a: 0.002, dc: 0.08, s: 0.7, r: 0.05 });
+        voice(sfxBus, { w: 'triangle', f: mf(m - 24), t: t + dt, d, v: 0.18, s: 0.8, r: 0.04 });
+      });
+      drum(sfxBus, 'c', t + 0.36, 0.4);
+    },
+    // 시작! in a party (0.6 s): two quick brass pickups, then go's chord ("빰빠-라밤!"), kick + crash
+    mg_go(t) {
+      for (const [dt, ms] of [[0, [76, 79]], [0.09, [77, 81]]]) ms.forEach((m) => voice(sfxBus, { w: 'p25', f: mf(m), t: t + dt, d: 0.06, v: 0.06, a: 0.002, dc: 0.05, s: 0.6, r: 0.03 }));
+      const c = t + 0.2;
+      [84, 88, 91].forEach((m, i) => voice(sfxBus, { w: i ? 'p25' : 'square', f: mf(m), t: c, d: 0.4, v: i ? 0.06 : 0.07, a: 0.002, dc: 0.2, s: 0.65, r: 0.08, vib: 0.008, vr: 7, vd: 0.15 }));
+      voice(sfxBus, { w: 'triangle', f: mf(48), t: c, d: 0.35, v: 0.22, s: 0.8, r: 0.06 });
+      noise(sfxBus, { t: c, d: 0.3, v: 0.08, ft: 'bandpass', f: 900, f2: 5000, q: 0.8, a: 0.01, dc: 0.25, s: 0.3, r: 0.08 });
+      drum(sfxBus, 'k', t, 0.4); drum(sfxBus, 'c', c, 0.5);
+    },
+    // 끝! (0.7 s): a referee whistle - two blasts of a trilling 2.6 kHz pulse - and a crash
+    mg_finish(t) {
+      for (const [dt, d] of [[0, 0.12], [0.16, 0.3]]) {
+        voice(sfxBus, { w: 'p12', f: 2600, t: t + dt, d, v: 0.08, a: 0.004, dc: 0.05, s: 0.85, r: 0.03, vib: 0.03, vr: 38, vd: 0 });
+        noise(sfxBus, { t: t + dt, d, v: 0.05, ft: 'bandpass', f: 2600, q: 3, a: 0.004, dc: d, s: 0.6, r: 0.03 });
+      }
+      drum(sfxBus, 'c', t + 0.46, 0.45);
+    },
+    // the winner's jingle (1.6 s): a bouncy C-major run (C E G C' E' D' C') over an oom-pah bass, then a held C-E-G
+    // with a 6 Hz vibrato, snare + crash (extend's shape, longer, brighter)
+    mg_win(t) {
+      [72, 76, 79, 84, 88, 86, 84].forEach((m, i) => voice(sfxBus, { w: 'p25', f: mf(m), t: t + i * 0.1, d: 0.08, v: 0.11, a: 0.002, dc: 0.06, s: 0.7, r: 0.04 }));
+      [48, 55, 48, 55, 48, 55, 48].forEach((m, i) => voice(sfxBus, { w: 'triangle', f: mf(m), t: t + i * 0.1, d: 0.08, v: 0.22, s: 0.8, r: 0.03 }));
+      const c = t + 0.72;
+      [84, 88, 91].forEach((m, i) => voice(sfxBus, { w: i ? 'p12' : 'p25', f: mf(m), t: c, d: 0.8, v: i ? 0.05 : 0.1, s: 0.75, r: 0.12, vib: 0.014, vr: 6, vd: 0.15 }));
+      voice(sfxBus, { w: 'triangle', f: mf(36), t: c, d: 0.8, v: 0.24, s: 0.8, r: 0.1 });
+      drum(sfxBus, 's', t + 0.6, 0.35); drum(sfxBus, 'c', c, 0.5);
+      noise(sfxBus, { t: c, d: 0.7, v: 0.04, ft: 'highpass', f: 6500, s: 0.3, dc: 0.4, r: 0.1 });
+    },
+    // one point counting in (o.n 1..: the pitch climbs 2 semitones a step from C6, wrapping after 9): a 40 ms "띡"
+    tally(t, o) {
+      const n = (((o && o.n) | 0) || 1) - 1;
+      voice(sfxBus, { w: 'triangle', f: mf(84 + 2 * (n % 9)), t, d: 0.04, v: 0.09, a: 0.001, dc: 0.035, s: 0, r: 0.01 });
+    },
+    // my row went up the board: a 0.25 s sine swoosh 600 -> 1800 Hz and item's ding
+    rank_up(t) {
+      voice(sfxBus, { w: 'sine', f: 600, f2: 1800, sl: 0.22, t, d: 0.25, v: 0.12, a: 0.01, dc: 0.2, s: 0.5, r: 0.04 });
+      voice(sfxBus, { w: 'p25', f: 1568, t: t + 0.2, d: 0.16, v: 0.12, a: 0.003, dc: 0.14, s: 0.3, r: 0.06 });
+    },
+    // a 0.9 s snare roll (every 35 ms, swelling) ending on a crash
+    drumroll(t) {
+      for (let i = 0; i < 24; i++) drum(sfxBus, 's', t + i * 0.035, 0.15 + i * 0.012);
+      drum(sfxBus, 'c', t + 0.86, 0.5);
+    },
+    // an award's reveal (0.6 s): powerup's sparkling top and a two-note brass "따-란!"
+    award(t) {
+      for (let i = 0; i < 5; i++) voice(sfxBus, { w: 'sine', f: mf(i % 2 ? 93 : 96), t: t + i * 0.04, d: 0.05, v: 0.06, a: 0.002, s: 0.5, r: 0.02 });
+      [[0.12, [79, 84], 0.1], [0.26, [84, 88], 0.34]].forEach(([dt, ms, d]) => ms.forEach((m) => voice(sfxBus, { w: 'p25', f: mf(m), t: t + dt, d, v: 0.07, a: 0.003, dc: 0.1, s: 0.7, r: 0.06 })));
+      noise(sfxBus, { t: t + 0.26, d: 0.35, v: 0.04, ft: 'highpass', f: 6500, s: 0.3, dc: 0.25, r: 0.08 });
     },
   };
 

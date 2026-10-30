@@ -44,6 +44,8 @@ for (let i = 0; i < 7; i++) SIZE['lg_' + i] = [8, 8];
 Object.assign(SIZE, { coin: [8, 8], shop: [8, 8], lock: [8, 8] });
 // v4 뽑기 (design/gacha.md 8): the machine 20x28, its crank 7x7 (4), the capsules 6x6 (4) / halves 6x3, e7's duckling 5x4 (2)
 Object.assign(SIZE, { gacha: [20, 28], gacha_h: [7, 7], cap: [6, 6], cap_t: [6, 3], cap_b: [6, 3], fx_duck: [5, 4] });
+// 파티 물 차오르기 (design/party-polish.md 8.1): the 오리 튜브 ring, 16x8 (2)
+SIZE.duck_ring = [16, 8];
 const sizeOf = (n) => SIZE[n] || (/^boss_|^portrait_/.test(n) ? [32, 32] : /^tile_|^life_/.test(n) ? [8, 8] : [16, 16]);
 ENEMY.forEach((t) => { need[t + '_walk'] = 2; need[t + '_angry'] = 2; need[t + '_trapped'] = 2; need[t + '_dead'] = 1; });
 ITEMS.forEach((t) => { need['item_' + t] = 1; });
@@ -66,6 +68,7 @@ need.crown = 1; need.tag_arrow = 1; need.ready = 1;
 need.trophy = 2; for (let i = 0; i < 7; i++) need['lg_' + i] = 1;
 Object.assign(need, { coin: 2, shop: 1, lock: 1 });
 Object.assign(need, { gacha: 1, gacha_h: 4, cap: 4, cap_t: 4, cap_b: 1, fx_duck: 2 });
+need.duck_ring = 2;
 // names the engine builds from an animal id: "<char> + '_x'" suffixes and "'x_' + <char>" / prefix-argument forms
 const builtSuffix = new Set([...game.matchAll(/\b(?:c|char|\w+\.char)\s*\+\s*'(_[a-z_]+)'/g)].map((m) => m[1]));
 const builtPrefix = new Set([...game.matchAll(/'([a-z]+_)'\s*\+\s*(?:c\b|\w+\.char\b|\w+\.sel\b)/g), ...game.matchAll(/(?:portraitCanvas|drawArt)\([^,()]+,\s*(?:[^,()]+,\s*)?'([a-z]+_)'/g)].map((m) => m[1]));
@@ -83,7 +86,9 @@ else bad('game.js: the league icons (lg_0..lg_6) are not baked at 8x8');
 // (game.js sizeOf: the 뽑기's machine / crank / capsules and fx_duck take their size from the art, PG.ITEM_SIZE - so the
 // engine bakes them at exactly this checker's SIZE)
 const ARTSIZED = /^(fx_)|^(gacha|gacha_h|cap|cap_t|cap_b)$/;
-const engineSizeOf = (n) => (/^boss_|^portrait_/.test(n) ? [32, 32] : /^tile_|^life_/.test(n) ? [8, 8] : ARTSIZED.test(n) && SIZE[n] ? SIZE[n] : engineSize[n] || [16, 16]);
+// (game.js sizeOf names duck_ring outright: 16x8)
+const RING = /if \(name === 'duck_ring'\) return \[16, 8\];/.test(game);
+const engineSizeOf = (n) => (/^boss_|^portrait_/.test(n) ? [32, 32] : /^tile_|^life_/.test(n) ? [8, 8] : ARTSIZED.test(n) && SIZE[n] ? SIZE[n] : n === 'duck_ring' && RING ? [16, 8] : engineSize[n] || [16, 16]);
 // literal names drawn by the engine
 const lits = new Set();
 for (const m of game.matchAll(/(?:drawEnt|drawRaw|frameOf)\(\s*'([a-z_]+)'\s*,/g)) lits.add(m[1]);
@@ -276,7 +281,8 @@ async function checkNet() {
     if (!body) { bad(`game.js: function ${fn} not found`); continue; }
     for (const m of body.matchAll(/\bs\.([A-Za-z_]+)\(/g)) sessUsed.add(m[1]);
   }
-  const lobbyUsed = new Set([...game.matchAll(/\b(?:NET\.lobby|lb)\.([A-Za-z_]+)\(/g)].map((m) => m[1]));
+  // (a bare lb, never a member .lb: the 앱인토스 bridge's leaderboard is AIT.br.lb)
+  const lobbyUsed = new Set([...game.matchAll(/(?<![\w$.])(?:NET\.lobby|lb)\.([A-Za-z_]+)\(/g)].map((m) => m[1]));
   if (!sessUsed.size || !lobbyUsed.size || !netUsed.size) bad('game.js: could not find the engine\'s PG.Net calls');
 
   // a page: net.js in its own context

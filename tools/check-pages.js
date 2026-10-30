@@ -8,6 +8,8 @@
 //                           external script is PeerJS pinned to an exact version, with the same body as the artifact; and
 //                           in headless Chrome it must still play SOLO when PeerJS cannot load (all network blocked:
 //                           transports {room:false, peer:false, bc:true}), and pick 'peer' when window.Peer exists.
+//   the relay (design/relay.md 10): the artifact carries nothing of it (no PG_RELAY assignment, no pg-relay tag, no
+//   Worker host); the deploy page at most build.js's one line; the deploy-relay/ fixture exactly that line.
 // Usage: node bogeul/tools/check-pages.js [--static]
 const fs = require('fs');
 const path = require('path');
@@ -52,6 +54,9 @@ const FONT_HOST = /^https:\/\/fonts\.(googleapis|gstatic)\.com(\/|$)/;
   ok('artifact: reaches capabilities only through claude.use(...)', !/window\.claude\.(room|user|db|artifact)\b|claude\??\.(room|user)\??\./.test(js));
   ok('artifact: scripts in order sprites, levels, audio, net, game', /\/\* ---- sprites\.js ---- \*\/[\s\S]*\/\* ---- levels\.js ---- \*\/[\s\S]*\/\* ---- audio\.js ---- \*\/[\s\S]*\/\* ---- net\.js ---- \*\/[\s\S]*\/\* ---- game\.js ---- \*\//.test(art));
   ok('artifact: size under 16 MB', Buffer.byteLength(art) < 16 * 1024 * 1024, Buffer.byteLength(art));
+  // (net.js's 'ws' link is inlined too, but nothing here reaches it: it needs window.PG_RELAY or a loopback ?relay=, and
+  // builds its socket from window.WebSocket only then - the no-WebSocket check above reads the literal constructor)
+  ok('artifact: nothing of the relay (no PG_RELAY assignment, no pg-relay tag, no Worker address)', !/PG_RELAY\s*=|pg-relay|workers\.dev/.test(art));
   // (파티, design/party.md 9.2 / 7.5 / 7.6: the card overlay, hidden at boot; 파티 in both mode segments; the podium title's own span)
   ok('artifact: the 파티 card (#pg-party, hidden), 파티 in both mode segments, the podium title span', /<section id="pg-party" class="pg-ov pg-party"[^>]*hidden>/.test(art) && (art.match(/data-mode="party"/g) || []).length === 2 && art.includes('<span id="pg-podium-h">결과 발표!</span>'));
 }
@@ -79,6 +84,14 @@ const PEER_RE = /^https:\/\/(?:cdnjs\.cloudflare\.com\/ajax\/libs\/peerjs\/\d+\.
   const body = (dep.match(/<body>\s*([\s\S]*?)\s*<\/body>/i) || [])[1] || '';
   const artBody = art.slice(art.indexOf('<div'));
   ok('deploy: same body as the artifact page', body.length > 1000 && body.trim() === artBody.trim(), `${body.length} vs ${artBody.length}`);
+  const RELAY_LINE = /<script id="pg-relay">window\.PG_RELAY=\{url:"https:\/\/[a-z0-9.-]+(?::\d+)?(?:\/[A-Za-z0-9._~-]+)*"\};<\/script>\n<script defer src="https:\/\/[^"]*peerjs/;
+  const rl = count(/pg-relay/g);
+  ok('deploy: the relay at most as build.js\'s one line, right before PeerJS (none without a relay URL)', rl === 0 ? !/PG_RELAY\s*=/.test(dep) : rl === 1 && RELAY_LINE.test(dep), String(rl));
+  let fx = '';
+  try { fx = fs.readFileSync(`${T}/deploy-relay/index.html`, 'utf8'); } catch (e) { fx = ''; }
+  ok('deploy-relay fixture: exactly one PG_RELAY line with the placeholder address, before PeerJS, the same body',
+    (fx.match(/pg-relay/g) || []).length === 1 && fx.includes('<script id="pg-relay">window.PG_RELAY={url:"http://127.0.0.1:9"};</script>\n<script defer src="') &&
+    ((fx.match(/<body>\s*([\s\S]*?)\s*<\/body>/i) || [])[1] || '').trim() === artBody.trim(), String(fx.length));
 }
 
 // ================================================================== nothing of the 앱인토스 build (design/toss.md 2.1)

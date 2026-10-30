@@ -35,12 +35,15 @@ jobs:
           google-chrome --version
       - name: 게임 만들기 (node build.js)
         run: node build.js
+        env:
+          # (테스트 판에는 중계 서버 주소를 넣지 않아요: 중계 테스트는 자기 가짜 주소로 따로 확인해요)
+          PG_RELAY_URL: none
       - name: 빠른 테스트 묶음 (tools/run-all.js)
         # node 검사 전부 + 핵심을 덮는 가상 시간 헤드리스 테스트들. 실시간 여러 창 온라인 테스트는 공용 러너에서
         # 흔들려서 빼요 (그건 PC에서 node tools/run-all.js 전체로 돌려요)
         env:
           JOBS: >-
-            check-sprites check-integration check-shop check-pages check-cloud check-toss net-node audio-node validate-levels
+            check-sprites check-integration check-shop check-pages check-cloud check-toss net-node audio-node validate-levels relay-node
             smoke campaign final-e2e final-e2e2 fixes integration levels-engine v2-core v2-boss review-correctness
             mp-local v3-levels v3-fixes arena-gate monsters distinction trophies party shop gacha kits clutter touch-input
         run: node tools/run-all.js --no-build --exact $JOBS
@@ -86,6 +89,8 @@ jobs:
         env:
           PG_BUILD_TEMP: ${{ runner.temp }}/bogeul
           PG_PREVIEW: ${{ github.event.pull_request.number }}
+          # 중계 서버(Cloudflare Worker) 주소: 저장소 변수 RELAY_URL (CLOUDFLARE-SETUP.md). 없으면 예전과 똑같이 만들어요
+          PG_RELAY_URL: ${{ vars.RELAY_URL }}
       - name: Firebase 미리보기 채널에 올리기
         id: fb
         if: env.HAS_FB == 'true'
