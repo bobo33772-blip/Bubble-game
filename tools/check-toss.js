@@ -7,10 +7,11 @@
 //          pattern absent; the artifact and the deploy have nothing of Toss; the test pages are there. Then build.js on a
 //          COPY of the sources (PG_BUILD_TEMP): a bad marker layout stops it with its message; with a made-up
 //          firebase.config.json a plain build then --toss leaves dist/, deploy/, the itch zip and .firebaserc byte for
-//          byte as they were; without turn.config.json the Toss page has no PG_PEER_OPTIONS, with one exactly one
+//          byte as they were; the Toss page's relay line (space t): the owner's Worker by default, PG_RELAY_URL's when
+//          set, none (and a warning) with PG_RELAY_URL=none; never a TURN list, not even with turn.config.json
 //        node bogeul/tools/check-toss.js --dist <dir>   (inside `npm run build`, after vite build: toss/dist)
 //          every .html / .js / .css read as text, comments included: no banned pattern, every host allowlisted (+ the
-//          page's own PG_PEER_OPTIONS hosts), index.html at the top with one module script from ./assets, the five pg/
+//          host of the page's own relay line), index.html at the top with one module script from ./assets, the five pg/
 //          files byte-equal to C:/Temp/bogeul/toss/pg/, the fonts (.woff2 + both families), no .map / sw.js / manifest,
 //          < 100 MB (a warning above 20 MB)
 //        node bogeul/tools/check-toss.js --ait <file>   (the last step of `npm run build`): the .ait exists, is newer
@@ -31,13 +32,13 @@ const argOf = (k) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : 
 const ORDER = ['sprites.js', 'levels.js', 'audio.js', 'net.js', 'game.js'];
 const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]));
 const MB = 1024 * 1024;
-// the ICE servers of a page's PG_PEER_OPTIONS (null: none)
-function peerOptsOf(html) {
-  if (!/window\.PG_PEER_OPTIONS=/.test(html)) return null;
-  // (build.js: <script>window.PG_PEER_OPTIONS={config:{iceServers:[...]}};</script> - the list itself is JSON)
-  const m = html.match(/<script>window\.PG_PEER_OPTIONS=\{config:\{iceServers:(\[[\s\S]*?\])\}\};<\/script>/);
-  if (!m) return undefined;
-  try { return { config: { iceServers: JSON.parse(m[1].replace(/\\u003c/g, '<')) } }; } catch (e) { return undefined; }
+// a page's relay line (build.js tossRelayTag): {url, space, host}; null: none; undefined: more than one, or malformed
+const RELAY_LINE = /<script id="pg-relay">window\.PG_RELAY=\{url:"(https:\/\/([a-z0-9.-]+\.[a-z]{2,})(?::\d{1,5})?(?:\/[A-Za-z0-9._~-]+)*)",space:"([wpt])"\};<\/script>/g;
+function relayOf(html) {
+  const n = (html.match(/pg-relay|PG_RELAY/g) || []).length, m = [...html.matchAll(RELAY_LINE)];
+  if (!n) return null;
+  if (m.length !== 1 || n !== 2) return undefined;                    // (one tag: its id and the global it sets)
+  return { url: m[0][1], host: m[0][2].toLowerCase(), space: m[0][3] };
 }
 const NO_TOSS = [/<html\b[^>]*\bpg-ait\b/i, /PG_AIT\s*=(?!=)/, /@apps-in-toss/, /<script\b[^>]*\bsrc\s*=\s*["']?[^"'\s>]*ait\.js\b/i];
 // the Toss page's own shape (toss/index.html, its C:/Temp copy, a build copy's)
@@ -53,6 +54,10 @@ function tossPage(html, name) {
   ok(`${name}: no CSS comments left in the head (two of them described the Google button)`, !/\/\*/.test(html.slice(0, html.indexOf('</head>'))));
   ok(`${name}: the hidden cloud button has no label (구글로 로그인 removed)`, /<button id="pg-cloud-btn" class="pg-btn pg-ghost pg-cloud-btn" type="button" hidden><\/button>/.test(html));
   ok(`${name}: the body has no inline engine (pg/*.js are loaded by src/ait.js)`, !/\/\* ---- (sprites|game)\.js ---- \*\//.test(html) && !/<script>[\s\S]*PG\.debug/.test(html));
+  // online (design/toss.md 2.5): the relay in its Toss space, or none; never a TURN list (turn.config.json is the deploy's)
+  const rl = relayOf(html);
+  ok(`${name}: no relay line, or one in the head naming the space t`, rl === null || (!!rl && rl.space === 't' && html.indexOf('pg-relay') < html.indexOf('</head>')), rl);
+  ok(`${name}: no PG_PEER_OPTIONS (no TURN list in Toss)`, !/PG_PEER_OPTIONS/.test(html));
   const head = html.slice(0, html.indexOf('</head>'));
   const hits = R.scan(html, true).filter((h) => h.name !== 'firebase');   // (the word was checked above)
   ok(`${name}: no banned pattern`, hits.length === 0, hits.slice(0, 3));
@@ -83,10 +88,13 @@ if (args.includes('--dist')) {
   const rel = (f) => path.relative(D, f).split(path.sep).join('/');
   ok('dist: index.html at the top', fs.existsSync(path.join(D, 'index.html')), D);
   const html = fs.existsSync(path.join(D, 'index.html')) ? read(path.join(D, 'index.html')) : '';
-  // (the page's own TURN hosts: the hosts of its PG_PEER_OPTIONS, which build.js made from turn.config.json)
-  const po = peerOptsOf(html);
-  ok('dist: PG_PEER_OPTIONS absent or valid JSON', po !== undefined);
-  const allowed = new Set(Object.keys(R.HOSTS).concat(po && po.config ? R.iceHosts(po.config.iceServers) : []));
+  // (the page's own relay host - build.js wrote it from PG_RELAY_URL / relay.config.json / TOSS_RELAY, so it is not
+  // known in advance (design/relay.md 15) - is allowed as well; a Toss page never has a TURN list)
+  const rl = relayOf(html);
+  ok('dist/index.html: no relay line, or exactly one naming the space t', rl === null || (!!rl && rl.space === 't'), rl);
+  if (!rl) console.log('CHECK-TOSS WARNING dist/index.html has no relay line: online only through PeerJS (PG_RELAY_URL=none?)');
+  ok('dist/index.html: no PG_PEER_OPTIONS (no TURN list in Toss)', !/PG_PEER_OPTIONS/.test(html));
+  const allowed = new Set(Object.keys(R.HOSTS).concat(rl ? [rl.host] : []));
   let texts = 0;
   for (const f of files.filter((x) => /\.(html|js|css|mjs)$/i.test(x))) {
     const t = read(f); texts++;
@@ -101,7 +109,7 @@ if (args.includes('--dist')) {
   ok('dist/index.html: exactly one <script src>, a module from ./assets/', scripts.length === 1 && /type="module"/.test(scripts[0]) && /src="\.\/assets\/[^"]+\.js"/.test(scripts[0]), scripts);
   const links = [...html.matchAll(/<link\b[^>]*>/gi)].map((m) => m[0]);
   ok('dist/index.html: its <link>s are ./assets stylesheets only (no preconnect, manifest, icon)', links.every((l) => /rel="stylesheet"/.test(l) && /href="\.\/assets\/[^"]+\.css"/.test(l)), links);
-  ok('dist/index.html: no inline script but PG_PEER_OPTIONS', [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)].every((m) => /\bsrc=/.test(m[1]) || /^window\.PG_PEER_OPTIONS=/.test(m[2])));
+  ok('dist/index.html: no inline script but the relay line', [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)].every((m) => /\bsrc=/.test(m[1]) || (m[1] === ' id="pg-relay"' && /^window\.PG_RELAY=\{url:"[^"<]*",space:"t"\};$/.test(m[2]))));
   ok('dist/index.html: the Toss page (pg-ait), the hidden cloud button without a label', /<html lang="ko" class="pg-sa pg-ait">/.test(html) && /id="pg-cloud-btn"[^>]*hidden><\/button>/.test(html) && !/구글|Google/.test(html));
   // the engine files: as build.js wrote them (C:/Temp copy)
   for (const f of ORDER) {
@@ -200,7 +208,9 @@ if (args.includes('--dist')) {
   fs.cpSync(path.join(ROOT, 'src'), path.join(SRC, 'src'), { recursive: true, filter: (p) => !/[\\/]tests([\\/]|$)/.test(path.relative(path.join(ROOT, 'src'), p)) && path.basename(p) !== 'tests' });
   fs.writeFileSync(path.join(SRC, '.firebaserc'), '{\n  "projects": {\n    "default": "YOUR-PROJECT-ID"\n  }\n}\n');
   fs.writeFileSync(path.join(SRC, 'firebase.config.json'), JSON.stringify({ apiKey: 'AIza' + 'Toss1'.repeat(7), authDomain: 'pg-toss-test.firebaseapp.com', projectId: 'pg-toss-test', appId: '1:123456789:web:abcdef0123456789' }));
-  const env = Object.assign({}, process.env, { PG_BUILD_TEMP: TMP }); for (const k of ['PG_FIREBASE_CONFIG', 'PG_PREVIEW', 'PG_TOSS', 'PG_TURN_CONFIG']) delete env[k];
+  const env = Object.assign({}, process.env, { PG_BUILD_TEMP: TMP }); for (const k of ['PG_FIREBASE_CONFIG', 'PG_PREVIEW', 'PG_TOSS', 'PG_TURN_CONFIG', 'PG_RELAY_URL']) delete env[k];
+  // (the owner's Worker: build.js's TOSS_RELAY, the Toss page's relay when nothing else names one)
+  const TOSS_RELAY = (read(path.join(ROOT, 'build.js')).match(/const TOSS_RELAY = '([^']+)';/) || [])[1];
   const run = (a, e) => { const r = spawnSync(process.execPath, [path.join(SRC, 'build.js')].concat(a || []), { encoding: 'utf8', env: Object.assign({}, env, e || {}), cwd: SRC }); return { status: r.status, out: (r.stdout || '') + (r.stderr || '') }; };
   const snap = () => {
     const m = new Map();
@@ -215,7 +225,7 @@ if (args.includes('--dist')) {
     ok('build copy: ... its deploy page carries the cloud (PG_CLOUD), the zip is there', /window\.PG_CLOUD=/.test(before.get(path.join('deploy', 'index.html')).toString()) && before.has(path.join('deploy', 'ppodeuk-bath-itch.zip')));
     const r2 = run(['--toss']);
     ok('build copy: --toss runs (and says it wrote nothing else)', r2.status === 0 && /nothing else/.test(r2.out), r2.out.slice(-400));
-    ok('build copy: --toss without turn.config.json warns about the relay', /WARNING toss: turn\.config\.json 없음/.test(r2.out), r2.out.slice(-300));
+    ok('build copy: --toss with no relay URL set: the owner\'s Worker in the space t (its line says so), no warning', !!TOSS_RELAY && r2.out.includes('relay: ' + TOSS_RELAY + ' space t') && !/WARNING toss/.test(r2.out), r2.out.slice(-300));
     const after = snap();
     const diff = [...new Set([...before.keys(), ...after.keys()])].filter((k) => !before.has(k) || !after.has(k) || !before.get(k).equals(after.get(k)));
     ok('build copy: dist/, deploy/, its C:/Temp copy, the itch zip and .firebaserc byte for byte the same after --toss (the deploy keeps its PG_CLOUD)', diff.length === 0 && before.size > 5, diff);
@@ -223,17 +233,21 @@ if (args.includes('--dist')) {
     if (ok('build copy: --toss wrote toss/index.html and toss/public/pg/*.js', fs.existsSync(tp) && ORDER.every((f) => fs.existsSync(path.join(SRC, 'toss', 'public', 'pg', f))))) {
       const t = read(tp);
       tossPage(t, 'build copy toss/index.html');
-      ok('build copy: toss/index.html has no firebase, no PG_PEER_OPTIONS (no turn.config.json)', !/firebase/i.test(t) && !/PG_PEER_OPTIONS/.test(t));
+      const rl = relayOf(t);
+      ok('build copy: toss/index.html has no firebase; its one relay line names the owner\'s Worker and the space t', !/firebase/i.test(t) && !!rl && rl.url === TOSS_RELAY && rl.space === 't', rl);
       ok('build copy: toss/ is byte-equal to its C:/Temp copy', t === read(path.join(TMP, 'toss', 'index.html')) && ORDER.every((f) => read(path.join(SRC, 'toss', 'public', 'pg', f)) === read(path.join(TMP, 'toss', 'pg', f))));
     }
-    // a TURN list: exactly one PG_PEER_OPTIONS, its hosts what check-toss --dist will allow
+    // a TURN list (the deploy's) never reaches the Toss page; PG_RELAY_URL names its relay (space t); none: no relay line
     const turn = path.join(B, 'turn.json');
     fs.writeFileSync(turn, 'iceServers: [ { urls: "stun:stun.relay.example.net:80", }, { urls: "turns:global.relay.example.net:443?transport=tcp", username: "u", credential: "c", }, ]');
-    const r3 = run(['--toss'], { PG_TURN_CONFIG: turn });
-    const t3 = fs.existsSync(tp) ? read(tp) : '';
-    const po = peerOptsOf(t3);
-    ok('build copy: with a TURN list the Toss page has exactly one PG_PEER_OPTIONS (in the head, before the module entry), no warning', r3.status === 0 && (t3.match(/window\.PG_PEER_OPTIONS=/g) || []).length === 1 && t3.indexOf('PG_PEER_OPTIONS') < t3.indexOf('/src/main.js') && !/WARNING toss/.test(r3.out) && /TURN: yes/.test(r3.out), r3.out.slice(-300));
-    ok('build copy: ... its hosts are the list\'s', !!po && R.iceHosts(po.config.iceServers).join() === 'stun.relay.example.net,global.relay.example.net', po);
+    const U = 'https://relay-x.test-acct.workers.dev';
+    const r3 = run(['--toss'], { PG_TURN_CONFIG: turn, PG_RELAY_URL: U });
+    const t3 = fs.existsSync(tp) ? read(tp) : '', rl3 = relayOf(t3);
+    ok('build copy: with a TURN list and PG_RELAY_URL: no PG_PEER_OPTIONS, one relay line (that URL, space t) in the head before the module entry', r3.status === 0 && !/PG_PEER_OPTIONS|relay\.example\.net/.test(t3) && !!rl3 && rl3.url === U && rl3.space === 't' && t3.indexOf('pg-relay') < t3.indexOf('/src/main.js') && !/WARNING toss/.test(r3.out), [r3.out.slice(-300), rl3]);
+    const r4 = run(['--toss'], { PG_RELAY_URL: 'none' });
+    const t4 = fs.existsSync(tp) ? read(tp) : '';
+    ok('build copy: PG_RELAY_URL=none -> no relay line, and a warning (online only through PeerJS)', r4.status === 0 && relayOf(t4) === null && /WARNING toss: 중계 서버 없음/.test(r4.out) && /relay: none/.test(r4.out), r4.out.slice(-300));
+    tossPage(t4, 'build copy toss/index.html without a relay');
     // a bad marker layout stops the build with its message, before anything is written
     const g = path.join(SRC, 'src', 'game.js'), g0 = read(g);
     const bad = [

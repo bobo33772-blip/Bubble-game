@@ -94,8 +94,9 @@
    its guests (cloudflare/: no game logic, nothing stored). build.js gives the deploy page window.PG_RELAY ({url} -
    the relay Worker's address; a PR preview adds space 'p', Toss 't'; the artifact never has it), so transports().ws
    is true there. The 앱인토스 page (window.PG_AIT set before this file) always uses space 't', whatever its tag says:
-   its rooms are friendly matches between game keys and never meet the web's (design/toss.md 2.5). A test page may name a LOOPBACK relay with ?relay=ws://localhost:<port>/ws (tools/ws-relay.js), any
-   other ?relay= is ignored. One socket per page: wss://<relay>/r/<space>/<code>?v=1&role=h|g. The relay's first frame
+   its rooms are friendly matches between game keys and never meet the web's (design/toss.md 2.5). A test page may
+   name a LOOPBACK relay with ?relay=ws://localhost:<port>/ws (tools/ws-relay.js), any other ?relay= is ignored. One
+   socket per page: wss://<relay>/r/<space>/<code>?v=1&role=h|g. The relay's first frame
    {k:'hi', v:1, id, h, tok?} issues my seat id (id) and names the host (h); then {k:'s', q, d} (a state), {k:'r', t, d}
    (a reliable envelope to t = an id or '*'), {k:'m', l:[ids]} (host only: the admitted guests), {k:'bye'}; the relay
    stamps what it forwards with its sender f, says {k:'gone', f, why:'left'|'lost'} and lets a stranger (a guest not

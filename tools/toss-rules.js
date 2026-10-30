@@ -26,25 +26,18 @@ const BANNED_HTML = [
   ['<iframe', /<iframe/i],
   ['a manifest link', /<link\b[^>]*\brel=["']?manifest/i],
 ];
-// every host the bundle may name (https? / wss? URLs and stun: / turn: / turns: entries). Each one was looked at:
+// every host the bundle may name (https? / wss? URLs and stun: / turn: / turns: entries). Each one was looked at. The
+// relay Worker's host is not listed: check-toss allows the one the page's own relay line names (build.js wrote it)
 const HOSTS = {
-  '0.peerjs.com': 'PeerJS signalling (its cloud PeerServer, wss on 443): the online rooms',
-  'stun.l.google.com': 'the STUN entry build.js adds to a TURN list without one, and PeerJS\'s own default ICE list',
+  '0.peerjs.com': 'PeerJS signalling (its cloud PeerServer, wss on 443): the fallback rooms behind the relay',
+  'stun.l.google.com': 'PeerJS\'s own default ICE list (the Toss page sets no PG_PEER_OPTIONS)',
   'localhost': 'net.js\'s header comment (how to serve the bc test pages)',
   'peerjs.com': 'PeerJS\'s embedded package.json (homepage) - an inert string',
   'github.com': 'PeerJS\'s embedded package.json (repository / funding) - an inert string',
   'opencollective.com': 'PeerJS\'s embedded package.json (funding) - an inert string',
-  'eu-0.turn.peerjs.com': 'PeerJS\'s default ICE list (used only without PG_PEER_OPTIONS)',
-  'us-0.turn.peerjs.com': 'PeerJS\'s default ICE list (used only without PG_PEER_OPTIONS)',
+  'eu-0.turn.peerjs.com': 'PeerJS\'s default ICE list (the Toss page sets no PG_PEER_OPTIONS)',
+  'us-0.turn.peerjs.com': 'PeerJS\'s default ICE list (the Toss page sets no PG_PEER_OPTIONS)',
 };
-// the hosts of a TURN list (turn.config.json: [{urls}] or {iceServers}) - allowed as well
-function iceHosts(list) {
-  const out = [];
-  for (const e of Array.isArray(list) ? list : []) for (const u of [].concat(e && e.urls || [])) {
-    const m = String(u).match(/^(?:stun|turns?):([^:?/\s]+)/); if (m) out.push(m[1].toLowerCase());
-  }
-  return out;
-}
 // every host named in a text: http(s) / ws(s) URLs and ICE entries
 function hostsIn(text) {
   const out = new Set();
@@ -79,4 +72,4 @@ function aitCut(code, name) {
 }
 // the regions game.js has today (2.2: clOutsideUrl, clOpenOutside, clProvider, clSignInGo, clRedirect, pwaInit)
 const CUTS = 6;
-module.exports = { BANNED, BANNED_HTML, HOSTS, iceHosts, hostsIn, scan, aitCut, CUTS, CUT_OPEN, CUT_CLOSE };
+module.exports = { BANNED, BANNED_HTML, HOSTS, hostsIn, scan, aitCut, CUTS, CUT_OPEN, CUT_CLOSE };
