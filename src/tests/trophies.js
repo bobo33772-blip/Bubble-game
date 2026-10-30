@@ -291,6 +291,154 @@
     T.today(null);
   }
 
+  // ---------------------------------------------------------------- 4b. 파티 트로피 (design/party-trophies.md 9.2): the table
+  // (a staked party only - 안 걸기 holds nothing: the stake-0 rows are only 안 걸고 참여's own line, place points alone)
+  const pfin = (n, pls) => Array.from({ length: n }, (_, i) => ({ slot: i, pl: pls ? pls[i] : i + 1, p: 0, z: 0 }));
+  const pnets = (n, s, fin, gl, gz, rot) => T.ptable(n, s, fin, gl | 0, gz | 0, rot | 0).map((r) => r[2] + r[3] - (r[5] === 0 ? 0 : s));
+  function partyTableTests() {
+    const WANT = {
+      0: { 2: [12, -6], 3: [15, 5, -6], 4: [16, 8, 2, -6] },
+      5: { 2: [17, -11], 3: [20, 4, -10], 4: [21, 9, 1, -11] },
+      10: { 2: [22, -16], 3: [23, 4, -13], 4: [26, 10, 0, -16] },
+      20: { 2: [32, -26], 3: [31, 3, -20], 4: [36, 12, -2, -26] },
+      50: { 2: [62, -56], 3: [55, 0, -41], 4: [66, 18, -8, -56] },
+    };
+    const bad = [];
+    for (const s of [0, 5, 10, 20, 50]) for (const n of [2, 3, 4]) { const got = pnets(n, s, pfin(n)); if (!same(got, WANT[s][n])) bad.push([s, n, got]); }
+    ok('party table: every distinct-places row of 2.2 (n 2/3/4 x stakes 5/10/20/50; 0: the place points alone)', !bad.length, bad);
+    const sh = (n, s) => T.ptable(n, s, pfin(n), 0, 0, 0).map((r) => r[3]);
+    ok('party table: the shares 4p at 10 = 20 / 12 / 8 / 0, at 50 = 100 / 60 / 40 / 0; 3p at 5 = 10 / 4 / 1 (the floors\' rest to 1st)', same(sh(4, 10), [20, 12, 8, 0]) && same(sh(4, 50), [100, 60, 40, 0]) && same(sh(3, 5), [10, 4, 1]), [sh(4, 10), sh(4, 50), sh(3, 5)]);
+    const TIES = [
+      ['4p, 1st = 2nd', 4, [1, 1, 3, 4], { 0: [12, 12, 2, -6], 5: [15, 15, 1, -11], 10: [18, 18, 0, -16], 50: [42, 42, -8, -56] }],
+      ['4p, 2nd = 3rd', 4, [1, 2, 2, 4], { 0: [16, 5, 5, -6], 5: [21, 5, 5, -11], 10: [26, 5, 5, -16], 50: [66, 5, 5, -56] }],
+      ['4p, 3rd = 4th', 4, [1, 2, 3, 3], { 0: [16, 8, -2, -2], 5: [21, 9, -5, -5], 10: [26, 10, -8, -8], 50: [66, 18, -32, -32] }],
+      ['4p, 1st = 2nd = 3rd', 4, [1, 1, 1, 4], { 0: [9, 9, 9, -6], 5: [11, 11, 10, -11], 10: [13, 12, 12, -16], 50: [26, 26, 25, -56] }],
+      ['4p, 1st = 2nd, 3rd = 4th', 4, [1, 1, 3, 3], { 0: [12, 12, -2, -2], 5: [15, 15, -5, -5], 10: [18, 18, -8, -8], 50: [42, 42, -32, -32] }],
+      ['3p, 1st = 2nd', 3, [1, 1, 3], { 0: [10, 10, -6], 5: [12, 12, -10], 10: [14, 13, -13], 50: [28, 27, -41] }],
+      ['3p, 2nd = 3rd', 3, [1, 2, 2], { 0: [15, 0, 0], 5: [20, -2, -3], 10: [23, -4, -4], 50: [55, -20, -20] }],
+      ['everyone tied (무승부)', 4, [1, 1, 1, 1], { 0: [0, 0, 0, 0], 5: [0, 0, 0, 0], 10: [0, 0, 0, 0], 50: [0, 0, 0, 0] }],
+    ];
+    const tb = [];
+    for (const [nm, n, pl, want] of TIES) for (const s of [0, 5, 10, 50]) { const got = pnets(n, s, pfin(n, pl)); if (!same(got, want[s])) tb.push([nm, s, got]); }
+    ok('party table: every tie row of 2.2 at stakes 0 / 5 / 10 / 50 (the remainder to the tie\'s first seat at game id 0)', !tb.length, tb);
+    ok('party table: a 무승부 is every row 1st with base 0 (the podium\'s draw)', T.ptable(4, 10, pfin(4, [1, 1, 1, 1]), 0, 0, 0).every((r) => r[1] === 1 && r[2] === 0));
+    const zf = (n, zs, pl) => pfin(n, pl).map((r, i) => Object.assign(r, { z: zs.includes(i) ? 1 : 0 }));
+    const LEAVE = [
+      ['4 at the hold, one left with gg (3 finish)', pnets(4, 10, pfin(3), 1, 0), [26, 10, 0]],
+      ['4 at the hold, one link dropped (no gg): pot 30', pnets(4, 10, pfin(3), 0, 0), [21, 7, -2]],
+      ['4 at the hold, two left with gg: the 3rd place\'s 20% to the best staker', pnets(4, 10, pfin(2), 2, 0), [34, 10]],
+      ['3 at the hold, one left with gg', pnets(3, 10, pfin(2), 1, 0), [26, 4]],
+      ['4 at the hold, three left with gg (기권승: the pot only)', pnets(4, 10, pfin(1), 3, 0), [30]],
+      ['4 at the hold, three left, one with gg (기권승)', pnets(4, 10, pfin(1), 1, 0), [10]],
+      ['2 at the hold, the other left with gg (기권승)', pnets(2, 10, pfin(1), 1, 0), [10]],
+      ['4p, the 1st without the stake: the stakers take 15 / 9 / 6 among themselves', pnets(4, 10, zf(4, [0])), [16, 13, 1, -10]],
+      ['4p, the 4th without the stake', pnets(4, 10, zf(4, [3])), [21, 7, -2, -6]],
+      ['4p, 1st and 2nd without it (pot 20)', pnets(4, 10, zf(4, [0, 1])), [16, 8, 6, -10]],
+      ['4p, tie for 1st, one of the two without it', pnets(4, 10, zf(4, [0], [1, 1, 3, 4])), [12, 17, 1, -10]],
+      ['2p, either one without it', pnets(2, 10, zf(2, [0])).concat(pnets(2, 10, zf(2, [1]))), [12, -6, 12, -6]],
+    ];
+    for (const [nm, got, want] of LEAVE) ok('party table: ' + nm + ' -> ' + want.join(' / '), same(got, want), got);
+    ok('party table: everyone else\'s link dropped (no gg) -> void ([]), as a battle', T.ptable(4, 10, pfin(1), 0, 0, 0).length === 0 && T.ptable(2, 10, pfin(1), 0, 0, 0).length === 0);
+    ok('party table: r[4] (KOs) is 0, r[5] says whose stake is in', T.ptable(4, 10, zf(4, [3]), 0, 0, 0).every((r) => r[4] === 0) && same(T.ptable(4, 10, zf(4, [3]), 0, 0, 0).map((r) => r[5]), [1, 1, 1, 0]));
+    // the remainder turns with the game id: 4p 1st = 2nd = 3rd at 10 shares 40 -> 13 / 13 / 13 + 1 (one seat), at 5
+    // shares 20 -> 6 / 6 / 6 + 2 (two seats)
+    const ex = (s, rot) => T.ptable(4, s, pfin(4, [1, 1, 1, 4]), 0, 0, rot).slice(0, 3).map((r) => r[3]);
+    const r10 = [0, 1, 2].map((k) => ex(10, k)), r5 = [0, 1, 2].map((k) => ex(5, k));
+    ok('party table: the tie\'s extra trophy rotates with the game id (at 10 each seat gets it once in 3 parties; at 5 each misses it once)',
+      [0, 1, 2].every((q) => r10.filter((x) => x[q] === 14).length === 1) && [0, 1, 2].every((q) => r5.filter((x) => x[q] === 6).length === 1) && r10.every((x) => x[0] + x[1] + x[2] === 40), [r10, r5]);
+    // random invariants (seeded): the pot paid out exactly whenever a staker finished, nothing when none did; every net in
+    // -(stake + 6)..+150; a 기권승 the pot only
+    let seed = 777; const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+    const viol = []; let hi = 0, hiW = 0;
+    for (let it = 0; it < 4000; it++) {
+      const n = 2 + Math.floor(rnd() * 3), m = 1 + Math.floor(rnd() * n), gl = Math.floor(rnd() * (n - m + 1)), s = [5, 10, 20, 50][Math.floor(rnd() * 4)];
+      const pts = Array.from({ length: m }, () => Math.floor(rnd() * 3)).sort((a, b) => b - a), pl = [];
+      pts.forEach((v, i) => pl.push(i && v === pts[i - 1] ? pl[i - 1] : i + 1));
+      const fin = pl.map((q, i) => ({ slot: i, pl: q, p: rnd() < 0.3 ? 1 : 0, z: rnd() < 0.25 ? 1 : 0 }));
+      const gz = Math.floor(rnd() * (gl + 1)), K = fin.filter((f) => !f.z).length, pot = s * (K + gl - gz);
+      const rows = T.ptable(n, s, fin, gl, gz, Math.floor(rnd() * 9));
+      if (m === 1 && !gl) { if (rows.length) viol.push(['m1', n, s]); continue; }
+      const shares = rows.reduce((a, r) => a + r[3], 0);
+      if (rows.length !== m) viol.push(['rows', n, m]);
+      if (K ? shares !== pot : shares !== 0) viol.push(['pot', n, m, gl, gz, s, shares, pot]);
+      for (const r of rows) {
+        const st = r[5] === 0 ? 0 : s, v = r[2] + r[3] - st;
+        if (r[5] === 0 && r[3]) viol.push(['z share', r]);
+        if (v < -(st + 6) || v > 150) viol.push(['net', n, m, gl, s, v]);
+        if (m === 1) hiW = Math.max(hiW, v); else hi = Math.max(hi, v);
+      }
+    }
+    ok('party table: 4000 random tables - the pot paid out exactly (0 when no staker finished), a row without a stake shares nothing, every net in -(stake + 6)..+150', !viol.length, viol.slice(0, 5));
+    log('TROPHY INFO party random: highest finished net ' + hi + ' (spec bound 116), highest 기권승 ' + hiW + ' (150)');
+  }
+  // the +5 once, 꼴등 빼고, a 기권승 none; the real test over a party's own counters; v: 1 and the late result (9.2.3-6)
+  function partyApplyTests() {
+    T.fast(true); T.today(20261101);
+    const P = D.party, rows4 = T.ptable(4, 10, pfin(4), 0, 0, 0);
+    const go = (mid, slot, rows, real) => { fresh(100); T.hold(mid, 10, 4, 0); return T.result(mid, rows, slot, true, real); };
+    let r = go(MID(300), 0, rows4, true);
+    ok('party apply: 1st of 4 at 10: +26 and the +5 (131), g +1, w +1', r && r.net === 26 && r.bonus === 5 && S().t === 131 && S().g === 1 && S().w === 1, [r, S().t]);
+    r = go(MID(301), 2, rows4, true);
+    ok('party apply: 3rd breaks even (0) and still gets the +5', r && r.net === 0 && r.bonus === 5 && S().t === 105, [r, S().t]);
+    r = go(MID(302), 3, rows4, true);
+    ok('party apply: the last place: -16, no +5 (꼴등 빼고)', r && r.net === -16 && r.bonus === 0 && S().t === 84, [r, S().t]);
+    const tieL = T.ptable(4, 10, pfin(4, [1, 2, 3, 3]), 0, 0, 0);
+    r = go(MID(303), 2, tieL, true);
+    ok('party apply: a tie for last: no +5 for either (-8)', r && r.net === -8 && r.bonus === 0, r);
+    r = go(MID(304), 0, T.ptable(4, 10, pfin(1), 3, 0, 0), true);
+    ok('party apply: a 기권승 (one row): the pot only (+30), no +5 even when called real', r && r.net === 30 && r.bonus === 0, r);
+    r = go(MID(305), 1, [[1, 1, 999, 9999, 0, 1]], false);
+    ok('party apply: a hostile row clamped as a battle\'s (base <= 16, share <= stake x n)', r && r.net === 16 + 40 - 10, r);
+    fresh(100); T.hold(MID(306), 10, 4, 0, 1);
+    r = T.result(MID(306), [[0, 1, 16, 20, 0, 0], [1, 2, 8, 12, 0, 1]], 0, true, true);
+    ok('party apply: row[5] === 0 pays no stake (and shares none): +16 and the +5', r && r.net === 16 && r.put === 0 && r.bonus === 5, r);
+    // troPartyReal over crafted counters: 2 blows in each of 3 판 (no single 판 reaching 5) -> real; 4 in all -> not; 5 but
+    // under 60 s of play -> not (real again in the fast party); one finisher -> not; the 판 still open counts
+    P.fast(false);
+    P.coinPa({ act: [true, true, true], pf: [1300, 1300, 1300], shots: 6, seen: 2, go: 2 });
+    const a1 = T.preal(3);
+    P.coinPa({ act: [true, true], pf: [1300, 1300, 1300], shots: 4, seen: 1, go: 1, bshots: 3 });
+    const a2 = T.preal(3);
+    P.coinPa({ shots: 5, pf: [1000, 1000, 1000], seen: 2, go: 2 });
+    const a3 = T.preal(3); P.fast(true); const a3f = T.preal(3); P.fast(false);
+    P.coinPa({ act: [true, true, true], pf: [1300, 1300, 1300], shots: 6, seen: 2, go: 2 });
+    const a4 = T.preal(1);
+    P.coinPa({ shots: 4, pf: [1300, 1300, 1300], seen: 1, go: 2, bshots: 2 });
+    const a5 = T.preal(3);
+    ok('party real (+5): 6 blows over 3 판 -> real; 4 in all -> not; 5 under 60 s -> not (fast party: real); 1 finisher -> not; an open 판\'s blows count', a1 && !a2 && !a3 && a3f && !a4 && a5, [a1, a2, a3, a3f, a4, a5]);
+    // v: 1 (a party too short to count): only a party hold of this tab, once; never restarts the pod
+    fresh(100);
+    T.hold(MID(310), 10, 4, 0);                                          // (a battle hold: no pa)
+    T.apply({ t: 'tro', m: MID(310), n: 4, s: 10, r: [], v: 1 }, 1);
+    ok('v: 1 for a battle hold changes nothing (still held)', S().t === 84 && S().esc.length === 1 && (!S().pod || S().pod.mid !== MID(310)), [S().t, S().esc]);
+    P.coinPa({ shots: 9, pf: [4000], seen: 0, go: 0 });
+    T.hold(MID(311), 10, 4, 0, 0, true);
+    ok('a party hold carries its counters (livePa)', S().livePa.includes(MID(311)) && !S().livePa.includes(MID(310)), S().livePa);
+    T.apply({ t: 'tro', m: MID(311), n: 4, s: 10, r: [], v: 1 }, 1);
+    ok('v: 1 for the party hold: refunded at once (68 + 16), the pod says short', S().t === 84 && !S().esc.some((e) => e.m === MID(311)) && S().pod && S().pod.mid === MID(311) && S().pod.kind === 'short', [S().t, S().pod]);
+    T.apply({ t: 'tro', m: MID(311), n: 4, s: 10, r: rows4 }, 1);
+    T.apply({ t: 'tro', m: MID(311), n: 4, s: 10, r: [], v: 1 }, 1);
+    ok('... a normal result or a second v: 1 after it changes nothing, the pod stays short', S().t === 84 && S().pod.kind === 'short' && S().g === 0, [S().t, S().pod, S().g]);
+    T.hold(MID(312), 10, 4, 0, 0, true);
+    T.apply({ t: 'tro', m: MID(312), n: 4, s: 10, r: rows4 }, 1);
+    const t1 = S().t;
+    T.apply({ t: 'tro', m: MID(312), n: 4, s: 10, r: [], v: 1 }, 1);
+    ok('a v: 1 after an applied result changes nothing (2nd: +10 and the +5 kept)', t1 === 84 - 16 + 16 + 10 + 5 && S().t === t1 && S().pod.kind !== 'short', [t1, S().t, S().pod]);
+    // the quick 파티 한 번 더 race: a party hold, then CO.pa replaced by the next party's (0 blows), then the OLD party's
+    // result: applied once with the +5 from the OLD counters; the new CO.pa untouched (no coinPartyClose from troResultIn)
+    fresh(100);
+    P.coinPa({ gid: 7, act: [true, true, true], pf: [1300, 1300, 1300], shots: 6, seen: 2, go: 2 });
+    T.hold(MID(320), 10, 4, 0, 0, true);
+    const neu = P.coinPa({ gid: 8, shots: 0, seen: -1, go: 0, bshots: 0 });
+    T.apply({ t: 'tro', m: MID(320), n: 4, s: 10, r: rows4 }, 1);
+    const after = P.state().coins;
+    ok('late result after a quick rematch: applied once with the OLD party\'s +5 (84 + 16 + 10 + 5 = 115)', S().t === 115 && S().pod && S().pod.bonus === 5, [S().t, S().pod]);
+    ok('... the new party\'s counters untouched', after && after.gid === 8 && after.seen === neu.seen && after.shots === 0 && after.act.length === 0, [neu, after]);
+    T.apply({ t: 'tro', m: MID(320), n: 4, s: 10, r: rows4 }, 1);
+    ok('... a replay of it changes nothing', S().t === 115, S().t);
+    P.coinPa({}); T.fast(false); T.today(null);
+  }
+
   // ---------------------------------------------------------------- 5. how holds end without a result (§5.4)
   function endTests() {
     fresh(100);
@@ -423,7 +571,8 @@
       /처음 선물로 트로피 100개를 받았어요/.test($('pg-rec-note').textContent) && lad2[1].getAttribute('aria-current') === 'true' && lad2[0].classList.contains('got'), [$('pg-rec-lgname').textContent, $('pg-rec-note').textContent, lad2.map((l) => l.className)]);
     $('pg-rec-close').click(); await sleep(60);
     T.today(20261025); T.set({ g: 1, day: 20261025, de: 6 }); T.openRec(); await sleep(60);
-    ok('rec: after a game the note is today\'s trophy bonus: "오늘 트로피 보너스 6/40개 · 목욕도 배틀도 받아요"', $('pg-rec-note').textContent === '오늘 트로피 보너스 6/40개 · 목욕도 배틀도 받아요', $('pg-rec-note').textContent);
+    ok('rec: after a game the note is today\'s trophy bonus: "오늘 트로피 보너스 6/40개 · 목욕도 배틀도 파티도 받아요"', $('pg-rec-note').textContent === '오늘 트로피 보너스 6/40개 · 목욕도 배틀도 파티도 받아요', $('pg-rec-note').textContent);
+    ok('rec: its game row reads 배틀·파티 (parties count in the same 승 / 판)', [...document.querySelectorAll('#pg-rec dt')].some((d) => d.textContent === '배틀·파티'), [...document.querySelectorAll('#pg-rec dt')].map((d) => d.textContent));
     $('pg-rec-close').click(); await sleep(60); T.today(null);
     T.set({ t: 1300, w: 12, g: 30, ko: 44, best: 1400 }); T.openRec(); await sleep(60);
     ok('rec: the top league says so, with a full bar', $('pg-rec-lgname').textContent === '목욕탕 왕' && $('pg-rec-next').textContent === '최고 리그예요!' && $('pg-rec-fill').style.width === '100%' && $('pg-rec-win').textContent === '12승 / 30판', [$('pg-rec-next').textContent, $('pg-rec-fill').style.width]);
@@ -486,7 +635,7 @@
     const warm = ($('pg-fontwarm').textContent || '');
     const L = T.leagues().map((l) => l.name);
     const strs = ['내 트로피', '내 기록', '최고 트로피', '배틀', '뽀득 KO', '혼자 최고 점수', '다음 리그까지 30개', '최고 리그예요!', '0승 / 0판', '닫기',
-      '이 브라우저에서는 기록이 저장되지 않아요', '처음 선물로 트로피 100개를 받았어요! 친구와 배틀할 때 걸어 봐요', '오늘 트로피 보너스 6/40개 · 목욕도 배틀도 받아요',
+      '이 브라우저에서는 기록이 저장되지 않아요', '처음 선물로 트로피 100개를 받았어요! 친구와 배틀할 때 걸어 봐요', '오늘 트로피 보너스 6/40개 · 목욕도 배틀도 파티도 받아요', '배틀·파티',
       '끝까지 한 판마다 오늘 트로피 보너스 +5 (꼴등 빼고 · 하루 40개까지)', '오늘 트로피 보너스 +5', '내 트로피 -1개, 오늘 트로피 보너스 +5개, 지금 104개',
       '트로피 걸기', '안 걸기', '트로피 부족', '연습 경기', '10개씩', '트로피 10개씩', '트로피 안 걸기',
       '트로피가 모자라요 · 방장에게 걸기를 낮춰 달라고 해요', '트로피가 모자란 친구가 있어요 · 걸기를 낮춰 주세요', '내 트로피가 모자라요 · 걸기를 낮춰 주세요',
@@ -526,7 +675,7 @@
     D = PG.debug; T = D.tro; G = D.G;
     const sm = /shot=([a-z]+)/.exec(location.hash);
     if (sm) { if (/touch/.test(location.hash)) window.dispatchEvent(new Event('touchstart')); await shot(sm[1]); return; }
-    const steps = FIT_ONLY ? [fitTests] : [storeTests, rmwTests, ruleTests, applyTests, endTests, bonusTests, uiTests, fitTests, fontTests];
+    const steps = FIT_ONLY ? [fitTests] : [storeTests, rmwTests, ruleTests, applyTests, partyTableTests, partyApplyTests, endTests, bonusTests, uiTests, fitTests, fontTests];
     for (const f of steps) {
       try { await f(); } catch (e) { fail++; log('TROPHY FAIL ' + f.name + ' threw: ' + (e && e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : e)); }
     }

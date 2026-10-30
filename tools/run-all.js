@@ -58,7 +58,8 @@ const LIST = [
   V('v3-levels', 'test-v3-levels.html', 60000, summaryZero('V3LEVELS')),
   // battle arenas in the engine: enemy pressure per spawn (16 seeds x 60 s idle), first stun, the drain drop
   V('v3-fixes', 'test-v3-fixes.html', 60000, doneZero('FIXES')),
-  V('arena-gate', 'test-arena-gate.html#' + encodeURIComponent(JSON.stringify({ seeds: 16 })), 120000, doneZero('AGATE')),
+  // (240 s: CI's runners took 91-116 s and twice hit 120 s on 10-30; the measurement has no early exit)
+  V('arena-gate', 'test-arena-gate.html#' + encodeURIComponent(JSON.stringify({ seeds: 16 })), 240000, doneZero('AGATE')),
   // 몬스터 출현 (design/distinction.md §3): off = no arena enemies and no intruder minions, KO / power-ups / podium as
   // before, the default unchanged, an older host's R (no o[5]) reads on; online over bc below (monsters-net)
   V('monsters', 'test-monsters.html', 120000, doneZero('MON')),
@@ -222,7 +223,7 @@ const LIST = [
   V('trophies-net', HTTP + 'test-trophies-net.html', 'rt480000', doneZero('TROPHYNET'), { done: 'TROPHYNET DONE', w: 1200, h: 900 }),
   // 파티 online (design/party.md §13.2; 4 bc frames): the old-page gate, the cards on every screen, the water clock, the
   // crown's authority, the podium and the coins, leavers, 파티 한 번 더
-  V('party-net', HTTP + 'test-party-net.html', 'rt420000', doneZero('PARTYNET'), { done: 'PARTYNET DONE', w: 1200, h: 900 }),
+  V('party-net', HTTP + 'test-party-net.html', 'rt780000', doneZero('PARTYNET'), { done: 'PARTYNET DONE', w: 1200, h: 900 }),
   // the new games on a slow link (design/party-games.md §13.2): frame 3 at lat 100 / jit 40 - 바나나우유's RT from each
   // page's own draw and real key events, 펑's same press pattern -> the same score at 8 and at 100 ms, 술래's judge by
   // each runner's own view (never caught stopping in time on its own screen, arrivals by stamp, a guest 술래's turn)
