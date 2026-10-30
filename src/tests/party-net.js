@@ -30,7 +30,8 @@
 //      time-up -> 골든 골 on every page, the next goal ends it; the team places agree (x2: the last 판)
 //   8  파티 한 번 더: a new game id, a new plan, nothing paid twice;  9  a guest leaving during the 2nd card, a 거품 축구
 //      (4 -> 3): that 판 is drawn again on every page (no 축구 for 3), the party finishes with 3, the leaver gets nothing;
-//      no allowBc (q 1): a finished party pays nobody; the host's 방으로 mid-party: everyone in the room, nobody paid; the
+//      no allowBc (q 1): a finished party pays nobody; 바나나우유 잡기 (party-games 4.4, a smoke: each page's own measured
+//      ms reaches the host, the reveal agrees, the 판 ends by its rounds); the host's 방으로 mid-party: everyone in the room, nobody paid; the
 //      host leaving mid-party: the guests in the lobby with 방장이 나갔어요, nobody paid
 // Prints "PARTYNET PASS|FAIL <name>", "PARTYNET INFO ..." and "PARTYNET DONE pass=N fail=M".
 (function () {
@@ -463,6 +464,30 @@
     ok('practice: the podium screen-reader line says no coins, and nothing about trophies (a party has none)', D3.every((f) => /연습 경기라 비누 코인은 없어요/.test(doc(f, 'pg-podium-sum').textContent) && !/트로피/.test(doc(f, 'pg-podium-sum').textContent) && doc(f, 'pg-podium-note').textContent.indexOf('트로피') < 0),
       D3.map((f) => doc(f, 'pg-podium-sum').textContent));
     for (const f of D3) f.T.allowBc(true);
+
+    // ---- 바나나우유 잡기 online, a smoke at 8 / 4 ms (design/party-games.md 4.4; the slow-link checks are the #lag run's):
+    // a forced 1-판 party (fast: 4 rounds). Round 1: each page presses 250 ms after its OWN first draw of the milk - the
+    // host takes each seat's own measured ms (its mi, the host's through the same local -> input), the reveal rows agree
+    // on every page; the 판 ends by its rounds, the podium follows
+    H.mp.toRoom(); await until(() => D3.every((f) => N(f).screen === 'room'), 6000);
+    H.P.force(['milk']);
+    await readyAll(D3);
+    H.mp.start();
+    const mk = await until(() => D3.every((f) => PS(f).ph === 'playing' && PS(f).mini && PS(f).mini.id === 'milk'), 15000);
+    ok('바나나우유: the 판 plays on every page (무대 목욕탕, the animals on their stage spots)', mk && D3.every((f) => PS(f).kind === 'p' && f.P.arenas()[PS(f).arena].key === 'stage'), D3.map((f) => [PS(f).ph, PS(f).mini && PS(f).mini.id]));
+    const mkWant = {};
+    await Promise.all(D3.map(async (f) => {
+      if (!(await until(() => { const s = f.P.seen(); return s && s.r === 1 && s.milk !== undefined; }, 8000, 2))) return;
+      const t = f.P.seen().milk; await sleep(250); const tp = f.P.now();
+      f.P.press(N(f).mySlot, 'shoot', tp); mkWant[N(f).mySlot] = Math.round(tp - t);
+    }));
+    const mkRv = await until(() => H.P.milk() && H.P.milk().r === 1 && H.P.milk().ph === 2, 4000, 5);
+    const res = mkRv ? H.P.milk().res : null;
+    ok('바나나우유: each seat\'s grab reaches the host with the ms its own page measured (250+ after its own draw)', res && res.length === 3 && res.every((q) => q[2] === 1 && q[1] === mkWant[q[0]] && q[1] >= 250 && q[1] < 1000), [res, mkWant]);
+    const mkAgree = await until(() => D3.every((f) => PS(f).mini && PS(f).mini.r === 1 && PS(f).mini.ph === 2 && JSON.stringify(PS(f).mini.res) === JSON.stringify(res)), 3000, 5);
+    ok('바나나우유: the reveal rows (and points) agree on every page', mkAgree, D3.map((f) => PS(f).mini && [PS(f).mini.r, PS(f).mini.ph, PS(f).mini.res]));
+    const mpod = await until(() => D3.every((f) => PS(f).ph === 'podium'), 45000);
+    ok('바나나우유: the 판 ends by its 4 fast rounds and the podium shows on every page', mpod, D3.map((f) => [PS(f).ph, PS(f).mini && PS(f).mini.r]));
 
     // ---- the host's 방으로 mid-party: everyone in the room, nobody paid
     H.mp.toRoom(); await until(() => D3.every((f) => N(f).screen === 'room'), 6000);
