@@ -13,6 +13,18 @@ can win is +150 (a 기권승) or +116 (a finished party). **Section 13** is the 
 The owner asked (2026-10-29): `파티에도 트로피 걸게해주고 123등 트로피 차등으로 배분해줘` - let a party bet trophies too, and
 share them out in steps for 1st / 2nd / 3rd instead of the battle's winner-takes-the-pot.
 
+> **Owner decision (2026-10-30, open question 12.1; it overrides the body):** a party at **안 걸기 is NOT a 트로피 경기** -
+> it stays exactly as today (coins only: no hold, no place points, no +5, no `tro`, 내 기록 untouched). Only a party with
+> a stake (5 / 10 / 20 / 50) is a 트로피 경기 with the place points, the pot split and the +5. Consequences to carry
+> through the build: `troPartyOn()` (or its equivalent) is true only for a party room with `stakeNow() > 0`; a switch
+> between 파티 at 안 걸기 and co-op / battle un-readies nobody (as today); the stake-0 rows of the tables in section 2, the
+> stake-0 UI lines of section 7 (e.g. `트로피 경기: 최종 1등 +16 ...` at q 0, stake 0) and the stake-0 tests are dropped
+> or turned into "nothing changes" checks; risk 11.1 shrinks to "a party with a stake costs trophies"; the guest summary
+> at 안 걸기 says nothing about trophies (as today). The 2-minute void (`PARTY_TRO_MINF`) and everything else apply only
+> to staked parties. Also in flight on other branches: fix/crown-last (왕관: the holder at time-up wins, `PARTY_V` 4) and
+> feat/party-games (3 new games, its own `PARTY_V` bump, games of 40-57 s - re-check `PARTY_TRO_MINF` against a 3판
+> party of new games when the two meet). Merge `origin/main` before building; `PARTY_V` = main's value + 1.
+
 ---
 
 ## 0. Decisions in one table
@@ -702,7 +714,7 @@ working:
 ## 12. Open questions for the owner (each with the default this spec uses)
 
 1. A party at 안 걸기: a 트로피 경기 with place points (+16 … −6) and the +5, like a battle - or no trophies at all unless a
-   stake is set? **Default: like a battle** (one rule for both modes).
+   stake is set? **Default: like a battle** (one rule for both modes). **Owner (2026-10-30): no trophies at 안 걸기** (the block at the top).
 2. The split 4명 50 / 30 / 20 / 0, 3명 60 / 30 / 10, 2명 100 / 0? **Default: as written** (constants, `PARTY_SHARE`).
 3. A tie's leftover trophy (at most 2): rotated by the game id? **Default: rotated** (never always the host; the other
    choice is seat order).
