@@ -25,7 +25,7 @@
 // shared machinery, 바나나우유 잡기 (milkTests), 펑! 비눗방울 (puffTests: puffL, the 66 ms rule, 만점 / the pop at L_k, the
 // dip / foam, a bank and a puff of one frame in time order, the warnings, the bell, the wall-clock window, remote rows
 // clamped, over at the done reports or waitF, the key, a leaver, the view, the fast window, the card).
-//   scenes: #shot=milk|milkrev|milkdecoy|milkcard|puff|puffcard (&s=0: the page's own layout, a phone)
+//   scenes: #shot=milk|milkrev|milkdecoy|milkcard|puff|puffcard|sneak|sneakchant|sneakcard (&s=0: the page's own layout, a phone)
 // Prints "PARTY PASS|FAIL <name>", "PARTY INFO ..." and "PARTY DONE pass=N fail=M".
 (function () {
   'use strict';
@@ -1662,6 +1662,14 @@
       until(() => G.frame % 6 === 1, 6);   // (a frame of the flash: it blinks 3 on / 3 off)
       info('puff scene: L1 ' + L1 + ' - ' + [0, 1, 2, 3].map((s) => P.puffSeat(s).s10 / 10 + '% warn ' + P.puffWarn(P.puffSeat(s).s10, L1) + ' score ' + P.puffSeat(s).score).join(' | '));
     } else if (name === 'puffcard') { party(longNicks(), { plan: ['water', 'puff'] }, 101); toPlaying(); P.skip(); toCard(); step(170); }
+    // (술래: the look - the 술래 turned round with red pips and the red edge, one runner caught in a drifting prison, one
+    // arrived at the line, one frozen mid-way; sneaklook: the chant at 4 syllables; the card with its order line)
+    else if (name === 'sneak' || name === 'sneakchant') {
+      party(longNicks(), { plan: ['sneak'] }, 101); toPlaying();
+      put(1, 120, 200); put(2, 186, 200); put(3, 60, 200); step(3); D.press('right', true, 2); step(4); D.press('right', false, 2);
+      if (name === 'sneakchant') { for (let k = 0; k < 4; k++) { P.press(0, 'shoot'); step(6); } step(4); }
+      else { const T = P.look(); until(() => G.frame >= T - 10, 60); D.press('right', true, 1); until(() => G.frame >= T + 13, 60); D.press('right', false, 1); step(16); }
+    } else if (name === 'sneakcard') { party(longNicks(), { plan: ['water', 'sneak'] }, 101); toPlaying(); P.skip(); toCard(); step(170); }
     else if (name === 'milkdecoy') { P.vclock(true, 1000); party(longNicks(), { plan: ['milk'] }, 101); toPlaying(); toRound(3); until(() => P.seen() && P.seen().r === 3 && P.seen().d.length > 0, 400); step(3); }
     D.G.manual = true; D.step(0);
     await sleep(300);
