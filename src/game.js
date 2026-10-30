@@ -4632,7 +4632,7 @@ window.PG = window.PG || {};
       M.miK = M.miK || {};
       for (const p of G.players) {
         let mi = null;
-        if (p.local !== false) mi = F.local ? F.local(M, p.slot, (ins && ins[p.slot]) || NO_INPUT) : null;
+        if (p.local !== false) { mi = F.local ? F.local(M, p.slot, (ins && ins[p.slot]) || NO_INPUT) : null; M.miL = M.miL || {}; M.miL[p.slot] = mi; }   // (miL: a local seat's last mi - debug)
         else { const rem = NET.remote.get(p.id), st = rem && rem.st; if (st && st.gid === NET.gid && Array.isArray(st.mi) && P && st.mi[0] === P.i) mi = st.mi; }
         if (!mi || !F.input) continue;
         const k = mi.join(); if (M.miK[p.slot] === k) continue;
@@ -15387,6 +15387,7 @@ window.PG = window.PG || {};
       // would (its own k / rt / ep / mi; at = now); this page's own part of a seat (G.mloc) and what it reports; the
       // screen's first draws; the current 바나나우유 round's whole plan (host)
       press(slot, act, t) { const s = clamp(slot | 0, 0, MAX_PLAYERS - 1); dbgPq[s].push([act || 'shoot', t === undefined ? pageNow() : +t]); return dbgPq[s].length; },
+      down: (slot, t) => api.press(slot, 'down', t),
       vclock(on, t) { VCLOCK.on = !!on; if (t !== undefined) VCLOCK.t = +t; else if (on && !VCLOCK.t) VCLOCK.t = 1000; return VCLOCK.on; },
       drawAt(t) { VCLOCK.t = +t; return VCLOCK.t; },
       now: () => pageNow(), drawT: () => G.drawT,
@@ -15400,7 +15401,7 @@ window.PG = window.PG || {};
         return Object.assign({}, s);
       },
       mloc: (slot) => { const L = slot === undefined ? G.mloc : G.mloc[slot]; return L ? JSON.parse(JSON.stringify(L)) : null; },
-      mi: (slot) => { const M = G.mini, F = M && MINI_FN[M.id]; if (G.online && G.role === 'guest') return NET.mi ? NET.mi.slice() : null; const L = M && G.mloc[slot]; return F && F.local && L && L.rep && M.id === 'milk' ? [G.party.i, M.r, L.rep[0], L.rep[1]] : null; },
+      mi: (slot) => { const M = G.mini; if (G.online && G.role === 'guest') return NET.mi ? NET.mi.slice() : null; const q = M && M.miL && M.miL[slot]; return q ? q.slice() : null; },
       seen: () => (G.mloc.sh ? JSON.parse(JSON.stringify(G.mloc.sh)) : null),
       milk: () => { const M = G.mini; return M && M.id === 'milk' ? JSON.parse(JSON.stringify({ r: M.r, ph: M.ph, A: M.A, n: M.n, plan: M.plan, nogo: M.nogo, rep: M.rep, res: M.res, pts: M.pts, ms: M.ms, C: M.C, endAt: M.endAt })) : null; },
       // (host, 바나나우유: round r's plan as milkPlan draws it from a seed - pure, the page's own draws are put back)

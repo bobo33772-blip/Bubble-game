@@ -1091,3 +1091,70 @@ with `ESC_MASH`), `KIT_BASE` through `kitOf`, `WALK` 1.25 x 0.7 = 0.875 px/f, th
 already in it), word pops recorded through `netEv('w')`, the card's `keys` / `keysT` path, `#pg-party-demo` hidden
 only under 17em of height (the 1x window is 20.4em), `viewKindOf` / `loadView` for party arena indexes 2 and 3, the
 snapshot budget.
+
+---
+
+## 18. As built: builder 1 (the shared machinery + 바나나우유 잡기)
+
+### 18.1 Where the code differs from the text above
+
+| Spec | Built | Why |
+|---|---|---|
+| `PARTY_V` 4 | **5** | main's polish is 3, fix/crown-last takes 4; the verify step sets the final value after merging main. party-net checks `PV >= 5` and its crafted older guest sends `pa: PV - 1`. |
+| The milk stays drawn "until the reveal" | the same, and through the reveal **when nobody grabbed it** (ringed) | an empty counter at the reveal of a GO round read as "there was no milk". |
+| The fastest "holds the bottle over its head" | in its **paws** (12 px, on its counter side, the reveal's hop) | the DOM name tag sits over the head and hid it. |
+| `g.mg` 바나나우유 `['m', r, ph, events, C, rows, totals]` | + **`n`** (the round count) as `mg[7]`; during the wait (ph 0) `rows` carries the **반칙 so far** (`[slot, 0, 2, -1]`), from the reveal every seat's row | the guest's `3/8` needs n (the fast party plays 4); a friend's 물벼락 then shows on every page as it happens, not only at the reveal (a 반칙 cues nobody to press; grabs stay hidden until the reveal). |
+| A missing NO-GO report | 느려요 (flag 4, 0) | only a stale seat can miss one. |
+| NO-GO round shape | decoys at `arm + ri(24, 72)`, then `+ 54 + ri(0, 40)` each; the end 60 f after the last leaves | the worst honest 판 (every round at its 180 f cap) is ~66 s, still under the 75 s cap (tested). |
+| `MILK` | + `fast: 4` (the fast party's rounds), `endF: 30` (the 판 ends 30 f after the last **reveal ends**) | |
+| `clock(M)` returns a string | a string **or `[string, warn]`** (red blinking) | 펑's `0:23` under 10 s. |
+| `G.drawT = vclock ? pageNow() : frameT` | `VCLOCK` moves `STEP_MS` per world frame by itself (`vclock(on, t)`, `drawAt(t)` sets it) | a stepped test then has exact, moving draw and press times; `evT` ignores `timeStamp` while it is on. |
+| Debug presses | `P.press(slot, act, t)`, `P.down(slot, t)`, **and** a debug seat's rising edge (`D.press`) queues a pq entry at the page clock | `tap()` works in the new games. |
+
+### 18.2 New code (game.js unless named)
+
+- Constants: `PARTY_V` 5, `STAGE_X`, `MILK`, `MINI.milk` (`c 'm'`, `world: false`, `noFire`, `cues: false`, `fastSecs` 30,
+  `keys` / `keysT`), `MINI_IDS` + `'milk'`, `MINI_OLD` 3 (the arena games; the room's rules list the rest on a line of their
+  own, `partyRules`), `PARTY_TX` `gamesN` / `mk*`, `PARTY_TEXT` warms every `keys` / `keysT`.
+- Input: `pressQ` / `pressPush` / `evT` / `pageNow` / `VCLOCK` / `dbgPq` / `pqLog`; `onKeyDown` (점프 / 거품 / a fresh ↓),
+  `bindTouch`'s `sync(e)`, `stickMove(cx, cy, t)`'s down edge; `readInputs` gives every seat `pq` (sorted, <= 8, none
+  outside 'playing' or with the menu open) and `downP`; `frameT` (loop) -> `G.drawT` (render).
+- The layer: `stageSpots`, `miniParked` (world false or `frozen`), `miniFlag`, `miniStale` (`rem.st.at`, `MILK.staleF`),
+  `miniTick(ins)` (each local seat's `local`, each remote seat's `rem.st.mi` of this gid and 판 -> `input` when changed:
+  `M.miK`; `M.miL` keeps a local seat's last mi), `coinAct`, `drawPosed` (the `pose` swap), `tagAnchor` (`tagY`; the tag
+  arrows follow it), `drawHUDParty`'s `clock` and no pips for `noFire`, `syncJumpSub` (no move line for `noFire`),
+  `updateBattle(ins)`'s `cues`, `updateBody` / `guestSelf` early returns, `fire` / `hostShot` `noFire` guards.
+- Net: `parseBody` `mi`, `guestSend` `mi` (while playing a game), `hostBodyIn` `s.at`, `NET.mi` / `NET.rtHi` (reset per 판
+  in `applyView`, kept monotonic in `guestUpdate`), `G.mloc` (reset by `miniLoad` / `applyView` / `guestBegin`).
+- 무대 목욕탕: `PG.PARTY_ARENAS[2]` (levels.js, gather row 3: the validator warns under it), `PARTY_KEYS` + `'stage'`,
+  `fallbackPartyArena('stage')`, `loadPartyArenas` (any known key past the list), validate-levels' stage branch.
+- 바나나우유: `milkRounds`, `milkNogo`, `milkPlan`, `milkRound`, `milkTick`, `milkInput`, `milkClose`, `milkSplash`,
+  `milkNow` (+ `MILK_VT`), `milkSeen` (`G.mloc.sh`: this screen's first draws), `milkDecoy`, `milkLocal`, `milkView`,
+  `milkDraw` / `milkFront` / `milkRing` / `milkBest`, `milkPose`, `milkHud`, `milkDemo`, `localSfx`.
+- Debug (`PG.debug.party`): `press`, `down`, `vclock`, `drawAt`, `now`, `drawT`, `fakeBody`, `mloc`, `mi`, `seen`, `milk`,
+  `milkPlan`, `milkNogo`, `milkView`, `parseBody`, `pq`, `shotIn`, `viewAt`, `tagAnchor`; `consts()` + `MILK`, `STAGE_X`,
+  `MINI_OLD`; `state().mini` + `r ph n C res pts ms`.
+
+### 18.3 Tests
+
+- party.js: the rotation rewritten for the free draw (generic over `K.MINI_IDS`: every game that fits shows up, distinct
+  while the bag lasts, a replan never repeats a played game while one is unplayed); `machineryTests` (stage spots for 2 / 3 /
+  4, parked bodies, noFire incl. a `'shot'`, cues, pq order / down edge / menu / real keys, `G.drawT`, `mi` bounds, `G.mloc`
+  reset, fastSecs, the HUD's pips, a battle afterwards); `milkTests` (the plan over seeds, the wire never early, the draw
+  frame, the judge at -50 / 0 / 99 / 100 / 1500 / 1501 / none, decoys, 물벼락, shared ms, coins, NO-GO, banners, the ring,
+  8 rounds then the end, remote `mi` clamps, the cap, a stale seat, a leaver, the key, `milkView`'s merge, a view clock
+  stepping back, the card); the flow / arena / leaver checks that assumed three games; demos, HUD and fit over every game;
+  `#shot=milk|milkrev|milkdecoy|milkcard`.
+- touch.js: pq times from pointer events, two buttons in one frame, the stick's down edge with 거품 held, no repeat while
+  held. party-net: the gate at `PARTY_V` 5, the leaver's redraw from the games that fit 3 and were not played.
+
+### 18.4 For the next builders
+
+- 펑 (builder 2): `MINI.puff` with `world: false`, `noFire`, `cues: false`; `local` from `inp.pq` (time-ordered, `'down'`
+  entries included) on `pageNow()`; the window starts at the first `G.drawT` of 'playing'; `over` with `miniStale`;
+  `tagY`; `clock` returning `[m:ss, under10]`; `sit` through `pose` (any draw-time field, put back after the draw). Add
+  `PUFF` next to `MILK`, `'puff'` to `MINI_IDS`, the `puff` sfx (audio.js, `NO_ECHO`). Under `vclock` a 45 s window is 2700
+  stepped frames. party-net's `#lag` load and the online checks of both games are yours (`pressAfterDraw`).
+- 술래 (builder 3): `frozen(M, p)` is read by `miniParked` on every page (a guest's own body x); `rem.buf.list` entries carry
+  `d.rt` / `d.ep` / `d.at`; `NET.rtHi` is ready; `P.fakeBody(slot, st)` pushes into that buffer; add `'sneak'` to
+  `PARTY_KEYS` / the validator / `fallbackPartyArena`, `kitOf` -> `KIT_BASE` and the walk factor are not built.

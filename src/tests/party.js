@@ -758,6 +758,16 @@
     P.fast(true); party(['duck', 'cat'], { plan: ['milk', 'crown'] });
     const ft = PS().total, fn = PS().mini.n; toPlaying(); P.skip(); toCard(); const ct = PS().total; P.fast(false);
     ok('fastSecs: the fast party gives 바나나우유 its 30 s (and 4 rounds), 왕관 its 12 s', ft === 30 * 60 && fn === MK().fast && ct === 12 * 60, [ft, fn, ct]);
+    // the HUD: no magazine pips in a noFire game (seat 1's panel at x 1: its pips at x 48, the bottom one y 11..13)
+    const pip = () => { const d = $('pg-canvas').getContext('2d').getImageData(48, 12, 1, 1).data; return d[0] > 200 && d[1] > 200 && d[2] > 200; };
+    party(['duck', 'cat'], { plan: ['crown', 'milk'] }); toPlaying(); step(2); const pipC = pip();
+    P.skip(); toCard(); toPlaying(); step(2); const pipM = pip();
+    ok('HUD: the magazine pips show in 왕관 뺏기, not in 바나나우유 (noFire)', pipC && !pipM, [pipC, pipM]);
+    // no regressions: a battle after a milk party - bodies move, bubbles fire, the magazine is there
+    D.local.battle(['duck', 'cat']); step(160);
+    const bx = pl(0).x; D.press('right', true, 0); step(20); D.press('right', false, 0);
+    const nb = G.bubbles.length; D.press('shoot', true, 0); step(2); D.press('shoot', false, 0); step(2);
+    ok('after a party: a battle moves and blows bubbles again (no game flag left over)', !PS().on && pl(0).x > bx + 8 && G.bubbles.length > nb, [pl(0).x - bx, G.bubbles.length, nb]);
     P.vclock(false);
   }
 
@@ -805,6 +815,7 @@
     [-50, 0, 99, 100].forEach((d, s) => P.press(s, 'shoot', tm + d)); step(1);
     const reps = [0, 1, 2, 3].map((s) => (P.mloc(s) || {}).rep);
     ok('judge: -50 / 0 / 99 ms after my draw are a 반칙, 100 ms a grab of 100', reps[0][1] === 2 && reps[1][1] === 2 && reps[2][1] === 2 && same(reps[3], [100, 1]), reps);
+    ok('mi: a host-local seat\'s report goes local -> input as [판 i, round, ms, flag] (one code path with a guest\'s)', same(P.mi(3), [PS().i, 1, 100, 1]) && same(P.milk().rep[3], [100, 1]), [P.mi(3), P.milk().rep]);
     ok('ring: the teaching gold ring blinks round the milk in round 1', ring1 > 10, ring1);
     const rv1 = P.milk();
     ok('close: every seat reported -> the round closes at once (the reveal): grab 3, 반칙 -1 each', rv1.ph === 2 && same(rv1.res.map((q) => q[3]), [-1, -1, -1, 3]) && same(rv1.pts, { 0: -1, 1: -1, 2: -1, 3: 3 }), rv1);
