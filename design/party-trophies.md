@@ -796,7 +796,7 @@ and podium); only a party at 5 / 10 / 20 / 50 is a 트로피 경기. About 310 c
 
 | Where | As built |
 |---|---|
-| Versions | `PARTY_V` **5** (not 4: fix/crown-last takes 4) and `PARTY_TRO_V` 5. The verify step sets the final value after merging main (both must be the `PARTY_V` of the release that ships party trophies; feat/party-games bumps it too). |
+| Versions | `PARTY_V` **5** and `PARTY_TRO_V` 5 (final, 14.4: main is still 3 and the open PR #24, fix/crown-last, takes 4 - two branches at the same number would merge silently into one version). Whoever lands after the other keeps both equal to the `PARTY_V` of the release that ships party trophies; feat/party-games bumps it again. |
 | `troPartyOn()` | `NET.mode === 'party' && stakeNow() > 0 && (host \|\| NET.pv >= PARTY_TRO_V)` - the stake test is the owner's decision. It gates the rules, the summary item, the 3-2-1 part, the card chip, the wait line and the practice pod. |
 | Hold | `troHostGo` returns for a party at 안 걸기 (`G.party && !(stakeNow() > 0)`); the guest's line in `guestHostIn` also needs `stakeNow() > 0`. Everything else as 3.1 (`f0`, the mid test first, `troGuestGo(id, party)`, the 105 s `min`, the mode in the consent test, `TRO.live`'s `pa`). |
 | Settle | `troPartyResult(walk)` as 3.2, called in `partyFinal` right after `setMusic` / before `coinPartyNow` and `showOverlay('podium')`. `troPartyReal`, `troPartyMinF` (`TRO.pmin`: the debug override) as written. |
@@ -828,6 +828,25 @@ and podium); only a party at 5 / 10 / 20 / 50 is a 트로피 경기. About 310 c
   (the code is the battle's).
 - A 1판 debug party shows the chip next to `점수 2배!` on its only card: the round line then wraps at 1x (real parties have 3
   or 5 판, so the first card is never the last).
-- Open: the final `PARTY_V` / `PARTY_TRO_V` after merging main (crown-last 4, party-games' own bump); re-check
-  `PARTY_TRO_MINF` against a 3판 of feat/party-games' shorter games (risk 3); the Apps in Toss gates when feat/toss lands
-  (risk 4).
+- Open: `PARTY_V` / `PARTY_TRO_V` when this and #24 / feat/party-games meet (14.4); re-check `PARTY_TRO_MINF` against a
+  3판 of feat/party-games' shorter games (risk 3); the Apps in Toss gates when feat/toss lands (risk 4).
+
+### 14.4 Verify pass (2026-10-30)
+
+- **Main**: `origin/main` was still d7e065a (nothing to merge). `PARTY_V` stays **5**: main's 3 + 1 is 4, which the open
+  PR #24 (fix/crown-last) already uses; a gap is harmless (every test is `>=`), a shared number is not.
+- **Fixed**: a guest holds on a `'p'` snapshot of the **first 판 only** (`g.pa.i === 0` in `guestHostIn`). A page that
+  missed every `'p'` of 1판 used to hold at 2판's 시작!: its `st` reached the host (`TRO.match` lives across 판), so its
+  stake went into the pot, while its own result could be refused by the 105 s `min` (counted from that later hold) and
+  refunded - trophies made from nothing. Now it plays the party without a hold, and the host counts no stake for it.
+- **Checked and fine** (against the code): the pot is paid out exactly (300,000 random tables with ties, 견습, 안 걸고
+  참여, gg / dropped leavers and the rotation: Σ share = pot whenever a staker finished, every net ≥ −(s + 6), the base
+  inside `BASE[n]`, the share ≤ s × n); `G.frame` never resets (the void span); `TRO.match` is cleared only by
+  `netAgain`, `troSessionEnd`, `netToRoom` and the settle, never between 판; `troWait` keeps `TRO.live` (a late `tro` keeps
+  its party's +5 test); a replayed `tro` or `v: 1` changes nothing; `netAgain` clears `TRO.lastRes`, so a 안 걸기 party's
+  podium never shows a gate or a next-party line from an earlier battle; the host's 방으로 before the podium forfeits
+  only its own hold; stake 0 never reaches `troHostGo`'s hold, `troPartyResult`, the guest's line or `troApply`; the cloud
+  push waits on `troOpenHere`; battle paths read the same as on main (the practice pod now also refreshes a battle's sr
+  line at once - text only).
+- **Known, as a battle**: a leaver's forfeit stands in a void party (too short, or a walkover nobody won): its stake is
+  lost, not shared (leaving is last place either way); a pot whose finishers all played without the stake is lost.
