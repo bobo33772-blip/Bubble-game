@@ -111,7 +111,7 @@ flowchart LR
 - 게임 만들기: `node build.js` → `dist/` (Claude 아티팩트용 한 장짜리 HTML), `deploy/` (배포용: 앱 설치, 구글 로그인 저장)
 - 전체 테스트: `node tools/run-all.js` (헤드리스 크롬으로 240여 개 테스트를 돌려요)
 - 구글 로그인 저장 · 친구 기능 설정: [FIREBASE-SETUP.md](FIREBASE-SETUP.md) · 보안 규칙: [firebase/firestore.rules](firebase/firestore.rules)
-- 서로 다른 네트워크끼리 온라인 연결: 중계(TURN) 서버 정보는 GitHub 비밀값 `TURN_CONFIG`로 넣어요 (저장소에는 올리지 않아요)
+- 온라인 방: Cloudflare 중계 서버(`cloudflare/`)를 거쳐요. 설정: [CLOUDFLARE-SETUP.md](CLOUDFLARE-SETUP.md) (Worker 주소는 GitHub 변수 `RELAY_URL`). 없으면 예전처럼 PeerJS 직접 연결
 
 ## 📁 폴더 안내
 
@@ -120,8 +120,9 @@ flowchart LR
 | `src/game.js` | 게임 엔진 (물리, 동물 특기, 몬스터 · 보스, 온라인, 트로피, 상점 · 뽑기, 로그인 저장, 친구) |
 | `src/sprites.js` | 픽셀 그림 (동물, 몬스터, 아이템, 뽑기 기계) |
 | `src/levels.js` | 24개 탕과 배틀 경기장 |
-| `src/audio.js` · `src/net.js` | 효과음 · 음악 / 온라인 연결 (PeerJS, Claude 방) |
+| `src/audio.js` · `src/net.js` | 효과음 · 음악 / 온라인 연결 (중계 서버, PeerJS, Claude 방) |
 | `src/page.html` | 화면 틀과 메뉴 |
+| `cloudflare/` | 온라인 중계 서버 (방마다 메시지를 전달하는 Worker) |
 | `src/tests/` · `tools/` | 자동 테스트와 점검 도구 |
 | `design/` | 기능별 설계 문서 (트로피, 상점, 뽑기, 친구, 동물별 꾸미기 등) |
 | `firebase/` | Firestore 보안 규칙 |

@@ -3,7 +3,9 @@
 // Usage: node bogeul/tools/serve.js [port=8765] [root=C:/Temp/bogeul]
 //   then e.g.  node bogeul/tools/run-chrome.js http://localhost:8765/test-net-bc.html - 900 760 30000
 // Loopback only (127.0.0.1 and ::1), GET/HEAD, no directory listing, no caching. Ctrl+C to stop.
-// As a module: const srv = require('./serve').start(8765, 'C:/Temp/bogeul'); ... srv.close();
+// It also runs the LOCAL RELAY for the 'ws' tests (tools/ws-relay.js, design/relay.md 11.3): WebSocket upgrades under
+// /ws (ws://localhost:<port>/ws/r/<space>/<code> - the real room logic of cloudflare/src/) and its /ws-admin/ routes.
+// As a module: const srv = require('./serve').start(8765, 'C:/Temp/bogeul'); ... srv.close();   ({relay: false}: no relay)
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -20,7 +22,9 @@ const TYPES = {
 function start(port = 8765, root = require('./env').T, opts = {}) {
   const base = path.resolve(root);
   const log = opts.quiet ? () => {} : (m) => console.log(m);
+  const relay = opts.relay === false ? null : require('./ws-relay').create({ base: '/ws' });
   const handler = (req, res) => {
+    if (relay && relay.admin(req, res)) return;
     const plain = (code, text) => { res.writeHead(code, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(text); };
     if (req.method !== 'GET' && req.method !== 'HEAD') return plain(405, 'method not allowed');
     let rel;
@@ -42,6 +46,7 @@ function start(port = 8765, root = require('./env').T, opts = {}) {
   const servers = [];
   for (const host of ['127.0.0.1', '::1']) {
     const s = http.createServer(handler);
+    if (relay) s.on('upgrade', relay.upgrade);
     s.on('error', (e) => {
       if (host === '::1' && (e.code === 'EADDRNOTAVAIL' || e.code === 'EAFNOSUPPORT')) return;   // no IPv6 loopback: fine
       console.error(`serve: cannot listen on ${host}:${port} (${e.code || e.message})`);
@@ -50,7 +55,7 @@ function start(port = 8765, root = require('./env').T, opts = {}) {
     s.listen(port, host);
     servers.push(s);
   }
-  return { url: `http://localhost:${port}/`, root: base, close() { for (const s of servers) { try { s.close(); } catch (e) { /* ignore */ } } } };
+  return { url: `http://localhost:${port}/`, root: base, relay, close() { if (relay) relay.close(); for (const s of servers) { try { s.close(); } catch (e) { /* ignore */ } } } };
 }
 
 if (require.main === module) {

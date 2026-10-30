@@ -1,0 +1,9 @@
+{
+  "name": "ppodeuk-relay",
+  "private": true,
+  "type": "module",
+  "description": "뽀득뽀득 목욕탕 relay Worker: a WebSocket relay for online rooms (CLOUDFLARE-SETUP.md)",
+  "devDependencies": {
+    "wrangler": "4.150.0"
+  }
+}
