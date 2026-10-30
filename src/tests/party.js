@@ -916,6 +916,138 @@
     ok('card: 바나나우유 잡기 - its how, rule and keys lines as specified', c.name === '바나나우유 잡기' && c.how === '바나나우유가 나오면 바로 눌러요!' && c.rule === '다른 간식이나 딸기우유에 누르면 물벼락 -1점 · 빠를수록 점수가 커요' && c.keys === 'Z 또는 X로 잡기' && P.mini().milk.keysT === '점프나 거품 버튼으로 잡기' && c.demo, c);
   }
 
+  // ---------------------------------------------------------------- 5d. 펑! 비눗방울 (party-games 5, 13.1.4)
+  // a seed whose bubble 0 pops at a size L that passes pred (the first from 1)
+  const seedL0 = (pred) => { for (let s = 1; s < 200000; s++) if (pred(P.puffL(s, 0))) return s; return -1; };
+  // a 펑 판 (2 players unless chars), bubble 0's pop size set by seed, played to its first playing frame (my window runs)
+  function puffAt(seed, chars) { party(chars || ['duck', 'cat'], { plan: ['puff'] }, 41); if (seed > 0) P.puffSeed(seed); toPlaying(); return P.puffT0(); }
+  // n presses of 거품 by a seat, one every gapF frames (5: 83 ms - each one counts)
+  const puffs = (slot, n, gapF) => { for (let k = 0; k < n; k++) { P.press(slot, 'shoot'); step(gapF || 5); } };
+  const PST = (slot) => P.mloc(slot) || {};
+  const sfxLog = [];
+  function puffTests() {
+    const U = K.PUFF;
+    if (!sfxLog.hooked) { const A = PG.Audio, o = A.sfx; A.sfx = function (n) { sfxLog.push(n); return o.apply(A, arguments); }; sfxLog.hooked = true; }
+    // puffL: pure, integers in lo..hi, every size drawn, none much likelier; another seed, another list
+    const cnt = {}; let bad = 0;
+    for (let s = 1; s <= 200; s++) for (let k = 0; k < 40; k++) { const v = P.puffL(s, k); if (v !== P.puffL(s, k) || v < U.lo || v > U.hi || v !== Math.floor(v)) bad++; cnt[v] = (cnt[v] | 0) + 1; }
+    const vs = Object.values(cnt), lo = Math.min(...vs), hi = Math.max(...vs);
+    ok('puffL: pure (the same seed and k -> the same size), integers in 40..110, all 71 sizes drawn, none much likelier (8000 draws); another seed draws another list', !bad && Object.keys(cnt).length === 71 && lo > 60 && hi < 180 && !same([0, 1, 2, 3, 4].map((k) => P.puffL(7, k)), [0, 1, 2, 3, 4].map((k) => P.puffL(8, k))), [bad, Object.keys(cnt).length, lo, hi]);
+    const gold = 1 - (U.hi - 100) / (U.hi - U.lo + 1);
+    ok('puffL: ' + (U.hi - 100) + ' of ' + (U.hi - U.lo + 1) + ' sizes are golden (over 100: they reach 만점), about ' + Math.round((1 - gold) * 100) + '%', U.hi - 100 === 10 && U.lo === 40);
+
+    P.vclock(true, 1000);
+    // the window: from my first draw while playing; the HUD's centre counts it down
+    const sGold = seedL0((L) => L >= 101), t0 = puffAt(sGold);
+    ok('window: it starts on the first frame this screen drew while playing (G.drawT); the HUD centre is my window, 0:45', t0 !== null && t0 === P.drawT() && same(P.clock(), ['0:45', false]) && P.puff().win === U.winMs, [t0, P.drawT(), P.clock(), P.puff()]);
+    ok('world: false - the 펑 판 plays on 무대 목욕탕, the animals on their stage spots, no START_INV blink; noFire, cues: false', P.arenas()[PS().arena].key === 'stage' && G.players.every((p) => p.invuln === 0) && P.mini().puff.world === false && P.mini().puff.noFire && P.mini().puff.cues === false);
+    // the 66 ms rule: presses 50 ms apart count every other one
+    const b0 = PS().coins.bshots;
+    for (let k = 0; k < 10; k++) { P.press(0, 'shoot'); step(3); }
+    ok('puffs: presses 50 ms apart count every other one (one each 66 ms at most): 10 presses -> 5 puffs, 17.0%', PST(0).k === 5 && P.puffSeat(0).s10 === 170 && !G.bubbles.length, [PST(0), P.puffSeat(0)]);
+    let maxMi = 0; for (let k = 0; k < 24; k++) { puffs(0, 1); maxMi = Math.max(maxMi, P.mi(0)[2]); }
+    const s29 = P.puffSeat(0); puffs(0, 1); const m30 = PST(0);
+    ok('만점: 30 puffs make 100% - a bubble whose pop size is over 100 (bubble 0: ' + P.puffL(sGold, 0) + ') sends itself off at the 30th for 100 points (the 29th: 98.6%), the dip follows', s29.s10 === 986 && m30.score === 100 && m30.n === 1 && m30.pops === 0 && m30.st === 1 && m30.k === 0 && G.words.some((w) => w.txt === P.tx().pfMax), [s29, m30]);
+    ok('size: never over 100 (the mi\'s size stayed in 0..100: 99 at the 29th)', maxMi === 99 && P.mi(0)[2] === 0, maxMi);
+    ok('coins: a send-off is one action of my seat (bshots +1)', PS().coins.bshots === b0 + 1, [PS().coins.bshots, b0]);
+    puffs(0, 6);
+    const dip = PST(0); step(6); puffs(0, 1);
+    ok('dip: puffs in the 0.6 s after a send-off count for nothing; after it they count again', dip.k === 0 && dip.st === 1 && PST(0).k === 1 && PST(0).st === 0, [dip, PST(0)]);
+    // a bank and a puff of the same frame, in their time order
+    puffs(0, 9);
+    let t = P.now(); P.press(0, 'shoot', t + 9); P.press(0, 'down', t + 2); step(1);
+    const bp = PST(0);
+    ok('order: a down 7 ms before a puff in the same frame banks first (34.0% -> 12 points) and the puff falls in the dip', bp.n === 2 && bp.score === 112 && bp.k === 0 && bp.st === 1, bp);
+    step(40); puffs(0, 3); t = P.now(); P.press(0, 'down', t + 9); P.press(0, 'shoot', t + 2); step(1);
+    const pb = PST(0);
+    ok('order: ... a puff 7 ms before a down counts first, then the bank (4 puffs, 13.6% -> 2 points)', pb.n === 3 && pb.score === 114 && pb.k === 0, pb);
+    ok('mi: a host-local seat reports [판 i, score, size, bubbles, pops, st] through local -> input (its row on the wire)', same(P.mi(0), [PS().i, 114, 0, 3, 0, 1]) && same(P.puff().rows[0], [114, 0, 3, 0, 1]) && same(P.mg()[2][0], [0, 114, 0, 3, 0, 1]) && P.mg()[0] === 'f' && P.mg()[3] === U.winMs && P.mg()[4] === 2, [P.mi(0), P.puff().rows, P.mg()]);
+    // a pop exactly at L_k: L 51 - 14 puffs (47.6%) stay, the 15th (51.0%) pops; the foam then blocks puffs for 1 s
+    const s51 = seedL0((L) => L === 51); puffAt(s51);
+    const c1 = PS().coins.bshots; sfxLog.length = 0;
+    puffs(0, 14); const a14 = P.puffSeat(0); puffs(0, 1); const p15 = PST(0);
+    ok('pop: bubble k pops on the puff that brings it to L_k (L 51: 14 puffs - 47.6% - stay, the 15th - 51.0% - pops): 0 points, the foam, 펑!', a14.s10 === 476 && p15.pops === 1 && p15.n === 1 && p15.score === 0 && p15.st === 2 && p15.k === 0 && G.words.some((w) => w.txt === P.tx().pfPop), [a14, p15]);
+    ok('pop: my own pop plays pop + b_splash on my page; each counted puff its own puff sound (14)', sfxLog.filter((n) => n === 'pop').length === 1 && sfxLog.includes('b_splash') && sfxLog.filter((n) => n === 'puff').length === 14, sfxLog.slice(-6));
+    ok('coins: a bubble popped by puffing is one action too (bshots +1)', PS().coins.bshots === c1 + 1, [PS().coins.bshots, c1]);
+    puffs(0, 10); const foam = PST(0); step(6); puffs(0, 1);
+    ok('foam: puffs in the 1.0 s after a pop count for nothing; after it they count, on bubble 1 (its own pop size)', foam.k === 0 && foam.st === 2 && PST(0).k === 1 && PST(0).n === 1, [foam, PST(0)]);
+    for (const Lw of [99, 100]) {
+      puffAt(seedL0((L) => L === Lw)); puffs(0, 29); const a = PST(0); puffs(0, 1); const b = PST(0);
+      ok('pop: L ' + Lw + ' pops on the 30th puff (the pop test comes before 만점) - 29 puffs stay', a.pops === 0 && a.k === 29 && b.pops === 1 && b.score === 0 && b.n === 1, [a, b]);
+    }
+    // the warnings: the tremble from 70% of L, the bigger one from 85%, the flash from 90% (tenths of a %)
+    ok('warning: L 80 - 55.9% none, 56.0% the tremble, 68.0% the bigger tremble, 72.0% the flash; L 51 - 45.9% the flash, 45.8% not', P.puffWarn(559, 80) === 0 && P.puffWarn(560, 80) === 1 && P.puffWarn(679, 80) === 1 && P.puffWarn(680, 80) === 2 && P.puffWarn(719, 80) === 2 && P.puffWarn(720, 80) === 3 && P.puffWarn(459, 51) === 3 && P.puffWarn(458, 51) === 2 && P.puffWarn(0, 40) === 0);
+    // the tags over the biggest bubble (tagY), never on it
+    ok('tags: 펑\'s name tags sit over the biggest bubble (tagY: head - sit - 4 - 44 - 2), never on its tremble', G.players.every((p) => P.tagAnchor(p.slot) <= p.y - U.sit - 4 - 44 - 1 && P.tagAnchor(p.slot) > 100), G.players.map((p) => [p.y, P.tagAnchor(p.slot)]));
+
+    // the bell 5 s before my window ends, then the end: a bubble in hand pops (no coin) and I am done; the 판 ends at the
+    // host's time-up with every seat done
+    const t0b = puffAt(sGold);
+    until(() => P.now() - t0b >= U.winMs - 10000 - 60, 3000); until(() => P.clock()[1], 10);
+    ok('clock: under 10 s my window\'s clock blinks red (0:10)', same(P.clock(), ['0:10', true]) && P.now() - t0b >= U.winMs - 10000, [P.clock(), P.now() - t0b]);
+    until(() => P.now() - t0b >= U.winMs - U.bellMs - 120, 3000); sfxLog.length = 0;
+    const fb = until(() => G.banner && G.banner.main === P.tx().pfLast1, 20), atB = P.now() - t0b;
+    ok('bell: 5 s before my window\'s end - my line 마지막엔 꼭 날려요! / 안 날린 방울은 터져요 and hurry', fb >= 0 && atB >= U.winMs - U.bellMs && atB < U.winMs - U.bellMs + 17 && G.banner.sub === P.tx().pfLast2 && sfxLog.includes('hurry'), [fb, atB, G.banner]);
+    puffs(0, 5); const c2 = PS().coins.bshots;
+    const fe = until(() => PST(0).st === 3, 400), atE = P.now() - t0b, e0 = PST(0);
+    ok('end: at 45 000 ms of my window a bubble not sent off pops (0 points, no coin) and I am done (st 3)', fe >= 0 && atE >= U.winMs && atE < U.winMs + 17 && e0.pops === 1 && e0.n === 1 && e0.score === 0 && e0.k === 0 && PS().coins.bshots === c2, [fe, atE, e0]);
+    const fr = until(() => G.mode !== 'playing', 200);
+    ok('end: every seat done - the 판 ends at the host\'s time-up (left 0), places by the rows', fr >= 0 && fr <= 3 && G.mode === 'result' && PS().left <= 0 && PS().mini.fin, [fr, G.mode, PS().left]);
+    // the window is wall-clock: a 2 s jump of the page clock (frames dropped) ends it 120 frames sooner; the 판 then still
+    // waits for the host's time-up, my done line up meanwhile
+    const t0c = puffAt(sGold); step(600); P.drawAt(P.now() + 2000); const f0 = G.frame;
+    until(() => PST(0).st === 3, 3000); const dF = G.frame - f0, atC = P.now() - t0c, upC = PS().left;
+    step(30); const waitLine = G.mode === 'playing' && G.banner && G.banner.main === P.tx().pfDone1 && G.banner.sub === P.tx().pfDone2;
+    const fr2 = until(() => G.mode !== 'playing', 400);
+    ok('window: wall-clock - a 2 s jump of the page clock ends my window 120 frames sooner, still at 45 000 ms of it', Math.abs(dF - (U.winMs / (1000 / 60) - 600 - 120)) <= 1 && atC >= U.winMs && atC < U.winMs + 17 && upC > 100, [dF, atC, upC]);
+    ok('end: done before the host\'s time-up - the 판 waits for it (my line stays: 다 불었어요!), then ends', waitLine && fr2 > 50 && G.mode === 'result', [waitLine, fr2, G.mode]);
+
+    // remote seats: a junk row clamped; fewer bubbles or another 판 ignored; done stays done; a friend's pop plays on my
+    // page once; the host waits waitF past its time-up for a seat that never says done, its bubble counted as popped
+    puffAt(sGold, ['duck', 'cat', 'frog']); P.fakeBody(1, {}); P.fakeBody(2, {});
+    const pi = PS().i, feed = (s, mi) => { P.fakeBody(s, mi ? { mi } : {}); };
+    feed(1, [pi, 99999, 500, 3, 7, 0]); step(1); const j1 = P.puff().rows[1];
+    feed(1, [pi, 10, 10, 2, 0, 0]); step(1); const j2 = P.puff().rows[1];
+    feed(1, [pi + 1, 50, 10, 5, 0, 0]); step(1); const j3 = P.puff().rows[1];
+    ok('input: a junk row is clamped (score <= 100 a bubble, size <= 100, pops <= bubbles); fewer bubbles, or another 판\'s row, is ignored', same(j1, [300, 100, 3, 3, 0]) && same(j2, j1) && same(j3, j1), [j1, j2, j3]);
+    feed(1, [pi, 250, 0, 4, 3, 3]); step(1); feed(1, [pi, 400, 0, 6, 3, 0]); step(1);
+    ok('input: done stays done (a later row changes nothing)', same(P.puff().rows[1], [250, 0, 4, 3, 3]), P.puff().rows[1]);
+    sfxLog.length = 0; const pp0 = sfxLog.length;
+    feed(2, [pi, 0, 30, 0, 0, 0]); step(1); feed(2, [pi, 0, 0, 1, 1, 2]); step(1); feed(2, [pi, 0, 0, 1, 1, 2]); step(1);
+    ok('friends: a remote seat\'s pop plays pop + b_splash on the host\'s page once (from its row), its 펑! too', sfxLog.slice(pp0).filter((n) => n === 'pop').length === 1 && sfxLog.includes('b_splash') && G.words.some((w) => w.txt === P.tx().pfPop), sfxLog.slice(pp0));
+    for (let f = 0; f < 4000 && PS().left > 0; f++) { feed(1); feed(2, [pi, 49, 21, 1, 1, 0]); step(1); }
+    let endF = -1; for (let f = 0; f < 200 && G.mode === 'playing'; f++) { feed(1); feed(2, [pi, 49, 21, 1, 1, 0]); step(1); endF = f + 1; }
+    const r2 = PS().mini.rows[2];
+    ok('over: a seat still sending states but never done is waited for ' + U.waitF + ' f past the host\'s time-up; its bubble in hand then counts as popped', Math.abs(endF - U.waitF) <= 2 && G.mode === 'result' && same(r2, [49, 0, 2, 2, 3]), [endF, r2, G.mode]);
+    // a stale seat (states stopped) is not waited for
+    puffAt(sGold, ['duck', 'cat', 'frog']); P.fakeBody(1, {}); P.fakeBody(2, {});
+    const pj = PS().i;
+    for (let f = 0; f < 4000 && PS().left > 0; f++) { P.fakeBody(1, { mi: [pj, 0, 0, 0, 0, 3] }); if (f % 2 === 0 && PS().left > 200) P.fakeBody(2, { mi: [pj, 25, 0, 1, 0, 0] }); step(1); }
+    const sf = until(() => G.mode !== 'playing', 200);
+    ok('over: a remote seat whose states stopped (staleF) is not waited for - the 판 ends at the host\'s time-up', sf >= 0 && sf <= 3 && G.mode === 'result' && PS().mini.rows[2][4] === 3, [sf, PS().mini.rows]);
+    // the place key: points, then fewer pops, then more bubbles; still equal: a shared place
+    party(['duck', 'cat', 'frog', 'otter'], { plan: ['puff'] }); toPlaying();
+    Object.assign(G.mini.rows, { 0: [301, 0, 9, 9, 3], 1: [300, 0, 6, 1, 3], 2: [300, 0, 4, 1, 3], 3: [300, 0, 4, 1, 3] });
+    const pm = new Map(P.places());
+    ok('key: more points first (301 with 9 pops wins), then fewer pops, then more bubbles; still equal - a shared place', pm.get(0) === 1 && pm.get(1) === 2 && pm.get(2) === 3 && pm.get(3) === 3, P.places());
+    // a leaver mid-판: its row leaves the wire, its stall stays, the game goes on
+    puffs(1, 3); P.drop(1); step(2);
+    ok('leaver: one leaves mid-판 - its row leaves the wire, the stalls stay (4), the game goes on', G.mode === 'playing' && !P.mg()[2].some((q) => q[0] === 1) && P.mg()[4] === 4 && G.players.length === 3, P.mg());
+    // a guest's mirror: bounded rows, the seed, the window, the stalls
+    const v = P.puffView(['f', 'x', [[1, 5, 500, 3, 9, 7], ['y'], [-3, 1], [2, 30, 40, 2, 1, 1]], 99, 7]);
+    ok('view: puffView bounds a junk row (size 100, pops <= bubbles, st 0-3), drops junk entries, the window >= 1 s, 2-4 stalls', v.seed === 0 && same(v.rows, { 1: [5, 100, 3, 3, 3], 2: [30, 40, 2, 1, 1] }) && v.win === 1000 && v.ns === 4, v);
+    // the fast party: a 12 s window
+    P.fast(true); party(['duck', 'cat'], { plan: ['puff'] });
+    const fw = P.puff().win, ftot = PS().total; P.fast(false);
+    ok('fast: the debug fast party gives 펑 a 12 s window (its 12 s clock)', fw === U.fastMs && ftot === 12 * 60, [fw, ftot]);
+    P.vclock(false);
+    // the card: the texts as specified, the demo
+    party(longNicks(), { plan: ['puff'] }); step(80);
+    const c = P.card();
+    ok('card: 펑! 비눗방울 - its how, rule and keys lines as specified', c.name === '펑! 비눗방울' && c.how === '연타로 불고 아래로 날려요! 터지면 꽝' && c.rule === '흔들리면 조심, 반짝이면 바로 날려요 · 클수록 점수가 훨씬 커요' && c.keys === 'Z·X 연타로 불기 · ↓ 날리기' && P.mini().puff.keysT === '점프·거품 연타로 불기 · 조이스틱 아래로 날리기' && c.demo, c);
+    ok('texts: 펑\'s lines are in PARTY_TX and warmed (펑! 만점! 마지막엔 꼭 날려요! 다 불었어요!)', ['펑!', '만점!', '마지막엔 꼭 날려요!', '안 날린 방울은 터져요', '다 불었어요!', '친구들을 기다려요', '펑! 비눗방울'].every((s) => P.text().indexOf(s) >= 0));
+  }
+
   // ---------------------------------------------------------------- 6. no KO
   function noKoTests() {
     party(['duck', 'cat', 'frog'], { plan: ['crown'] });
@@ -1330,6 +1462,18 @@
       P.press(0, 'shoot', t + 254); P.press(2, 'shoot', t + 318); P.press(3, 'shoot', t + 40); step(10);
       if (name === 'milkrev') { P.press(1, 'shoot', t + 420); until(() => P.milk().ph === 2, 100); step(14); }
     } else if (name === 'milkcard') { party(longNicks(), { plan: ['water', 'milk'] }, 101); toPlaying(); P.skip(); toCard(); step(140); }
+    // (펑: four stalls mid-game - a bubble trembling, one flashing, a pop's foam, banked columns; the card)
+    else if (name === 'puff') {
+      P.vclock(true, 1000); party(longNicks(), { plan: ['puff'] }, 101); P.puffSeed(seedL0((L) => L >= 101)); toPlaying();
+      const blow = (s, n) => { for (let k = 0; k < n; k++) { P.press(s, 'shoot'); step(4); } };
+      [26, 10, 18, 28].forEach((n, s) => blow(s, n));   // (bubble 0, golden: banked at 88 / 34 / 61 / 95%)
+      for (const s of [0, 1, 2, 3]) P.down(s); step(45);
+      // (bubble 1, the same L for everyone: 1 trembling, 2 trembling more, 3 flashing - then 0 pops it)
+      const L1 = P.puffL(P.puff().seed, 1), kOf = (w) => { let b = 0; for (let k = 1; k * 34 < L1 * 10; k++) if (P.puffWarn(k * 34, L1) === w) b = k; return b; };
+      [1, 2, 3].forEach((s) => blow(s, kOf(s)));
+      blow(0, Math.ceil(L1 * 10 / 34)); step(4);
+      info('puff scene: L1 ' + L1 + ' - ' + [0, 1, 2, 3].map((s) => P.puffSeat(s).s10 / 10 + '% warn ' + P.puffWarn(P.puffSeat(s).s10, L1) + ' score ' + P.puffSeat(s).score).join(' | '));
+    } else if (name === 'puffcard') { party(longNicks(), { plan: ['water', 'puff'] }, 101); toPlaying(); P.skip(); toCard(); step(170); }
     else if (name === 'milkdecoy') { P.vclock(true, 1000); party(longNicks(), { plan: ['milk'] }, 101); toPlaying(); toRound(3); until(() => P.seen() && P.seen().r === 3 && P.seen().d.length > 0, 400); step(3); }
     D.G.manual = true; D.step(0);
     await sleep(300);
@@ -1342,7 +1486,7 @@
     if (/touch/.test(location.hash)) window.dispatchEvent(new Event('touchstart'));
     const sm = /shot=([a-z]+)/.exec(location.hash);
     if (sm) { await shot(sm[1]); return; }
-    const steps = FIT_ONLY ? [fitTests] : [rotationTests, pointTests, waterTests, soapTests, raftTests, crownTests, ballTests, machineryTests, milkTests, noKoTests, cardFlowTests, beatTests, flowTests, coinTests, arenaTests, cardTests, fitTests, touchTests];
+    const steps = FIT_ONLY ? [fitTests] : [rotationTests, pointTests, waterTests, soapTests, raftTests, crownTests, ballTests, machineryTests, milkTests, puffTests, noKoTests, cardFlowTests, beatTests, flowTests, coinTests, arenaTests, cardTests, fitTests, touchTests];
     for (const f of steps) {
       try { await f(); } catch (e) { fail++; log('PARTY FAIL ' + f.name + ' threw: ' + (e && e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : e)); }
     }

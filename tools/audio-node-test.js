@@ -24,7 +24,9 @@ const SFX_V7 = ['gacha_roll', 'gacha_drop', 'gacha_pop', 'gacha_win'];
 const SFX_V8 = ['dry', 'reload']; // (battle: an empty press; the magazine refilled)
 // 파티 다듬기 (design/party-polish.md §8.2): the minigame show's stings (tally / rank_up local, the rest echoed)
 const SFX_V9 = ['mg_title', 'mg_go', 'mg_finish', 'mg_win', 'tally', 'rank_up', 'drumroll', 'award'];
-const SFX_NAMES = SFX_V1.concat(SFX_V2, SFX_V3, SFX_V4, SFX_V5, SFX_V6, SFX_V7, SFX_V8, SFX_V9);
+// 파티 새 게임 (design/party-games.md §9.2): 펑's puff, o.n 0..10 (local, NO_ECHO)
+const SFX_V10 = ['puff'];
+const SFX_NAMES = SFX_V1.concat(SFX_V2, SFX_V3, SFX_V4, SFX_V5, SFX_V6, SFX_V7, SFX_V8, SFX_V9, SFX_V10);
 const V5_SOUNDS = [['stake', null], ['tro_fly', 0], ['tro_fly', 1], ['tro_fly', 2], ['tro_fly', 3], ['tro_fly', 4], ['tro_fly', 5], ['tro_up', null], ['tro_down', null], ['promote', null]];
 // every distinct v4 sound as [name, n]: n-variants per the spec, pop n 1..6 per animal (null = no opts)
 const V4_SOUNDS = [['pop', 1], ['pop', 2], ['pop', 3], ['pop', 4], ['pop', 5], ['pop', 6],
@@ -980,6 +982,29 @@ const label = (name, n) => name + (n === null ? '' : '(n=' + n + ')');
   ok(g('gacha_win(3)').lvl <= grab(E, 'promote').lvl + 1e-9, 'the 전설 fanfare is never louder than promote');
   noThrow(() => { for (const o of [undefined, null, {}, { n: NaN }, { n: -4 }, { n: 1e9 }, 'x', 7]) { for (const n of SFX_V7) A.sfx(n, o); E.advance(1); } }, '뽑기 sfx with odd opts');
   ok(E.errors.length === 0, '뽑기: no invalid Web Audio calls ' + E.errors.slice(0, 3).join(' | '));
+}
+
+// ---------------------------------------------------------------- 펑's puff (party-games 9.2)
+// o.n 0..10: each makes sound, starts nothing in the past, no NaN, short (~40 ms), quieter than shoot, its band's centre
+// rising 120 Hz a step from 500 Hz; odd opts safe; in game.js NO_ECHO (each page plays its own puffs)
+{
+  const E = makeEnv();
+  const A = E.A;
+  A.unlock();
+  const sh = grab(E, 'shoot'), got = [];
+  for (let n = 0; n <= 10; n++) {
+    const r = grab(E, 'puff', { n }); got.push(r);
+    ok(r.srcs.length > 0 && r.made.every((x) => x.startT == null || x.startT >= E.ctx.currentTime), 'puff(' + n + ') makes sound, nothing in the past');
+    ok(r.span > 0.02 && r.span < 0.2, 'puff(' + n + ') is short (' + r.span.toFixed(2) + ' s)');
+    ok(r.lvl < sh.lvl, 'puff(' + n + ') is quieter than shoot (' + r.lvl.toFixed(3) + ' vs ' + sh.lvl.toFixed(3) + ')');
+  }
+  const fc = (r) => (r.f0.find((q) => q[0] === 'n:bandpass') || [0, 0])[1];
+  ok(got.every((r, n) => Math.abs(fc(r) - (500 + 120 * n)) < 1e-6), 'puff: the band centre is 500 + 120 Hz x o.n (' + got.map(fc).join(' ') + ')');
+  noThrow(() => { for (const o of [undefined, null, {}, { n: NaN }, { n: -4 }, { n: 1e9 }, 'x', 7]) { A.sfx('puff', o); E.advance(0.2); } }, 'puff with odd opts');
+  ok(E.errors.length === 0, 'puff: no invalid Web Audio calls ' + E.errors.slice(0, 3).join(' | '));
+  const gsrc = fs.existsSync(path.join(__dirname, '..', 'src', 'game.js')) ? fs.readFileSync(path.join(__dirname, '..', 'src', 'game.js'), 'utf8') : '';
+  const ne = /const NO_ECHO = {([^}]*)}/.exec(gsrc);
+  ok(!gsrc || (ne && /\bpuff: 1\b/.test(ne[1])), 'puff is in game.js NO_ECHO');
 }
 
 // ---------------------------------------------------------------- T. the v1-v3 effects are untouched by v4

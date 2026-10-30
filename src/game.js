@@ -289,6 +289,12 @@ window.PG = window.PG || {};
   // RT; fast: the debug fast party's rounds; endF: the 판 ends this long after the last reveal
   const MILK = { rounds: 8, nogo: 2, nogoFrom: 4, intro: 30, wait: [72, 180], decoyF: 30, gapF: 24, dFrom: 3, dTwo: 5, pinkFrom: 5,
     minMs: 100, maxMs: 1500, capF: 180, staleF: 30, revealF: 60, splashF: 48, pts: [3, 2, 1, 0], foul: -1, held: 1, ringTo: 4, kbAdj: 0, fast: 4, endF: 30 };
+  // 펑! 비눗방울 (party-games 5): my window (ms; fastMs in the debug fast party), % per puff, ms between counted puffs, the
+  // dip after a send-off / the foam after a pop (ms), pop sizes lo..hi (%), the tremble (±1 px) / the bigger tremble
+  // (±2 px) / the flash from this share of L, my bell (ms before the end), the host's wait for the last reports (f) past
+  // its own time-up, the most bubbles a row may claim; sit: px the animal sits up on its stool
+  const PUFF = { winMs: 45000, fastMs: 12000, step: 3.4, gapMs: 66, dipMs: 600, foamMs: 1000, lo: 40, hi: 110, shake: 0.7, shake2: 0.85, flash: 0.9,
+    bellMs: 5000, waitF: 120, maxN: 40, sit: 4 };
   // each minigame: c its wire code, secs, ar the arena (['p', i] PG.PARTY_ARENAS[i], ['b'] a dry battle arena), fits(n),
   // team (two sides: the card's team line), and the card texts: name; how - the ONE-LINE how-to, which also says how to
   // win (<= 17 syllables: one line at 0.9em in the 1x window's 17.4em, 9.2); rule - the one extra line, hidden on short
@@ -306,12 +312,16 @@ window.PG = window.PG || {};
     milk: { c: 'm', secs: 75, fastSecs: 30, ar: ['p', 2], world: false, noFire: true, cues: false, fits: (n) => n >= 2, name: '바나나우유 잡기',
       how: '바나나우유가 나오면 바로 눌러요!', rule: '다른 간식이나 딸기우유에 누르면 물벼락 -1점 · 빠를수록 점수가 커요',
       keys: 'Z 또는 X로 잡기', keysT: '점프나 거품 버튼으로 잡기' },
+    // (party-games 5: each page's own 45 s window - the host's clock only waits for the last reports)
+    puff: { c: 'f', secs: 45, ar: ['p', 2], world: false, noFire: true, cues: false, fits: (n) => n >= 2, name: '펑! 비눗방울',
+      how: '연타로 불고 아래로 날려요! 터지면 꽝', rule: '흔들리면 조심, 반짝이면 바로 날려요 · 클수록 점수가 훨씬 커요',
+      keys: 'Z·X 연타로 불기 · ↓ 날리기', keysT: '점프·거품 연타로 불기 · 조이스틱 아래로 날리기' },
   };
   // (optional per game, polish 5: keys / keysT - the card's own keys line (a 연타 game's "X 연타!"), else PARTY_TX.keys /
   // keysT; party-games 3.1: world: false - a game that draws its own scene over the plain 무대 목욕탕 (the animals parked on
   // STAGE_X, no physics, no bubbles); noFire - nobody blows bubbles (the magazine pips hidden); cues: false - no last-3-s
   // beeps and no 10초 남았어요! (its rounds or each page's own clock end it); fastSecs - the debug fast party's length)
-  const MINI_IDS = ['water', 'crown', 'ball', 'milk'];
+  const MINI_IDS = ['water', 'crown', 'ball', 'milk', 'puff'];
   const MINI_OLD = 3;   // (the first three: the arena games of party.md / the polish; the room's rules list the rest on a line of their own)
   // (a short no-KO capture in every minigame; prisons sink in 물 0.3 px/f; out once the feet are 3 px under the surface; a
   // guest draws the water at its estimate of the host's NOW, at most WATER_LEAD frames past the newest snapshot - 4.1;
@@ -358,6 +368,7 @@ window.PG = window.PG || {};
     mkFake1: '가짜 간식이 나와요!', mkFake2: '바나나우유만 잡아요', mkPink1: '딸기우유 조심!', mkPink2: '분홍색은 참아요',
     mkNone1: '바나나우유가 없었어요!', mkNone2: '참은 친구 +1점', mkFoul: '반칙!', mkSlow: '느려요', mkHeld: '참았다!',
     mkSplash: '물벼락!', mkEarly: '너무 빨리 눌렀어요', mkDecoy: '바나나우유만 잡아요',
+    pfPop: '펑!', pfMax: '만점!', pfLast1: '마지막엔 꼭 날려요!', pfLast2: '안 날린 방울은 터져요', pfDone1: '다 불었어요!', pfDone2: '친구들을 기다려요',
   };
   const ptx = (k, v) => PARTY_TX[k].replace('{0}', String(v));
   const PARTY_TEXT = MINI_IDS.map((id) => [MINI[id].name, MINI[id].how, MINI[id].rule, MINI[id].keys || '', MINI[id].keysT || ''].join(' ')).join(' ') + ' ' +
@@ -5556,6 +5567,242 @@ window.PG = window.PG || {};
     }
   }
 
+  // ---- 펑! 비눗방울 (party-games 5, 연타 + push-your-luck): a world: false game on 무대 목욕탕 - the animals sit on pink
+  // stools in shower stalls (STAGE_X). Each page runs its own seats in its own window (PUFF.winMs from the first frame it
+  // drew while playing, on pageNow: a page that drops frames loses no time): a counted puff (a fresh 점프 / 거품, at most
+  // one every gapMs) grows my bubble by step %; a fresh down sends it off for round(size² / 100) points (at 100% it goes
+  // by itself: 만점!) and the wand dips; bubble k pops at L_k = puffL(seed, k) - the same secret sizes for everyone, the
+  // host's seed - for 0 points and a face of foam. The tremble and the flash (shake / shake2 / flash of L_k) are the only
+  // warning. Each page reports [판 i, score, size, bubbles, pops, st] in mi (cumulative: a dropped state loses nothing);
+  // the host clamps the rows (puffInput), relays them, and ends the 판 once every seat said done or waitF past its own
+  // time-up (puffTick: a missing one's bubble in hand counted as popped)
+  const puffWin0 = () => (PARTY_FAST ? PUFF.fastMs : PUFF.winMs);
+  const puffWin = (M) => (M && M.win) || PUFF.winMs;
+  // bubble k's pop size (%), lo..hi: a pure 32-bit hash of the seed and k (never rng: every page draws the same list)
+  function puffL(seed, k) {
+    let h = (Math.imul((seed | 0) ^ 0x5bd1e995, 0x9e3779b1) + Math.imul((k | 0) + 1, 0x85ebca6b)) | 0;
+    h = Math.imul(h ^ (h >>> 16), 0x7feb352d); h = Math.imul(h ^ (h >>> 15), 0x846ca68b); h ^= h >>> 16;
+    return PUFF.lo + (h >>> 0) % (PUFF.hi - PUFF.lo + 1);
+  }
+  // a bubble of k puffs in tenths of a % (an integer count times step: never a float that drifts), at most 100%; its
+  // radius (px) on the screen
+  const puffS10 = (k) => Math.min(1000, Math.round(k * PUFF.step * 10));
+  const puffR = (s10) => 3 + s10 * 0.019;
+  // the warning of a bubble s10 (tenths) against its pop size L: 0 none, 1 the tremble (±1 px), 2 the bigger tremble
+  // (±2 px), 3 the flash (still ±2) - in whole percent of L, so a threshold is exact
+  const puffWarn = (s10, L) => { const q = s10 * 10; return q >= Math.round(PUFF.flash * 100) * L ? 3 : q >= Math.round(PUFF.shake2 * 100) * L ? 2 : q >= Math.round(PUFF.shake * 100) * L ? 1 : 0; };
+  // this page's window clock: pageNow, less the time the screen sat paused (offline only - an online page never pauses)
+  const puffClock = () => pageNow() - (G.mloc.pz || 0);
+  // a word pop of this page's own (never recorded: each page pops its own 펑! / 만점!)
+  function localWord(x, y, txt, col) { const rec = NET.rec; NET.rec = false; try { wordPop(x, y, txt, col); } finally { NET.rec = rec; } }
+  // this screen's look of a seat: pf the frame of its last puff, pop [frame, r, x, y] the last pop, bank [frame, r, x, y]
+  // the last send-off floating up, col the points of the last 6 banked
+  function puffV(slot) { const V = G.mloc.v || (G.mloc.v = {}); return V[slot] || (V[slot] = { pf: -99, pop: null, bank: null, col: [] }); }
+  // a seat's bubble as this screen shows it: a seat this page runs from G.mloc (instant, size in tenths), a friend's
+  // from its row (the host's M.rows, a guest's mirror - a little late)
+  function puffSeat(M, slot) {
+    const L = G.mloc[slot];
+    if (L && L.own) return { s10: puffS10(L.k), score: L.score, n: L.n, pops: L.pops, st: L.st };
+    const r = M && M.rows && M.rows[slot];
+    return r ? { s10: r[1] * 10, score: r[0], n: r[2], pops: r[3], st: r[4] } : { s10: 0, score: 0, n: 0, pops: 0, st: 0 };
+  }
+  const puffHead = (p) => headTop(p) - PUFF.sit;   // (the head as drawn: sitting up on the stool)
+  function puffPopFx(p, v, s10) {
+    const r = puffR(s10), cx = p.x + 8, cy = puffHead(p) - 4 - r;
+    v.pop = [G.frame, r, cx, cy];
+    burst(cx, cy, 10, ['#ffffff', '#bdf0ff', '#e8fbff'], 1.3, 18, 0.06);
+    localSfx('pop'); localSfx('b_splash'); localWord(cx, cy - r - 4, PARTY_TX.pfPop, '#ffffff');
+  }
+  function puffBankFx(p, v, s10, pts, mine, max) {
+    const r = puffR(s10);
+    v.bank = [G.frame, r, p.x + 8, puffHead(p) - 4 - r]; v.col.push(pts); if (v.col.length > 6) v.col.shift();
+    if (mine) localSfx('item');
+    if (max) localWord(p.x + 8, puffHead(p) - 4 - 2 * r - 4, PARTY_TX.pfMax, '#ffe36b');
+  }
+  // my bubble sent off (a down, or 만점 at 100%): its points, the dip; one of my actions for the coins
+  function puffBank(L, p, t, max) {
+    const s10 = puffS10(L.k), pts = Math.round(s10 * s10 / 10000);
+    L.score += pts; L.n++; L.k = 0; L.st = 1; L.until = t + PUFF.dipMs;
+    if (p) { puffBankFx(p, puffV(p.slot), s10, pts, true, max); if (p.slot === G.localSlot) coinAct(); }
+  }
+  // my bubble popped: by a puff (0 points, the foam; an action for the coins) or by the bell at my window's end (no coin)
+  function puffPop(L, p, t, byPuff) {
+    const s10 = puffS10(L.k); L.n++; L.pops++; L.k = 0;
+    if (byPuff) { L.st = 2; L.until = t + PUFF.foamMs; if (p && p.slot === G.localSlot) coinAct(); }
+    if (p) puffPopFx(p, puffV(p.slot), s10);
+  }
+  // this page's seat (5.1, 5.4): its presses this frame in time order inside my window - a puff at most every gapMs (the
+  // pop test first, then 만점 at 100%), a down sends a bubble of at least one puff off; the dip / the foam ignore both.
+  // The bell 5 s before the end, then the end: a bubble not sent off pops and the seat is done (st 3)
+  function puffLocal(M, slot, inp) {
+    const P = G.party; if (!P) return null;
+    let L = G.mloc[slot]; if (!L) L = G.mloc[slot] = { own: true, k: 0, score: 0, n: 0, pops: 0, st: 0, until: 0, last: -1e9 };
+    const t0 = G.mloc.t0, p = G.players.find((q) => q.slot === slot);
+    if (t0 !== undefined && L.st !== 3) {
+      const pz = G.mloc.pz || 0, end = t0 + puffWin(M);
+      for (const q of inp.pq || []) {
+        const t = q[1] - pz; if (t < t0 || t >= end) continue;
+        if (L.st && t >= L.until) L.st = 0;
+        if (L.st) continue;
+        if (q[0] === 'down') { if (L.k) puffBank(L, p, t, false); continue; }
+        if (t - L.last < PUFF.gapMs) continue;
+        L.last = t; L.k++; if (p) puffV(slot).pf = G.frame;
+        const s10 = puffS10(L.k);
+        if (s10 >= puffL(M.seed, L.n) * 10) puffPop(L, p, t, true);
+        else if (s10 >= 1000) puffBank(L, p, t, true);
+        else localSfx('puff', { n: Math.floor(s10 / 100) });
+      }
+      const now = puffClock();
+      if (L.st && now >= L.until) L.st = 0;
+      if (mineHere(p) && !G.mloc.bell && now >= end - PUFF.bellMs && now < end) { G.mloc.bell = 1; localSfx('hurry'); partyMyLine(PARTY_TX.pfLast1, PARTY_TX.pfLast2); }
+      if (now >= end) { if (L.k) puffPop(L, p, end, false); L.st = 3; }
+    }
+    // (done before the host's 끝!: my line stays up until it comes)
+    if (L.st === 3 && mineHere(p)) {
+      const b = G.banner;
+      if (b && b.main === PARTY_TX.pfDone1 && G.frame < b.end) b.end = Math.max(b.end, G.frame + 30);
+      else if (!G.mloc.doneL) { G.mloc.doneL = 1; partyMyLine(PARTY_TX.pfDone1, PARTY_TX.pfDone2); }
+    }
+    return [P.i, L.score, Math.round(puffS10(L.k) / 10), L.n, L.pops, L.st];
+  }
+  // a friend's row changed on this screen (the host's puffInput for a remote seat, a guest's mirror): its puff pose, a
+  // send-off floating up, a pop with its 펑! and sounds (each page its own)
+  function puffRowFx(slot, a, b) {
+    const p = G.players.find((q) => q.slot === slot); if (!p) return;
+    a = a || [0, 0, 0, 0, 0]; const v = puffV(slot), dp = b[3] - a[3], db = b[2] - a[2] - Math.max(0, dp);
+    if (b[1] > a[1]) v.pf = G.frame;
+    if (db > 0) puffBankFx(p, v, a[1] * 10, Math.max(0, b[0] - a[0]), false, false);
+    if (dp > 0) puffPopFx(p, v, a[1] * 10);
+  }
+  // host: a seat's latest row, clamped (mi is self-reported, the same trust as a body state): size 0-100, bubbles 0-maxN
+  // and never fewer, pops never fewer and at most the bubbles, score at most 100 a bubble; done stays done
+  function puffInput(M, slot, mi) {
+    const r = M.rows[slot] || [0, 0, 0, 0, 0]; if (r[4] === 3) return;
+    const n = nInt(mi[3], 0, PUFF.maxN, 0), pops = Math.min(nInt(mi[4], 0, PUFF.maxN, 0), n);
+    if (n < r[2] || pops < r[3]) return;
+    const row = [Math.min(nInt(mi[1], 0, 100 * PUFF.maxN, 0), 100 * n), nInt(mi[2], 0, 100, 0), n, pops, nInt(mi[5], 0, 3, 0)];
+    const p = G.players.find((q) => q.slot === slot);
+    if (p && p.local === false) puffRowFx(slot, M.rows[slot], row);
+    M.rows[slot] = row;
+  }
+  // host, each playing frame: from its own time-up, the 판 ends once every seat said done (a stale remote one is not
+  // waited for) or waitF later - a seat not done then: its last row, the bubble in hand counted as popped
+  function puffTick(M) {
+    if (M.fin || !G.battle || G.battle.left > 0) return;
+    if (M.upF < 0) M.upF = G.frame;
+    if (!G.players.every((p) => (M.rows[p.slot] && M.rows[p.slot][4] === 3) || miniStale(p)) && G.frame - M.upF < PUFF.waitF) return;
+    for (const p of G.players) {
+      const r = M.rows[p.slot] || (M.rows[p.slot] = [0, 0, 0, 0, 0]);
+      if (r[4] !== 3) { if (r[1] > 0) { r[2] = Math.min(PUFF.maxN, r[2] + 1); r[3] = Math.min(r[2], r[3] + 1); } r[1] = 0; r[4] = 3; }
+    }
+    M.fin = true;
+  }
+  // guest: the seed, every seat's row ([slot, score, size, bubbles, pops, st], bounded), the window, the stalls; a
+  // friend's row that changed plays its puff / send-off / pop here (my own seat is my G.mloc)
+  function puffView(mg, mg1, t, g, M) {
+    M.seed = nInt(mg[1], 0, 0x7fffffff, 0); M.win = nInt(mg[3], 1000, 120000, PUFF.winMs); M.ns = nInt(mg[4], 2, 4, clamp(G.players.length, 2, 4));
+    const rows = {};
+    for (const q of Array.isArray(mg[2]) ? mg[2].slice(0, MAX_PLAYERS) : []) {
+      if (!Array.isArray(q)) continue;
+      const s = nInt(q[0], -1, MAX_PLAYERS - 1, -1); if (s < 0) continue;
+      const n = nInt(q[3], 0, PUFF.maxN, 0);
+      rows[s] = [nInt(q[1], 0, 100 * PUFF.maxN, 0), nInt(q[2], 0, 100, 0), n, Math.min(nInt(q[4], 0, PUFF.maxN, 0), n), nInt(q[5], 0, 3, 0)];
+    }
+    if (M.seeded) for (const s of Object.keys(rows)) if ((s | 0) !== G.localSlot) puffRowFx(s | 0, M.rows && M.rows[s], rows[s]);
+    M.rows = rows; M.seeded = true;
+    return M;
+  }
+  // behind the animals: the stalls (2 px tile dividers, a shower with its drip, a pink stool each) - and this page's
+  // window starts on the first frame it draws while playing (offline: the time it sat paused is left out)
+  function puffDraw(M, front) {
+    if (front) { puffFront(M); return; }
+    if (G.mode === 'playing' && G.mloc.t0 === undefined) { G.mloc.t0 = G.drawT; G.mloc.dT = G.drawT; }
+    else if (G.mloc.t0 !== undefined) { if (G.mode === 'paused') G.mloc.pz = (G.mloc.pz || 0) + Math.max(0, G.drawT - G.mloc.dT); G.mloc.dT = G.drawT; }
+    const xs = STAGE_X[M.ns || clamp(G.players.length, 2, 4)] || STAGE_X[2], tf = frameOf(themeOf(LV || { theme: 2 }).tile, 0), sh = frameOf('shower', 0);
+    const walls = new Set(); for (const cx of xs) for (const x of [cx - 28, cx + 28]) if (x > WALL_L + 1 && x < WALL_R - 1) walls.add(x);
+    if (tf) for (const x of walls) for (let y = PF_TOP + TS; y < PF_BOT - TS; y += TS) ctx.drawImage(tf.c, 3, 0, 2, TS, x - 1, y, 2, TS);
+    xs.forEach((cx, k) => {
+      if (sh) ctx.drawImage(sh.c, cx - 8, PF_TOP + TS);
+      const d = (G.frame + k * 13) % 40;
+      if (d < 20) { ctx.globalAlpha = 1 - d / 20; ctx.fillStyle = '#8fdcff'; ctx.fillRect(cx - 1, PF_TOP + TS + 8 + d * 2, 1, 2); ctx.globalAlpha = 1; }
+      ctx.fillStyle = '#c86a8e'; ctx.fillRect(cx - 7, PF_BOT - TS - 5, 14, 3); ctx.fillRect(cx - 6, PF_BOT - TS - 2, 2, 2); ctx.fillRect(cx + 4, PF_BOT - TS - 2, 2, 2);
+      ctx.fillStyle = '#ff9ec4'; ctx.fillRect(cx - 6, PF_BOT - TS - 5, 12, 2);
+    });
+  }
+  // in front: per seat the banked column (the last 6 at 8 px, one of 81+ points at 12 px, the newest floating up to it
+  // in 40 f) and the score at the stall's top; the bubble (seat-tinted, centred r + 4 px over the head, trembling /
+  // flashing by its warning); a pop - bubble_pop for 12 f and white foam over the head for the foam's second
+  function puffFront(M) {
+    const g = frameOf('giant_bubble', (G.frame / 10) | 0);
+    const ball = (f, x, y, r) => { if (f) ctx.drawImage(f.c, Math.round(x - r), Math.round(y - r), Math.round(2 * r), Math.round(2 * r)); };
+    for (const p of G.players) {
+      const S = puffSeat(M, p.slot), v = puffV(p.slot), cx = p.x + 8, hy = puffHead(p), tint = g ? tintOf(g, p.color, 0.25) : null;
+      const colX = cx - 20, fly = v.bank && G.frame - v.bank[0] < 40;
+      let cy = 46;
+      v.col.forEach((pts, i) => {
+        const r = pts >= 81 ? 6 : 4, last = i === v.col.length - 1;
+        if (last && fly) { const u = (G.frame - v.bank[0]) / 40; ball(tint, dLerp(v.bank[2], colX, u), dLerp(v.bank[3], cy + r, u), dLerp(v.bank[1], r, u)); }
+        else ball(tint, colX, cy + r, r);
+        if (last && v.bank && G.frame - v.bank[0] >= 36 && G.frame - v.bank[0] < 48) for (let s = 0; s < 4; s++) { ctx.fillStyle = STAR_COLS[s]; ctx.fillRect(Math.round(colX + Math.cos(s * 1.6 + G.frame / 4) * (r + 3)), Math.round(cy + r + Math.sin(s * 1.6 + G.frame / 4) * (r + 3)), 1, 1); }
+        cy += 2 * r + 2;
+      });
+      text(String(S.score), cx, PF_TOP + TS + 11, p.color, { align: 'center', outline: '#16363a' });
+      if (S.s10 > 0) {
+        const r = puffR(S.s10), w = puffWarn(S.s10, puffL(M.seed, S.n)), a = w >= 2 ? 2 : w;
+        const dx = a ? ((G.frame >> 1) & 1 ? a : -a) : 0, dy = a ? ((G.frame >> 2) & 1 ? 1 : -1) : 0;
+        ball(w === 3 && G.frame % 6 < 3 && g ? tintOf(g, '#ffffff', 0.8) : tint, cx + dx, hy - 4 - r + dy, r);
+      }
+      const pp = v.pop, pt = pp ? G.frame - pp[0] : 99;
+      if (pt < 12) { const f = frameOf('bubble_pop', pt < 6 ? 0 : 1); if (f) ctx.drawImage(f.c, Math.round(pp[2] - pp[1]), Math.round(pp[3] - pp[1]), Math.round(2 * pp[1]), Math.round(2 * pp[1])); }
+      if (pt < 60) { ctx.fillStyle = '#ffffff'; for (let k = 0; k < 7; k++) ctx.fillRect(Math.round(cx - 7 + ((k * 5 + (G.frame >> 3)) % 14)), Math.round(hy - 1 + ((k * 3) % 5) - (k & 1 ? 2 : 0)), 2, 1); }
+    }
+  }
+  // the animals on their stools (pose): sitting up sit px, facing the middle; the shoot frame for 6 f after each puff;
+  // after a pop the die frame for the foam's second
+  function puffPose(M, p) {
+    const o = { vx: 0, vy: 0, onGround: true, shootAnim: 0, invuln: 0, y: p.y - PUFF.sit, facing: p.x + 8 < 128 ? 1 : -1 }, v = G.mloc.v && G.mloc.v[p.slot];
+    if (v && v.pop && G.frame - v.pop[0] < 60) return Object.assign(o, { dead: true, dieT: 0 });
+    if (v && G.frame - v.pf < 6) o.shootAnim = 6;
+    return o;
+  }
+  // a seat's 2nd line: a bubble and its score
+  function puffHud(M, p, x) {
+    const f = frameOf('bubble', 0); if (f) ctx.drawImage(f.c, x + 17, 8, 8, 8);
+    text(String(puffSeat(M, p.slot).score), x + 27, 9, '#bdf0ff');
+  }
+  // the HUD's centre: what is left of my window (0:23), red and blinking under 10 s - the full window before it starts
+  function puffClockTx(M) {
+    const t0 = G.mloc.t0, left = t0 === undefined ? (G.mode === 'result' ? 0 : puffWin(M)) : Math.max(0, puffWin(M) - (puffClock() - t0)), s = Math.ceil(left / 1000);
+    return [Math.floor(s / 60) + ':' + (s % 60 < 10 ? '0' : '') + (s % 60), G.mode === 'playing' && s <= 10];
+  }
+  // 펑 (5.7): two stalls (a divider at x 48), a and b at 8 px; a puffs (its shoot frame every 8 f, a ")" of 2 px) and its
+  // bubble grows r 2 -> 7 to 70; a down arrow flashes under it at 72 and the bubble floats to the stall's top, shrinking
+  // to r 2 with a sparkle (to 110); b blows bigger from 40 (r 2 -> 10), trembles from 118, flashes from 136 and pops at 150
+  // (bubble_pop, white foam over b); a blows a small second bubble (160-220) and banks it beside the first
+  function puffDemo(dx, f, a, b) {
+    demoTiles(dx, 0, 28, 12, 8);
+    dx.fillStyle = '#5fa9ad'; dx.fillRect(48, 0, 1, 28);
+    const bub = (x, y, r, white) => { const g = frameOf('giant_bubble', 0); if (!g || r <= 0) return; const t = white ? tintOf(g, '#ffffff', 0.8) : g; dx.drawImage(t.c, Math.round(x - r), Math.round(y - r), Math.round(2 * r), Math.round(2 * r)); };
+    const arrow = (x) => { dx.fillStyle = '#ffffff'; dx.fillRect(x, 28, 1, 1); dx.fillRect(x - 1, 29, 3, 1); dx.fillRect(x, 30, 1, 1); };
+    const spark = (x, y) => { for (let k = 0; k < 4; k++) { dx.fillStyle = STAR_COLS[k]; dx.fillRect(Math.round(x + Math.cos(k * 1.6 + f / 3) * 4), Math.round(y + Math.sin(k * 1.6 + f / 3) * 3), 1, 1); } };
+    // (a: the first bubble 0-70, sent off at 72 to the top (20, 3); the second 160-220, sent off at 220 beside it)
+    const aBlow = f < 70 || (f >= 160 && f < 220), aShoot = aBlow && f % 8 < 3;
+    demoSpr(dx, a + (aShoot ? '_shoot' : '_idle'), 0, 20, 20, 8, false);
+    if (aShoot) { dx.fillStyle = '#ffffff'; dx.fillRect(29, 22, 1, 1); dx.fillRect(30, 23, 1, 1); }
+    if (f < 72) { const r = dLerp(2, 7, f / 70); bub(24, 19 - r, r); }
+    else if (f < 110) { const u = (f - 72) / 38, r = dLerp(7, 2, u); bub(dLerp(24, 20, u), dLerp(12, 3, u), r); if (f >= 104) spark(20, 3); }
+    else bub(20, 3, 2);
+    if ((f >= 72 && f < 90) || (f >= 220 && f < 238)) { if ((f >> 2) & 1) arrow(24); }
+    if (f >= 160 && f < 222) { const r = dLerp(2, 5, (f - 160) / 60); bub(24, 19 - r, r); }
+    else if (f >= 222) { const u = clamp((f - 222) / 14, 0, 1); bub(dLerp(24, 27, u), dLerp(14, 3, u), dLerp(5, 2, u)); if (f >= 234) spark(27, 3); }
+    // (b: idle, then blowing 40-150 - the tremble from 118, the flash from 136 - the pop at 150 and its foam to 200)
+    const bBlow = f >= 40 && f < 150, bShoot = bBlow && f % 8 < 3, bFoam = f >= 150 && f < 200;
+    demoSpr(dx, b + (bFoam ? '_die' : bShoot ? '_shoot' : '_idle'), 0, 68, 20, 8, true);
+    if (bBlow) { const r = dLerp(2, 10, (f - 40) / 110), sh = f >= 118 ? ((f >> 1) & 1 ? 1 : -1) : 0; bub(72 + sh, 19 - r, r, f >= 136 && ((f >> 2) & 1)); }
+    if (f >= 150 && f < 162) demoSpr(dx, 'bubble_pop', f < 156 ? 0 : 1, 62, 0, 20);
+    if (bFoam) { dx.fillStyle = '#ffffff'; for (let k = 0; k < 5; k++) dx.fillRect(68 + ((k * 3 + (f >> 3)) % 8), 18 + ((k * 2) % 3), 1, 1); }
+  }
+
   // ---- the card's animated how-to (polish 3.2.1, MINI_FN[id].demo): each screen draws its own 96x32 loop into
   // #pg-party-demo (never on the wire) from renderScene while the card shows - a pure function of f (P.t % 240), with my
   // animal a (slot 0's offline) and the next seat's b, so a page drawing it late or skipping frames is still right
@@ -5717,6 +5964,29 @@ window.PG = window.PG || {};
       clock: (M) => Math.max(1, M.r | 0) + '/' + (M.n || MILK.rounds),
       hud: milkHud,
       demo: milkDemo,
+    },
+    puff: {
+      spawns: () => [],   // (world: false - miniLoad puts everyone on the stage spots)
+      // (seed: the pop sizes' list; rows {slot: [score, size, bubbles, pops, st]}; win: the window (ms); ns: the stalls)
+      init: () => ({ seed: ri(1, 0x7fffffff), rows: {}, win: puffWin0(), ns: clamp(G.players.length, 2, 4), upF: -1, fin: false }),
+      start() {},
+      tick: puffTick,
+      local: puffLocal,
+      input: puffInput,
+      over: (M) => !!M.fin,
+      // (more points, then fewer pops, then more bubbles; still equal: a shared place)
+      key: (p, M) => { const r = M.rows[p.slot] || [0, 0, 0, 0, 0]; return r[0] * 1e4 + (99 - Math.min(r[3], 99)) * 100 + Math.min(r[2], 99); },
+      // (['f', seed, [[slot, score, size, bubbles, pops, st]] of the seats here, the window (ms), the stalls])
+      snap: (M) => ['f', M.seed, G.players.filter((p) => M.rows[p.slot]).map((p) => [p.slot].concat(M.rows[p.slot])), M.win, M.ns],
+      view: puffView,
+      drop(slot, M) { delete M.rows[slot]; },
+      draw: puffDraw,
+      pose: puffPose,
+      clock: puffClockTx,
+      // (the name tags over the biggest bubble - never on its tremble or flash)
+      tagY: (M, p) => puffHead(p) - 4 - 2 * puffR(1000) - 2,
+      hud: puffHud,
+      demo: puffDemo,
     },
   };
 
@@ -12791,7 +13061,7 @@ window.PG = window.PG || {};
   // 'quake' and 'pop' are echoed)
   const NO_ECHO = { jump: 1, shoot: 1, bounce: 1, splash: 1, pause: 1, start: 1,
     flap: 1, slam: 1, dash: 1, slide: 1, djump: 1, hop: 1, b_echo: 1, b_onsen: 1, b_splash: 1, b_icicle: 1, b_yarn: 1, b_egg: 1, dry: 1, reload: 1,
-    tally: 1, rank_up: 1 };   // (파티: the tally's ticks and my row's rise are each page's own)
+    tally: 1, rank_up: 1, puff: 1 };   // (파티: the tally's ticks and my row's rise are each page's own; 펑's puffs too)
   // (파티's card 'a' and result 'r': only pages that said pa in their hi ever get them)
   const PH_CODE = { playing: 'p', countdown: 'c', transition: 't', gameover: 'o', ending: 'e', podium: 'd', dying: 'p', paused: 'p', title: 'p', card: 'a', result: 'r' };
   const PH_NAME = { p: 'playing', c: 'countdown', t: 'transition', o: 'gameover', e: 'ending', d: 'podium', a: 'card', r: 'result' };
@@ -15275,7 +15545,9 @@ window.PG = window.PG || {};
       rafts: G.players.filter((p) => p.raft).map((p) => p.slot), gold: M.gold | 0, fl: M.fl | 0, ball2: M.ball2 ? Object.assign({}, M.ball2) : null, gg: M.gg === undefined ? -1 : M.gg,
       // (party-games: 바나나우유's round, phase, rounds, close tick, the reveal's rows, points and ms by seat)
       r: M.r === undefined ? null : M.r, ph: M.ph === undefined ? null : M.ph, n: M.n === undefined ? null : M.n, C: M.C === undefined ? null : M.C,
-      res: M.res ? M.res.map((q) => q.slice()) : null, pts: M.pts ? Object.assign({}, M.pts) : null, ms: M.ms ? Object.assign({}, M.ms) : null } : null);
+      res: M.res ? M.res.map((q) => q.slice()) : null, pts: M.pts ? Object.assign({}, M.pts) : null, ms: M.ms ? Object.assign({}, M.ms) : null,
+      // (펑: the seed, the rows by seat, the window, the host's end)
+      seed: M.seed === undefined ? null : M.seed, rows: M.rows ? JSON.parse(JSON.stringify(M.rows)) : null, win: M.win === undefined ? null : M.win, fin: !!M.fin } : null);
     const api = {
       // the 판 list for n players, rounds 3 / 5, from a seeded draw (pure: the page's own draws are put back)
       plan(n, rounds, seed, from) { const keep = rng; rng = mulberry32((seed | 0) >>> 0); try { return partyPlan(n | 0, rounds | 0, from); } finally { rng = keep; } },
@@ -15285,7 +15557,7 @@ window.PG = window.PG || {};
       coin: (n, done, act, shots, playF, place, tie) => coinParty(n, done, act, shots, playF, place, tie),
       waterAt: (f, k) => waterAt(f, PARTY_ARENAS[0] && PARTY_ARENAS[0].rise, k || 1),
       arenas: () => PARTY_ARENAS, dry: () => dryArenas(), mini: () => JSON.parse(JSON.stringify(MINI, (k, v) => (typeof v === 'function' ? undefined : v))),
-      consts: () => ({ PARTY_V, MILK: JSON.parse(JSON.stringify(MILK)), STAGE_X: JSON.parse(JSON.stringify(STAGE_X)), MINI_OLD,
+      consts: () => ({ PARTY_V, MILK: JSON.parse(JSON.stringify(MILK)), PUFF: Object.assign({}, PUFF), STAGE_X: JSON.parse(JSON.stringify(STAGE_X)), MINI_OLD,
         PARTY_PTS, PARTY_F, PARTY_FF, PARTY_LAST_X, AWARD_PTS, AWARDS: AWARDS.map((q) => Object.assign({}, q)), ESC_MASH, SOAP: Object.assign({}, SOAP), RAFT: Object.assign({}, RAFT), SURGE_WARN, CROWN2: Object.assign({}, CROWN2), BALL2: Object.assign({}, BALL2), MINI_IDS: MINI_IDS.slice(), MINI_TRAP, MINI_SINK, WATER_SLACK, WATER_LEAD, CROWN_SLOW, CROWN_NOPICK, CROWN_SLACK, pBase: COIN.pBase, pRound: COIN.pRound, pPlace: COIN.pPlace, BALL: Object.assign({}, BALL), BALL_TEAM: BALL_TEAM.slice() }),
       text: () => PARTY_TEXT, tx: () => Object.assign({}, PARTY_TX),
       // this page's view: the phase, the sequencer and the minigame
@@ -15416,6 +15688,17 @@ window.PG = window.PG || {};
       // (unit) a 바나나우유 row as a guest's milkView reads it (a fresh mirror)
       milkView: (mg, mg1) => { const M = milkView(mg, mg1 || null, 0, { pa: {} }, { id: 'milk', seeded: false }); return { r: M.r, ph: M.ph, ev: M.ev, C: M.C, res: M.res, pts: M.pts, n: M.n }; },
       tagAnchor: (slot) => { const p = G.players.find((q) => q.slot === slot); return p ? tagAnchor(p) : null; },
+      // (펑: bubble k's pop size for a seed - pure; the host's state; its seed by hand (host, before the window starts);
+      // the warning of a size in tenths against L; this screen's window start (null: not yet); a seat's bubble as this
+      // screen shows it; a 펑 row as a guest's puffView reads it (a fresh mirror); the HUD's centre text of the game now)
+      puffL: (seed, k) => puffL(seed, k),
+      puff: () => { const M = G.mini; return M && M.id === 'puff' ? JSON.parse(JSON.stringify({ seed: M.seed, rows: M.rows, win: M.win, ns: M.ns, upF: M.upF, fin: !!M.fin })) : null; },
+      puffSeed(s) { const M = G.mini; if (!M || M.id !== 'puff') return null; M.seed = s | 0; return M.seed; },
+      puffWarn: (s10, L) => puffWarn(s10, L),
+      puffT0: () => (G.mloc.t0 === undefined ? null : G.mloc.t0),
+      puffSeat: (slot) => (G.mini && G.mini.id === 'puff' ? puffSeat(G.mini, slot | 0) : null),
+      puffView: (mg) => { const M = puffView(mg, null, 0, { pa: {} }, { id: 'puff', seeded: false }); return { seed: M.seed, rows: M.rows, win: M.win, ns: M.ns }; },
+      clock: () => { const M = G.mini, F = M && MINI_FN[M.id]; return F && F.clock ? F.clock(M) : null; },
       // (unit tests) my own line on this screen (partyMyLine); the banner a snapshot of this world would send (g.bn)
       myLine(main, sub) { partyMyLine(main, sub); return G.banner ? { main: G.banner.main, sub: G.banner.sub, loc: !!G.banner.loc } : null; },
       snapBn() { const g = snapOf(0); return g.bn ? g.bn.slice() : null; },
