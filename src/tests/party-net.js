@@ -3,9 +3,9 @@
 //   node tools/run-chrome.js http://localhost:8765/test-party-net.html - 1200 900 rt420000 "PARTYNET DONE"
 // Every frame: tro.ns('f' + i), tro.allowBc(true) (bc is practice otherwise), party.fast(true) (every game 12 s, the card
 // and the result beats PARTY_FF). host = slot 0 (꽥꽥이), A = slot 1 (까삐), B = slot 2 (펭펭), C = slot 3 (냥냥).
-//   1  the room: hi carries pa: 3 (PARTY_V); a party room's R says m 'p' and o[7] = the 판 수, its o[0..6] as a battle
-//      room's; a new page joining never shows 새로고침 필요 (sampled from the join on); a crafted older guest (PR B's hi,
-//      pa 2) is never ready - its seat says 새로고침 필요 on the host and on the other guests (R.u), its R.p ready flag is
+//   1  the room: hi carries pa: PARTY_V (5: the new games); a party room's R says m 'p' and o[7] = the 판 수, its o[0..6]
+//      as a battle room's; a new page joining never shows 새로고침 필요 (sampled from the join on); a crafted older guest
+//      (a page before the new games, pa PARTY_V - 1) is never ready - its seat says 새로고침 필요 on the host and on the other guests (R.u), its R.p ready flag is
 //      0, 시작 is off, the room line says why; switched to 배틀 it is ready again with no new 준비; mp.guestRoom reads o[7]
 //      5 / missing / junk as 5 / 3 / 3
 //   2  a 3판 party (물 · 왕관 · 물, forced): the first card shows on the host and every guest, the same round lines, names
@@ -116,7 +116,7 @@
     for (const g of [A, B]) await join(g);
     await until(() => N(H).roster.length === 3 && N(H).party.seats.every((s) => s.slot === 0 || s.hi), 4000);
     const PV = H.P.consts().PARTY_V;
-    ok('hi: every new page says pa: ' + PV + ' (3: the polish - 물 v2, the beats, the card\'s 준비; the host records hi and pa)', PV === 3 && N(H).party.seats.filter((s) => s.slot).every((s) => s.hi && s.pa === PV), N(H).party.seats);
+    ok('hi: every new page says pa: ' + PV + ' (5: the new games - world: false, the body state\'s mi; the host records hi and pa)', PV >= 5 && N(H).party.seats.filter((s) => s.slot).every((s) => s.hi && s.pa === PV), N(H).party.seats);
     const R0 = N(H).tro.R;
     ok('R: m \'p\', o[7] = 3 (the 판 수), the seats\' ready flags', R0 && R0.m === 'p' && R0.o.length === 8 && R0.o[7] === 3, R0);
     ok('guests read the party room (mode party, 3판)', [A, B].every((g) => N(g).mode === 'party' && N(g).opts.rounds === 3 && N(g).party.u.length === 0), [A, B].map((g) => N(g).party));
@@ -128,16 +128,16 @@
     await until(() => N(H).roster.length === 4 && N(H).party.seats.find((s) => s.slot === 3 && s.hi), 4000);
     await sleep(300); clearInterval(sampler);
     ok('a new page joining never shows 새로고침 필요 (the r.hi gate: not before its hi, not after)', !flicker && N(H).party.seats.find((s) => s.slot === 3).pa === PV, N(H).party.seats);
-    // a crafted older guest: C says hi again with pa 2 (PR B's page: no beats, no 물 v2 - it would read them as noise);
-    // a page older still sends a smaller pa or none: the same gate
+    // a crafted older guest: C says hi again with pa PARTY_V - 1 (a page before the new games: it would read their plan
+    // codes as 물 and mi as noise); a page older still sends a smaller pa or none: the same gate
     C.mp.ready(true); await until(() => N(H).party.seats.find((s) => s.slot === 3).ready, 3000);
-    C.mp.session().send(hostIdOf(C), { t: 'hi', n: NICKS[3], c: CHARS[3], cu: 100, d: N(H).roster[3].d || 'abcdef', z: 1, pa: 2 });
+    C.mp.session().send(hostIdOf(C), { t: 'hi', n: NICKS[3], c: CHARS[3], cu: 100, d: N(H).roster[3].d || 'abcdef', z: 1, pa: PV - 1 });
     await until(() => N(H).party.seats.find((s) => s.slot === 3).old, 3000);
     A.mp.ready(true); B.mp.ready(true);
     await until(() => N(B).party.u.includes(3) && N(H).tro.R.p.find((e) => e[0] === 1)[3] === 1, 3000);
     const tagOf = (f, k) => { const li = doc(f, 'pg-room-players').children[k]; const t = li && li.querySelector('.pg-pc-tag'); return t ? t.textContent : ''; };
     const R1 = N(H).tro.R;
-    ok('old page (pa 2): its seat says 새로고침 필요 on the host, R.u = [3], its R.p ready flag 0, 시작 off', tagOf(H, 3) === '새로고침 필요' && JSON.stringify(R1.u) === '[3]' && R1.p.find((e) => e[0] === 3)[3] === 0 && !N(H).canStart && doc(H, 'pg-go').disabled,
+    ok('old page (pa ' + (PV - 1) + '): its seat says 새로고침 필요 on the host, R.u = [3], its R.p ready flag 0, 시작 off', tagOf(H, 3) === '새로고침 필요' && JSON.stringify(R1.u) === '[3]' && R1.p.find((e) => e[0] === 3)[3] === 0 && !N(H).canStart && doc(H, 'pg-go').disabled,
       [tagOf(H, 3), R1.u, R1.p, N(H).canStart]);
     ok('old page: ... the other guests see the tag and the room line (R.u)', [A, B].every((g) => tagOf(g, 3) === '새로고침 필요' && doc(g, 'pg-room-msg').textContent === '새로고침이 필요한 친구가 있어요 · 파티는 새 버전에서만 해요'), [A, B].map((g) => [tagOf(g, 3), doc(g, 'pg-room-msg').textContent]));
     ok('old page: ... and the host\'s room line says why', doc(H, 'pg-room-msg').textContent === '새로고침이 필요한 친구가 있어요 · 파티는 새 버전에서만 해요', doc(H, 'pg-room-msg').textContent);
@@ -438,12 +438,13 @@
     C.mp.leave();
     await until(() => N(H).roster.length === 3 && H.G.players.length === 3, 4000);
     const D3 = [H, A, B];
-    const redrawn = await until(() => D3.every((f) => PS(f).ph === 'card' && f.P.card().shown && f.P.card().name === '왕관 뺏기' && !f.P.card().team && f.P.card().round === '2판 / 3판'), 4000);
-    ok('leaver: a guest leaving during the 축구 card (4 -> 3) - that 판 is drawn again on every page (왕관 뺏기, no team line), the party goes on with 3',
-      redrawn && PS(H).on && PS(H).i === 1 && PS(H).plan[1] === 'crown' && !PS(H).plan.includes('ball') && H.G.players.length === 3 && !PS(H).walk, [PS(H).plan, D3.map((f) => f.P.card())]);
+    // (party-games 3.6: the replan draws from the games that fit 3 and were not played - 왕관 or a new game)
+    const redrawn = await until(() => D3.every((f) => PS(f).ph === 'card' && f.P.card().shown && PS(H).plan[1] !== 'ball' && f.P.card().name === H.P.mini()[PS(H).plan[1]].name && !f.P.card().team && f.P.card().round === '2판 / 3판'), 4000);
+    ok('leaver: a guest leaving during the 축구 card (4 -> 3) - that 판 is drawn again on every page (a game for 3 not played yet, no team line), the party goes on with 3',
+      redrawn && PS(H).on && PS(H).i === 1 && PS(H).plan[1] !== 'water' && !PS(H).plan.includes('ball') && H.G.players.length === 3 && !PS(H).walk, [PS(H).plan, D3.map((f) => f.P.card())]);
     // (the leaver's page keeps no party: its lobby's demo world runs its rounds, no water / crown drawn behind the panel)
     ok('leaver: its own page has no party left (G.party / G.mini cleared, the arena list back to the battle one)', !PS(C).on && PS(C).mini === null && PS(C).kind === 'b', [PS(C).on, PS(C).mini, PS(C).kind]);
-    const pod2 = await until(() => D3.every((f) => PS(f).ph === 'podium'), 45000);
+    const pod2 = await until(() => D3.every((f) => PS(f).ph === 'podium'), 70000);   // (a redrawn 바나나우유 plays its 4 fast rounds)
     await sleep(300);
     ok('leaver: the party finishes (podium of 3 on the 3 pages left)', pod2 && D3.every((f) => PS(f).podium.order.length === 3), D3.map((f) => PS(f).ph));
     ok('leaver: the one who left got nothing', coinsOf(C) === ceC, [ceC, coinsOf(C)]);
