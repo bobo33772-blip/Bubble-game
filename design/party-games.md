@@ -1146,7 +1146,10 @@ snapshot budget.
   stepping back, the card); the flow / arena / leaver checks that assumed three games; demos, HUD and fit over every game;
   `#shot=milk|milkrev|milkdecoy|milkcard`.
 - touch.js: pq times from pointer events, two buttons in one frame, the stick's down edge with 거품 held, no repeat while
-  held. party-net: the gate at `PARTY_V` 5, the leaver's redraw from the games that fit 3 and were not played.
+  held. party-net: the gate at `PARTY_V` 5, the leaver's redraw from the games that fit 3 and were not played, and a
+  바나나우유 smoke at 8 / 4 ms (each page presses 250 ms after its own draw: the host gets that page's own ms, the reveal
+  agrees everywhere, the 판 ends by its rounds). Green: party, party-fit-568, party-net, validate-levels, check-integration,
+  audio-node, smoke, final-e2e, final-e2e2, battle-net, mp-net, kits, touch-input, check-pages, ux-roomrow(-320).
 
 ### 18.4 For the next builders
 
