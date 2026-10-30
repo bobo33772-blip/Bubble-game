@@ -5379,8 +5379,9 @@ window.PG = window.PG || {};
     if (p) burst(p.x + 8, headTop(p) - 4, 10, ['#8fdcff', '#c8f4ff', '#ffffff'], 1.1, 22, 0.12);
     localSfx('scald_splash');
   }
-  // the view clock this screen draws by: the host's frame, a guest's view of it
-  const milkNow = () => (G.online && G.role === 'guest' ? NET.rt : G.frame);
+  // the view clock this screen draws by: the host's frame, a guest's view of it (MILK_VT: a test's clock)
+  let MILK_VT = null;
+  const milkNow = () => (MILK_VT !== null ? MILK_VT : G.online && G.role === 'guest' ? NET.rt : G.frame);
   // this screen's first draws of this round's appearances (4.4): G.mloc.sh {r, arm, milk, end: draw times, mf: the frame
   // the milk was first drawn, d: [[kind, tick, first frame, draw time]]}. Once drawn it stays drawn: a guest's view
   // clock stepping back never draws it again with a second time
@@ -5449,7 +5450,7 @@ window.PG = window.PG || {};
   }
   // the 매점 (behind the animals): a glass fridge, the counter, the drink of the moment at 2x (popping in over 4 f; the
   // teaching gold ring on the milk up to ringTo), the wait's three dots; in the reveal the milk goes to the fastest.
-  // In front: the 물벼락 바가지 over a splashed animal, the times (0.27) at y 172, the bottle over the fastest's head
+  // In front: the 물벼락 바가지 over a splashed animal, the times (0.27) at y 172, the bottle in the fastest's paws
   function milkDraw(M, front) {
     const sh = milkSeen(M), cx = 128, top = 150;
     if (front) { milkFront(M, sh); return; }
@@ -5498,16 +5499,18 @@ window.PG = window.PG || {};
       const q = rev ? (M.res || []).find((o) => o[0] === p.slot && o[2] === 1) : null, ms = q ? q[1] : own;
       if (ms >= 0) text((ms / 1000).toFixed(2), p.x + 8, 172, p.color, { align: 'center', outline: '#16363a' });
     }
-    // (the reveal: the bottle arcs from the counter into the fastest's paws and stays over its head, a ring round it)
+    // (the reveal: the bottle arcs from the counter into the fastest's paws - on its counter side, under its name tag -
+    // and stays there, a ring round it)
     const b = rev ? milkBest(M) : -1, bp = b >= 0 ? G.players.find((p) => p.slot === b) : null, f = milkFrame(9);
     if (bp && f) {
-      const u = clamp((milkNow() - M.C) / 12, 0, 1), x = dLerp(128, bp.x + 8, u), y = dLerp(134, headTop(bp) - 18, u) - Math.sin(Math.PI * u) * 24;
-      ctx.drawImage(f.c, Math.round(x - 8), Math.round(y), 16, 16);
-      if ((G.frame >> 3) & 1) { ctx.globalAlpha = 0.9; ctx.strokeStyle = '#ffd447'; ctx.beginPath(); ctx.arc(Math.round(x), Math.round(y + 8), 11, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1; }
+      const side = bp.x + 8 < 128 ? 1 : -1, h = Math.abs(Math.sin(G.frame * 0.15)) * 3, u = clamp((milkNow() - M.C) / 12, 0, 1);
+      const x = dLerp(128, bp.x + 8 + side * 8, u), y = dLerp(126, bp.y + 1 - h, u) - Math.sin(Math.PI * u) * 20;
+      ctx.drawImage(f.c, Math.round(x - 6), Math.round(y), 12, 12);
+      if ((G.frame >> 3) & 1) { ctx.globalAlpha = 0.9; ctx.strokeStyle = '#ffd447'; ctx.beginPath(); ctx.arc(Math.round(x), Math.round(y + 6), 9, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1; }
     }
   }
   // the parked animals (pose): idle facing the counter; my own press - the jump frame for 6 f; a 물벼락 - the die frame,
-  // shivering ±1 px for splashF; the fastest of the reveal hops with its bottle
+  // shivering ±1 px for splashF; the fastest of the reveal hops with its bottle (milkFront: the same hop)
   function milkPose(M, p) {
     const o = { vx: 0, vy: 0, onGround: true, shootAnim: 0, invuln: 0, facing: p.x + 8 < 128 ? 1 : -1 };
     if (M.r < 1) return o;
@@ -10446,7 +10449,7 @@ window.PG = window.PG || {};
   // next frame); dbgPq: a debug seat's (PG.debug.party.press, and a debug press's rising edge). pageNow: this page's
   // clock - performance.now(), or the tests' virtual clock (vclock: it moves STEP_MS each world frame, drawAt sets it).
   // Battle and co-op never read pq / downP / G.drawT)
-  const pressQ = [], dbgPq = [[], [], [], []], prevDbg = [0, 1, 2, 3].map(() => ({ jump: false, shoot: false, down: false }));
+  const pressQ = [], dbgPq = [[], [], [], []], prevDbg = [0, 1, 2, 3].map(() => ({ jump: false, shoot: false, down: false })), pqLog = [null, null, null, null];
   const VCLOCK = { on: false, t: 0 };
   let frameT = 0;   // (loop's rAF time: render's G.drawT)
   const pageNow = () => (VCLOCK.on ? VCLOCK.t : typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
@@ -10468,6 +10471,7 @@ window.PG = window.PG || {};
       prevDbg[s] = { jump: d.jump, shoot: d.shoot, down: d.down };
       const q = dbgPq[s].splice(0).concat(s === G.localSlot ? mineQ : []);
       i.pq = play ? q.sort((a, b) => a[1] - b[1]).slice(0, 8) : [];
+      if (i.pq.length) pqLog[s] = i.pq.map((e) => e.slice());   // (debug: the last frame's queue a seat got)
       out.push(i);
     }
     latch.jump = latch.shoot = false;
@@ -15403,6 +15407,11 @@ window.PG = window.PG || {};
       milkPlan(r, nogo, A, seed) { const keep = rng; rng = mulberry32((seed | 0) >>> 0); try { return milkPlan(r | 0, !!nogo, A | 0); } finally { rng = keep; } },
       milkNogo(n, seed) { const keep = rng; rng = mulberry32((seed | 0) >>> 0); try { return milkNogo(n | 0); } finally { rng = keep; } },
       parseBody: (st) => parseBody(st),
+      // (unit) the last non-empty press queue a seat's frame got (then forgotten), with its downP; the host's 'shot' from
+      // a (fake) remote seat at its spot; a view clock 바나나우유 draws by (null: the real one)
+      pq: (slot) => { const q = pqLog[slot | 0]; pqLog[slot | 0] = null; return q; },
+      shotIn(slot) { const p = G.players.find((q) => q.slot === slot); if (!p) return null; const n = G.bubbles.length; hostShot(p, { ep: p.ep, x: p.x, y: p.y, f: 1, n: 77 }); return G.bubbles.length - n; },
+      viewAt(t) { MILK_VT = t === null || t === undefined ? null : +t; return MILK_VT; },
       // (unit) a 바나나우유 row as a guest's milkView reads it (a fresh mirror)
       milkView: (mg, mg1) => { const M = milkView(mg, mg1 || null, 0, { pa: {} }, { id: 'milk', seeded: false }); return { r: M.r, ph: M.ph, ev: M.ev, C: M.C, res: M.res, pts: M.pts, n: M.n }; },
       tagAnchor: (slot) => { const p = G.players.find((q) => q.slot === slot); return p ? tagAnchor(p) : null; },

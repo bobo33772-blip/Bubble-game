@@ -55,25 +55,44 @@
   const firstUnder = (feet, k) => { for (let f = 0; f < 3600; f++) if (feet > P.waterAt(f, k) + 3) return f; return -1; };
 
   // ---------------------------------------------------------------- 1. rotation (3.2)
+  // (party-games 3.6, the owner's pick: one shuffled bag of every game that fits n, drawn freely - no families. Written
+  // for the games this page has: K.MINI_IDS, where only 거품 축구 has a fits rule - 2 or 4 players)
+  const fitIds = (n) => K.MINI_IDS.filter((id) => id !== 'ball' || n === 2 || n === 4);
   function rotationTests() {
-    const bad = [];
+    const bad = [], seen = { 2: new Set(), 3: new Set(), 4: new Set() };
     for (const n of [2, 3, 4]) for (const r of [3, 5]) for (let seed = 1; seed <= 300; seed++) {
-      const plan = P.plan(n, r, seed);
+      const plan = P.plan(n, r, seed), fit = fitIds(n);
+      plan.forEach((id) => seen[n].add(id));
       if (plan.length !== r) bad.push(['len', n, r, seed, plan]);
       for (let i = 1; i < plan.length; i++) if (plan[i] === plan[i - 1]) bad.push(['twice', n, r, seed, plan]);
-      const fit = n === 3 ? ['water', 'crown'] : ['water', 'crown', 'ball'];
       if (plan.some((id) => !fit.includes(id))) bad.push(['id', n, r, seed, plan]);
-      if (n !== 3 && new Set(plan.slice(0, 3)).size !== 3) bad.push(['once', n, r, seed, plan]);
+      // (all distinct while the bag lasts: a 3판 always, a 5판 when 5 or more games fit)
+      const k = Math.min(r, fit.length); if (new Set(plan.slice(0, k)).size !== k) bad.push(['distinct', n, r, seed, plan]);
     }
-    ok('rotation: 2 / 3 / 4 players x 3판 / 5판 x 300 seeds - the right length, never the same game twice in a row; 2 / 4 players play each of the three once in 3판 (5판: then two of a fresh bag); 3 players never 거품 축구', !bad.length, bad.slice(0, 3));
-    const a3 = P.plan(3, 3, 11), a5 = P.plan(3, 5, 12);
-    ok('rotation: 3 players (two games) -> 3판 is A B A, 5판 A B A B A', a3[0] === a3[2] && a3[0] !== a3[1] && a5[0] === a5[2] && a5[2] === a5[4] && a5[1] === a5[3] && a5[0] !== a5[1], [a3, a5]);
-    let firsts = new Set(); for (let s = 1; s <= 60; s++) firsts.add(P.plan(4, 3, s)[0]);
-    ok('rotation: any of the three may come first (a shuffled bag)', firsts.size === 3, [...firsts]);
+    ok('rotation: 2 / 3 / 4 players x 3판 / 5판 x 300 seeds - the right length, never the same game twice in a row, only games that fit (3 players never 거품 축구), all distinct while the bag lasts (3판 always, 5판 from 5 games)', !bad.length, bad.slice(0, 3));
+    ok('rotation: every game that fits shows up (' + fitIds(2).length + ' for 2 / 4 players, ' + fitIds(3).length + ' for 3) - the new games are in the bag', [2, 3, 4].every((n) => seen[n].size === fitIds(n).length) && K.MINI_IDS.includes('milk'), [2, 3, 4].map((n) => [...seen[n]]));
+    let firsts = new Set(); for (let s = 1; s <= 120; s++) firsts.add(P.plan(4, 3, s)[0]);
+    ok('rotation: any game may come first (a shuffled bag)', firsts.size === fitIds(4).length, [...firsts]);
+    // a replan from a played prefix: never a played game again while one that fits is unplayed, never twice in a row
+    const rbad = [];
+    for (const n of [2, 3, 4]) for (let seed = 1; seed <= 200; seed++) {
+      const fit = fitIds(n), pre = P.plan(n, 2, seed + 500), out = P.plan(n, 5, seed, pre);
+      if (out[0] !== pre[0] || out[1] !== pre[1] || out.length !== 5) rbad.push(['keep', n, seed, pre, out]);
+      for (let i = 2; i < 5; i++) {
+        const unplayed = fit.filter((id) => !out.slice(0, i).includes(id));
+        if (unplayed.length && !unplayed.includes(out[i])) rbad.push(['again', n, seed, out]);
+        if (out[i] === out[i - 1]) rbad.push(['twice', n, seed, out]);
+      }
+    }
+    ok('rotation: a replan keeps the 판 already played and never brings a played game back while another that fits is unplayed (5판, 2 / 3 / 4 players x 200)', !rbad.length, rbad.slice(0, 3));
     const rb = P.plan(3, 3, 9, ['water']);
-    ok('rotation: a replan for 3 players (4 -> 3 before a 거품 축구) keeps the 판 played and plans no 축구', rb[0] === 'water' && !rb.includes('ball') && rb[1] !== 'water' && rb[2] !== rb[1], rb);
-    const rp = P.plan(3, 5, 5, ['crown', 'water']);
-    ok('rotation: a replan keeps the 판 already played and goes on without repeating the last one', rp.length === 5 && rp[0] === 'crown' && rp[1] === 'water' && rp[2] === 'crown' && rp.every((id, i) => !i || id !== rp[i - 1]), rp);
+    ok('rotation: a replan for 3 players (4 -> 3 before a 거품 축구) keeps the 판 played and plans no 축구, no 물 again', rb[0] === 'water' && !rb.includes('ball') && rb[1] !== 'water' && rb[2] !== 'water' && rb[2] !== rb[1], rb);
+    // with fewer games in the bag (the cut line: a game left out) no game twice in a row either - a 3-player 5판 of 3
+    // games repeats some, never back to back
+    const tw = [];
+    for (let seed = 1; seed <= 300; seed++) { const pl5 = P.plan(3, 5, seed); for (let i = 1; i < 5; i++) if (pl5[i] === pl5[i - 1]) tw.push(pl5); }
+    ok('rotation: never twice in a row across a bag refill (3 players, 5판 x 300)', !tw.length, tw.slice(0, 2));
+    ok('rotation: a forced list (debug) is kept as it is when every game fits, else none', same(P.force(['milk', 'water']), ['milk', 'water']) && P.force(null) === null);
   }
 
   // ---------------------------------------------------------------- 2. points and ties (0, 3.3; polish 3.7)
@@ -659,8 +678,10 @@
     ok('leavers: (setup) the 2nd card is 거품 축구 with its team line', PS().mini.id === 'ball' && P.card().team && PS().t >= 80, [PS().mini.id, PS().t]);
     P.drop(3); step(80);
     c = P.card();
-    ok('leavers: one leaves during the 축구 card (4 -> 3) - that 판 is drawn again (왕관 뺏기, no team line), its card starts over, the 3rd fits 3 too',
-      G.mode === 'card' && PS().plan[1] === 'crown' && PS().plan[2] === 'water' && PS().mini.id === 'crown' && PS().t === 80 && c.name === '왕관 뺏기' && !c.team && c.round === '2판 / 3판', [PS().plan, PS().mini.id, PS().t, c]);
+    // (party-games 3.6: the replan draws from what fits 3 and was not played - 왕관 or a new game, never 축구 or 물 again)
+    const rp1 = PS().plan;
+    ok('leavers: one leaves during the 축구 card (4 -> 3) - that 판 is drawn again (a game for 3 not played yet, no team line), its card starts over, the 3rd fits 3 too and differs',
+      G.mode === 'card' && rp1[0] === 'water' && !rp1.includes('ball') && rp1[1] !== 'water' && rp1[2] !== rp1[1] && rp1[2] !== 'water' && PS().mini.id === rp1[1] && PS().t === 80 && c.name === P.mini()[rp1[1]].name && !c.team && c.round === '2판 / 3판', [rp1, PS().mini.id, PS().t, c]);
     party(withNicks(['duck', 'cat', 'frog', 'capy']), { plan: ['ball', 'crown'] });
     toPlaying(); kicked(); P.drop(2);
     ok('leavers: one leaves mid-축구 (4 -> 3) - it plays on (the team keeps its member), the 판 after it still fits', G.mode === 'playing' && PS().mini.id === 'ball' && same(PS().mini.team, { 0: 0, 1: 1, 2: 1, 3: 0 }) && G.players.length === 3 && same(PS().plan, ['ball', 'crown']), [G.mode, PS().mini.team, PS().plan]);
@@ -678,6 +699,210 @@
     const endIn2 = until(() => G.mode === 'result', 120), wl4 = winLine();
     ok('leavers: the right team all gone -> the 판 ends early (PARTY_F.early), 왼쪽 팀 승리! from 0 : 1, the two left 1st with 4 each', endIn2 >= K.PARTY_F.early - 2 && endIn2 <= K.PARTY_F.early + 2 && wl4 === P.tx().winL && PS().pts[0] === 4 && PS().pts[3] === 4 && PS().last[0] === 1 && PS().last[3] === 1,
       [endIn2, wl4, PS().pts, PS().last]);
+  }
+
+  // ---------------------------------------------------------------- 5b. the new games' machinery (party-games 3, 13.1.1)
+  const MK = () => K.MILK;
+  // (gold pixels on the ring's top arc - 240-300 degrees: clear of the 32 px bottle, the fridge's bottles and the counter's edge)
+  const goldish = (X, Y, R) => { const x = $('pg-canvas').getContext('2d'); let n = 0; for (let a = 240; a <= 300; a += 2) { const q = a * Math.PI / 180, px = x.getImageData(Math.round(X + Math.cos(q) * R), Math.round(Y + Math.sin(q) * R), 1, 1).data; if (px[0] > 200 && px[1] > 150 && px[2] < 140) n++; } return n; };
+  function machineryTests() {
+    P.vclock(true, 1000);
+    // the stage: everyone parked on STAGE_X, no blink; walking and blowing do nothing; the HUD's centre is the round
+    for (const chars of [['duck', 'cat'], ['duck', 'cat', 'frog'], ['duck', 'cat', 'frog', 'otter']]) {
+      party(chars, { plan: ['milk'] }); toPlaying();
+      const xs = G.players.map((p) => p.x + 8), want = K.STAGE_X[chars.length];
+      ok('stage: ' + chars.length + ' players stand on STAGE_X (' + want.join(' / ') + ') on 무대 목욕탕\'s floor, no START_INV blink', same(xs, want) && G.players.every((p) => p.y === 200 && p.invuln === 0) && PS().kind === 'p' && P.arenas()[PS().arena].key === 'stage', [xs, G.players.map((p) => [p.y, p.invuln]), PS().arena]);
+    }
+    const x0 = G.players.map((p) => [p.x, p.y]), bs0 = PS().coins.bshots;
+    D.press('right', true, 0); D.press('left', true, 1); step(20); D.press('right', false, 0); D.press('left', false, 1);
+    D.press('jump', true, 2); step(3); D.press('jump', false, 2);
+    ok('world: false - walking and jumping move nobody (no physics; vx / vy 0, on the ground, invuln 0)', same(G.players.map((p) => [p.x, p.y]), x0) && G.players.every((p) => p.vx === 0 && p.vy === 0 && p.onGround && p.invuln === 0), G.players.map((p) => [p.x, p.y, p.vx, p.vy]));
+    D.press('shoot', true, 0); step(2); D.press('shoot', false, 0); step(2);
+    ok('noFire: a 거품 press in the intro makes no bubble and no blow (bshots unchanged: unarmed, not a grab either)', !G.bubbles.length && PS().coins.bshots === bs0, [G.bubbles.length, PS().coins.bshots, bs0]);
+    P.fakeBody(3, {}); const shot = P.shotIn(3);
+    ok('noFire: a \'shot\' message from a seat while 바나나우유 plays makes no bubble (hostShot drops it)', shot === 0 && !G.bubbles.length, shot);
+    G.battle.left = 601; step(2);
+    ok('cues: false - no 10초 남았어요! at 10 s left', !(G.banner && G.banner.main === '10초 남았어요!'), G.banner && G.banner.main);
+    ok('clock: the HUD centre is the round (1/8) - MINI.milk.cues false, world false, noFire', PS().mini.n === MK().rounds && P.mini().milk.world === false && P.mini().milk.noFire === true && P.mini().milk.cues === false);
+    // a crown 판 for contrast: the same 'shot' blows a bubble there
+    party(['duck', 'cat', 'frog', 'penguin'], { plan: ['crown'] }); toPlaying(); P.fakeBody(3, {}); step(1);
+    ok('noFire: ... while in 왕관 뺏기 the same \'shot\' blows one (the guard is the game\'s flag)', P.shotIn(3) === 1, G.bubbles.length);
+    // the press queue: each fresh press with its time (two in one frame = two, in time order), a 'down' entry, downP an
+    // edge; nothing while the menu is open, nothing stale for the next frame; G.drawT moves with D.step
+    party(['duck', 'cat'], { plan: ['milk'] }); toPlaying();
+    const t0 = P.now();
+    P.press(1, 'shoot', t0 + 9); P.press(1, 'jump', t0 + 3); P.press(1, 'down', t0 + 5); step(1);
+    const q1 = P.pq(1);
+    ok('pq: three presses in one frame reach that seat\'s frame as three entries in time order (a down between two presses)', same(q1, [['jump', t0 + 3], ['down', t0 + 5], ['shoot', t0 + 9]]), q1);
+    step(1);
+    ok('pq: ... and nothing of them is left for the next frame', P.pq(1) === null);
+    D.press('down', true, 0); step(1); const dq = P.pq(0); step(3); const dq2 = P.pq(0); D.press('down', false, 0); step(1);
+    ok('pq: a held down pushes one \'down\' entry on its edge only', dq && dq.length === 1 && dq[0][0] === 'down' && dq2 === null, [dq, dq2]);
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyX', key: 'x', bubbles: true })); window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyX', key: 'x', bubbles: true }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyZ', key: 'z', bubbles: true })); window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyZ', key: 'z', bubbles: true }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowDown', key: 'ArrowDown', bubbles: true })); window.dispatchEvent(new KeyboardEvent('keyup', { code: 'ArrowDown', key: 'ArrowDown', bubbles: true }));
+    step(1); const kq = P.pq(0);
+    ok('pq: real key presses (X, Z, ↓) reach my seat\'s next frame as shoot / jump / down entries', kq && same(kq.map((q) => q[0]).sort(), ['down', 'jump', 'shoot']), kq);
+    G.menuOpen = true; P.press(0, 'shoot'); step(1); const mq = P.pq(0); G.menuOpen = false; step(1);
+    ok('pq: with the menu open my seat gets no presses, and none come back after it closes', mq === null && P.pq(0) === null, mq);
+    const d0 = P.drawT(); step(1); const d1 = P.drawT(); step(3); const d2 = P.drawT();
+    ok('G.drawT: set in render - D.step moves it by a world frame each (the virtual clock)', Math.abs(d1 - d0 - 1000 / 60) < 0.01 && Math.abs(d2 - d1 - 3000 / 60) < 0.01, [d0, d1, d2]);
+    // mi on the wire: bounded; G.mloc starts again at each 판
+    const pb = P.parseBody({ k: 5, mi: [1, 'x', 1e9, -1e9, 5, 6, 7, 8, 9, 10] }), pn = P.parseBody({ k: 5 });
+    ok('mi: parseBody keeps at most 8 ints clamped to +-1e6 (junk 0); none -> null', same(pb.mi, [1, 0, 1e6, -1e6, 5, 6, 7, 8]) && pn.mi === null, [pb.mi, pn.mi]);
+    party(['duck', 'cat'], { plan: ['milk', 'crown'] }); toPlaying();
+    until(() => P.seen() && P.seen().milk !== undefined, 400); P.press(0, 'shoot', P.seen().milk + 300); step(2);
+    const ml = P.mloc(0); P.skip(); toCard();
+    ok('G.mloc: this page\'s own part of a seat (its report) is there during the 판, empty again at the next card', ml && ml.rep && ml.rep[1] === 1 && same(P.mloc(), {}), [ml, P.mloc()]);
+    // the fast party: a round game's fastSecs, the others' 12 s
+    P.fast(true); party(['duck', 'cat'], { plan: ['milk', 'crown'] });
+    const ft = PS().total, fn = PS().mini.n; toPlaying(); P.skip(); toCard(); const ct = PS().total; P.fast(false);
+    ok('fastSecs: the fast party gives 바나나우유 its 30 s (and 4 rounds), 왕관 its 12 s', ft === 30 * 60 && fn === MK().fast && ct === 12 * 60, [ft, fn, ct]);
+    P.vclock(false);
+  }
+
+  // ---------------------------------------------------------------- 5c. 바나나우유 잡기 (party-games 4, 13.1.3)
+  // the frames of this round until the milk was drawn here (P.seen().milk: its draw time); -1 if it never came
+  const toMilk = () => until(() => G.mode !== 'playing' || (P.seen() && P.seen().r === P.milk().r && P.seen().milk !== undefined), 600);
+  const toRound = (r) => until(() => G.mode !== 'playing' || (P.milk().r === r && P.milk().ph === 0), 1500);
+  function milkTests() {
+    const M = MK();
+    // the plan (pure, seeded): decoys by round, 딸기우유 from 5 (one at most), the NO-GO rounds
+    const pbad = []; let two = 0, pink = 0, shortOne = 0;
+    for (let seed = 1; seed <= 400; seed++) for (let r = 1; r <= 8; r++) {
+      const pl0 = P.milkPlan(r, false, 1000, seed * 13 + r), ev = pl0.ev, arm = 1000 + M.intro, dec = ev.filter((e) => e[0] >= 1 && e[0] <= 4), wait = pl0.m - arm;
+      if (ev[0][0] !== 0 || ev[0][1] !== arm || ev[ev.length - 1][0] !== 9 || ev[ev.length - 1][1] !== pl0.m || wait < M.wait[0] || wait > M.wait[1]) pbad.push(['shape', r, seed, ev]);
+      const want = r < M.dFrom ? [0] : r < M.dTwo ? [1] : wait < 2 * (M.decoyF + M.gapF) ? [1] : [1, 2];
+      if (!want.includes(dec.length)) pbad.push(['count', r, seed, wait, ev]);
+      if (dec.length === 2) two++; if (r >= M.dTwo && wait < 2 * (M.decoyF + M.gapF)) shortOne++;
+      const starts = dec.map((e) => e[1]).concat([pl0.m]);
+      for (let k = 0; k < dec.length; k++) if (dec[k][1] < arm || dec[k][1] + M.decoyF + M.gapF > starts[k + 1]) pbad.push(['space', r, seed, ev]);
+      const pk = dec.filter((e) => e[0] === 4).length; pink += pk;
+      if (pk > 1 || (pk && r < M.pinkFrom)) pbad.push(['pink', r, seed, ev]);
+    }
+    ok('plan: rounds 1-2 no decoy, 3-4 one, 5-8 one or two (one when the wait drew under 2 x 54 f), each 30 f + 24 f clear of the next appearance; the milk 72-180 f after the arm; 딸기우유 only from round 5, one at most (400 seeds)', !pbad.length && two > 50 && pink > 50 && shortOne > 20, [pbad.slice(0, 3), two, pink, shortOne]);
+    const nb = []; let nn = 0;
+    for (let seed = 1; seed <= 300; seed++) {
+      const pl0 = P.milkPlan(5 + (seed % 4), true, 500, seed), ev = pl0.ev, dec = ev.filter((e) => e[0] >= 1 && e[0] <= 4), last = dec[dec.length - 1];
+      if (dec.length < 2 || dec.length > 3 || ev.some((e) => e[0] === 9) || pl0.m !== -1 || ev[ev.length - 1][0] !== 8 || pl0.end !== last[1] + M.decoyF + 60 || ev[ev.length - 1][1] !== pl0.end) nb.push([seed, ev, pl0]);
+      const g = P.milkNogo(8, seed); nn += g.length;
+      if (g.length !== M.nogo || g.some((q) => q < M.nogoFrom || q > 8) || Math.abs(g[0] - g[1]) < 2) nb.push(['nogo', seed, g]);
+    }
+    ok('plan: a NO-GO round has 2-3 decoys, no milk, its end 60 f after the last decoy leaves; 2 NO-GO rounds of 4-8, never adjacent (300 seeds)', !nb.length && same(P.milkNogo(4, 3), [4]), nb.slice(0, 3));
+
+    // the judge (4 players, round 1): presses -50 / 0 / 99 / 100 ms around my own draw of the milk; the snapshot never
+    // carries an event before the host's clock reaches it
+    P.vclock(true, 1000);
+    party(['duck', 'cat', 'frog', 'otter'], { plan: ['milk'] }, 41); toPlaying();
+    let leak = 0;
+    const r1 = P.milk(); for (let f = 0; f < 600 && !(P.seen() && P.seen().milk !== undefined); f++) { const mg = P.mg(); if (mg[3].some((e) => e[1] > G.frame)) leak++; step(1); }
+    const sh1 = P.seen();
+    ok('wire: an event rides in g.mg only once the host\'s clock reached its tick (the whole wait of round 1)', !leak && r1.r === 1 && P.mg()[3].length === 2 && P.mg()[0] === 'm', [leak, P.mg()]);
+    ok('draw: the milk was first drawn on the frame the host reached its tick (the arm too), its draw time is G.drawT then', sh1 && sh1.milk !== undefined && sh1.arm !== undefined && G.frame === r1.plan.m && sh1.milk === P.drawT() && Math.abs(sh1.milk - sh1.arm - (r1.plan.m - r1.plan.ev[0][1]) * 1000 / 60) < 0.01, [sh1, G.frame, r1.plan]);
+    // (the teaching ring in rounds 1-4: gold pixels round the bottle on some frames)
+    let ring1 = 0; for (let f = 0; f < 16; f++) { step(1); ring1 += goldish(128, 134, 20); }
+    const tm = P.seen().milk;
+    [-50, 0, 99, 100].forEach((d, s) => P.press(s, 'shoot', tm + d)); step(1);
+    const reps = [0, 1, 2, 3].map((s) => (P.mloc(s) || {}).rep);
+    ok('judge: -50 / 0 / 99 ms after my draw are a 반칙, 100 ms a grab of 100', reps[0][1] === 2 && reps[1][1] === 2 && reps[2][1] === 2 && same(reps[3], [100, 1]), reps);
+    ok('ring: the teaching gold ring blinks round the milk in round 1', ring1 > 10, ring1);
+    const rv1 = P.milk();
+    ok('close: every seat reported -> the round closes at once (the reveal): grab 3, 반칙 -1 each', rv1.ph === 2 && same(rv1.res.map((q) => q[3]), [-1, -1, -1, 3]) && same(rv1.pts, { 0: -1, 1: -1, 2: -1, 3: 3 }), rv1);
+    ok('wire: the reveal\'s rows ride in g.mg ([slot, ms, flag, points]) with the totals', same(P.mg()[5], rv1.res) && same(P.mg()[6], [-1, -1, -1, 3]), P.mg());
+    // round 2: 1500 ms is a grab, 1501 느려요, no press 느려요 at 1500 ms of my clock, 250 the fastest
+    toRound(2); toMilk(); const t2 = P.seen().milk;
+    P.press(0, 'jump', t2 + 1500); P.press(1, 'shoot', t2 + 1501); P.press(3, 'shoot', t2 + 250); step(1);
+    const mid2 = P.milk().ph;
+    until(() => P.milk().ph === 2, 200);
+    const rv2 = P.milk(), rep2 = P.mloc(2).rep;
+    ok('judge: 1500 ms a grab, 1501 ms 느려요; no press - 느려요 once my clock passed 1500 ms (then the round closes)', mid2 === 0 && rv2.ph === 2 && same(rv2.res.map((q) => q.slice(0, 3)), [[0, 1500, 1], [1, 1500, 4], [2, 1500, 4], [3, 250, 1]]) && same(rep2, [1500, 4]), [rv2.res, rep2]);
+    ok('points: by ms - 250 gets 3, 1500 gets 2, 느려요 0', same(rv2.res.map((q) => q[3]), [2, 0, 0, 3]) && same(rv2.ms, { 0: 1500 + 1500, 1: 1500 + 1500, 2: 1500 + 1500, 3: 100 + 250 }), [rv2.res, rv2.ms]);
+    // round 3: a decoy - a press on it is a 반칙 (my line says 바나나우유만 잡아요); equal ms share the place (3 / 3 / 1)
+    toRound(3);
+    ok('banner: round 3 opens with 가짜 간식이 나와요! / 바나나우유만 잡아요', G.banner && G.banner.main === P.tx().mkFake1 && G.banner.sub === P.tx().mkFake2, G.banner);
+    until(() => P.seen() && P.seen().r === 3 && P.seen().d.length > 0, 400);
+    const dk = P.seen().d[0];
+    P.press(3, 'shoot', dk[3] + 50); step(1);
+    const foul3 = P.mloc(3), line3 = G.banner ? [G.banner.main, G.banner.sub] : null;
+    P.press(3, 'shoot', dk[3] + 400); step(1);
+    toMilk(); const t3 = P.seen().milk;
+    P.press(0, 'shoot', t3 + 200); P.press(1, 'shoot', t3 + 200); P.press(2, 'shoot', t3 + 300); P.press(3, 'shoot', t3 + 150); step(1);
+    const rv3 = P.milk();
+    ok('decoy: a press on a decoy is a 반칙 (on my seat\'s screen at once: the 물벼락 and my line 물벼락! / 바나나우유만 잡아요 - offline every seat is mine)', foul3.rep[1] === 2 && foul3.why === 'decoy' && dk[0] >= 1 && dk[0] <= 3 && same(line3, [P.tx().mkSplash, P.tx().mkDecoy]), [foul3, dk, line3]);
+    ok('물벼락: my later presses this round count for nothing (still the 반칙 after the milk)', rv3.ph === 2 && rv3.res[3][2] === 2 && rv3.res[3][3] === -1, rv3.res);
+    ok('points: equal ms share the place - 200 / 200 / 300 -> 3 / 3 / 1', same(rv3.res.map((q) => q[3]), [3, 3, 1, -1]), rv3.res);
+    ok('coins: each valid grab of MY seat (slot 0) counts one action - my 2 grabs so far, not seat 3 grabs (bshots 2)', PS().coins.bshots === 2, PS().coins);
+    // the rest: no presses - every GO round closes on the 느려요 reports, a NO-GO round on everyone's 참았다 at its end
+    const nogo = P.milk().nogo; let heldOk = true, ringLate = 0, pinkBanner = false;
+    for (let r = 4; r <= 8; r++) {
+      toRound(r); if (r === 5) pinkBanner = !!(G.banner && G.banner.main === P.tx().mkPink1 && G.banner.sub === P.tx().mkPink2);
+      if (!nogo.includes(r) && r >= 5) { toMilk(); for (let f = 0; f < 16; f++) { step(1); ringLate += goldish(128, 134, 20); } }
+      until(() => P.milk().ph === 2, 900);
+      const rv = P.milk();
+      if (nogo.includes(r)) heldOk = heldOk && rv.res.every((q) => q[2] === 3 && q[3] === 1) && G.banner && G.banner.main === P.tx().mkNone1;
+    }
+    ok('NO-GO: in a round with no milk, no press until my screen drew its end is 참았다 (+1), the reveal says 바나나우유가 없었어요!', nogo.length === 2 && heldOk, [nogo, heldOk]);
+    ok('banner: round 5 opens with 딸기우유 조심! / 분홍색은 참아요', pinkBanner);
+    ok('ring: no teaching ring from round 5 (the pink twin would be no test)', ringLate === 0, ringLate);
+    const e8 = until(() => G.mode !== 'playing', 400), st8 = PS();
+    ok('end: 8 rounds, then the 판 ends endF after the last reveal (not by the clock)', st8.mini && st8.mini.r === 8 && G.mode === 'result' && e8 > 0 && st8.left > 0, [e8, st8.mini && st8.mini.r, G.mode, st8.left]);
+
+    // a NO-GO round: any press before its end is a 반칙; a press after my screen drew its end counts for nothing
+    party(['duck', 'cat'], { plan: ['milk'] }, 41); toPlaying();
+    const ng = P.milk().nogo[0]; toRound(ng);
+    until(() => P.seen() && P.seen().r === ng && P.seen().d.length > 0, 400);
+    P.press(0, 'shoot', P.seen().d[0][3] + 300); step(1);
+    until(() => P.seen().end !== undefined, 600); P.press(1, 'shoot', P.seen().end + 10); step(1);
+    until(() => P.milk().ph === 2, 100);
+    const rn = P.milk();
+    ok('NO-GO: a press on a decoy is a 반칙 (-1); a press only after the end was drawn is still 참았다 (+1)', rn.r === ng && same(rn.res.map((q) => [q[2], q[3]]), [[2, -1], [3, 1]]), rn.res);
+
+    // remote seats (fakeBody: its own mi in a body state): clamped; a silent one is waited for up to the cap; a stale one
+    // (no state for staleF) is not waited for; a leaver drops out
+    party(['duck', 'cat', 'frog'], { plan: ['milk'] }, 41); toPlaying();
+    P.fakeBody(1, {}); P.fakeBody(2, {});
+    const ri0 = PS().i;
+    const r0 = P.milk().r, tick = () => { P.fakeBody(2, {}); step(1); };
+    for (let f = 0; f < 600 && !(P.seen() && P.seen().milk !== undefined); f++) tick();
+    P.fakeBody(1, { mi: [ri0, r0, 50, 1] }); P.press(0, 'shoot', P.seen().milk + 180); tick(); tick();
+    const due = P.milk().plan.m;
+    ok('input: a remote grab under minMs is taken as a 반칙 (its first report only)', same(P.milk().rep[1], [M.maxMs, 2]) && same(P.milk().rep[0], [180, 1]), P.milk().rep);
+    P.fakeBody(1, { mi: [ri0, r0, 300, 1] }); tick();
+    ok('input: ... a later report of the same round changes nothing', same(P.milk().rep[1], [M.maxMs, 2]));
+    let closeAt = -1; for (let f = 0; f < 400 && closeAt < 0; f++) { tick(); if (P.milk().ph === 2) closeAt = G.frame; }
+    ok('close: a seat still sending states but never reporting is waited for up to the cap (the milk + 180 f) - then 느려요 (0)', closeAt === due + M.capF && P.milk().res[2][2] === 4 && P.milk().res[2][3] === 0, [closeAt, due, P.milk().res]);
+    toRound(2); until(() => P.seen() && P.seen().r === 2 && P.seen().milk !== undefined, 600);
+    P.fakeBody(1, { mi: [ri0, 2, 2000, 1] }); P.fakeBody(2, { mi: [ri0 + 1, 2, 300, 1] }); P.press(0, 'shoot', P.seen().milk + 400); step(1);
+    const rp2 = P.milk().rep;
+    ok('input: a grab over maxMs is 느려요; a report for another 판 is ignored', same(rp2[1], [M.maxMs, 4]) && !rp2[2], rp2);
+    let c2 = -1; for (let f = 0; f < 60 && c2 < 0; f++) { step(1); if (P.milk().ph === 2) c2 = f; }
+    ok('close: a remote seat whose states stopped (no new one for staleF) is not waited for - the round closes once it is stale', c2 >= 0 && c2 <= M.staleF + 2 && P.milk().res.find((q) => q[0] === 2)[2] === 4, [c2, P.milk().res]);
+    toRound(3); P.fakeBody(2, {}); until(() => P.seen() && P.seen().r === 3 && P.seen().milk !== undefined, 600);
+    P.fakeBody(1, { mi: [ri0, 3, 400, 3] }); step(1);
+    ok('input: a 참았다 in a GO round is taken as 느려요', same(P.milk().rep[1], [M.maxMs, 4]), P.milk().rep);
+    P.drop(2); P.press(0, 'shoot', P.seen().milk + 200); step(2);
+    ok('leaver: one leaves mid-round - the round resolves without it (its row gone)', P.milk().ph === 2 && P.milk().res.length === 2 && !P.milk().res.some((q) => q[0] === 2) && P.mg()[5].length === 2, P.milk().res);
+
+    // the place key: points, then less ms; still equal - a shared place
+    party(['duck', 'cat', 'frog'], { plan: ['milk'] }); toPlaying();
+    Object.assign(G.mini, { pts: { 0: 5, 1: 5, 2: 5 }, ms: { 0: 3000, 1: 2900, 2: 3000 } });
+    const pm = new Map(P.places());
+    ok('key: equal points - the less ms over the GO rounds places higher; equal ms too - a shared place', pm.get(1) === 1 && pm.get(0) === 2 && pm.get(2) === 2, P.places());
+
+    // a guest's mirror: events of the next snapshot merged in (a.k < e <= rt), rows bounded
+    const v = P.milkView(['m', 3, 0, [[0, 130]], -1, [[1, 0, 2, -1], ['x']], [1, -1, 0, 0], 8], ['m', 3, 0, [[0, 130], [2, 170]], -1, [], [], 8]);
+    const v2 = P.milkView(['m', 3, 0, [[0, 130]], -1, [], [], 8], ['m', 4, 0, [[0, 400]], -1, [], [], 8]);
+    ok('view: milkView merges the next snapshot\'s events of the same round (not another round\'s); junk rows dropped', same(v.ev, [[0, 130], [2, 170]]) && same(v.res, [[1, 0, 2, -1]]) && same(v.pts, { 0: 1, 1: -1 }) && same(v2.ev, [[0, 130]]), [v, v2]);
+    // once drawn, it stays drawn: the view clock stepping back after the milk changes nothing (one draw time)
+    party(['duck', 'cat'], { plan: ['milk'] }); toPlaying(); toMilk();
+    const s0 = P.seen().milk, mm = P.milk().plan.m;
+    P.viewAt(mm - 40); step(5); const s1 = P.seen(); P.viewAt(null);
+    ok('draw: a view clock stepping back after the milk was drawn keeps it drawn (the same draw time)', s1.milk === s0, [s0, s1]);
+    P.vclock(false);
+    // the card: the texts as specified, the demo
+    party(longNicks(), { plan: ['milk'] }); step(80);
+    const c = P.card();
+    ok('card: 바나나우유 잡기 - its how, rule and keys lines as specified', c.name === '바나나우유 잡기' && c.how === '바나나우유가 나오면 바로 눌러요!' && c.rule === '다른 간식이나 딸기우유에 누르면 물벼락 -1점 · 빠를수록 점수가 커요' && c.keys === 'Z 또는 X로 잡기' && P.mini().milk.keysT === '점프나 거품 버튼으로 잡기' && c.demo, c);
   }
 
   // ---------------------------------------------------------------- 6. no KO
@@ -857,9 +1082,14 @@
 
   // ---------------------------------------------------------------- 9. the flow (3.1), the podium, leavers, rematch
   function flowTests() {
-    party(['duck', 'cat', 'frog', 'penguin'], { rounds: 3 });
+    // (party-games 3.6: the free draw may bring the new games - the beat timings are checked on a forced plan of the
+    // three arena games; an unforced party is drawn from all that fit, three distinct)
+    party(['duck', 'cat', 'frog', 'penguin'], { rounds: 3 }, 5);
+    const free3 = PS().plan;
+    ok('flow: an unforced 4-player 3판 party draws three distinct games of all that fit', free3.length === 3 && new Set(free3).size === 3 && free3.every((id) => fitIds(4).includes(id)), free3);
+    party(['duck', 'cat', 'frog', 'penguin'], { plan: ['water', 'crown', 'ball'] });
     const plan = PS().plan;
-    ok('flow: a 4-player 3판 party plays each of the three games once', plan.length === 3 && new Set(plan).size === 3 && plan.includes('ball'), plan);
+    ok('flow: a 4-player 3판 party of the three arena games plays each once', plan.length === 3 && new Set(plan).size === 3 && plan.includes('ball'), plan);
     ok('flow: the first card is shown (#pg-party) with its 판 line', P.card().shown && P.card().round === '1판 / 3판' && P.card().name === P.mini()[plan[0]].name, P.card());
     let last = G.mode, since = 0;
     const marks = [];
@@ -976,9 +1206,9 @@
     D.local.battle(['duck', 'cat']); D.setTimeLeft(0.02); step(5);
     ok('podium: a battle afterwards has 결과 발표! again (no 3판 tag, no party note), no raft, no party overlay', G.mode === 'podium' && $('pg-podium-h').textContent === '결과 발표!' && $('pg-podium-again').textContent === '한 판 더' && $('pg-podium-tag').textContent !== '3판' && G.players.every((p) => !p.raft) && !PS().on, [$('pg-podium-h').textContent, $('pg-podium-tag').textContent]);
     let threw = null;
-    try { for (const plan of [['water'], ['crown'], ['ball']]) { party(['duck', 'cat', 'frog', 'otter'], { plan }); for (let f = 0; f < 1500; f++) { step(1); if (G.mode === 'card' && PS().t === 12) readyAll(); if (G.mode === 'playing' && PS().mini.t === 300) { if (plan[0] === 'water') P.raft(1); P.skip(); } } } } catch (e) { threw = e.message; }
-    ok('HUD: every phase of the three games renders without an exception (a raft, the beats)', !threw, threw);
-    for (const id of ['water', 'crown', 'ball']) { const d = P.demo(id); ok('demo [' + id + ']: its 240-frame loop draws into a 96x32 context without errors and leaves pixels on it', d && !d.err && d.lit > 200, d); }
+    try { for (const plan of K.MINI_IDS.map((id) => [id])) { party(['duck', 'cat', 'frog', 'otter'], { plan }); for (let f = 0; f < 1500; f++) { step(1); if (G.mode === 'card' && PS().t === 12) readyAll(); if (G.mode === 'playing' && PS().mini.t === 300) { if (plan[0] === 'water') P.raft(1); P.skip(); } } } } catch (e) { threw = e.message; }
+    ok('HUD: every phase of every game renders without an exception (a raft, the beats)', !threw, threw);
+    for (const id of K.MINI_IDS) { const d = P.demo(id); ok('demo [' + id + ']: its 240-frame loop draws into a 96x32 context without errors and leaves pixels on it', d && !d.err && d.lit > 200, d); }
     const warm = $('pg-fontwarm').textContent, miss = new Set();
     for (const ch of P.text()) if (/[\uac00-\ud7a3]/.test(ch) && warm.indexOf(ch) < 0) miss.add(ch);
     ok('fonts: every party syllable (PARTY_TEXT, the polish\'s new lines too) is in #pg-fontwarm, both faces', !miss.size && ['.pg-fw-sign', '.pg-fw-body'].every((q) => document.querySelector('#pg-fontwarm ' + q).textContent.indexOf('물 차오르기') >= 0) && ['준비 완료!', '보너스상!', '오리 튜브', '골든 골', '황금 왕관'].every((t) => P.text().indexOf(t) >= 0), [...miss].join(''));
@@ -1006,7 +1236,7 @@
   }
   const cardEl = () => document.querySelector('.pg-party-card');
   async function fitAt(label, wantRule) {
-    for (const id of ['water', 'crown', 'ball']) {
+    for (const id of K.MINI_IDS) {
       party(longNicks(), { plan: [id === 'water' ? 'crown' : 'water', id] });
       toPlaying(); P.skip(); toCard(); step(80);   // (the 2nd card, past its splash)
       if (id === 'ball') P.fill(0);                 // (축구: with my own side line, as an online screen)
@@ -1049,16 +1279,18 @@
   // ---------------------------------------------------------------- 12. the arenas (5.3)
   function arenaTests() {
     const ok1 = P.reload(PG.PARTY_ARENAS);
-    ok('arenas: PG.PARTY_ARENAS loads (물 차는 대욕장 with its rise, 거품 축구장 with its goals / sides / ball, both closed)', ok1.length === 2 && ok1[0].key === 'water' && ok1[0].closed && ok1[0].rise && ok1[0].gapX === 128
+    ok('arenas: PG.PARTY_ARENAS loads (물 차는 대욕장 with its rise, 거품 축구장 with its goals / sides / ball, 무대 목욕탕 a plain box - all closed)', ok1.length === 3 && ok1[2].key === 'stage' && ok1[2].closed && !ok1[2].rise && !ok1[2].goals && ok1[2].bar === '##............................##' && ok1[0].key === 'water' && ok1[0].closed && ok1[0].rise && ok1[0].gapX === 128
       && ok1[1].key === 'ball' && ok1[1].closed && ok1[1].goals.length === 2 && ok1[1].sides.length === 2 && ok1[1].ball.x === 128 && /^#{32}$/.test(ok1[1].floor) && ok1[1].bar === '######....................######', ok1);
     const open = P.arenas()[0].map.slice(); open[25] = '##############...###############';
     const r = P.reload([{ key: 'water', name: 'x', theme: 1, map: open, players: [{ col: 4, row: 24 }], rise: { y0: 222, warn: 2, steps: [[5, 9, 206]], surges: [['junk']], flood: 'x' } }]);
     ok('arenas: normLevel keeps a closed map closed (a gap in its floor is closed again, no drain opened); a broken surge / flood is left out', /^#{32}$/.test(r[0].floor) && /^#{32}$/.test(r[0].ceil) && r[0].gapX === 128 && r[0].rise.surges.length === 0 && r[0].rise.flood === null, r[0]);
-    const b = P.reload([null, { key: 'water', map: 'junk' }, { key: 'water', name: 'y', map: open }]);
-    ok('arenas: a broken entry (or one without its rise schedule / its goals) gets the built-in closed arena of its index\'s game (with the v2 schedule)', b.length === 3 && [0, 2].every((k) => b[k].key === 'water' && b[k].closed && b[k].rise && b[k].rise.steps.length === 5 && b[k].rise.flood && b[k].rise.surges.length === 2 && /^#{32}$/.test(b[k].floor))
+    const b = P.reload([null, { key: 'water', map: 'junk' }, { key: 'water', name: 'y', map: open }, { key: 'water', name: 'y', map: open }]);
+    ok('arenas: a broken entry (or one without its rise schedule / its goals, or another key) gets the built-in closed arena of its index\'s game (with the v2 schedule; the stage a plain box)', b.length === 4 && b[2].key === 'stage' && b[2].name === '무대 목욕탕' && b[2].floor === '#'.repeat(32) && b[2].bar === '##............................##' && [0, 3].every((k) => b[k].key === 'water' && b[k].closed && b[k].rise && b[k].rise.steps.length === 5 && b[k].rise.flood && b[k].rise.surges.length === 2 && /^#{32}$/.test(b[k].floor))
       && b[1].key === 'ball' && b[1].closed && b[1].goals.length === 2 && b[1].bar === '######....................######', b.map((A) => [A.name, A.key, !!A.rise, !!A.goals]));
+    const ns = P.reload([PG.PARTY_ARENAS[0], PG.PARTY_ARENAS[1]]);
+    ok('arenas: a missing 무대 목욕탕 gets the built-in plain box', ns.length === 3 && ns[2].key === 'stage' && ns[2].closed && ns[2].floor === '#'.repeat(32), ns[2]);
     const nb = P.reload([PG.PARTY_ARENAS[0], { key: 'ball', name: 'z', theme: 0, map: PG.PARTY_ARENAS[1].map, goals: 'junk', sides: PG.PARTY_ARENAS[1].sides, ball: { x: 128, y: 64 } }]);
-    ok('arenas: a 거품 축구장 without usable goals gets the built-in field (its crossbars, goals, sides, ball)', nb.length === 2 && nb[1].key === 'ball' && nb[1].name === '거품 축구장' && nb[1].goals[0].line === 40 && nb[1].sides[1][0].col === 20, nb[1]);
+    ok('arenas: a 거품 축구장 without usable goals gets the built-in field (its crossbars, goals, sides, ball)', nb.length === 3 && nb[1].key === 'ball' && nb[1].name === '거품 축구장' && nb[1].goals[0].line === 40 && nb[1].sides[1][0].col === 20, nb[1]);
   }
 
   // ---------------------------------------------------------------- screenshot scenes (#shot=card|water|crown|ball|ballcard|win|tally|award|podium[&s=1|2])
@@ -1081,6 +1313,13 @@
     else if (name === 'tally') { party(longNicks(), { plan: ['crown', 'water'] }, 101); toPlaying(); P.crown(1); step(200); P.skip(); toBeat('t'); step(120); }
     else if (name === 'award') { party(longNicks(), { plan: ['crown'] }, 101); toPlaying(); P.crown(1); step(100); P.crown(3); step(50); P.skip(); G.party.caps = { 0: 2, 1: 0, 2: 0, 3: 0 }; toBeat('A'); step(40); }
     else if (name === 'podium') { party(longNicks(), { plan: ['crown'] }, 101); toPlaying(); P.crown(1); step(200); P.crown(3); step(100); P.skip(); until(() => G.mode === 'podium', 2000); step(120); }
+    // (바나나우유: the milk on the counter with its ring - two grabbed, one splashed; then the reveal; a decoy round)
+    else if (name === 'milk' || name === 'milkrev') {
+      P.vclock(true, 1000); party(longNicks(), { plan: ['milk'] }, 101); toPlaying(); toMilk(); const t = P.seen().milk;
+      P.press(0, 'shoot', t + 254); P.press(2, 'shoot', t + 318); P.press(3, 'shoot', t + 40); step(10);
+      if (name === 'milkrev') { P.press(1, 'shoot', t + 420); until(() => P.milk().ph === 2, 100); step(14); }
+    } else if (name === 'milkcard') { party(longNicks(), { plan: ['water', 'milk'] }, 101); toPlaying(); P.skip(); toCard(); step(140); }
+    else if (name === 'milkdecoy') { P.vclock(true, 1000); party(longNicks(), { plan: ['milk'] }, 101); toPlaying(); toRound(3); until(() => P.seen() && P.seen().r === 3 && P.seen().d.length > 0, 400); step(3); }
     D.G.manual = true; D.step(0);
     await sleep(300);
     log('PARTY SHOT READY ' + name);
@@ -1092,7 +1331,7 @@
     if (/touch/.test(location.hash)) window.dispatchEvent(new Event('touchstart'));
     const sm = /shot=([a-z]+)/.exec(location.hash);
     if (sm) { await shot(sm[1]); return; }
-    const steps = FIT_ONLY ? [fitTests] : [rotationTests, pointTests, waterTests, soapTests, raftTests, crownTests, ballTests, noKoTests, cardFlowTests, beatTests, flowTests, coinTests, arenaTests, cardTests, fitTests, touchTests];
+    const steps = FIT_ONLY ? [fitTests] : [rotationTests, pointTests, waterTests, soapTests, raftTests, crownTests, ballTests, machineryTests, milkTests, noKoTests, cardFlowTests, beatTests, flowTests, coinTests, arenaTests, cardTests, fitTests, touchTests];
     for (const f of steps) {
       try { await f(); } catch (e) { fail++; log('PARTY FAIL ' + f.name + ' threw: ' + (e && e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : e)); }
     }
