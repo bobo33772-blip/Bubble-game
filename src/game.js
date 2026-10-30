@@ -13214,10 +13214,11 @@ window.PG = window.PG || {};
     const k = nInt(g.k, 0, 1e12, -1);
     if (k < 0 || !bufPush(NET.buf, k, g)) return;
     // (trophies, on this network event - a hidden tab too: a ranked battle's first 'p' is "시작!" for me, its podium
-    // without a result for me starts the 15 s wait. 파티 트로피: a staked party of a host that ranks parties - its first
-    // 'p' is the first 판's 시작!, its 'd' only the final podium)
+    // without a result for me starts the 15 s wait. 파티 트로피: a staked party of a host that ranks parties - it holds on
+    // a 'p' of the first 판 only (a page that missed all of them plays it without a hold: a hold made in a later 판 could
+    // be refused by its 105 s and refunded while the host paid its stake out), its 'd' is only the final podium)
     const pt = g.m === 'p' && NET.pv >= PARTY_TRO_V && stakeNow() > 0;
-    if ((g.m === 'b' || pt) && NET.q === 0 && NET.ms) { if (g.ph === 'p') troGuestGo(id, g.m === 'p'); else if (g.ph === 'd') troWait(NET.ms + '.' + id); }
+    if ((g.m === 'b' || pt) && NET.q === 0 && NET.ms) { if (g.ph === 'p') { if (!pt || (g.pa && g.pa.i === 0)) troGuestGo(id, pt); } else if (g.ph === 'd') troWait(NET.ms + '.' + id); }
     // (비누 코인, on the same event: co-op - the 탕 indexes the team passed; battle - its first 'p' is my 시작!, every 'p'
     // carries the clock, its first 'd' is my podium; 파티 - per 판 the same, and its own podium: coinPartyGuest)
     if (g.m === 'c') coinGuestIdx(nInt(g.lp, 0, 99, 0) * LEVELS.length + nInt(g.r, 0, 99, 0), g);
