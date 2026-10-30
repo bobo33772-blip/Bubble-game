@@ -7,7 +7,8 @@ holds, 안 걸고 참여, 꼴등 빼고, the cloud) and of the party (design/par
 Code is referenced by function name, never by line number. Every function named here exists on main unless it is marked
 **new**. Every number in the tables of section 2 was computed with a simulation of `troPartyTable` (2.1), with 200,000
 random tables for the bounds: the pot is always paid out exactly, the most a player can lose is stake + 6 and the most it
-can win is +150 (a 기권승) or +116 (a finished party).
+can win is +150 (a 기권승) or +116 (a finished party). **Section 13** is the adversarial review against the code
+(2026-10-29): what it changed in this spec, and every `NET.mode` read on main with what it needs.
 
 The owner asked (2026-10-29): `파티에도 트로피 걸게해주고 123등 트로피 차등으로 배분해줘` - let a party bet trophies too, and
 share them out in steps for 1st / 2nd / 3rd instead of the battle's winner-takes-the-pot.
@@ -22,14 +23,14 @@ share them out in steps for 1st / 2nd / 3rd instead of the battle's winner-takes
 | One stake for the whole party | Held once, at the **first 판's 시작!** (stake + 6, only the stake in 견습), settled once at the **final standing** (the podium, after the awards). Later 판 hold nothing more. Leaving during the first card / 3-2-1 is free; from the first 시작! to the podium, leaving is last place. |
 | Place points | The battle's `BASE` for n = players at the first 시작!: 2 players +12 / −6; 3 players +15 / +5 / −6; 4 players +16 / +8 / +2 / −6, by the **final** place (`partyStandings`). Ties average their places' points (rounded); 견습 never loses by place. |
 | The pot | All stakes put in, split by final place (**new** `PARTY_SHARE`): 4 players **50% / 30% / 20% / 0**; 3 players **60% / 30% / 10%**; 2 players **100% / 0**. The split runs over the stakers' own order (안 걸고 참여: nothing in, nothing out). Floors, then the best staker takes what is left; a tie splits its places' shares evenly, the remainder one each in seat order, rotated by the game id (2.1). The pot is never created or lost. |
-| 오늘 트로피 보너스 | **+5 once per finished real party** (not per 판), 꼴등 빼고, from the same daily pool (`DAY_CAP` 40). Real = 2+ finishers and at least 5 bubbles I blew in the whole party. |
+| 오늘 트로피 보너스 | **+5 once per finished real party** (not per 판), 꼴등 빼고, from the same daily pool (`DAY_CAP` 40). Real = the coins' own test, over the whole party: 2+ finishers, at least 5 bubbles I blew and at least 60 s of play (`COIN.gameShots`, `COIN.minF`), read from that party's own counters (`CO.pa`). |
 | 기권승 / everyone left | As a battle: the one left gets **the pot only** (no base, no +5), and only when someone left on purpose (`gg`); nobody gave up → void, refund. Players lost between 판 are leavers like in a battle (their `gg` or their dropped link decides). |
-| Too short | **New**: a finished party with under **2 minutes of play** (`PARTY_TRO_MINF` 7200 frames, the shortest battle) is void: every hold refunded at once. Only 3 players with two very short 물 rounds can make one; it keeps a party at or under a battle's pace (5.1) and gives guests the battle's 105 s check against a hostile host (5.3). |
+| Too short | **New**: a finished party whose **first 시작! → final standing took under 2 minutes** (`PARTY_TRO_MINF` 7200 host frames, the shortest battle's clock) is void: every hold refunded at once. The span counts the cards, 3-2-1s and result beats after the first 시작! (real minutes of the match), not only the playing frames. Today only 3 players' 물 · 왕관 · 물 with two 물 drowned on purpose can be that short; it keeps a party at or under a battle's pace (5.1) and gives guests the battle's 105 s check against a hostile host (5.3). |
 | Leavers / the host | A leaver mid-party is settled as a battle leaver (나가기 = `gg` + forfeit; a dropped link while watching = refund). The host leaving = `host_left` → refund for everyone; the host's 방으로 before the podium = the host forfeits, guests are refunded after 15 s. The paths are the battle's, checked in 3.3. |
 | Network | No new message type, `NET_V` stays 4. **`PARTY_V` 3 → 4** (a pa-3 page is never ready in a party room). New fields: `R.pv` (the host's party version, party rooms), `rd.md` (the mode the guest readied for), `tro.v` (a short party: refund now). |
-| Cloud | `firebase/firestore.rules` **unchanged**: the biggest single write is +206 (≤ 250), `de` stays ≤ 40, `g` +1 a party. |
+| Cloud | `firebase/firestore.rules` **unchanged**. A tab never pushes while its own hold is open (`clCanPush`: `!troOpenHere()`), so the settle is one write of net + 5 (≤ +121 finished, ≤ +150 기권승); ≤ +177 / +206 only if another tab of the same browser pushed the held count meanwhile. All ≤ 250; `clStep` splits a rise the time rule would refuse. `de` stays ≤ 40, `g` +1 a party. |
 | 내 기록 | Parties count in the same `w` / `g` (one game per party); its row `배틀` reads `배틀·파티`. No store or cloud change. |
-| Apps in Toss | Trophies stay off there: every party path goes through `stakeNow` / `troEscrow` / `troApply` / `troResultIn`, which the Toss build already turns off (`AIT.on`); its texts get the same `AIT.on` branch (11, risk 4). |
+| Apps in Toss | Trophies stay off there: every party path goes through `stakeNow` / `troHostGo` / `troGuestGo` / `troEscrow` / `troApply` / `troResultIn`, which the Toss build (feat/toss, not on main yet) turns off with `AIT.on`; `troPartyResult` and `troPartyOn()` get their own `AIT.on` test, and no party trophy text shows there (risk 4). |
 
 ---
 
@@ -41,14 +42,14 @@ share them out in steps for 1st / 2nd / 3rd instead of the battle's winner-takes
 | Options box | `buildOpts`: the 트로피 걸기 row is `data-for 'b'`; the 판 수 row (`'p'`) is the last row; `syncOpts` hides by mode. | The row becomes `'bp'`; it already sits before 판 수. |
 | Hold | `troHostGo` returns for `G.party` (and is called only from the battle branch of `updateCountdown`'s 시작! frame; the party branch calls `coinGo(); miniStart();`). Guests: `guestHostIn` runs `troGuestGo` / `troWait` only for `g.m === 'b'`. `troEscrow` is once per match id (`TRO.seen`). | One game id = one party (all 판 share `NET.gid`), so `mid = NET.ms + '.' + gid` is the party's id: holding "once per mid" is exactly "once per party". The host must not rebuild `TRO.match` at the 2nd 판's 시작! (it would drop `gg` / `st`). |
 | Result | `troHostResult` from `endBattle` only; a party never calls `endBattle`; `partyFinal(walk)` builds `G.podium = {order, t, te, pl}` from `partyStandings`, then `coinPartyNow`, then `showOverlay('podium')`. | **New** `troPartyResult(walk)` in `partyFinal`, after `G.podium`, before `showOverlay`. Places come from `G.podium.pl` (shared places repeat). |
-| The +5 | `troApply(…, real)`: +`TRO_PLAY` unless a 기권승 (one row) or my place is the highest of 2+ rows (`last`); `troReal` reads `CO.bshots` (per 판 in a party) and the battle clock. | A party needs its own real test: `CO.pa.shots` (all my blows, closed per 판 by `coinPartyClose`). `troApply` itself is unchanged. |
-| Min time | `troGuestGo` holds with `min = NET.opts.time * 60000 − TRO_SLACK_MS` (the battle clock); `troApply` refuses a guest's result before it. | A party gets `PARTY_TRO_MINF / 60 * 1000 − TRO_SLACK_MS` = 105 s (5.3). |
+| The +5 | `troApply(…, real)`: +`TRO_PLAY` unless a 기권승 (one row) or my place is the highest of 2+ rows (`last`); `troReal` reads `CO.bshots` (per 판 in a party) and the battle clock. | A party needs its own real test: that party's `CO.pa` (`shots`: all my blows, closed per 판 by `coinPartyClose`; `pf`: the playing frames per 판). `coinPartyStart` replaces `CO.pa` at the next party's first snapshot, so a guest keeps a reference to its party's object with its hold (`TRO.live`, 3.2). `troApply` itself is unchanged. |
+| Min time | `troGuestGo` holds with `min = NET.opts.time * 60000 − TRO_SLACK_MS` (the battle clock - for a party today that would be the room's unused battle time option); `troApply` refuses a guest's result before it. | A party gets `PARTY_TRO_MINF / 60 * 1000 − TRO_SLACK_MS` = 105 s (5.3). |
 | Leavers | `hostDropPlayer` → `partyDrop(slot)`; < 2 left → `partyFinal(true)`. `gg` (`troGg`, `troSessionEnd('left')`, hidden tab) and `st` are matched to `TRO.match.mid`. | A leaver is missing from `G.podium.order`; `M.slots` / `M.gg` say whether its stake is in the pot, as in a battle. |
 | Host leaving | `netStatusIn('closed', 'host_left')` → `netLeave(…, 'host_left')` → `netClose('host_left')` → `troSessionEnd('host_left')` (refund), then `idleWorld` (clears `G.party`). Host 방으로: `netToRoom` forfeits an open hold when `G.mode !== 'podium'`; guests: `guestToRoom` → `troWait`. Tab close: `pagehide` → `troSessionEnd('left')`. | All mode-agnostic: a party reaches them unchanged (3.3). |
-| Podium | `troPodiumUI` returns into `partyPodiumUI` for `G.party`, which sets the tag `3판`, **hides `#pg-podium-bonus`** and **always enables 파티 한 번 더**; `troPodiumTick` flies cups to whoever took a share. `fillPodium`'s sr line reads `TRO.pod`. | The party branch gains the trophy pieces (7.3); cups fly to every block with a gain. |
+| Podium | `troPodiumUI` returns into `partyPodiumUI` for `G.party` **before** it builds the practice `TRO.pod` (so a practice party's sr line has no trophy part today); `partyPodiumUI` sets the tag `3판`, **hides `#pg-podium-bonus`** and **always enables 파티 한 번 더**. `troPodiumTag` would write `연습` / `기권승` / `무승부` over the tag; `troPodBonus` fills its line only after `upDone`, which `troPodiumTick` sets only when `TRO.pod.rows` is not empty; `troPodiumTick` flies cups to whoever took a share. `fillPodium`'s sr line reads `TRO.pod` and knows `'prac'` only. | The party branch gains the trophy pieces (7.3) with a party tag rule and a no-rows bonus line; cups fly to every block with a gain; `fillPodium` gains the `'short'` text. |
 | Room rules | `partyRules(q)` lists `PARTY_TX.noTro` `트로피는 걸지 않아요`; the battle's trophy lines are `troRulesLine`, `troFreeLine`, the +5 line and the 견습 line. | The party branch replaces `noTro` with its own trophy lines (7.1). |
 | Versions | `PARTY_V = 3`; `seatReady` / `seatOld` keep a page with a lower `hi.pa` out of a party room; nothing tells a guest the **host's** party version (party-polish 14.4, open). | `PARTY_V` 4, and **new** `R.pv` so a new guest never holds for an older host's party. |
-| Cloud | firestore.rules: a slot write rises `t` by ≤ 250 and `rise × 500 ≤ 10000 + dt`; `g` +0..20; `w` ≤ the rise of `g`; `ko` +0..400; `de` 0..40. `clStep` splits a bigger rise. | Section 6: no change. |
+| Cloud | firestore.rules: a slot write rises `t` by ≤ 250 and `rise × 500 ≤ 10000 + dt`; `g` +0..20; `w` ≤ the rise of `g`; `ko` +0..400; `de` 0..40. `clStep` splits a bigger rise. `clCanPush` refuses while this tab has an open hold (`troOpenHere`), and sign-in / sign-out are refused while `S.esc` has a hold (`clMsg('held')`). | Section 6: no change. The hold is never written; a party is one no-push window of 2-7 minutes. |
 | 내 기록 | `fillRec`: `S.w + '승 / ' + S.g + '판'` under `<dt>배틀</dt>`. | Shared counters; the label changes. |
 
 ---
@@ -60,8 +61,9 @@ share them out in steps for 1st / 2nd / 3rd instead of the battle's winner-takes
 ```js
   // 파티 트로피 (design/party-trophies.md): top constants block, next to BASE
   const PARTY_SHARE = { 2: [100, 0], 3: [60, 30, 10], 4: [50, 30, 20, 0] };  // % of the pot by place (stakers' order)
-  const PARTY_TRO_V = 4;        // the first PARTY_V that ranks parties (R.pv); 5 if feat/party-games lands first
-  const PARTY_TRO_MINF = 7200;  // a finished party pays only after this much play (frames: 2 min = the shortest battle)
+  const PARTY_TRO_V = 4;        // the PARTY_V of the release that first ranks parties (R.pv); 5 if feat/party-games lands first
+  const PARTY_TRO_MINF = 7200;  // a finished party pays only when its first 시작! -> final standing took this many host
+                                // frames (G.frame: cards, 3-2-1s and beats included; 2 min = the shortest battle's clock)
 
   // host: one row [slot, place, base, share, 0, st] per finisher of a party. fin = the players at the podium, best first
   // (G.podium.order), each {slot, pl, p, z}: pl its podium place (G.podium.pl: shared places repeat), p 견습 at the first
@@ -102,8 +104,9 @@ share them out in steps for 1st / 2nd / 3rd instead of the battle's winner-takes
 A row becomes my change exactly as a battle row: **net = base + share − the stake I put in** (`troApply`, unchanged: my
 players and stake from my own hold, `row[5] === 0` pays no stake, the share capped at stake × n).
 
-- **The only stake never paid out**: a `gg` leaver's, when no finisher put a stake in (everyone left played without it).
-  It stays lost, as in a battle (the leaver forfeited it on its own page; nobody gains it).
+- **Stakes the table never pays out** (lost, never created - as in a battle): a `gg` leaver's when no finisher put a
+  stake in (everyone left played without it); and a leaver that forfeits on its own page (away when its link dropped)
+  while its `gg` never reached the host (the table counts it as a dropped link: not in the pot).
 - **Why over the stakers' order**: 안 걸고 참여 means nothing in, nothing out. A free 1st place takes its place points and no
   share; the stakers behind it take the shares as if they were 1st, 2nd, 3rd among themselves. With fewer staking
   finishers than places (leavers, free seats), the unfilled places' shares go to the best staker.
@@ -170,21 +173,29 @@ staker 1st takes the pot of 150); a 기권승 at most **+150**. Below the battle
 ### 2.3 오늘 트로피 보너스, 기권승, void
 
 - **The +5** (`TRO_PLAY`), once per party, through `troApply`'s `real` argument (unchanged code): a party is real when it
-  has 2+ finishers and I blew at least `COIN.gameShots` (5) bubbles in the whole party (`CO.pa.shots`, the coins' own
-  counter, closed per 판 by `coinPartyClose`). Play time needs no own test: a ranked party has at least 2 minutes of play
-  (the void below), more than `COIN.minF`. **꼴등 빼고** as built: the highest place of the rows, every member of a tie for it,
-  gets none; a 무승부 has no last. Practice, a refund, a void party, a leaver and a replayed result never pay it.
+  has 2+ finishers, I blew at least `COIN.gameShots` (5) bubbles in the whole party and the party had at least
+  `COIN.minF` (60 s) of play - the battle's `troReal` test, read from that party's own coin counters (`A.shots`, closed per
+  판 by `coinPartyClose`, and `A.pf`; the fast debug party waives the play time as `coinPartyNow` does). The play-time
+  test is not implied by the void floor (that counts the cards and beats too) and matters once feat/party-games adds
+  45 s games. **꼴등 빼고** as built: the highest place of the rows, every member of a tie for it, gets none; a 무승부 has no
+  last. Practice, a refund, a void party, a leaver and a replayed result never pay it.
 - **기권승**: fewer than 2 players left at any point (`partyDrop` → `partyFinal(true)`): the one left (always the host - a
   guest's session ends with the host) gets the pot only when at least one leaver sent `gg`, no base, no +5; otherwise the
   party is void and the host's hold is refunded. Players who left in earlier 판 count exactly like players who left in the
   last one: each one's `gg` (or its dropped link) decides whether its stake is in the pot.
-- **Too short (void, new)**: the host sums each 판's playing frames into `TRO.match.pf` (in `partyResult`). A finished party
-  (`partyFinal(false)`) with `pf < PARTY_TRO_MINF` pays nothing: the host refunds its own hold and sends
-  `{t:'tro', m, n, s, r: [], v: 1}`; each guest refunds its hold of that party at once (an older page ignores `v` and is
-  refunded after 15 s by `troWait`). The podium says why (7.3). Only a 3판 with a single 60 s game can be that short:
-  물 · 왕관 · 물 (3 players, or a 4-player party whose 축구 was re-drawn after a leaver) with the two 물 together under a
-  minute. 2 or 4 players otherwise play 왕관 and 축구 (60 s each); every 5판 and 3 players' 왕관 · 물 · 왕관 have two 60 s
-  games.
+- **Too short (void, new)**: the host notes the frame of the first 시작! in `TRO.match.f0 = G.frame` (`troHostGo`). A
+  finished party (`partyFinal(false)`) with `G.frame - M.f0 < PARTY_TRO_MINF` pays nothing: the host refunds its own hold
+  and sends `{t:'tro', m, n, s, r: [], v: 1}`; each guest refunds its hold of that party at once. The podium says why
+  (7.3). `G.frame` runs on every host frame of the match (card, countdown, playing, result) and stops with a hidden host
+  tab, so the span is the match's own length on the host's clock - the same clock and the same 2 minutes a battle's
+  hold-to-podium has. Today only one plan can end under it: 3 players' 물 · 왕관 · 물 (or a 4-player party re-drawn to it
+  after a leaver) with the two 물 together under about 40 s when the host skips every beat (about 20 s when the beats
+  run); the first 물 step drowns the floor at 7 s, so only players who drown on purpose get there. 2 or 4 players always
+  play 왕관 and 축구 (60 s each) in a 3판; 3 players' 왕관 · 물 · 왕관 and every 5판 have two 60 s games.
+- (The first draft counted only the playing frames. That voids honest parties of short games: with feat/party-games, a
+  3판 of 펑 (45 s) + 물 + 바나나우유 (8 rounds, often under a minute) would have under 2 minutes of play most of the time,
+  while its cards and beats make it as long as a battle. Per minute is about the friends' real time, so the span is the
+  right measure; it is also one stamp instead of a sum in `partyResult`.)
 
 ### 2.4 What stays
 
@@ -199,52 +210,70 @@ the tie-breaks decide the final standing exactly as today; trophies only read it
 ### 3.1 Hold at the first 판's 시작!
 
 - **Host**: `updateCountdown`'s party branch (`else if (G.party && G.mini) {…}`) also calls `troHostGo()`. `troHostGo` drops
-  its `G.party` return and gains, right after `mid` is known, `if (TRO.match && TRO.match.mid === mid) return;` (a party's
-  later 판: already held - `TRO.match` keeps its `gg`, `st` and `pf`). `TRO.match` gains `pf: 0`. n = `G.players.length` and
-  the 견습 flags are taken at that frame, as for a battle (a leaver during the first card or 3-2-1 is not counted).
+  its `G.party` return (keeping every other test of that line - and feat/toss's `AIT.on`) and gains, right after `mid` is
+  known and before anything else, `if (TRO.match && TRO.match.mid === mid) return;` (a party's later 판: already held -
+  `TRO.match` keeps its `gg`, `st` and `f0`; `TRO.seen` would stop a second hold anyway, but a rebuilt `TRO.match` would
+  drop the `gg` / `st` of the earlier 판). `TRO.match` gains `f0: G.frame`. n = `G.players.length` and the 견습 flags are
+  taken at that frame, as for a battle (a leaver during the first card or 3-2-1 is not counted).
 - **Guest**: `guestHostIn`'s trophy line becomes
-  `if ((g.m === 'b' || (g.m === 'p' && NET.pv >= PARTY_TRO_V)) && NET.q === 0 && NET.ms) { …as today… }`. The party's first
-  `'p'` snapshot is its first 시작!; later 판's `'p'` snapshots find the mid in `TRO.seen`; phase `'d'` is only the final
-  podium (cards are `'a'`, results `'r'`, 3-2-1 `'c'`).
-- `troGuestGo`: `min = G.party ? PARTY_TRO_MINF / 60 * 1000 − TRO_SLACK_MS : NET.opts.time * 60000 − TRO_SLACK_MS` (105 s),
-  and the consent test also checks the mode: `if (s > 0 && (s !== TRO.agreed || NET.mode !== TRO.agreedM)) return;`.
-  Everything else (안 걸고 참여, `st`, `gg` when hidden) is the battle's.
+  `if ((g.m === 'b' || (g.m === 'p' && NET.pv >= PARTY_TRO_V)) && NET.q === 0 && NET.ms) { if (g.ph === 'p') troGuestGo(id, g.m === 'p'); … }`.
+  The party's first `'p'` snapshot is its first 시작!; later 판's `'p'` snapshots find the mid in `TRO.seen`; phase `'d'`
+  is only the final podium (`PH_CODE`: card `'a'`, countdown `'c'`, result `'r'`, podium `'d'`). It runs before
+  `coinPartyGuest` on the same snapshot, as today.
+- `troGuestGo(id, party)` (**new** argument: the snapshot's own mode, not `G.party`): `min = party ? PARTY_TRO_MINF / 60 *
+  1000 − TRO_SLACK_MS : NET.opts.time * 60000 − TRO_SLACK_MS` (105 s), the consent test also checks the mode:
+  `if (s > 0 && (s !== TRO.agreed || NET.mode !== TRO.agreedM)) return;`, and after a hold `if (party)
+  TRO.live.get(mid).pa = CO.pa;` (that party's coin counters, for its +5: 3.2). Everything else (안 걸고 참여, `st`, `gg`
+  when hidden) is the battle's.
 
 ### 3.2 Settle at the final standing (`troPartyResult(walk)`, **new**, host)
 
 ```js
   // host, in partyFinal after G.podium is set: the table over the final standing; void (refund at once) when nobody gave
-  // up in a walkover, or when the party had under PARTY_TRO_MINF frames of play; else my row and the reliable 'tro'
+  // up in a walkover, or when a finished party's first 시작! -> now took under PARTY_TRO_MINF host frames (cards and
+  // beats included); else my row and the reliable 'tro'
   function troPartyResult(walk) {
     const M = TRO.match; TRO.match = null;
-    if (!M || !G.online || G.role !== 'host' || M.mid !== NET.ms + '.' + NET.gid || !G.podium) return;   // (none before the first 시작!)
+    if (!M || !G.online || G.role !== 'host' || M.mid !== NET.ms + '.' + NET.gid || !G.podium) return;   // (none before the first 시작!; feat/toss: AIT.on returns here too)
     const z = (sl) => (M.s > 0 && !M.st[sl] ? 1 : 0), pd = G.podium;
     const fin = pd.order.map((sl, i) => ({ slot: sl, pl: pd.pl[i] || i + 1, p: M.p[sl] | 0, z: z(sl) }));
     const left = M.slots.filter((sl) => !fin.some((f) => f.slot === sl) && M.gg.has(sl));
-    const short = !walk && M.pf < troPartyMinF();
+    const short = !walk && G.frame - M.f0 < troPartyMinF();
     const rows = short ? [] : troPartyTable(M.n, M.s, fin, left.length, left.filter(z).length, NET.gid);
     if (!rows.length) {
       troClose(M.mid, 'refund', short ? 'short' : 'void');
       if (short && NET.sess) NET.sess.send('*', { t: 'tro', m: M.mid, n: M.n, s: M.s, r: [], v: 1 });
       troPodium(M.mid, [], M.n, M.s, null, short ? 'short' : 'void'); return;
     }
-    const res = troApply(M.mid, rows, 0, true, troPartyReal(fin.length));
+    const res = troApply(M.mid, rows, 0, true, troPartyReal(CO.pa, fin.length));
     if (NET.sess) NET.sess.send('*', { t: 'tro', m: M.mid, n: M.n, s: M.s, r: rows });
     TRO.lastRes = { mid: M.mid, s: M.s };            // (the 파티 한 번 더 gate waits for each guest's 'cup')
     troPodium(M.mid, rows, M.n, M.s, res);
   }
-  // the +5's real party: 2+ finishers and >= COIN.gameShots of my blows over the party (CO.pa, closed per 판)
-  const troPartyReal = (nf) => nf >= 2 && !!CO.pa && CO.pa.shots >= COIN.gameShots;
+  // the +5's real party (troReal for a party): 2+ finishers, >= COIN.gameShots of my blows and >= COIN.minF frames of play
+  // over the whole party - A is that party's CO.pa (closed per 판; the 판 still open counts while A is still the current
+  // one); the fast debug party waives the play time, as coinPartyNow does. Read only: never closes a 판 itself
+  function troPartyReal(A, nf) {
+    if (!A || nf < 2) return false;
+    const open = A === CO.pa && A.go > A.seen ? CO.bshots : 0, pf = A.pf.reduce((s, f) => s + (f | 0), 0);
+    return A.shots + open >= COIN.gameShots && (PARTY_FAST || pf >= COIN.minF);
+  }
 ```
 
-- `partyResult` adds `if (TRO.match) TRO.match.pf += G.mini.t | 0;` (each 판's playing frames, golden goal included).
+- No change in `partyResult` (the first draft summed playing frames there; the span needs only `M.f0`).
 - `troPartyMinF()` is the debug override when one is set (9.1), else 0 in the debug fast party (`PARTY_FAST`: 12 s games,
   as `coinPartyNow` skips its play-time gate there), else `PARTY_TRO_MINF`.
-- **Guest** (`troResultIn`): a party is recognised by its id, not by `G.party` (which `idleWorld` clears if the guest is
-  already back in the room): `const party = !!CO.pa && CO.pa.gid === +mid.slice(7)`. For a party: first
-  `if (CO.pa.go > CO.pa.seen) coinPartyClose(CO.pa.go)` (my last 판, if no `'r'` snapshot reached me yet), then
-  `real = troPartyReal(rows.length)`. `m.v === 1 && !rows.length` → `troClose(mid, 'refund', 'short')` for my hold of that
-  mid and `troPodium(…, 'short')`. Everything else (apply once, not before `min`, `cup` reply) is the battle's.
+- **Guest** (`troResultIn`, after feat/toss's `AIT.on` return): a party is recognised by **its own hold**, not by
+  `G.party` (which `idleWorld` clears once the guest is back in the room) nor by `CO.pa.gid` (a quick 파티 한 번 더 - stake
+  0 opens the gate at once - replaces `CO.pa` at the next party's first snapshot, while a reliable `tro` can still be on
+  its way; trophies.md 12 "A result arrives after the next match began"): `const L = TRO.live.get(mid), A = L && L.pa`.
+  Then `real = A ? troPartyReal(A, rows.length) : troReal(rows.length, 0)`. `troResultIn` never calls
+  `coinPartyClose` (it would close a 판 of the next party): the 판 still open is read through `open` above.
+- **`v: 1`** (a short party): `if (m.v === 1 && !rows.length) { if (A) {…} return; }` - inside, `troClose(mid,
+  'refund', 'short')` (this tab's hold of that party only: `TRO.live` holds this tab's), then the display under the existing replay guard
+  (`if (!P || P.t0 < 0) troPodium(mid, [], …, null, 'short')`), and return (`troClose` already sends the `cup`). A
+  `v: 1` for a mid with no party hold of mine (a battle, one already applied, a replay) changes nothing. Everything else
+  (apply once, not before `min`, `cup` reply) is the battle's.
 
 ### 3.3 How a party's hold ends (the battle's table, trophies.md 5.4, read for a party)
 
@@ -260,11 +289,18 @@ the tie-breaks decide the final standing exactly as today; trophies only read it
 | The host's 방으로 before the podium (any party phase) | host: forfeit (its confirm says `· 내 트로피 -16`); guests: `'wait'` → refund after 15 s | `netToRoom`: `G.mode !== 'podium'` covers `'card'`, `'countdown'`, `'playing'`, `'result'`; guests `guestToRoom` → `troWait` |
 | A hot reload | refund | `stopEngine` → `netClose('reload')` |
 | Under 2 players left | the one left: 기권승 (pot only) if a leaver sent `gg`, else void → refund | 2.3 |
-| A finished party under 2 minutes of play | refund at once (`tro.v`) | 2.3 |
+| A finished party whose first 시작! → final standing took under 2 minutes | refund at once (`tro.v`) | 2.3 |
 | No result 15 s after my podium | refund | `troWait` on the `'d'` snapshot |
+| My tab hidden between 판 (switched apps), back before the end | nothing: a finisher with a row | `visibilitychange` → `troGg(1)`, back → `troGg(0)`; both match the party's mid, which `TRO.match` keeps across 판 |
+| My tab reloaded (F5) between 판 | forfeit: last place, my stake in the pot | hidden first (`gg` on), then `pagehide` → `troSessionEnd('left')`; the session is locked, so the new page cannot come back in |
+| A quick 파티 한 번 더 (stake 0: the gate opens at once) before my `tro` arrived | the old hold is `'wait'` from `guestBegin`; the `tro` still applies within 15 s with the old party's +5 test (`TRO.live`'s `pa`) | 3.2 |
 
 Nothing in the party changes these paths; the only new trophy code on them is the guest's `g.m === 'p'` gate (3.1) and
-`troPartyResult` in `partyFinal`. `troStale` (15 min) still covers a crashed tab: a 5판 party is about 6.5 minutes.
+`troPartyResult` in `partyFinal`. Checked on main for the host leaving: `net.js` closes a guest with `'host_left'` on the
+host's `bye` or when its peer is gone (`close('host_left')`), which reaches `netStatusIn` → `netLeave` → `netClose` →
+`troSessionEnd('host_left')` (refund) whatever the mode; `partyDrop` returns at the podium, and `hostDropPlayer` takes the
+party branch before the battle's `endBattle` test. `troStale` (15 min) still covers a crashed tab: a 5판 party is about
+6.5 minutes.
 
 ---
 
@@ -273,10 +309,10 @@ Nothing in the party changes these paths; the only new trophy code on them is th
 | Where | New | Validation / meaning |
 |---|---|---|
 | `hi` | `pa: 4` (`PARTY_V` 3 → 4) | unchanged code: in a party room a seat with `pa < 4` is never ready (`seatReady`), shows `새로고침 필요` (`seatOld`, `R.u`). party-net's crafted older guest sends `pa: 3`. |
-| `R` (party rooms, room and game phase) | `pv: PARTY_V` | guest: `NET.pv = R.m === 'p' ? nInt(R.pv, 0, 99, 0) : 0`. A party is ranked for my trophies only with `NET.pv >= PARTY_TRO_V`: an older host's party (no `pv`) holds nothing for me (it would never send a result - a 6-trophy hold refunded after the podium, and a wrong `트로피 경기` line). +7 bytes. |
+| `R` (party rooms, room and game phase) | `pv: PARTY_V` | guest: `NET.pv = R.m === 'p' ? nInt(R.pv, 0, 99, 0) : 0` (and 0 in `netAttach`). `R` rides in every snapshot (`netSnapshot` caches `NET.R`), and `guestHostIn` reads it before `g`, so the gate is current on the very snapshot it judges. A party is ranked for my trophies only with `NET.pv >= PARTY_TRO_V`: an older host's party (no `pv`; its `R.o[4]` is 0 there, its `stakeNow` being battle-only) holds nothing for me (it would never send a result - a 6-trophy hold refunded after the podium, and wrong trophy lines). +7 bytes. |
 | `R.o[4]` | the stake now also in a party room | unchanged reads (`bet`); an older guest is gated out anyway. |
 | `rd` | `md: 'b' \| 'p' \| 'c'` (the mode the guest saw) | host: a staked ready also needs `!('md' in m) ? NET.mode === 'battle' : m.md === modeCode()` - an older page's staked ready is accepted in a battle room only (in a party room `seatReady` refuses it anyway). Closes the race of a battle ready landing after a switch to a staked party. |
-| `tro` | `v: 1` with `r: []` | a party too short to count: guest refunds its hold of `m` now. A hostile host could only refund me early. |
+| `tro` | `v: 1` with `r: []` | a party too short to count: guest refunds this tab's party hold of `m` now (none: ignored - a battle hold, an applied one, a replay). A hostile host could only refund me early. |
 | `tro` rows | the battle's 6 elements, `r[4]` 0 | unchanged `troApply` / `troPodium`. |
 | `gg`, `st`, `cup` | - | unchanged; matched to `TRO.match.mid`, which lives from the first 시작! to the podium. |
 
@@ -284,13 +320,15 @@ Nothing in the party changes these paths; the only new trophy code on them is th
 `TRO.agreed`) is set in `netReady` and reset with it. On the host, `netSetOpts` un-readies every guest when the mode
 changes while `stakeNow() > 0` (the stake test `s0` alone no longer catches it: battle and party share `NET.opts.bet`).
 On a guest, `guestRoom`'s consent line also fires on `NET.ready && stakeNow() > 0 && NET.mode !== TRO.agreedM`, with its
-own 4 s message (7.1). At 안 걸기 a switch needs no new ready (a battle's 안 걸기 is not consent-gated either).
+own 4 s message (7.1). At 안 걸기 a switch needs no new ready (a battle's 안 걸기 is not consent-gated either): a guest ready
+in a co-op room stays ready when the host switches to 파티 at 안 걸기, exactly as co-op → 배틀 does today (open question 1
+decides whether a party at 안 걸기 is a 트로피 경기 at all).
 
 **Old pages.**
 
 | Host | Guest | What happens |
 |---|---|---|
-| new (pa 4) | pa 3 page | never ready in a party room (`새로고침 필요`), as party-polish 6.1. Battle / co-op unchanged. |
+| new (pa 4) | pa 3 page | never ready in a party room (`새로고침 필요`), as party-polish 6.1. Battle / co-op unchanged. The bump is required, not cosmetic: a pa 3 page holds nothing in a party (`g.m === 'b'` only) but has no `r.z`, so `troHostGo` would count its stake in the pot when its count covers it (`st = !r.z && t >= s`) - a stake nobody paid, shared out by place, and its place loss never taken. |
 | pa 3 page | new | no `R.pv`: the party is unranked for the new guest (no hold, no lines), as today. |
 | new | new | the party trophies. |
 
@@ -303,27 +341,34 @@ own 4 s message (7.1). At 안 걸기 a switch needs no new ready (a battle's 안
 Place points and the +5 are the only trophies that are made (stakes only move). A ranked party pays the same `BASE` and
 at most the same +5 as one battle, and takes longer:
 
-| (4 players, 1st place, +5 included) | Shortest | Typical | Per minute (shortest / typical) |
-|---|---|---|---|
-| Battle, 2 min (the fastest option) | 2.1 min (3-2-1 + 120 s + podium) | 2.1 | **10.0** / 10.0 |
-| Battle, 3 min (default) | 3.1 | 3.1 | 6.8 / 6.8 |
-| Party 3판 | 2.4 min (≥ 2 min of play by the void rule + 3 cards, 3-2-1s and beats ≈ 23 s) | 3.8 | 8.8 / 5.5 |
-| Party 5판 | 3.9 (three 60 s games at least + 5 cards, 3-2-1s and beats ≈ 39 s) | 6.3 | 5.4 / 3.3 |
+Times are a match cycle without the podium dwell (both modes have one): a battle's 3-2-1 + clock; a party's first card
+(at least `cardMin` 150 f when everyone is ready) + 3-2-1 + its span from the first 시작! to the final standing, with the
+host skipping every beat it may (`skipMin` 30 f; 끝! cannot be skipped).
 
-Made per match (Σ BASE + the +5s): 4 players 20 + 15, 3 players 14 + 10, 2 players 6 + 5, the same in both modes; the
-party's match is always the longer one. Without the 2-minute void, 3 players drowning themselves in both 물 of a
-물 · 왕관 · 물 party (about 1.6 min) would make 14 + 10 per 1.6 min against a 3-player 2-minute battle's 14 + 10 per 2.1:
-that is the gap the void closes.
+| (1st place, +5 included: 21) | Shortest | Typical | Per minute (shortest / typical) |
+|---|---|---|---|
+| Battle, 2 min (the fastest option) | 2.05 min (3-2-1 + 120 s) | 2.05 | **10.2** / 10.2 |
+| Battle, 3 min (default) | 3.05 | 3.05 | 6.9 / 6.9 |
+| Party 3판 | 2.09 min (the void floor: ≥ 2 min from the first 시작! + the first card and 3-2-1 ≈ 5.5 s); 2 or 4 players ≥ 2.55 (왕관 + 축구 + 물 ≥ 8 s, + ≈ 20 s of cards and beats) | 3.8 | ≤ 10.0 / 5.5 |
+| Party 5판 | 3.1 (3 players: 물 · 왕관 · 물 · 왕관 · 물, two 60 s games + ≈ 35 s of cards and beats); 2 or 4 players 3.9 (three 60 s games at least) | 6.3 | 6.8 (3 players) · 5.3 (2 or 4) / 3.3 |
+
+Made per match (Σ BASE + the +5s): 4 players 20 + 15, 3 players 14 + 10, 2 players 6 + 5, the same in both modes; a
+ranked party's match is never shorter than the fastest battle's (its span alone is at least the battle's clock, and it
+has a card before it). Without the void, 3 players drowning themselves in both 물 of a 물 · 왕관 · 물 party (two 8 s 물:
+about 1.7 min a cycle) would make 14 + 10 per 1.7 min against a 3-player 2-minute battle's 14 + 10 per 2.05: that is the
+gap the void closes.
 
 ### 5.2 Two friends trading wins, alts, practice
 
 - **Two friends trading wins (2-player party, 100% / 0)**: per two parties each one nets (12 + s) + (−6 − s) = +6, plus one
   +5 (the loser is last: 꼴등 빼고) = **+11 per two parties**, the stake cancels out. A 1v1 battle gives the same +11 per two
-  battles: 2.6 a minute each at 2 minutes; the party 2.3 at its shortest (2.4 min) and 1.45 typical. In 견습 (no place loss):
-  +17 per two matches, battle 4.0 a minute, party 3.5 / 2.2.
+  battles: 2.7 a minute each at 2 minutes; the party 2.2 at its shortest (2 players always play 왕관 + 축구: 2.55 min) and
+  1.45 typical. In 견습 (no place loss): +17 per two matches, battle 4.1 a minute, party 3.3 / 2.2.
 - **Extra browser profiles** (the local-user limit of trophies.md 13): a real player with idle alts earns at most BASE[n][0]
   + 5 per party, at the party's pace (above): less per minute than the same farm in 2-minute battles. The +5 still needs
-  5 of my own blows and comes from the shared daily 40.
+  5 of my own blows and 60 s of play, and comes from the shared daily 40. Feeding alts' gifts through stakes pays less
+  than in a battle: a 1st place takes half of a 4-player pot (+16 + s net) where a battle's winner takes all of it
+  (+16 + 3s): at stake 50, +66 against +166.
 - **Practice / same device**: unchanged `troPractice` - tabs of one browser (bc) and two players from one device's store
   make the whole party practice (no holds, the room says so). A guest whose own transport is bc, whose store is read-only,
   or who did not agree to the stake in this mode plays the party as practice for itself.
@@ -332,7 +377,7 @@ that is the gap the void closes.
 
 | Who | Can | Cannot |
 |---|---|---|
-| Hostile host | Give me last place: −(stake + 6) per party, and not before 105 s of real time after my hold (my `min`: a ranked party has ≥ 2 min of play, so this is the battle's own check). Gift me trophies, claim practice, refuse to pay (refund after 15 s), void the party (`v: 1`: refund now), keep starting 파티 한 번 더 (I can leave at the podium for free). | Take more than I hold; apply twice; change my players or stake (my hold is the truth); hold a stake I did not agree to in this mode; make me pay a stake I did not put in (`row[5]`); make me hold over bc. |
+| Hostile host | Give me last place: −(stake + 6) per party, and not before 105 s of real time after my hold (my `min`: a ranked party lasts ≥ 2 min from its first 시작! on the host's clock, so this is the battle's own check). Gift me trophies, claim practice, refuse to pay (refund after 15 s), void the party (`v: 1`: refund now), keep starting 파티 한 번 더 (I can leave at the podium for free). | Take more than I hold; apply twice; change my players or stake (my hold is the truth); hold a stake I did not agree to in this mode; make me pay a stake I did not put in (`row[5]`); make me hold over bc. |
 | Hostile guest | As in a battle: lie about its count, skip its hold, send `gg` / `cup`, claim in `st` a stake it never held (the pot gets up to one stake nobody paid, split by place). | Change anyone else's count; block the result. |
 | Local user | Alts on other devices, at the party's pace (5.2). | Beat the battle's pace. |
 
@@ -340,14 +385,22 @@ that is the gap the void closes.
 
 ## 6. Cloud (`firebase/firestore.rules`): no change
 
-- **Biggest single write**: the hold (−56) syncs at the first 시작!; the settle gives it back with the net and the +5. A
-  finished party: at most 56 + 116 + 5 = **177**; a 기권승: 56 + 150 = **206**; both ≤ 250 (the rule's `rise <= 250`).
-- **Time**: a finished ranked party has ≥ 2 min of play after the hold write, so `rise × 500 ≤ 10000 + dt` allows 260 by
-  then: no split. A 기권승 can come seconds after the hold (everyone leaves); `clStep` splits a rise the rule would refuse,
-  exactly as for a battle's early walkover. No coin write happens mid-party (`coinPartyNow` pays at the podium), so the
-  slot's last write before the settle is the hold.
+- **The hold is never written.** `clCanPush` refuses while this tab has an open hold (`!troOpenHere()`, cloud-trophies.md:
+  "never during an open hold"), so from the first 시작! to the settle this tab pushes nothing, and the settle's write
+  rises `t` by net + the +5 against the slot's last write (made before the party): a finished party at most
+  116 + 5 = **121**, a 기권승 at most **150** - the same 기권승 bound as a battle's, and under a battle win's 166 + 5.
+- **Another tab of the same browser** (one store, one slot) may push meanwhile, with the hold already subtracted from
+  `S.t`; then the settle rises by up to stake + 6 more: **177** / **206**. Every case is ≤ 250 (the rule's `rise <= 250`).
+- **Time**: `rise × 500 ≤ 10000 + dt` (dt since that slot's last write). A finished ranked party's span is ≥ 2 min, so a
+  write from before the party allows ≥ 260. A 기권승 seconds after the hold, or the other-tab case, can be refused by the
+  time rule; `clStep` caps each write to what the rule allows and the rest goes in the next writes, exactly as for a
+  battle's early walkover.
 - `de` ≤ 40: the +5 comes from the same `DAY_CAP` 40. `g` +1 a party (≤ 20); `w` +0..1 (≤ the rise of `g`); `ko` +0 (a party
-  has no 뽀득 KO). The invite rule already accepts `mode: 'party'`. Nothing to publish before this deploy.
+  has no 뽀득 KO). The coins of the same podium (`coinPartyNow`) ride in the same write and keep their own `ce` limits,
+  which `clStep` already caps. The invite rule already accepts `mode: 'party'`. Nothing to publish before this deploy.
+- **The no-push window is now a whole party** (2-7 minutes instead of a 2-5 minute battle), and sign-in / sign-out are
+  refused while `S.esc` has a hold (`clMsg('held')`): a friend who tries mid-party is told to wait until the podium
+  (risk 8).
 
 ---
 
@@ -363,8 +416,11 @@ that is the gap the void closes.
 - **Mode switch with a stake** (guest, 4 s, `troMsgSet`): `파티로 바뀌었어요: 10개씩 · 다시 준비해 주세요` / `배틀로 바뀌었어요:
   10개씩 · 다시 준비해 주세요`.
 - **Guest summary**: `파티 · 미니게임 3판 · 능력 있음 · 트로피 10개씩` (`트로피 안 걸기` at 0; then ` · 연사`, ` · 연습 경기` as today).
-- **Rules** (`partyRules(q)`: `PARTY_TX.noTro` is replaced by the trophy lines; the numbers from `troPartyTable` with
-  n = the room's size clamped to 2..4, distinct places):
+- **Ranked for me** (**new** `troPartyOn()`, one helper for every party trophy text - rules, summary item, countdown
+  sub, card chip): `NET.role === 'host' || NET.pv >= PARTY_TRO_V`. A guest of an older host keeps today's lines
+  (`PARTY_TX.noTro`, no summary item, no countdown part, no chip): that party holds nothing for it (4).
+- **Rules** (`partyRules(q)`: `PARTY_TX.noTro` is replaced by the trophy lines when `troPartyOn()`; the numbers from
+  `troPartyTable` with n = the room's size clamped to 2..4, distinct places):
   1. `미니게임 3판! 판마다 1등 4점 · 2등 2점 · 3등 1점 · 4등 0점` (unchanged), `마지막 판은 점수 2배!`, `끝나면 보너스상 3개 · 상마다
      +2점`, the tie line and the games line (unchanged)
   2. q 0, stake 0: `트로피 경기: 최종 1등 +16 · 2등 +8 · 3등 +2 · 4등 -6`
@@ -377,14 +433,21 @@ that is the gap the void closes.
   7. q 1 / 2: `연습 경기라 트로피는 그대로예요` (the coin line beside it already says why)
   8. the coin line, the magazine / 연사 line, the trap line and `판 중간에 나가면 비누 코인이 없어요` (unchanged)
 
+  The list grows from 10 lines to 13 (14 with a free seat); a battle room has 8-9. The room screen must still fit at
+  568x320 with the list as tall as that (check it where the room's fit is tested; if it does not, drop the tie line
+  `PARTY_TX.tie` first - the podium's notes say it when it happens).
+
 ### 7.2 Countdown and the card
 
-- **3-2-1 of the first 판** (`troCountSub`'s party branch: `partyRoundTx(true)` + this, only while `G.party.i === 0` online;
-  later 판 unchanged): `1판 / 3판 · 트로피 10개씩 걸어요!` (class ` bet`), `1판 / 3판 · 트로피 경기`, practice `1판 / 3판 · 연습
+- **3-2-1 of the first 판** (`troCountSub`'s party branch: `partyRoundTx(true)` + this, only while `G.party.i === 0`,
+  online and `troPartyOn()`; later 판 unchanged. Like a battle's, the line is the host's view - its stake, its `NET.q` -
+  carried to guests in `g.bn`): `1판 / 3판 · 트로피 10개씩 걸어요!` (class ` bet`), `1판 / 3판 · 트로피 경기`, practice `1판 / 3판 · 연습
   경기` (class ` prac`). The host's banner reaches guests in `g.bn` as today.
 - **The first card**: a chip in the round line beside `#pg-party-x2`: **new** `<b id="pg-party-bet" class="pg-party-bet"
   hidden><canvas class="pg-ic pg-cup" width="8" height="8" aria-hidden="true"></canvas><span>10개씩</span></b>`, shown on the
-  first card of a ranked staked party only (the hold comes at its 시작!), each page from its own `stakeNow()` / `NET.q`;
+  first card of a ranked staked party only (the hold comes at its 시작!), each page from its own `stakeNow()` / `NET.q` /
+  `troPartyOn()` (and hidden on a page that would play it as practice for itself: bc without `allowBc`, or a ready that
+  was not for this stake in this mode - the same tests as `troGuestGo`);
   `안 걸고 참여` when this seat plays without the stake. aria-label `트로피 10개씩 걸어요` / `안 걸고 참여해요`. Inline (no
   height): the round line `1판 / 3판` + the chip is about 9em, inside the 1x card's 17.4em (party.md 9.2). CSS as `.pg-party-x2`
   with `var(--duck)` on ink, like `.pg-badge.pg-bet`. Under 17em of height the round line hides (and the chip with it);
@@ -392,7 +455,10 @@ that is the gap the void closes.
 
 ### 7.3 The final podium
 
-`troPodiumUI`'s party branch becomes: `partyPodiumTitle()`, `partyPodiumUI()`, then the trophy pieces a battle has.
+`troPodiumUI`'s party branch becomes: `partyPodiumTitle()`, the practice `TRO.pod` exactly as a battle builds it (`NET.q
+!== 0`: kind `'prac'` - today the party returns before it), `partyPodiumUI()`, then the trophy pieces a battle has, with
+the party's own tag and note (below) - never `troPodiumTag`'s `연습` / `기권승` / `무승부`, which the party's note and
+lines say instead.
 
 - **Blocks**: the 2nd line flips from the party points to cup + my change (`troPodLine`, unchanged; the points stay in the
   HUD panels and the sr line), then alternates with my coins (`coinPodLine`, unchanged). The flip happens for every
@@ -400,8 +466,11 @@ that is the gap the void closes.
 - **Cups**: from every block with a loss to the blocks with a **gain**, best first, round-robin (`TRO.pod.party`; a
   battle keeps "to whoever took the pot"). At stake 0, one cup per losing block, as a battle.
 - **`#pg-podium-bonus`** (every page, after my count-up): `오늘 트로피 보너스 +5`, `안 걸고 참여 · 오늘 트로피 보너스 +5`,
-  `안 걸고 참여`; a short party `파티가 너무 빨리 끝나서 트로피는 그대로예요`. `partyPodiumUI` no longer hides it.
-- **Tag**: `3판` / `5판` as today; `승급! 온탕 단골` (class `pg-promo`) replaces it after my count-up when I was promoted.
+  `안 걸고 참여`; a short party `파티가 너무 빨리 끝나서 트로피는 그대로예요` **at once** - a short (or void, or practice)
+  `TRO.pod` has no rows, so `troPodiumTick` returns before `upDone` and `troPodBonus` would never fill it: `troPodBonus`
+  shows the `'short'` text without waiting for `upDone`. `partyPodiumUI` no longer hides the line.
+- **Tag**: `3판` / `5판` as today; `승급! 온탕 단골` (class `pg-promo`) replaces it after my count-up when I was promoted
+  (`troPodiumTag`'s party branch: 승급 or `P.n + '판'`, nothing else).
 - **Note** (`#pg-podium-note`, one line): in this order - a void walkover `친구가 나가서 일찍 끝났어요 · 트로피는 그대로예요`; a
   paid walkover `친구가 나가서 일찍 끝났어요 · 기권승`; the host's blocked gate `트로피가 모자란 친구가 있어요 · 방으로 가서 걸기를
   바꿔요`; the tie notes (unchanged: `동점은 1등을 더 많이 한 친구가 위예요`, `동점은 마지막 판 등수로 정했어요`, `공동 2등!`); the
@@ -409,11 +478,15 @@ that is the gap the void closes.
 - **파티 한 번 더**: disabled while `!troCanRematch()` (host), as 한 판 더 (`primaryAction` and the click already check it;
   `partyPodiumUI` stops forcing `disabled = false`).
 - **Guest wait line**: `방장이 다음 판을 고르고 있어요 · 다음 파티도 10개씩` (+ ` · 나는 안 걸고 해요`), stake 0 unchanged.
-- **Screen reader** (`fillPodium`, unchanged code): `1위 방장 (꽥꽥이) 12점, … , 내 트로피 +26개, 오늘 트로피 보너스 +5개,
-  지금 131개` + the coins; practice `, 연습 경기라 트로피는 그대로예요`; a short party `, 파티가 너무 빨리 끝나서 트로피는 그대로예요`.
+- **Screen reader** (`fillPodium`: one new branch, `P.kind === 'short'`): `1위 방장 (꽥꽥이) 12점, … , 내 트로피 +26개,
+  오늘 트로피 보너스 +5개, 지금 131개` + the coins (unchanged code); practice `, 연습 경기라 트로피는 그대로예요` (unchanged code,
+  now reached because a practice party builds its `'prac'` pod); a short party `, 파티가 너무 빨리 끝나서 트로피는 그대로예요`
+  (new).
 - **Leaving** (unchanged code, now armed mid-party): `한 번 더 누르면 나가요 · 트로피 -16`, `한 번 더 누르면 모두 방으로 · 내
   트로피 -16`.
-- **내 기록**: `<dt>배틀</dt>` → `<dt>배틀·파티</dt>` (the same `N승 / N판`).
+- **내 기록**: `<dt>배틀</dt>` → `<dt>배틀·파티</dt>` (the same `N승 / N판`, static in `page.html`); its note line
+  `오늘 트로피 보너스 N/40개 · 목욕도 배틀도 받아요` → `… · 목욕도 배틀도 파티도 받아요` (`fillRec`; the +5 now comes from parties
+  too).
 
 ### 7.4 New strings (`PARTY_TX`, warmed through `PARTY_TEXT`; numbers and stakes filled at run time)
 
@@ -433,6 +506,7 @@ that is the gap the void closes.
 | `nextFreeMe` / `nextFree` | `내 트로피가 모자라서 다음 파티는 안 걸고 해요` / `다음 파티는 안 걸고 하는 친구가 있어요` |
 | `waitBet` | ` · 다음 파티도 {0}개씩` |
 | `recRow` | `배틀·파티` |
+| (`fillRec`, `TRO_TEXT` warm-up) | `목욕도 배틀도 파티도 받아요` (replaces `목욕도 배틀도 받아요`) |
 
 New syllables (`최종`'s 종 is in `최종 순위`; `나눠요`, `너무`, `끼리` are new to the party text) are warmed by `PARTY_TEXT`.
 party.js's font check covers them.
@@ -444,30 +518,35 @@ party.js's font check covers them.
 | Where | Change |
 |---|---|
 | Top constants | `PARTY_V = 4`; `PARTY_SHARE`, `PARTY_TRO_V`, `PARTY_TRO_MINF` (2.1); the `PARTY_TX` keys of 7.4. |
-| `troPartyTable`, `troPartyReal`, `troPartyMinF`, `troPartyResult` | **New** (2.1, 3.2). |
-| `stakeNow` | `pvp() ? NET.opts.bet \| 0 : 0`. |
-| `troHostGo` | No `G.party` return; `if (TRO.match && TRO.match.mid === mid) return;`; `TRO.match.pf = 0`. |
+| `troPartyTable`, `troPartyReal`, `troPartyMinF`, `troPartyResult`, `troPartyOn` | **New** (2.1, 3.2, 7.1). |
+| `stakeNow` | `pvp() ? NET.opts.bet \| 0 : 0` (feat/toss: keep `&& !AIT.on`). |
+| `troHostGo` | No `G.party` return (the rest of that line stays); `if (TRO.match && TRO.match.mid === mid) return;` first; `TRO.match.f0 = G.frame`. |
 | `updateCountdown` | The party branch calls `troHostGo()` after `miniStart()`. |
-| `partyResult` | `TRO.match.pf += G.mini.t`. |
+| `partyResult` | No change. |
 | `partyFinal` | `troPartyResult(walk)` after `G.podium`, before `coinPartyNow` / `showOverlay('podium')`. |
-| `guestHostIn` | The trophy line for `g.m === 'p' && NET.pv >= PARTY_TRO_V` (3.1). |
-| `troGuestGo` | The party `min`; the mode in the consent test. |
-| `troResultIn` | Party detection by `CO.pa.gid`, `troPartyReal`, `v: 1` (3.2); `troPodium(…)` gets `party` for the cups. |
+| `guestHostIn` | The trophy line for `g.m === 'p' && NET.pv >= PARTY_TRO_V`; `troGuestGo(id, g.m === 'p')` (3.1). |
+| `troGuestGo` | `party` argument; the party `min`; the mode in the consent test; `TRO.live.get(mid).pa = CO.pa` after a party hold. |
+| `troResultIn` | Party detection by `TRO.live`'s `pa`, `troPartyReal(A, …)`, `v: 1` for a party hold of this tab only (3.2); `troPodium(…)` marks `party` (`!!G.party`) for the cups. |
 | `troPodium` / `troPodiumTick` | `TRO.pod.party`; cups to the blocks with a gain (7.3); kind `'short'`. |
-| `troPodBonus` | The `'short'` text. |
-| `troPodiumUI` / `partyPodiumUI` | 7.3: the bonus line, the tag's 승급, the notes' order, the gate, the wait line. |
+| `troPodBonus` | The `'short'` text, shown without `upDone` (no rows: no count-up). |
+| `troPodiumTag` | A party: 승급 or `P.n + '판'` only. |
+| `troPodiumUI` / `partyPodiumUI` | 7.3: the practice pod for a party too, the bonus line, the tag's 승급, the notes' order, the gate, the wait line. |
+| `fillPodium` | The `'short'` sr text. |
 | `troCountSub` / `troCountCls` | The first 판's trophy part (7.2). |
 | `fillParty` (card view) | The `#pg-party-bet` chip (7.2). |
-| `partyRules` | The trophy lines (7.1); `troParts(s)` takes the party table in a party room (`troRulesLine` / `troFreeLine` call it). |
+| `partyRules` | The trophy lines when `troPartyOn()` (7.1); `troParts(s)` takes the party table in a party room (`troRulesLine` / `troFreeLine` call it). |
 | `roomInfo` | `R.pv = PARTY_V` in a party room. |
+| `netAttach` | `NET.pv = 0`; `TRO.agreedM = ''` beside `TRO.agreed = -1`. |
 | `guestRoom` | `NET.pv`; the mode-consent line and its message. |
+| `guestToRoom` | `TRO.agreedM = ''` beside `TRO.agreed = -1`. |
 | `netReady` | `TRO.agreedM = NET.ready ? NET.mode : ''`; `rd` gains `md`. |
 | `netMsgIn` `'rd'` | The `md` test (4). |
 | `netSetOpts` | A mode change while `stakeNow() > 0` un-readies every guest. |
 | `troLowerStake` | Its message when `pvp()`. |
 | `renderRoom` | The guest summary's `트로피 …` item in a party. |
 | `buildOpts` | The 트로피 걸기 row `data-for 'bp'`. |
-| `fillRec` / `src/page.html` | `<dt>배틀·파티</dt>`; the `#pg-party-bet` chip and its CSS. |
+| `fillRec` / `src/page.html` | `<dt>배틀·파티</dt>`, `목욕도 배틀도 파티도 받아요`; the `#pg-party-bet` chip and its CSS. |
+| Comments | The party section's "비누 코인 only (no trophies)" (above `rematch`'s party section), `troHostGo`'s "(a party holds no trophies)", `partyRules`' "(no trophy lines: a party has none)" and the 1.x notes of party.md 0 / 8.4 point here. |
 | `PG.debug.tro` / `PG.debug.party` | 9.1. |
 
 About **220-260 changed lines** in `game.js`, ~10 in `page.html`, ~300 in tests.
@@ -479,7 +558,11 @@ About **220-260 changed lines** in `game.js`, ~10 in `page.html`, ~300 in tests.
 ### 9.1 Debug
 
 - `PG.debug.tro.ptable(n, s, fin, gl, gz, rot)` (the pure table), `PG.debug.tro.partyMin(f)` (the void floor in frames;
-  `null` = the default: 0 in the fast party, else `PARTY_TRO_MINF`), `state()` gains `agreedM`, `pv` and `match.pf`.
+  `null` = the default: 0 in the fast party, else `PARTY_TRO_MINF`), `PG.debug.tro.preal(nf)` (`troPartyReal(CO.pa, nf)`),
+  `PG.debug.tro.gg(on)` (`troGg(on)`), `hold(mid, s, n, min, nos, pa)` (6th argument: mark the hold's `TRO.live` with
+  `CO.pa`),
+  `state()` gains `agreedM`, `pv`, `match.f0` and `livePa` (the `live` mids that carry a party's counters; `live` itself
+  stays the array of mids existing tests read).
   `PG.debug.party.state()` is unchanged.
 
 ### 9.2 `src/tests/trophies.js` (virtual time)
@@ -490,6 +573,16 @@ About **220-260 changed lines** in `game.js`, ~10 in `page.html`, ~300 in tests.
    the remainder rotates with `rot` (three runs of 4p 1st = 2nd = 3rd at stake 5: each seat gets the extra once).
 3. `apply` of party rows: the +5 once, none for the last place or a tie for it, none in a 기권승; a hostile row clamped as
    a battle's; `row[5] === 0` pays no stake.
+4. `troPartyReal` over crafted party counters (`CO.pa` as `PG.debug.party`'s coin tests craft it): 2 blows in each of 3
+   판 (6, no single 판 reaching 5) → real; 4 in all → not; 5 blows but `pf` under 3600 → not (and real again with the
+   fast party on); one finisher → not.
+5. Replays on a party hold (the debug `hold` gains a 6th argument `pa`: after the hold, `TRO.live.get(mid).pa = CO.pa`, as
+   `troGuestGo` does): `apply({v: 1, r: []})` for a battle hold (no `pa`) changes nothing; for the party hold refunds it
+   once and shows `'short'`; a normal result after it, or a second `v: 1`, changes nothing and never restarts the pod; a
+   `v: 1` after an applied result changes nothing.
+6. The quick-rematch race: a party hold with `pa`, then `CO.pa` replaced by a new party's (another gid, 0 blows), then the
+   old party's result → applied once, with the +5 from the OLD party's counters (the new `CO.pa` untouched: no
+   `coinPartyClose` from `troResultIn`).
 
 ### 9.3 `src/tests/trophies-net.js` (3 bc frames, real time)
 
@@ -497,7 +590,8 @@ About **220-260 changed lines** in `game.js`, ~10 in `page.html`, ~300 in tests.
   `파티로 바뀌었어요: 10개씩 · 다시 준비해 주세요`; an `rd` with `md: 'b'` arriving after the switch is refused; back to 배틀
   at 안 걸기 un-readies nobody.
 - **R in a party room**: `o[4]` the stake, `pv` 4, `R.f` for a short seat; the 트로피 걸기 row visible and enabled for the host.
-- **Older host**: a party room's R without `pv` (patched host) → the new guest holds nothing at the first 시작!.
+- **Older host**: a party room's R without `pv` (patched host) → the new guest holds nothing at the first 시작!, its room
+  rules say `트로피는 걸지 않아요` (no trophy line, no `트로피 …` summary item) and its first card has no chip.
 
 ### 9.4 `src/tests/party.js` (virtual time, offline engine)
 
@@ -526,6 +620,15 @@ About **220-260 changed lines** in `game.js`, ~10 in `page.html`, ~300 in tests.
 - **The host's 방으로 mid-party** (a result beat of 2판): the host −16; guests refunded after `expire()`. **The host leaving
   mid-party**: guests refunded (`host_left`) and in the lobby (the existing check).
 - `hi.pa: 3` crafted guest: never ready in a staked party room; snapshots stay ≤ 3400 bytes.
+- **The guest's minimum time** (the one path `tro.fast(true)` hides): one guest frame with `tro.fast(false)` - the fast
+  party ends far under 105 s, so its result is refused there (`'wait'`), refunded after `expire()`, while the other
+  frames apply theirs.
+- **Away between 판** (**new** `PG.debug.tro.gg(on)` = `troGg(on)`, since an iframe cannot be hidden): one guest sends
+  `gg` on during the 2판 card and off again before the end → a finisher with its normal row; another sends `gg` on, then
+  `away(true)` and its link is cut → forfeit on its own page, its stake in the pot on the host.
+- **The +5's real test online**: a guest frame that blows nothing during the whole party gets its place points but no
+  +5; the others (the test drivers blow in every 판) get it, the last place excepted.
+- **Short party gate**: after `v: 1`, 파티 한 번 더 is enabled at once (no `TRO.lastRes`), and the next party holds again.
 
 ### 9.6 Jobs
 
@@ -540,12 +643,16 @@ One lean build pass (engine + UI), one tests pass, one suite run (about the size
 working:
 
 1. **Must**: the constants, `troPartyTable` + `PG.debug.tro.ptable`, trophies.js 9.2 (the numbers are the contract).
-2. **Must**: the hold and the settle - `stakeNow`, `troHostGo`, `partyResult` / `partyFinal` → `troPartyResult`, the guest's
-   `g.m === 'p'` line, `troGuestGo`'s min, `troResultIn`'s party real test; `PARTY_V` 4 and `R.pv`.
-3. **Must**: the room - the 트로피 걸기 row for a party, the rules lines, the summary; mode consent (`agreedM`, the switch,
-   `rd.md`).
-4. **Must**: the podium - the party branch of `troPodiumUI` (bonus line, gate, notes, wait line), cups to the gains.
-5. **Should**: the void under 2 minutes (`tro.v`, the short line); the countdown sub; `배틀·파티`.
+2. **Must**: the hold and the settle - `stakeNow`, `troHostGo` (`f0`), `partyFinal` → `troPartyResult`, the guest's
+   `g.m === 'p'` line, `troGuestGo(id, party)` (min, mode consent, `TRO.live`'s `pa`), `troResultIn`'s party real test;
+   **the void under 2 minutes with `tro.v`** (it ships with the guest's 105 s `min`: without it a short honest party
+   would pay the host while every guest's result is refused as too early and refunded - the host's trophies made from
+   nothing); `PARTY_V` 4 and `R.pv`.
+3. **Must**: the room - the 트로피 걸기 row for a party, `troPartyOn()`, the rules lines, the summary; mode consent
+   (`agreedM`, the switch, `rd.md`).
+4. **Must**: the podium - the party branch of `troPodiumUI` (practice pod, bonus line incl. the short one, tag, gate,
+   notes, wait line), `fillPodium`'s short text, cups to the gains.
+5. **Should**: the countdown sub; `배틀·파티` and the 내 기록 note.
 6. **Could**: the first card's chip (fallback: the countdown sub alone says it).
 7. Tests (9.3-9.5), then the suite run; the "As built" note in this file.
 
@@ -559,21 +666,36 @@ working:
 2. **One hold for a long match**: 6-7 minutes for a 5판 party. A guest that steps away mid-party (switching apps) and loses
    its link is last place, as in a battle, but the window is longer. `troStale`'s 15 min covers a 5판 party about twice;
    a host tab left hidden for minutes freezes the party (and the hold) as it freezes a battle.
-3. **The 2-minute void** could void a rare honest 3-player 물 · 왕관 · 물 party, and **feat/party-games** may add games under
-   60 s: a party of short games would then be void every time. That PR must re-check `PARTY_TRO_MINF` (a per-game
-   minimum, or a lower floor with the guest's `min` lowered to match).
-4. **Merges**: feat/party-games also bumps `PARTY_V` (the later PR takes the next; `PARTY_TRO_V` stays the version that
-   first ranked parties) and edits `partyRules`, `partyPodiumUI`, `PARTY_TX`; it may add the host's party version to `R`
-   too (party-polish 14.4) - then reuse it instead of `pv`. feat/toss edits `stakeNow`, `troHostGo`, `troCountSub` /
-   `troCountCls` and the room's trophy lines: whoever lands second adds `AIT.on` to the new party branches (the texts of
-   7.1-7.3). Trophies stay off in Toss even if a text is missed, because every hold and result goes through `troEscrow` /
-   `troApply` / `troResultIn`.
+3. **The 2-minute void** (first 시작! → final standing) voids only a deliberately drowned 3-player 물 · 왕관 · 물 today.
+   **feat/party-games** adds 펑 (45 s) and round games that often end under a minute; with the span (cards and beats
+   included) a 3판 of them stays over 2 minutes unless its 물 is drowned on purpose, but that PR must still re-check it
+   with its real lengths (and its `fastSecs` for the debug floor). If the floor ever moves, the guest's `min` moves with
+   it (`PARTY_TRO_MINF / 60 * 1000 − TRO_SLACK_MS`): a host floor below the guests' `min` pays the host while refusing
+   every guest.
+4. **Merges**: feat/party-games also bumps `PARTY_V` (the later PR takes the next; `PARTY_TRO_V` must equal the
+   `PARTY_V` of the release that ships party trophies) and edits `partyRules`, `partyPodiumUI`, `PARTY_TX`, `partyPlan`;
+   it may add the host's party version to `R` too (party-polish 14.4) - then reuse it instead of `pv`. feat/toss (as on
+   its branch today) gates `stakeNow` (`&& !AIT.on`), `troEscrow`, `troApply`, `troWait`, `troResultIn`, `troGuestGo` and
+   `troHostGo` on `AIT.on`, and gives the battle texts an `AIT_TX` branch (`partyRules` uses `AIT_TX.friendly` instead of
+   `PARTY_TX.noTro`). Whoever lands second: keep `!AIT.on` in the new `stakeNow`; keep `AIT.on` first in `troHostGo`'s
+   rewritten return line (then `TRO.match` stays null and `troPartyResult` returns at once - give it its own `AIT.on`
+   return too); put `troResultIn`'s new party / `v: 1` branch after its `AIT.on` return; and make `troPartyOn()` false
+   when `AIT.on`, so the room rules keep `AIT_TX.friendly` and no party trophy text (rules, summary, countdown, chip,
+   podium bonus) shows in Toss. Trophies stay off there even if a text is missed, because every hold and result goes
+   through the gated functions.
 5. **Older pages**: a cached pa-3 page must refresh to play a party (`새로고침 필요`); a new page as a guest of a pa-3 host
    plays its party unranked (no `R.pv`). Nothing on the wire can mint or lose trophies across versions.
 6. **Tests that assumed no trophies in a party** (party-net's two checks, any count of `t === 100` after a party) must
    flip in the same PR.
 7. **The 3rd place breaks even at stake 10 with 4 players** (+2 + 8 − 10 = 0) and loses a little at 20 / 50: intended
    ("차등"), but friends may read 0 as "nothing happened". The podium's flip shows `0` in the grey of a battle's 0.
+8. **The cloud waits a whole party**: no push from the first 시작! to the podium (2-7 minutes), and sign-in / sign-out
+   are refused with the `held` message until then. A phone that dies mid-party keeps its hold locally until `troStale`
+   (15 min) on its next load, as for a battle.
+9. **The party room's rules list** grows to 13-14 lines (7.1): the room must still fit a 568x320 phone.
+10. **A quick 파티 한 번 더 at 안 걸기** opens the gate at once (`TRO.lastRes.s === 0`), so a guest's `tro` can land after
+    the next party's first snapshot: covered by the hold's own `pa` (3.2) and the `'wait'` window, but it is the one
+    party path where the result and the next game overlap.
 
 ---
 
@@ -584,11 +706,68 @@ working:
 2. The split 4명 50 / 30 / 20 / 0, 3명 60 / 30 / 10, 2명 100 / 0? **Default: as written** (constants, `PARTY_SHARE`).
 3. A tie's leftover trophy (at most 2): rotated by the game id? **Default: rotated** (never always the host; the other
    choice is seat order).
-4. A party under 2 minutes of play pays no trophies? **Default: yes** (keeps a party at or below a battle's pace; only a
-   3-player 물 · 왕관 · 물 can be that short).
+4. A party whose first 시작! → final standing took under 2 minutes pays no trophies (every hold refunded)? **Default:
+   yes** (keeps a party at or below a battle's pace and matches the guests' 105 s check; today only a 3-player
+   물 · 왕관 · 물 with both 물 drowned on purpose is that short).
 5. Party wins and games in the same 내 기록 row (`배틀·파티`)? **Default: shared** (separate counters need a new store
    version and a cloud rules change).
 6. The stake chip on the first card only, or on every card? **Default: first card only** (the hold is at its 시작!; the
    last card already carries `점수 2배!`).
 7. A switch between 배틀 and 파티 with a stake on un-readies everyone? **Default: yes** (ready means ready for that stake
    in that mode).
+
+---
+
+## 13. Review against the code (2026-10-29)
+
+An adversarial pass over sections 0-12 against `src/game.js`, `src/net.js`, `firebase/firestore.rules`, the tests on
+main and the open branches (feat/toss, feat/party-games). The table function was re-run: every number in 2.2 holds, the
+pot is paid out exactly with any ties, leavers and 안 걸고 참여 (floors, then the best staker takes the rest; a tie group's
+remainder one each in seat order from the game id). What changed in this spec:
+
+| # | Found | Fix (where) |
+|---|---|---|
+| 1 | The void counted only playing frames (summed in `partyResult`). Per minute is the friends' real time; the cards and beats are part of the match. With feat/party-games' 45 s games a 3판 would be void most of the time while lasting as long as a battle. | The span from the first 시작! to the final standing on the host's `G.frame` (`TRO.match.f0`); no change in `partyResult` (0, 2.3, 3.2, 5.1, 11.3, 12.4). |
+| 2 | The void was a **Should**. Without it, a short honest party pays the host while every guest's result is refused by the 105 s `min` and refunded: trophies made from nothing on the host. | The void ships with the hold and the settle (10, step 2). |
+| 3 | Section 6 said the hold syncs at the first 시작!. `clCanPush` never pushes while this tab holds (`!troOpenHere()`). | The settle is one write of net + 5 (≤ 121 / ≤ 150; ≤ 177 / 206 only after another tab's push). Rules unchanged. The whole party is a no-push window; sign-in / sign-out refused meanwhile (6, risk 8). |
+| 4 | The guest found its party by `CO.pa.gid` and called `coinPartyClose` from `troResultIn`. At stake 0 the 파티 한 번 더 gate opens at once; the next party's first snapshot replaces `CO.pa`, and a late `tro` would then be read as a battle (wrong +5 test) - or close a 판 of the new party. | The hold keeps its party's counters (`TRO.live.get(mid).pa = CO.pa` in `troGuestGo`); `troPartyReal(A, nf)` reads them without closing anything (3.1, 3.2, 3.3, tests 9.2.5-6). |
+| 5 | The +5's real test had no play-time part ("implied by the void"): not true once the void counts the beats, and not true for 45 s games. | `troPartyReal` = the battle's `troReal` for a party: 2+ finishers, ≥ 5 blows and ≥ `COIN.minF` frames of play over the party (`A.pf`; waived in the fast party) (0, 2.3). |
+| 6 | `v: 1` refunded any hold of mine with that mid. | Only a party hold of this tab (`TRO.live`'s `pa`), after feat/toss's `AIT.on` return, under the existing replay guard; `troClose` already sends the `cup` (3.2, 4). |
+| 7 | `troGuestGo` read `G.party` to pick the party `min`. | `troGuestGo(id, party)` with the snapshot's own mode (3.1). |
+| 8 | The podium: `troPodiumTag` would print `연습` / `기권승` / `무승부` over a party's `3판`; the short line could never show (`troPodBonus` waits for `upDone`, which needs rows); `fillPodium` has no short text ("unchanged code" was wrong); a practice party never builds its `'prac'` pod, so the practice sr line the tests expect would not appear. | 7.3 and 8: the party tag rule, the short line at once, `fillPodium`'s new branch, the practice pod for a party. |
+| 9 | A guest of an older host (no `R.pv`) would still have shown the trophy rules, summary, countdown part and chip. | `troPartyOn()` gates every party trophy text (7.1, 7.2, test 9.3). |
+| 10 | 5.1 / 5.2: a 3-player 5판 can have two 60 s games, not three; 2 players always play 왕관 + 축구; the battle's 2-minute cycle is 2.05 min. | Recomputed: party ≤ 10.0 a minute against the battle's 10.2; 2 friends trading 2.2 against 2.7 (5.1, 5.2). |
+| 11 | The `PARTY_V` bump read as cosmetic. | It prevents a pa 3 guest's unpaid stake entering the pot (4, Old pages). |
+| 12 | Tests never exercised the guest's `min` (`tro.fast(true)` everywhere), the hidden-between-판 `gg`, the per-party blow count, the late `tro`, or an older host's room text. | 9.2 items 4-6, 9.3, 9.5 additions; `PG.debug.tro.gg`, `preal`, `hold`'s `pa`. |
+| 13 | Not in the spec: `TRO.agreedM` reset in `netAttach` / `guestToRoom`; `NET.pv` reset in `netAttach`; the 내 기록 note `목욕도 배틀도 받아요`; the stale "no trophies" comments; the room rules list length. | 8, 7.3, 7.4, 7.1, risk 9. |
+
+Checked and fine as written: one game id per party, so `TRO.seen` and the mid make "once per party" free; phase `'d'` is
+only the final podium (`PH_CODE`); `R` rides in every snapshot, read before `g`; `troApply` clamps a party row like a
+battle's (share ≤ stake × n covers the best staker's whole pot; a stale guest `n` only loosens or tightens a clamp, never
+mints); the host-leave paths (`net.js` `close('host_left')` → `netStatusIn` → `netLeave` → `netClose` →
+`troSessionEnd`) and the host's 방으로 (`netToRoom`'s `G.mode !== 'podium'` covers card, countdown, playing, result) are
+mode-agnostic; `partyDrop` returns at the podium and `hostDropPlayer` takes the party branch before `endBattle`; a
+hidden guest tab still holds and settles (network events); a reload between 판 is a `gg` leaver (hidden, then
+`pagehide`); `firestore.rules` needs no change (`de` ≤ 40 from `DAY_CAP`, `g` +1, `w` ≤ `g`, `ko` +0, every rise ≤ 250,
+the time rule handled by `clStep`).
+
+### 13.1 Every `NET.mode` read on main, for party trophies
+
+| Where (function) | Reads | Change |
+|---|---|---|
+| `stakeNow` | `=== 'battle'` | **`pvp()`** (feat/toss: `&& !AIT.on`) |
+| `troLowerStake` | `=== 'battle'` for its message | **`pvp()`** |
+| `palRowEl` (invite button aria), `palRender` (its cache key), `ivInvite` (the invite's mode) | the mode's name | none |
+| `pvp`, `seatReady`, `seatOld` | `!== 'coop'`, `=== 'party'` (the pa gate) | none (`PARTY_V` 4 does the gating) |
+| `netAdvertise` | `mode` of an open room | none (no stake in an ad) |
+| `roomInfo` | `R.m`, `R.u` | **`R.pv`** in a party room |
+| `netSetOpts` | sets the mode | **un-ready every guest on a mode change while `stakeNow() > 0`** |
+| `netStart` | which game to start | none |
+| `guestRoom` | `R.m` → `NET.mode` | **`NET.pv`; the mode-consent line** (`TRO.agreedM`) |
+| `syncOpts` | `'p'` / `'b'` rows | none (`buildOpts` puts the 트로피 걸기 row on `'bp'`; the lobby's pre-host options follow) |
+| `renderFriends` (lobby: mode buttons, `MODE_DESC`, the pre-host options, 방 만들기 label) | labels | none (`PARTY_TX.desc` says nothing about trophies) |
+| `renderRoom`: mode label, seat cache key, mode buttons, options box | labels / visibility | none (the stake badge, seat tags, ready button and messages follow `stakeNow()`) |
+| `renderRoom`: guest summary | battle parts carry `트로피 …`, party parts do not | **`트로피 10개씩` / `트로피 안 걸기` in a party when `troPartyOn()`** |
+| `renderRoom`: rules | battle `tro` lines / `partyRules(q)` | **`partyRules` trophy lines** (7.1) |
+| `renderRoom`: refresh message | `=== 'party'` | none |
+| `PG.debug.mp` state / decode | reports the mode | none (`state()` gains `pv`) |
