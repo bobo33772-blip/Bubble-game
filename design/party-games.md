@@ -1213,7 +1213,8 @@ snapshot budget.
 - party-net (plain run): a guest's body state carries `mi` only during a new game (none in 물, none at the podium).
 - party-net `#lag` (new job `party-net-lag`, rt300000): 13.2 sections 2, 3 and 5 as in 19.1.
 - Green: party (43 s), party-fit-568, party-net, party-net-lag, validate-levels, check-integration, audio-node, smoke,
-  final-e2e, final-e2e2, kits, touch-input, check-pages (battle-net, mp-net, ux-roomrow(-320): see the commit).
+  final-e2e, final-e2e2, kits, touch-input, check-pages, battle-net, mp-net, ux-roomrow, ux-roomrow-320 (no pwa, check-cloud,
+  cloud or full suite: another worktree's run-all was running).
 
 ### 19.4 For builder 3 (술래)
 
