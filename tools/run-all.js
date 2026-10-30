@@ -58,7 +58,8 @@ const LIST = [
   V('v3-levels', 'test-v3-levels.html', 60000, summaryZero('V3LEVELS')),
   // battle arenas in the engine: enemy pressure per spawn (16 seeds x 60 s idle), first stun, the drain drop
   V('v3-fixes', 'test-v3-fixes.html', 60000, doneZero('FIXES')),
-  V('arena-gate', 'test-arena-gate.html#' + encodeURIComponent(JSON.stringify({ seeds: 16 })), 120000, doneZero('AGATE')),
+  // (240 s: CI's runners took 91-116 s and twice hit 120 s on 10-30; the measurement has no early exit)
+  V('arena-gate', 'test-arena-gate.html#' + encodeURIComponent(JSON.stringify({ seeds: 16 })), 240000, doneZero('AGATE')),
   // 몬스터 출현 (design/distinction.md §3): off = no arena enemies and no intruder minions, KO / power-ups / podium as
   // before, the default unchanged, an older host's R (no o[5]) reads on; online over bc below (monsters-net)
   V('monsters', 'test-monsters.html', 120000, doneZero('MON')),
@@ -222,7 +223,7 @@ const LIST = [
   V('trophies-net', HTTP + 'test-trophies-net.html', 'rt480000', doneZero('TROPHYNET'), { done: 'TROPHYNET DONE', w: 1200, h: 900 }),
   // 파티 online (design/party.md §13.2; 4 bc frames): the old-page gate, the cards on every screen, the water clock, the
   // crown's authority, the podium and the coins, leavers, 파티 한 번 더
-  V('party-net', HTTP + 'test-party-net.html', 'rt420000', doneZero('PARTYNET'), { done: 'PARTYNET DONE', w: 1200, h: 900 }),
+  V('party-net', HTTP + 'test-party-net.html', 'rt600000', doneZero('PARTYNET'), { done: 'PARTYNET DONE', w: 1200, h: 900 }),
   // v4 shop online (design/shop.md 16.2, pass S4; 3 bc frames): hi.lk / 'eq' / R index 5 in the room only, forged sets,
   // an old-page guest; in game the room's sets frozen and drawn on every page, game-phase R seats 4 long in every
   // snapshot; battle coins = the host-side coinBattle on every page (the guest's clock), a countdown leaver, co-op 탕 /

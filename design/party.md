@@ -28,7 +28,7 @@ built as a self-contained "round with a placement result" that a board can drive
 | Minigames | **물 차오르기** (75 s, last one dry wins; survivors at time-up share 1st), **왕관 뺏기** (60 s, most crown time), **거품 축구** (60 s, 1v1 or 2v2, most goals; not for 3 players). Normal move / jump / shoot / drop-through controls, every animal's kit as in battle (with the room's 능력 끄기 and 연사), on one fixed screen. |
 | Bubbles on rivals | One rule for all three: a capture is a **short no-KO trap** (`MINI_TRAP` 90 f, mash out faster as in battle); touching a rival's prison only frees them (no 뽀득 KO, no points). 물: the prison sinks, and a prison carried into the water puts its animal out. 왕관: the holder drops the crown. 축구: the shot also pushes the ball. |
 | Arenas | Two new closed arenas in `PG.PARTY_ARENAS` (`levels.js`): **물 차는 대욕장** (5 one-way tiers) and **거품 축구장** (open field, a goal under a crossbar on each side). 왕관 뺏기 reuses the 4 battle arenas. |
-| Reward | **비누 코인 only**, by final rank, **no trophies** (no stake, no holds, no `tro`). Battle's anti-farm ideas: practice (`NET.q !== 0`: tabs of one browser, one device's store) pays nothing; a 판 pays only if I blew >= 2 bubbles in it; the rank bonus only for a finished party of >= 2 (a walkover pays participation only); >= 5 bubbles and >= 60 s played overall; every award through `coinGive` (the day's soft cap 400 then half, the day bonus). Per minute it pays less than a battle. |
+| Reward | **비누 코인 only**, by final rank, **no trophies** (a staked party has trophies since design/party-trophies.md; 안 걸기 is still this) (no stake, no holds, no `tro`). Battle's anti-farm ideas: practice (`NET.q !== 0`: tabs of one browser, one device's store) pays nothing; a 판 pays only if I blew >= 2 bubbles in it; the rank bonus only for a finished party of >= 2 (a walkover pays participation only); >= 5 bubbles and >= 60 s played overall; every award through `coinGive` (the day's soft cap 400 then half, the day bonus). Per minute it pays less than a battle. |
 | Network | Host-authoritative as battle. **No new message type.** Guests keep sending bodies, `shot`, `tp`, `mash`; the host's snapshot gains `g.pa` (party), `g.mg` (minigame), `g.pl` (podium places), `g.ak` (arena list) and two phases (`a` card, `r` result). `hi` gains `pa: 1`; `R.m` gains `'p'`; `R.o` gains `o[7]` (판 수). |
 | Old pages | `NET_V` stays 4. An older page cannot enter a party: in a party room the host counts a seat ready only when its `hi` said `pa` (`seatReady`, 6.1: its own ready flag is kept, so a switch back to 같이 하기 / 배틀 needs no re-ready), and the room says why (`새로고침 필요`). An older page as host never sends `'p'`. Lobby and invites list a party room only on new pages (6.2). |
 | Out of scope | The board, offline / one-screen party UI, trophies or 내 기록 stats for parties, new sprites / sounds / music, bots, a 3-player 축구, mid-party joins (section 14). |
@@ -727,6 +727,10 @@ party's award is at most 32 + 40 after minutes of play.
   soft cap halves both after 400 a day.
 
 ### 8.4 No trophies
+> **Superseded for a staked party (design/party-trophies.md, built on feat/party-trophies):** a party room at 5 / 10 / 20
+> / 50 is a 트로피 경기 - one hold at the first 시작!, settled by the final standing (`troPartyTable`: the battle's place
+> points, the pot split 50 / 30 / 20 / 0 · 60 / 30 / 10 · 100 / 0, the +5 once a party). At 안 걸기 everything below still holds.
+
 `stakeNow()` is 0 in a party room (the 트로피 걸기 row is hidden), `troHostGo` returns for a party, guests never run
 `troGuestGo` / `troWait` for `'p'`, `endBattle` (and `troHostResult`) never runs, `TRO_PLAY` (the +5) is not paid, 내 기록's
 battle counts do not move. The room rules say `트로피는 걸지 않아요`.

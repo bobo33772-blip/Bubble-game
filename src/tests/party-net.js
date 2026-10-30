@@ -3,11 +3,11 @@
 //   node tools/run-chrome.js http://localhost:8765/test-party-net.html - 1200 900 rt420000 "PARTYNET DONE"
 // Every frame: tro.ns('f' + i), tro.allowBc(true) (bc is practice otherwise), party.fast(true) (every game 12 s, the card
 // and the result beats PARTY_FF). host = slot 0 (꽥꽥이), A = slot 1 (까삐), B = slot 2 (펭펭), C = slot 3 (냥냥).
-//   1  the room: hi carries pa: 4 (PARTY_V); a party room's R says m 'p' and o[7] = the 판 수, its o[0..6] as a battle
-//      room's; a new page joining never shows 새로고침 필요 (sampled from the join on); a crafted older guest (the polish
-//      PR's hi, pa 3) is never ready - its seat says 새로고침 필요 on the host and on the other guests (R.u), its R.p
-//      ready flag is 0, 시작 is off, the room line says why; switched to 배틀 it is ready again with no new 준비;
-//      mp.guestRoom reads o[7] 5 / missing / junk as 5 / 3 / 3
+//   1  the room: hi carries pa: 6 (PARTY_V); a party room's R says m 'p' and o[7] = the 판 수, its o[0..6] as a battle
+//      room's; a new page joining never shows 새로고침 필요 (sampled from the join on); a crafted older guest (the hi of
+//      the party trophies' page, pa 5: its card would teach 왕관's old rule) is never ready - its seat says 새로고침 필요
+//      on the host and on the other guests (R.u), its R.p ready flag is 0, 시작 is off, the room line says why; switched
+//      to 배틀 it is ready again with no new 준비; mp.guestRoom reads o[7] 5 / missing / junk as 5 / 3 / 3
 //   2  a 3판 party (물 · 왕관 · 물, forced): the first card shows on the host and every guest, the same round lines, names
 //      and ready rows everywhere (my chip outlined on each page); each guest's 준비 (a jump press) reaches the host as pr
 //      and the ready rows agree everywhere; all ready -> the 3-2-1 on every page well before the auto start; the phases a /
@@ -32,7 +32,15 @@
 //   8  파티 한 번 더: a new game id, a new plan, nothing paid twice;  9  a guest leaving during the 2nd card, a 거품 축구
 //      (4 -> 3): that 판 is drawn again on every page (no 축구 for 3), the party finishes with 3, the leaver gets nothing;
 //      no allowBc (q 1): a finished party pays nobody; the host's 방으로 mid-party: everyone in the room, nobody paid; the
-//      host leaving mid-party: the guests in the lobby with 방장이 나갔어요, nobody paid
+//      host leaving mid-party (staked): the guests in the lobby with 방장이 나갔어요, nobody paid, their holds refunded
+//   10 파티 트로피 (design/party-trophies.md 9.5; 안 걸기 above stays unchanged - trophies untouched): a staked 3판 party of
+//      4 - the card chip, nothing held on the first card / 3-2-1, the 3-2-1 says the stake, one hold of 16 at the first
+//      시작! (none at 2판 / 3판), C leaving with 나가기 at the 2판 card (gg + forfeit, its stake in the pot), every count =
+//      ptable of the final standing, the +5 only for a real party (B blows nothing) and not the last, one tro per guest,
+//      cup + m, the podium rows, cups to the gains, the bonus line, the gate; 파티 한 번 더 holds again, gg on / off between
+//      판, B away + cut (forfeit, in the pot), A by the real clock (refused before 105 s -> wait -> refund); too short
+//      (tro.partyMin 1e9: v: 1, refund at once, the short line, the gate open at once); the host's 방으로 in a result beat;
+//      down to one (나가기: 기권승 the pot only / a cut link: void); a staked practice party (연습 경기라 트로피는 그대로예요)
 // Prints "PARTYNET PASS|FAIL <name>", "PARTYNET INFO ..." and "PARTYNET DONE pass=N fail=M".
 (function () {
   'use strict';
@@ -79,6 +87,8 @@
   const NICKS = ['방장', '까삐', '펭펭', '냥냥'], CHARS = ['duck', 'capy', 'penguin', 'cat'];
   let code = null;
   async function join(g) { await g.mp.join(code, { nick: NICKS[g.i], char: CHARS[g.i] }); return until(() => N(g).screen === 'room' && N(g).roster.length > 0, 4000); }
+  // the host's stake, then every guest seeing it (a ready sent before the guest knows the stake is for the old one: refused)
+  async function setBet(F, s) { F[0].mp.setOpts({ bet: s }); return until(() => F.slice(1).every((g) => N(g).tro.stake === s), 3000); }
   async function readyAll(F) { for (const g of F.slice(1)) g.mp.ready(true); return until(() => N(F[0]).canStart, 6000); }
   // put my own animal (each page moves its own) somewhere and face it one way
   async function place(fr, x, y, face) {
@@ -105,6 +115,13 @@
   };
   function watchPhases(F) { for (const f of F) { phases.set(f.i, []); seenBn.set(f.i, new Set()); } watch = setInterval(() => notePhases(F), 8); }
   const coinsOf = (f) => f.SH.state().ce;
+  // (파티 트로피) every 'tro' a guest's session receives; a page's link going silent (its BroadcastChannel posts nothing)
+  function watchTro(fr) { const s = fr.mp.session(); if (s && s !== fr.watched) { fr.watched = s; fr.tros = []; s.onMessage((from, m) => { if (m && m.t === 'tro') fr.tros.push(m); }); } }
+  function mute(fr, on) {
+    const BP = fr.w.BroadcastChannel.prototype;
+    if (on) { if (!fr.post) fr.post = BP.postMessage; BP.postMessage = function () {}; } else if (fr.post) { BP.postMessage = fr.post; fr.post = null; }
+  }
+  const TS = (fr) => fr.T.state();
   const TOP = (row) => 16 + row * 8;
   const inOrder = (list, want) => { let k = 0; for (const x of list) if (x === want[k]) k++; return k === want.length; };
 
@@ -117,7 +134,7 @@
     for (const g of [A, B]) await join(g);
     await until(() => N(H).roster.length === 3 && N(H).party.seats.every((s) => s.slot === 0 || s.hi), 4000);
     const PV = H.P.consts().PARTY_V;
-    ok('hi: every new page says pa: ' + PV + ' (4: 왕관\'s 1st wears it at time-up; 3 was the polish; the host records hi and pa)', PV === 4 &&N(H).party.seats.filter((s) => s.slot).every((s) => s.hi && s.pa === PV), N(H).party.seats);
+    ok('hi: every new page says pa: ' + PV + ' (6: 왕관\'s 1st wears it at time-up; 5 was the party trophies; the host records hi and pa)', PV === 6 && N(H).party.seats.filter((s) => s.slot).every((s) => s.hi && s.pa === PV), N(H).party.seats);
     const R0 = N(H).tro.R;
     ok('R: m \'p\', o[7] = 3 (the 판 수), the seats\' ready flags', R0 && R0.m === 'p' && R0.o.length === 8 && R0.o[7] === 3, R0);
     ok('guests read the party room (mode party, 3판)', [A, B].every((g) => N(g).mode === 'party' && N(g).opts.rounds === 3 && N(g).party.u.length === 0), [A, B].map((g) => N(g).party));
@@ -129,8 +146,8 @@
     await until(() => N(H).roster.length === 4 && N(H).party.seats.find((s) => s.slot === 3 && s.hi), 4000);
     await sleep(300); clearInterval(sampler);
     ok('a new page joining never shows 새로고침 필요 (the r.hi gate: not before its hi, not after)', !flicker && N(H).party.seats.find((s) => s.slot === 3).pa === PV, N(H).party.seats);
-    // a crafted older guest: C says hi again with pa 3 (the polish PR's page: its card would teach 왕관's old rule, the
-    // longest hold and the gold x2); a page older still sends a smaller pa or none: the same gate
+    // a crafted older guest: C says hi again with pa 5 (the party trophies' page: its card would teach 왕관's old rule,
+    // the longest hold and the gold x2); a page older still sends a smaller pa or none: the same gate
     C.mp.ready(true); await until(() => N(H).party.seats.find((s) => s.slot === 3).ready, 3000);
     C.mp.session().send(hostIdOf(C), { t: 'hi', n: NICKS[3], c: CHARS[3], cu: 100, d: N(H).roster[3].d || 'abcdef', z: 1, pa: PV - 1 });
     await until(() => N(H).party.seats.find((s) => s.slot === 3).old, 3000);
@@ -472,6 +489,11 @@
       D3.map((f) => doc(f, 'pg-podium-sum').textContent));
     for (const f of D3) f.T.allowBc(true);
 
+    // ---- 10. 파티 트로피: a staked party (design/party-trophies.md 9.5)
+    await stakedTests(F);
+    H.mp.toRoom(); await until(() => D3.every((f) => N(f).screen === 'room'), 6000);
+    await setBet(D3, 0);
+
     // ---- the host's 방으로 mid-party: everyone in the room, nobody paid
     H.mp.toRoom(); await until(() => D3.every((f) => N(f).screen === 'room'), 6000);
     H.P.force(['water', 'crown', 'water']);
@@ -486,17 +508,196 @@
     ok('방으로 mid-party: everyone back in the room, nobody paid', back2 && D3.every((f, k) => coinsOf(f) === ce4[k]), D3.map((f) => [N(f).screen, coinsOf(f)]));
     ok('방으로 mid-party: no page keeps the party (G.party / G.mini cleared behind the room panel)', D3.every((f) => !PS(f).on && PS(f).mini === null), D3.map((f) => [PS(f).on, PS(f).mini && PS(f).mini.id]));
 
-    // ---- the host leaving mid-party: the guests in the lobby with 방장이 나갔어요, nobody paid
+    // ---- the host leaving mid-party (a staked one): the guests in the lobby with 방장이 나갔어요, nobody paid, the guests'
+    // holds refunded (host_left), the host's own forfeited (it left)
+    await setBet(D3, 10);
     await readyAll(D3);
-    const ce5 = D3.map(coinsOf);
+    const ce5 = D3.map(coinsOf), tr5 = D3.map((f) => TS(f).t);
     H.mp.start();
-    await until(() => PS(H).ph === 'playing', 8000);
+    await until(() => PS(H).ph === 'playing' && D3.every((f) => TS(f).esc.length === 1), 8000);
     H.mp.leave();
     const lob = await until(() => [A, B].every((g) => N(g).screen === 'friends' && /방장이 나갔어요/.test(N(g).error)), 8000);
     await sleep(200);
     ok('host left mid-party: the guests are in the lobby with 방장이 나갔어요, nobody paid', lob && [A, B].every((g, k) => coinsOf(g) === ce5[k + 1]), [A, B].map((g) => [N(g).screen, N(g).error]));
+    ok('host left mid-party (staked): the guests are refunded (host_left), the host forfeits its own hold', [A, B].every((g, k) => TS(g).t === tr5[k + 1] && !TS(g).esc.length) && TS(H).t === tr5[0] - 16 && !TS(H).esc.length, [tr5, D3.map((f) => TS(f).t)]);
     ok('host left mid-party: no page keeps the party (the host\'s own, the guests\' mirrors)', D3.every((f) => !PS(f).on && PS(f).mini === null), D3.map((f) => [PS(f).on, PS(f).mini && PS(f).mini.id]));
     ok('no page error in any frame', F.every((f) => !f.errors.length), F.map((f) => f.errors));
+  }
+  // ---------------------------------------------------------------- 10. 파티 트로피 (design/party-trophies.md 9.5): a party
+  // at a stake is a 트로피 경기 - one hold at the first 시작!, settled by the final standing (troPartyTable); party.fast
+  // (the void floor is 0 there) and tro.fast on every frame unless said. Comes in with H, A, B at the practice podium, C in
+  // the lobby
+  async function stakedTests(F) {
+    const [H, A, B, C] = F, D3 = [H, A, B];
+    const signed = (v) => (v > 0 ? '+' : '') + v;
+    const waitOf = (f) => doc(f, 'pg-podium').querySelector('[data-net-wait]').textContent;
+    const midNow = () => TS(H).ms + '.' + N(H).gid;
+    for (const f of F) { f.T.fast(true); f.P.fast(true); f.T.set({ t: 100, de: 0 }); }
+    H.mp.toRoom(); await until(() => D3.every((f) => N(f).screen === 'room'), 6000);
+    await join(C); await until(() => N(H).roster.length === 4, 4000);
+    for (const g of [A, B, C]) watchTro(g);
+    await setBet(F, 10); H.P.force(['crown', 'crown', 'crown']);
+    const g0 = F.map((f) => TS(f).g);
+    if (!ok('staked: a party room at 10 with 4 players, everyone ready', await readyAll(F))) return;
+    // (each 판 the host gives the crown to y a short while, then to x while the blowers blow 3 bubbles, then ends it with x
+    // wearing it: a known standing - x 1st (it wears the crown at time-up), y 2nd (the longer hold of the rest), the rest
+    // tied 3rd)
+    const judge = async (x, y, blowers) => { H.P.crown(y); await sleep(400); H.P.crown(x); await Promise.all(blowers.map((f) => blows(f, 3))); H.P.skip(); };
+    // ---- the first card and its 3-2-1 hold nothing; the 3-2-1 says the stake; at the first 시작! every frame holds once
+    H.mp.start();
+    await until(() => F.every((f) => PS(f).ph === 'card' && f.P.card().shown && N(f).gid === N(H).gid), 5000);
+    const chips = F.map((f) => (doc(f, 'pg-party-bet').hidden ? '' : doc(f, 'pg-party-bet').textContent));
+    ok('staked: the first card says 10개씩 on every page (the stake chip, aria 트로피 10개씩 걸어요)', chips.every((c) => c === '10개씩') && doc(A, 'pg-party-bet').getAttribute('aria-label') === '트로피 10개씩 걸어요', chips);
+    let early = false; const subs = new Set();
+    while (PS(H).ph === 'card' || PS(H).ph === 'countdown') {
+      if (F.some((f) => TS(f).esc.length) && PS(H).ph !== 'playing') early = true;
+      const m = doc(A, 'pg-banner-main').textContent; if (m === '2' || m === '1') subs.add(doc(A, 'pg-banner-sub').textContent);
+      await sleep(15);
+    }
+    ok('staked: nothing held on the first card or its 3-2-1', !early);
+    ok('staked: the 3-2-1 on a guest says "1판 / 3판 · 트로피 10개씩 걸어요!" (the host\'s banner)', subs.has('1판 / 3판 · 트로피 10개씩 걸어요!'), [...subs]);
+    await until(() => F.every((f) => TS(f).esc.length === 1), 4000);
+    const mid = midNow();
+    ok('staked: at the first 시작! every frame holds 16 once, for the party\'s id', F.every((f) => TS(f).esc.length === 1 && TS(f).esc[0].h === 16 && TS(f).esc[0].m === mid && TS(f).t === 84) && TS(H).match && TS(H).match.mid === mid, F.map((f) => [TS(f).t, TS(f).esc]));
+    ok('staked: each guest\'s hold carries its party\'s coin counters (livePa)', [A, B, C].every((g) => TS(g).livePa.includes(mid)), [A, B, C].map((g) => TS(g).livePa));
+    if (!TS(H).match) return;
+    const f0 = TS(H).match.f0;
+    // (B never blows: its +5's real test fails; the others blow 3 bubbles in every 판. H 1st / A 2nd, B 1st / H 2nd, H 1st /
+    // A 2nd (x2): H 14, B 7 (1 win), A 7, C 4 - plus the 보너스상)
+    await judge(0, 1, [H, A, C]);
+    await until(() => F.every((f) => PS(f).ph === 'card' && PS(f).i === 1), 30000);
+    ok('staked: no second hold at the 2판 card (one hold; TRO.match kept with its f0); no stake chip on it', F.every((f) => TS(f).esc.length === 1 && TS(f).t === 84 && doc(f, 'pg-party-bet').hidden) && TS(H).match && TS(H).match.mid === mid && TS(H).match.f0 === f0, F.map((f) => [TS(f).esc.length, TS(f).t]));
+    await until(() => PS(H).ph === 'playing' && PS(H).i === 1, 15000); await judge(2, 0, [H, A, C]);
+    await until(() => PS(H).ph === 'playing' && PS(H).i === 2, 25000);
+    ok('staked: no second hold in 2판 / 3판', F.every((f) => TS(f).esc.length === 1 && TS(f).esc[0].m === mid && TS(f).t === 84), F.map((f) => TS(f).esc));
+    await judge(0, 1, [H, A, C]);
+    // ---- the final standing settles it: every count is ptable of it, the +5 for every real party (5+ of my own blows)
+    // but the last place's
+    if (!ok('staked: the party reaches its podium and every hold is settled', await until(() => F.every((f) => PS(f).ph === 'podium' && !TS(f).esc.length), 40000))) return;
+    await sleep(300);
+    const pd = PS(H).podium, fin = pd.order.map((sl, i) => ({ slot: sl, pl: pd.pl[i], p: 0, z: 0 }));
+    const rows = H.T.ptable(4, 10, fin, 0, 0, N(H).gid), maxPl = Math.max(...rows.map((r) => r[1])), nets = new Map(rows.map((r) => [r[0], r[2] + r[3] - 10]));
+    const rowOf = (f) => rows.find((r) => r[0] === N(f).mySlot);
+    const real = (f) => !!PS(f).coins && PS(f).coins.shots >= 5;
+    const want = (f) => 100 + nets.get(N(f).mySlot) + (real(f) && !(maxPl > 1 && rowOf(f)[1] === maxPl) ? 5 : 0);
+    info('staked: final ' + JSON.stringify(pd) + ' pts ' + JSON.stringify(PS(H).pts) + ' rows ' + JSON.stringify(rows) + ' shots ' + JSON.stringify(F.map((f) => PS(f).coins && PS(f).coins.shots)));
+    ok('staked: (setup) the crowns gave the standing H, B, A, C', JSON.stringify(pd.order) === '[0,2,1,3]' && JSON.stringify(pd.pl) === '[1,2,3,4]', pd);
+    ok('staked: every count is ptable of the final standing + 5 for a real party but the last (n 4 at 10: +26 / +10 / 0 / -16)', F.every((f) => TS(f).t === want(f)) && rows.reduce((a, r) => a + r[3], 0) === 40, [F.map((f) => TS(f).t), F.map(want), rows]);
+    ok('staked: B blew nothing all party long - its place points, no +5; the host blew in every 판 and got it', !real(B) && TS(B).pod && TS(B).pod.bonus === 0 && real(H) && TS(H).pod.bonus === 5, F.map((f) => [PS(f).coins && PS(f).coins.shots, TS(f).pod && TS(f).pod.bonus]));
+    ok('staked: a game for everyone (g +1)', F.every((f, k) => TS(f).g === g0[k] + 1), F.map((f) => TS(f).g));
+    await until(() => [A, B, C].every((g) => g.tros.some((m) => m.m === mid)) && N(H).roster.filter((r) => !r.host).every((r) => r.cupM === mid), 4000);
+    ok('staked: one tro per guest; each answered with a cup + m', [A, B, C].every((g) => g.tros.filter((m) => m.m === mid).length === 1) && N(H).roster.filter((r) => !r.host).every((r) => r.cupM === mid), [[A, B, C].map((g) => g.tros.length), N(H).roster]);
+    ok('staked: the podium rows agree on every page (slot -> change)', F.every((f) => TS(f).pod && TS(f).pod.mid === mid && pd.order.every((sl) => { const r = TS(f).pod.rows.find((q) => q.slot === sl); return r && r.net === nets.get(sl); })), F.map((f) => TS(f).pod));
+    const gains = pd.order.filter((sl) => nets.get(sl) > 0);
+    const cupsWant = Math.min(18, pd.order.reduce((a, sl) => a + (nets.get(sl) < 0 ? Math.max(1, Math.min(6, Math.ceil(-nets.get(sl) / 10))) : 0), 0));
+    await until(() => F.every((f) => TS(f).pod && TS(f).pod.flipAt >= 0 && f.G.podium && f.G.podium.t > TS(f).pod.flipAt + 25), 8000);
+    ok('staked: cups fly from the losing blocks to the blocks with a gain (' + cupsWant + ' to ' + gains.join(',') + ')', cupsWant > 0 && F.every((f) => TS(f).pod.cups === cupsWant && TS(f).pod.to.length === gains.length && TS(f).pod.to.every((sl) => gains.includes(sl))), F.map((f) => [TS(f).pod.cups, TS(f).pod.to]));
+    const bonusLine = (f) => (doc(f, 'pg-podium-bonus').hidden ? '' : doc(f, 'pg-podium-bonus').textContent);
+    ok('staked: my 오늘 트로피 보너스 +5 line after my count-up (none for B / the last); the tag stays 3판', F.every((f) => bonusLine(f) === (TS(f).pod.bonus ? '오늘 트로피 보너스 +5' : '') && doc(f, 'pg-podium-tag').textContent === '3판'), F.map((f) => [bonusLine(f), doc(f, 'pg-podium-tag').textContent]));
+    ok('staked: the sr line says my change (and the +5 apart)', F.every((f) => doc(f, 'pg-podium-sum').textContent.indexOf('내 트로피 ' + signed(nets.get(N(f).mySlot)) + '개') >= 0), F.map((f) => doc(f, 'pg-podium-sum').textContent));
+    ok('staked: the guest\'s wait line keeps the stake (다음 파티도 10개씩)', /방장이 다음 판을 고르고 있어요 · 다음 파티도 10개씩/.test(waitOf(A)), waitOf(A));
+    ok('staked: 파티 한 번 더 opens once every guest reported its cup (the gate)', await until(() => !doc(H, 'pg-podium-again').disabled && H.T.canRematch(), 4000));
+    // ---- 파티 한 번 더 (4 players): it holds again; B goes away with gg on and its link is cut in the 1st 판 (forfeit on its
+    // own page, its stake in the pot); C leaves with 나가기 during the 2판 card (gg + forfeit, in the pot); A's gg on / off
+    // there (a finisher with its normal row); A plays by the real clock (no tro.fast: its result before 105 s is refused -
+    // wait, then refunded): the n = 4 table with two gg leavers (+34 / +10)
+    A.T.fast(false);
+    for (const f of F) f.T.set({ t: 100 });
+    const gidB = N(H).gid, gB = F.map((f) => TS(f).g);
+    doc(H, 'pg-podium-again').click();
+    await until(() => N(H).gid === gidB + 1, 3000);
+    await until(() => F.every((f) => TS(f).esc.length === 1), 15000);
+    const midB = midNow();
+    ok('파티 한 번 더: it holds again at its first 시작! (16 each, the new id)', F.every((f) => TS(f).esc[0].m === midB && TS(f).t === 84), F.map((f) => TS(f).esc));
+    B.T.gg(true);
+    await until(() => TS(H).match && TS(H).match.gg.includes(2), 2000);
+    B.T.away(true); mute(B, true);
+    H.P.crown(0); await blows(H, 3);
+    await until(() => PS(H).ph === 'card' && PS(H).i === 1, 30000);
+    A.T.gg(true); const ggOn = await until(() => TS(H).match && TS(H).match.gg.includes(1), 2000);
+    A.T.gg(false); const ggOff = await until(() => TS(H).match && !TS(H).match.gg.includes(1), 2000);
+    ok('away between 판: A\'s gg on reaches the host during the 2판 card, off again clears it', ggOn && ggOff, TS(H).match);
+    C.mp.leave();
+    await until(() => TS(H).match && TS(H).match.gg.includes(3) && !N(H).roster.some((r) => r.slot === 3), 4000);
+    ok('leaver: C leaves with 나가기 during the 2판 card: gg on the host, forfeit on its own page (84, a game)', TS(C).t === 84 && !TS(C).esc.length && TS(C).g === gB[3] + 1 && TS(H).match.gg.includes(3), [TS(C).t, TS(C).g, TS(H).match]);
+    const dropped = await until(() => N(B).screen === 'friends' && N(H).roster.length === 2, 25000, 100);
+    mute(B, false); B.T.away(false);
+    ok('away + cut: B (gg on, away) loses its link: forfeit on its own page (84, a game), its gg kept on the host', dropped && TS(B).t === 84 && !TS(B).esc.length && TS(B).g === gB[2] + 1 && TS(H).match && TS(H).match.gg.includes(2), [N(B).screen, TS(B).t, TS(H).match]);
+    for (const i of [1, 2]) { await until(() => PS(H).ph === 'playing' && PS(H).i === i, 25000); await judge(0, 1, [H]); }
+    await until(() => PS(H).ph === 'podium' && !TS(H).esc.length && PS(A).ph === 'podium', 30000);
+    await until(() => A.tros.some((m) => m.m === midB), 3000); await sleep(300);
+    const pdB = PS(H).podium, rowsB = H.T.ptable(4, 10, pdB.order.map((sl, i) => ({ slot: sl, pl: pdB.pl[i], p: 0, z: 0 })), 2, 0, N(H).gid);
+    const sent = (A.tros.find((m) => m.m === midB) || {}).r || [], netB = (sl) => { const r = rowsB.find((q) => q[0] === sl) || [0, 0, 0, 0]; return r[2] + r[3] - 10; };
+    ok('two gg leavers: the host settles by the n 4 table with both stakes in the pot (H 1st +34, A 2nd +10: the 3rd place\'s 20% to the best staker)', JSON.stringify(sent) === JSON.stringify(rowsB) && rowsB.length === 2 && rowsB.reduce((a, r) => a + r[3], 0) === 40 && netB(0) === 34 && netB(1) === 10 && TS(H).t === 100 + 34 + (TS(H).pod ? TS(H).pod.bonus : 0), [sent, rowsB, TS(H).t]);
+    ok('guest min time: A (no tro.fast) refuses its result before 105 s - its hold waits at the podium', TS(A).esc.length === 1 && TS(A).esc[0].st === 'wait' && TS(A).t === 84, TS(A).esc);
+    A.T.expire(); await sleep(100);
+    ok('guest min time: ... and is refunded when the wait runs out (84 -> 100, no game)', TS(A).t === 100 && !TS(A).esc.length && TS(A).g === gB[1], [TS(A).t, TS(A).esc, TS(A).g]);
+    A.T.fast(true);
+    // ---- a party too short to count (the debug floor at 1e9 frames): every hold refunded at once (v: 1), the short line,
+    // 파티 한 번 더 open at once - and the next party holds again
+    await until(() => !doc(H, 'pg-podium-again').disabled, 4000);
+    H.mp.toRoom(); await until(() => [H, A].every((f) => N(f).screen === 'room'), 6000);
+    await join(B); await until(() => N(H).roster.length === 3, 4000); watchTro(B);
+    for (const f of D3) f.T.set({ t: 100 });
+    H.T.partyMin(1e9); H.P.force(['crown']);
+    await readyAll(D3);
+    H.mp.start();
+    await until(() => D3.every((f) => TS(f).esc.length === 1), 12000);
+    const midS = midNow(); H.P.skip();
+    await until(() => D3.every((f) => PS(f).ph === 'podium' && !TS(f).esc.length), 30000); await sleep(300);
+    ok('too short: every frame refunded at once (100 each, no game), the host sent v: 1', D3.every((f) => TS(f).t === 100 && !TS(f).esc.length) && [A, B].every((g) => g.tros.some((m) => m.m === midS && m.v === 1 && !m.r.length)), [D3.map((f) => TS(f).t), [A, B].map((g) => g.tros.slice(-1))]);
+    ok('too short: "파티가 너무 빨리 끝나서 트로피는 그대로예요" on every podium (its line at once, and the sr line)', D3.every((f) => bonusLine(f) === '파티가 너무 빨리 끝나서 트로피는 그대로예요' && /파티가 너무 빨리 끝나서 트로피는 그대로예요/.test(doc(f, 'pg-podium-sum').textContent) && TS(f).pod && TS(f).pod.kind === 'short'), D3.map((f) => [bonusLine(f), TS(f).pod && TS(f).pod.kind]));
+    ok('too short: 파티 한 번 더 is open at once (no result to wait for)', !doc(H, 'pg-podium-again').disabled && !TS(H).lastRes, TS(H).lastRes);
+    H.T.partyMin(null); H.P.force(['crown', 'crown']);
+    const gidS = N(H).gid;
+    doc(H, 'pg-podium-again').click();
+    await until(() => N(H).gid === gidS + 1, 3000);
+    const heldS = await until(() => D3.every((f) => TS(f).esc.length === 1 && TS(f).esc[0].m === midNow()), 12000);
+    ok('too short: ... and the next party holds again', heldS, D3.map((f) => TS(f).esc));
+    // ---- the host's 방으로 in a result beat of the 1st 판: the host forfeits (its confirm said so); the guests wait, then
+    // are refunded
+    H.P.skip(); await until(() => PS(H).ph === 'result', 20000);
+    const tr6 = D3.map((f) => TS(f).t);
+    H.mp.toRoom(); await until(() => D3.every((f) => N(f).screen === 'room'), 6000);
+    ok('방으로 in a result beat: the host forfeits (-16 stays taken, a game); the guests\' holds wait', TS(H).t === tr6[0] && !TS(H).esc.length && [A, B].every((g) => TS(g).esc.length === 1 && TS(g).esc[0].st === 'wait'), D3.map((f) => [TS(f).t, TS(f).esc]));
+    A.T.expire(); B.T.expire(); await sleep(100);
+    ok('방으로 in a result beat: ... then the guests are refunded (100)', [A, B].every((g) => TS(g).t === 100 && !TS(g).esc.length), [A, B].map((g) => TS(g).t));
+    // ---- down to one: the last guest leaves with 나가기 -> 기권승 for the host (the pot only, no +5); a cut link -> void
+    B.mp.leave(); await until(() => N(H).roster.length === 2, 4000);
+    for (const f of [H, A]) f.T.set({ t: 100 });
+    H.P.force(['crown', 'crown']);
+    await readyAll([H, A]); H.mp.start();
+    await until(() => [H, A].every((f) => TS(f).esc.length === 1), 12000);
+    A.mp.leave();
+    await until(() => PS(H).ph === 'podium' && !TS(H).esc.length, 8000); await sleep(200);
+    ok('down to one: A leaves with 나가기 -> 기권승 for the host: the pot only (+10), no +5; the note says 기권승', TS(H).t === 110 && TS(H).pod && TS(H).pod.kind === 'walk' && TS(H).pod.bonus === 0 && doc(H, 'pg-podium-note').textContent === '친구가 나가서 일찍 끝났어요 · 기권승' && doc(H, 'pg-podium-tag').textContent === '2판', [TS(H).t, TS(H).pod, doc(H, 'pg-podium-note').textContent]);
+    ok('down to one: A forfeited (84)', TS(A).t === 84, TS(A).t);
+    H.mp.toRoom(); await until(() => N(H).screen === 'room', 4000);
+    await join(A); await until(() => N(H).roster.length === 2, 4000);
+    for (const f of [H, A]) f.T.set({ t: 100 });
+    await readyAll([H, A]); H.mp.start();
+    await until(() => [H, A].every((f) => TS(f).esc.length === 1), 12000);
+    mute(A, true);
+    await until(() => PS(H).ph === 'podium' && !TS(H).esc.length, 25000, 100);
+    await until(() => N(A).screen === 'friends', 8000, 100);
+    mute(A, false);
+    ok('down to one: A\'s link cut instead (no gg) -> void: the host refunded (100), its note says so', TS(H).t === 100 && TS(H).pod && TS(H).pod.kind === 'void' && doc(H, 'pg-podium-note').textContent === '친구가 나가서 일찍 끝났어요 · 트로피는 그대로예요', [TS(H).t, TS(H).pod, doc(H, 'pg-podium-note').textContent]);
+    ok('down to one: ... and A refunded too (lost while watching)', TS(A).t === 100 && !TS(A).esc.length, TS(A).t);
+    // (back to H, A, B in the room for the sections after this one; C stays in the lobby)
+    H.mp.toRoom(); await until(() => N(H).screen === 'room', 4000);
+    await join(A); await join(B); await until(() => N(H).roster.length === 3, 4000);
+    for (const f of F) f.T.set({ t: 100 });
+    // ---- a staked party as practice (this browser's tabs, q 1): nothing held; the rules and the podium say why
+    for (const f of D3) f.T.allowBc(false);
+    H.P.force(['crown']);
+    await until(() => D3.every((f) => [...doc(f, 'pg-room-rules').children].some((li) => li.textContent === '연습 경기라 트로피는 그대로예요')), 3000);
+    ok('practice at 10: the rules say 연습 경기라 트로피는 그대로예요 (no trophy line)', D3.every((f) => { const r = [...doc(f, 'pg-room-rules').children].map((li) => li.textContent); return r.includes('연습 경기라 트로피는 그대로예요') && !r.some((l) => /최종 등수|파티마다/.test(l)); }));
+    await readyAll(D3); H.mp.start();
+    await until(() => D3.every((f) => PS(f).ph === 'podium'), 30000); await sleep(300);
+    ok('practice at 10: nobody held or changed; the sr line says 연습 경기라 트로피는 그대로예요', D3.every((f) => TS(f).t === 100 && !TS(f).esc.length && /연습 경기라 트로피는 그대로예요/.test(doc(f, 'pg-podium-sum').textContent) && doc(f, 'pg-podium-tag').textContent === '1판'), D3.map((f) => [TS(f).t, doc(f, 'pg-podium-sum').textContent, doc(f, 'pg-podium-tag').textContent]));
+    for (const f of D3) f.T.allowBc(true);
+    for (const f of F) f.T.fast(false);
+    H.P.force(null);
   }
   // (A's own animal on its page)
   const G1 = (f) => me(f);
