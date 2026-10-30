@@ -21,6 +21,11 @@
 // counters, the awards, their points), the podium, leavers and the walkover, full magazines at every 시작!, 파티 한 번
 // 더, the coins (every branch, through coinGive), no trophy change, the demos, the views' fit at 1x / 2x / a 568x320
 // phone, the warm-up, a battle afterwards with no party left over, the HUD, the closed arenas.
+// The new games (design/party-games.md §13.1, on a virtual clock - vclock - so press and draw times are exact): the
+// shared machinery, 바나나우유 잡기 (milkTests), 펑! 비눗방울 (puffTests: puffL, the 66 ms rule, 만점 / the pop at L_k, the
+// dip / foam, a bank and a puff of one frame in time order, the warnings, the bell, the wall-clock window, remote rows
+// clamped, over at the done reports or waitF, the key, a leaver, the view, the fast window, the card).
+//   scenes: #shot=milk|milkrev|milkdecoy|milkcard|puff|puffcard (&s=0: the page's own layout, a phone)
 // Prints "PARTY PASS|FAIL <name>", "PARTY INFO ..." and "PARTY DONE pass=N fail=M".
 (function () {
   'use strict';

@@ -1161,3 +1161,62 @@ snapshot budget.
 - 술래 (builder 3): `frozen(M, p)` is read by `miniParked` on every page (a guest's own body x); `rem.buf.list` entries carry
   `d.rt` / `d.ep` / `d.at`; `NET.rtHi` is ready; `P.fakeBody(slot, st)` pushes into that buffer; add `'sneak'` to
   `PARTY_KEYS` / the validator / `fallbackPartyArena`, `kitOf` -> `KIT_BASE` and the walk factor are not built.
+
+## 19. As built: builder 2 (펑! 비눗방울 + the online checks of both new games)
+
+### 19.1 Where the code differs from the text above
+
+| Spec | Built | Why |
+|---|---|---|
+| `g.mg` 펑 `['f', seed, rows]` | + **`win`** (the window, ms) as `mg[3]` and **`ns`** (the stalls) as `mg[4]` | the fast party's 12 s window is the host's (a guest's `PARTY_FAST` may differ); a leaver's stall stays drawn empty, so a guest needs the stall count of the 시작!, not its own player count. About 10 bytes. |
+| `PUFF` | + `fastMs` 12000 (the fast party's window), `maxN` 40 (the clamp's bubble count, now a constant), `sit` 4 | |
+| The flash: "flashes white every 6 f" | 3 frames on / 3 off, and the **whole bubble** fills white (a 0.55 white disc under a white-tinted ring) | `giant_bubble` is a pale-blue ring on transparent: tinting the ring white was close to invisible on the 568x320 phone (checked on the `#shot=puff&s=0` scene). The tremble is ±1 / ±2 px as specified. |
+| The score "at y 30" | at y 35, under the shower | the 16x8 shower sits at y 24-32 in the stall's top centre. |
+| `sit` 4 px | the animal is drawn **4 px higher**, on the stool (feet on its seat at y 212) | a 14x5 stool under the feet; drawn lower, the animal would sink into the floor tiles. |
+| `tagY` `PF_BOT - 8 - 16 - 50` | `head - sit - 4 - 2 x 22 - 2` (the same place, from the animal's own head) | animals have different head heights (`lookLift`). |
+| The window from "the first frame my screen drew 시작!" | the first render while `G.mode === 'playing'` (`puffDraw` sets `G.mloc.t0`); offline, the time the screen sat **paused** is left out of the window (`G.mloc.pz`) | an offline local party can pause; an online page never pauses (its menu does not stop the world), so online `pz` stays 0. |
+| Sounds of a friend's send-off | none (only a friend's pop plays `pop` + `b_splash` + its 펑!) | my own `item` on a send-off is the feedback; four players' send-offs would chime constantly. |
+| party-net `#lag` 바나나우유: "the host's own player and frames 1 and 3 each press 250 ms after their own draw" | the same, in round 1 (exact plumbing only) **and round 2** (exact + the 250..300 range); 200 vs 320 ms and B's decoy press in **round 3** | each page's first key press unlocks its audio, which is heavy, and the four frames share one main thread: the next page's timer then runs ~0.5 s late (699 / 1186 ms seen in round 1, 256-273 ms in round 2). Real players are not affected (a real event keeps its own time stamp). |
+| party-net `#lag` 펑: "stop pressing 2 s before the window ends" | a fixed pattern (↓ at the tremble, ↓ at the flash, then puff until it pops) on a host seed whose first three pop sizes are 40-55 %, presses at least 80 ms apart, each waiting for the page to count it; asserted to finish within 10 s of the 12 s window | a time-bound loop would give each page a different press count; a fixed pattern on the same L list must give the same score. |
+
+### 19.2 New code (game.js unless named)
+
+- Constants: `PUFF`, `MINI.puff` (`c 'f'`, 45 s, `world: false`, `noFire`, `cues: false`, the card's texts and keys),
+  `MINI_IDS` + `'puff'`, `PARTY_TX` `pfPop` / `pfMax` / `pfLast1` / `pfLast2` / `pfDone1` / `pfDone2`, `NO_ECHO` + `puff`.
+- 펑: `puffWin0` / `puffWin`, `puffL` (a pure 32-bit hash, 40-110), `puffS10` (size in tenths: an integer count x 34),
+  `puffR`, `puffWarn` (whole percent of L, exact thresholds), `puffClock`, `localWord`, `puffV` (this screen's look of a
+  seat: last puff, pop, send-off, banked column), `puffSeat` (own seats from `G.mloc`, friends from rows), `puffHead`,
+  `puffPopFx` / `puffBankFx`, `puffBank` / `puffPop`, `puffLocal`, `puffRowFx` (a friend's row changing: host
+  `puffInput` for remote seats, guest `puffView`), `puffInput`, `puffTick` (`M.fin`: all done or `waitF` past time-up,
+  the bubble in hand counted as popped), `puffView`, `puffDraw` (stalls, shower and drip, stools; `t0` / `pz`),
+  `puffFront` (column, score, bubble with tremble / flash, `bubble_pop`, foam), `puffPose`, `puffHud`, `puffClockTx`,
+  `puffDemo`; `MINI_FN.puff`.
+- audio.js: `puff` (o.n 0..10, a 40 ms band-passed "푸" from 500 Hz + 120 Hz a step; `VARIANTS` `puff: [0, 10, 0]`).
+- Tests-only hook in 바나나우유: `PAD` / `padFire` (in `milkSeen` at the first draw of the milk or a decoy).
+- Debug (`PG.debug.party`): `puffL`, `puff`, `puffSeed`, `puffWarn`, `puffT0`, `puffSeat`, `puffView`, `clock`,
+  `pressAfterDraw(ms, 'milk' | 'decoy')`, `padRec`, `milkEv`, `remMi`; `consts()` + `PUFF`; `state().mini` + `seed rows
+  win fin`.
+
+### 19.3 Tests
+
+- party.js `puffTests` (on `vclock`): puffL (pure, 40..110, all 71 values, near uniform), the window from the first
+  draw and the HUD's `0:45`, the stage, 50 ms presses count every other one, 30 puffs -> 만점 100 (29: 98.6%), the size
+  never over 100, coins per send-off / per pop by puffing / none for the bell's pop, the dip and the foam, a bank and a
+  puff of one frame in either time order, the reported `mi` and its wire row, a pop exactly at L 51 (15th puff), L 99
+  and 100 pop on the 30th, the warning thresholds, `tagY`, the red clock at 0:10, the bell at 40 000 ms, the end at
+  45 000 ms, the 판's end with everyone done, a 2 s clock jump ending the window 120 frames sooner while the 판 waits
+  for the host's time-up (my 다 불었어요! line up), a junk remote row clamped / fewer bubbles / another 판 ignored / done
+  stays done, a friend's pop played once, `waitF` for a seat never done (its bubble counted as popped), a stale seat
+  not waited for, the key, a leaver, `puffView` bounds, the fast 12 s window, the card. Scenes `#shot=puff|puffcard`
+  (`&s=0`: the page's own layout).
+- audio-node: `puff` 0..10 (sound, short, quieter than shoot, its band centre, odd opts, in `NO_ECHO`).
+- party-net (plain run): a guest's body state carries `mi` only during a new game (none in 물, none at the podium).
+- party-net `#lag` (new job `party-net-lag`, rt300000): 13.2 sections 2, 3 and 5 as in 19.1.
+- Green: party (43 s), party-fit-568, party-net, party-net-lag, validate-levels, check-integration, audio-node, smoke,
+  final-e2e, final-e2e2, kits, touch-input, check-pages (battle-net, mp-net, ux-roomrow(-320): see the commit).
+
+### 19.4 For builder 3 (술래)
+
+- The rotation, demo, HUD and fit checks pick `'sneak'` up from `MINI_IDS`; with 6 games 3 players draw from 5.
+- party-net `#lag` (`lagRun`) is where 13.2 section 4 goes (frame 3 = C on the slow link; `fakeBody` for party.js).
+- `localWord` (a word pop never recorded) and `localSfx` exist; 술래's word pops are host-recorded (`wordPop`).
