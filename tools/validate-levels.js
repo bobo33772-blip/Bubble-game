@@ -92,6 +92,10 @@
  * mirror, and line is the mouth's inner edge; the sides are two standable kickoff spots per team, mirrored; the ball's
  * kickoff spot is open air for the whole 22 px ball. Its crossbars are out of a normal jump's reach on purpose (a cat's
  * 2단 점프 keeps goal on one): an unreachable crossbar is a note (the 'x' in the preview), not an error or a warning.
+ * 무대 목욕탕 (key 'stage'): a plain box, every STAGE_X spot standable. 살금살금 복도 (key 'sneak', sneak: { start, it,
+ * line }, design/party-games.md 6.6): start and it standable on the floor, start left of it, the line at least 120 px
+ * past the start's body and short of the 술래's; nothing solid on rows 21-24 between them but stools 1-2 tiles high
+ * with 3 rows of air over them.
  */
 'use strict';
 const fs = require('fs');
@@ -178,8 +182,8 @@ const LEVELS = ctx.PG && ctx.PG.LEVELS;
 if (!Array.isArray(LEVELS)) fatal('PG.LEVELS is not an array');
 const ARENAS = ctx.PG && ctx.PG.ARENAS;
 const PARTY_ARENAS = ctx.PG && ctx.PG.PARTY_ARENAS;
-const PARTY_KEYS = ['water', 'ball', 'stage'];   // (파티: 물 차는 대욕장, 거품 축구장, 무대 목욕탕)
-const PARTY_NAMES = ['물 차는 대욕장', '거품 축구장', '무대 목욕탕'];
+const PARTY_KEYS = ['water', 'ball', 'stage', 'sneak'];   // (파티: 물 차는 대욕장, 거품 축구장, 무대 목욕탕, 살금살금 복도)
+const PARTY_NAMES = ['물 차는 대욕장', '거품 축구장', '무대 목욕탕', '살금살금 복도'];
 const STAGE_X = { 2: [100, 156], 3: [72, 128, 184], 4: [44, 100, 156, 212] };   // (game.js STAGE_X: world: false feet centres by players)
 const BALL_R = 11; // (game.js BALL.r: the 축구 ball's radius, px)
 const WATER_SLACK = 3, WATER_SECS = 60, CEIL_Y = 24; // (game.js MINI.water / WATER_SLACK; the ceiling's underside)
@@ -224,7 +228,7 @@ function analyse(L, idx, kind) {
   const isBoss = !arena && !party && L.boss !== undefined;
   if (typeof L.name !== 'string' || !L.name.trim()) err('name missing');
   if (!Number.isInteger(L.theme) || L.theme < 0 || L.theme > 4) err('theme must be an integer 0..4');
-  const known = party ? new Set(['key', 'name', 'theme', 'closed', 'map', 'players', 'gather', 'rise', 'goals', 'sides', 'ball'])
+  const known = party ? new Set(['key', 'name', 'theme', 'closed', 'map', 'players', 'gather', 'rise', 'goals', 'sides', 'ball', 'sneak'])
     : arena ? new Set(['name', 'theme', 'map', 'players', 'enemySpawns', 'gather', 'water'])
       : new Set(['name', 'theme', 'map', 'player', 'players', 'enemies', 'gather', 'special', 'boss', 'bossSpawn']);
   for (const k of Object.keys(L)) if (!known.has(k)) warn(`unknown field "${k}"`);
@@ -949,6 +953,34 @@ function analyse(L, idx, kind) {
     }
     res.stage = `spots ${Object.keys(STAGE_X).map((n) => `${n}: ${STAGE_X[n].join('/')}`).join(' · ')}`;
   }
+  // 살금살금 복도 (design/party-games.md 6.6): the runners' start and the 술래's spot standable on the floor, start left of
+  // it, the touch line between them at least 120 px past the start's body; nothing solid on rows 21-24 between them but
+  // the stools - each one 1-2 tiles high with 3 rows of air over it (a normal jump clears it)
+  if (party && L.key === 'sneak') {
+    const S = L.sneak;
+    if (!S || typeof S !== 'object' || !isCell(S.start) || !isCell(S.it) || !Number.isFinite(S.line)) err('the sneak arena needs sneak: { start: {col,row}, it: {col,row}, line (px) }');
+    else {
+      standCheck(S.start, 'sneak.start', true); standCheck(S.it, 'sneak.it', true);
+      const sx = S.start.col * TS - 4, ix = S.it.col * TS - 4;
+      if (S.start.row !== ROWS - 2 || S.it.row !== ROWS - 2) err(`sneak.start / sneak.it stand on the floor (row ${ROWS - 2})`);
+      if (!(S.start.col < S.it.col)) err('sneak.start must be left of sneak.it');
+      if (!(S.line - (sx + 16) >= 120)) err(`sneak.line ${S.line} is less than 120 px past the start's body (its right edge ${sx + 16})`);
+      if (!(S.line <= ix)) err(`sneak.line ${S.line} must not pass the 술래's body (x ${ix})`);
+      // the stools: runs of solid cells standing on the floor between them
+      const lo = S.start.col + 2, hi = S.it.col - 1, stools = [];
+      for (let c = lo; c <= hi; c++) {
+        let h = 0; while (h < 4 && B(ROWS - 2 - h, c)) h++;
+        for (let r = 21; r <= ROWS - 2 - h; r++) if (!O(r, c)) err(`sneak: (${c},${r}) between the start and the 술래 must be open air (only stools stand on the floor)`);
+        if (!h) continue;
+        if (h > 2) err(`sneak: the stool at col ${c} is ${h} tiles high (at most 2: a normal jump clears it)`);
+        for (let r = ROWS - 2 - h; r > ROWS - 2 - h - 3; r--) if (!O(r, c)) err(`sneak: the stool at col ${c} needs 3 rows of air over it (row ${r})`);
+        const last = stools[stools.length - 1];
+        if (last && last.c1 === c - 1) last.c1 = c; else stools.push({ c0: c, c1: c, h });
+      }
+      if (!stools.length) warn('sneak: no stool to hop between the start and the 술래');
+      res.sneak = `start (${S.start.col},${S.start.row}) x ${sx} · 술래 (${S.it.col},${S.it.row}) x ${ix} · line ${S.line} (${S.line - sx - 16} px to walk) · stools ${stools.map((q) => `cols ${q.c0}-${q.c1} (${q.h} high)`).join(', ') || 'none'}`;
+    }
+  }
   const tens = '    ' + Array.from({ length: COLS }, (_, c) => (c >= 10 ? String(Math.floor(c / 10)) : ' ')).join('');
   const ones = '    ' + Array.from({ length: COLS }, (_, c) => String(c % 10)).join('');
   res.lines = [tens, ones, ...grid.map((row, r) => `${String(r).padStart(2)}  ${row.join('')}`)];
@@ -1071,6 +1103,7 @@ else {
       if (res.rise) console.log('    rise: ' + res.rise);
       if (res.ball) console.log('    goals: ' + res.ball);
       if (res.stage) console.log('    stage: ' + res.stage);
+      if (res.sneak) console.log('    sneak: ' + res.sneak);
       for (const m of res.N) console.log(`  note:  ${m}`);
       for (const m of res.E) console.log(`  ERROR: ${m}`);
       for (const m of res.W) console.log(`  warn:  ${m}`);

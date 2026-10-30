@@ -189,7 +189,8 @@ window.PG = window.PG || {};
   };
   const SHOT_MAX = 110; // (no shot phase is longer: checked by newShot's numbers above, see the guest's prediction)
   const ECHO_GRACE = 12;  // (frames an echo that just stopped behind its duck cannot be touch-popped)
-  const kitOf = (pl) => (!pl || G.perksOff || pl.raft || !isChar(pl.char) ? KIT_BASE : KIT[pl.char]);
+  // (파티: a 오리 튜브 and everyone in 살금살금 술래 - party-games 6.1 - have the base kit)
+  const kitOf = (pl) => (!pl || G.perksOff || pl.raft || !isChar(pl.char) || (G.mini && G.mini.id === 'sneak') ? KIT_BASE : KIT[pl.char]);
   // the word each move pops over its owner the first time it is used in a round (that player's own screen only)
   const MOVE_WORD = {}; CHAR_IDS.forEach((c) => { MOVE_WORD[c] = CHARS[c].move.word; });
   // each animal's own blow sound (replaces 'shoot' with perks on; local, like 'shoot')
@@ -295,6 +296,17 @@ window.PG = window.PG || {};
   // its own time-up, the most bubbles a row may claim; sit: px the animal sits up on its stool
   const PUFF = { winMs: 45000, fastMs: 12000, step: 3.4, gapMs: 66, dipMs: 600, foamMs: 1000, lo: 40, hi: 110, shake: 0.7, shake2: 0.85, flash: 0.9,
     bellMs: 5000, waitF: 120, maxN: 40, sit: 4 };
+  // 살금살금 술래 (party-games 6): rounds and caps (s) by players, the swap (f); the runners' walk (x WALK); the chant (f
+  // between syllables, the presses that may wait, the idle before it moves by itself, then every autoF; 욕 -> 탕), the
+  // look, its grace, the freed exemption, the feint (its head flip, from syllable feintFrom); the look's move tolerance
+  // (px) and its walking test (|vx| >= vxTol from vxF into the look); the rt clamp (f behind the host); the prisons'
+  // drift (px/f, at y driftY: over the stools); 3초! (f); arrival points; catch points (cap a round); coins: progress
+  // (px) since the last look, presses in a chant; fast / fastCap: the debug fast party's rounds and cap (s); endF: the
+  // 판 ends this long after the last round closes
+  const SNEAK = { rounds: { 2: 4, 3: 3, 4: 4 }, cap: { 2: 12, 3: 16, 4: 13 }, swapF: 72, walk: 0.7,
+    sylF: 6, queue: 3, idleF: 60, autoF: 24, tangF: 21, lookF: 90, graceF: 10, freeF: 30, feintF: 8, feintFrom: 3,
+    moveTol: 2, vxTol: 0.1, vxF: 12, lagMax: 60, drift: 1.2, driftY: 188, hurryF: 180, arr: [3, 2, 1], catch: 1, catchMax: 3,
+    progPx: 16, chantN: 3, fast: 2, fastCap: 6, endF: 30 };
   // each minigame: c its wire code, secs, ar the arena (['p', i] PG.PARTY_ARENAS[i], ['b'] a dry battle arena), fits(n),
   // team (two sides: the card's team line), and the card texts: name; how - the ONE-LINE how-to, which also says how to
   // win (<= 17 syllables: one line at 0.9em in the 1x window's 17.4em, 9.2); rule - the one extra line, hidden on short
@@ -316,12 +328,17 @@ window.PG = window.PG || {};
     puff: { c: 'f', secs: 45, ar: ['p', 2], world: false, noFire: true, cues: false, fits: (n) => n >= 2, name: '펑! 비눗방울',
       how: '연타로 불고 아래로 날려요! 터지면 꽝', rule: '흔들리면 조심, 반짝이면 바로 날려요 · 클수록 점수가 훨씬 커요',
       keys: 'Z·X 연타로 불기 · ↓ 날리기', keysT: '점프·거품 연타로 불기 · 조이스틱 아래로 날리기' },
+    // (party-games 6: a round game on its own arena - bodies move, frozen parks the 술래 and the arrived; it ends by its
+    // own last round, secs is only a safety cap)
+    sneak: { c: 's', secs: 80, fastSecs: 30, ar: ['p', 3], noFire: true, cues: false, fits: (n) => n >= 2, name: '살금살금 술래',
+      how: '술래가 돌아보면 멈춰! 먼저 닿으면 3점', rule: '모두 한 번씩 술래 · 움직이다 들키면 거품에 갇혀 뒤로 · 술래는 잡을 때마다 1점',
+      keys: '←→ 살금살금 · Z 점프 · 술래는 X 연타', keysT: '조이스틱 걷기 · 점프 · 술래는 거품 연타' },
   };
   // (optional per game, polish 5: keys / keysT - the card's own keys line (a 연타 game's "X 연타!"), else PARTY_TX.keys /
   // keysT; party-games 3.1: world: false - a game that draws its own scene over the plain 무대 목욕탕 (the animals parked on
   // STAGE_X, no physics, no bubbles); noFire - nobody blows bubbles (the magazine pips hidden); cues: false - no last-3-s
   // beeps and no 10초 남았어요! (its rounds or each page's own clock end it); fastSecs - the debug fast party's length)
-  const MINI_IDS = ['water', 'crown', 'ball', 'milk', 'puff'];
+  const MINI_IDS = ['water', 'crown', 'ball', 'milk', 'puff', 'sneak'];
   const MINI_OLD = 3;   // (the first three: the arena games of party.md / the polish; the room's rules list the rest on a line of their own)
   // (a short no-KO capture in every minigame; prisons sink in 물 0.3 px/f; out once the feet are 3 px under the surface; a
   // guest draws the water at its estimate of the host's NOW, at most WATER_LEAD frames past the newest snapshot - 4.1;
@@ -369,11 +386,14 @@ window.PG = window.PG || {};
     mkNone1: '바나나우유가 없었어요!', mkNone2: '참은 친구 +1점', mkFoul: '반칙!', mkSlow: '느려요', mkHeld: '참았다!',
     mkSplash: '물벼락!', mkEarly: '너무 빨리 눌렀어요', mkDecoy: '바나나우유만 잡아요',
     pfPop: '펑!', pfMax: '만점!', pfLast1: '마지막엔 꼭 날려요!', pfLast2: '안 날린 방울은 터져요', pfDone1: '다 불었어요!', pfDone2: '친구들을 기다려요',
+    snIt: '술래', snOrder: '술래 순서: ', snNext: '다음 술래: {0}!', snNext2: '술래가 돌아보면 멈춰요!', snMe1: '이번엔 내가 술래!', snMe2: '거품 연타로 외쳐요',
+    snCount: '이번 술래: 나!', snChant: '뽀득뽀득목욕탕', snTang: '탕!', snCaught: '들켰다!', snFeint: '흠칫!', snArrive: '도착!',
+    snMoved1: '움직였어요!', snMoved2: '연타로 빠져나와요', snHurry1: '3초!', snHurry2: '빨리 와요!',
   };
   const ptx = (k, v) => PARTY_TX[k].replace('{0}', String(v));
   const PARTY_TEXT = MINI_IDS.map((id) => [MINI[id].name, MINI[id].how, MINI[id].rule, MINI[id].keys || '', MINI[id].keysT || ''].join(' ')).join(' ') + ' ' +
     Object.keys(PARTY_TX).map((k) => PARTY_TX[k].replace('{0}', '')).join(' ') + ' ' + AWARDS.map((a) => a.name + ' ' + a.line).join(' ') +
-    ' 판 등 점 공동 승리 무승부 팀 왼쪽 오른쪽 1등 2등 3등 4등 0123456789+/:·!';
+    ' 판 등 점 공동 승리 무승부 팀 왼쪽 오른쪽 1등 2등 3등 4등 0123456789+/:·!→';
   const V3_TEXT = CHAR_IDS.map((c) => { const d = CHARS[c]; return [d.name, d.animal, d.role, d.tag, d.badge, d.move.name, d.move.how, d.move.touch, d.bub.name, d.bub.desc].join(' '); }).join(' ') +
     // (v4 kit cards, hints, the countdown line; the pips' aria text)
     ' ' + STAT_NAMES.join(' ') + ' 특기: 거품: ' + OFF_LINE + ' 내 특기: 5점 중 3점' +
@@ -1276,13 +1296,14 @@ window.PG = window.PG || {};
   // ---- party arenas (PG.PARTY_ARENAS, design/party.md 5): closed maps with their minigame's own fields, in the order
   // PARTY_KEYS (MINI[id].ar names the index); a missing or broken entry gets a built-in closed one of its key (the water
   // tiers / the field with its crossbars / the plain stage), like fallbackArena
-  const PARTY_KEYS = ['water', 'ball', 'stage'];
+  const PARTY_KEYS = ['water', 'ball', 'stage', 'sneak'];
   function fallbackPartyArena(key) {
-    const map = [], ball = key === 'ball', stage = key === 'stage';
+    const map = [], ball = key === 'ball', stage = key === 'stage', sneak = key === 'sneak';
     for (let r = 0; r < ROWS; r++) {
       let s = '##' + '.'.repeat(28) + '##';
       if (r === 0 || r === ROWS - 1) s = '#'.repeat(COLS);
       if (stage) { map.push(s); continue; }
+      if (sneak) { if (r === ROWS - 2) s = '##.......##..........##.......##'; map.push(s); continue; }
       if (ball) { if (r === 20) s = '######' + '.'.repeat(20) + '######'; map.push(s); continue; }
       if (r === 21) s = '##....######........######....##';
       if (r === 17) s = '##..####.....######.....####..##';
@@ -1295,6 +1316,12 @@ window.PG = window.PG || {};
     if (stage) {
       return { key: 'stage', name: '무대 목욕탕', theme: 2, closed: true, map, gather: { col: 15, row: 3 },
         players: [{ col: 5, row: 24 }, { col: 26, row: 24 }, { col: 12, row: 24 }, { col: 19, row: 24 }] };
+    }
+    // (살금살금 복도, party-games 6.6: one floor, two stools 2 wide on it; the runners' start, the 술래's spot, the line)
+    if (sneak) {
+      return { key: 'sneak', name: '살금살금 복도', theme: 1, closed: true, map, gather: { col: 15, row: 3 },
+        players: [{ col: 3, row: 24 }, { col: 27, row: 24 }, { col: 6, row: 24 }, { col: 25, row: 24 }],
+        sneak: { start: { col: 3, row: 24 }, it: { col: 27, row: 24 }, line: 200 } };
     }
     if (ball) {
       return { key: 'ball', name: '거품 축구장', theme: 0, closed: true, map, gather: { col: 15, row: 3 },
@@ -1335,6 +1362,15 @@ window.PG = window.PG || {};
     if (goals.length < 2 || goals.some((q) => !q) || sides.length < 2 || sides.some((t) => t.length < 2 || t.some((q) => !q)) || !isFinite(x) || !isFinite(y)) return null;
     return { goals, sides, ball: { x: clamp(x, WALL_L + BALL.r, WALL_R - BALL.r), y: clamp(y, CEIL_Y + BALL.r, PF_BOT - TS - BALL.r) } };
   }
+  // 술래's field as the engine runs it (party-games 6.6), null when unusable: start (the runners' cell) and it (the
+  // 술래's) inside the walls, start left of it, the touch line (px) between them
+  function sneakOf(S) {
+    const cell = (q) => (q && isFinite(+q.col) && isFinite(+q.row) ? { col: clamp(+q.col | 0, 2, COLS - 4), row: clamp(+q.row | 0, 1, ROWS - 2) } : null);
+    if (!S || typeof S !== 'object') return null;
+    const start = cell(S.start), it = cell(S.it), line = +S.line;
+    if (!start || !it || !isFinite(line) || start.col >= it.col) return null;
+    return { start, it, line: clamp(line, start.col * TS + 16, it.col * TS - 4) };
+  }
   let PARTY_ARENAS = [];
   function loadPartyArenas() {
     const src = Array.isArray(PG.PARTY_ARENAS) ? PG.PARTY_ARENAS.slice() : [];
@@ -1343,9 +1379,9 @@ window.PG = window.PG || {};
       // (each index's own game - past the known ones, an entry's own key)
       const key = PARTY_KEYS[i] || (A && PARTY_KEYS.includes(A.key) ? A.key : 'water');
       let base = A && typeof A === 'object' && Array.isArray(A.map) && (!PARTY_KEYS[i] || A.key === key) ? A : fallbackPartyArena(key);
-      if ((key === 'water' && !riseOf(base.rise)) || (key === 'ball' && !soccerOf(base))) base = fallbackPartyArena(key);
+      if ((key === 'water' && !riseOf(base.rise)) || (key === 'ball' && !soccerOf(base)) || (key === 'sneak' && !sneakOf(base.sneak))) base = fallbackPartyArena(key);
       const mk1 = (B) => Object.assign(normLevel(Object.assign({}, B, { arena: true, closed: true, enemies: [], boss: null, special: undefined }), i),
-        { key, closed: true }, key === 'ball' ? soccerOf(B) : key === 'water' ? { rise: riseOf(B.rise) } : {});
+        { key, closed: true }, key === 'ball' ? soccerOf(B) : key === 'water' ? { rise: riseOf(B.rise) } : key === 'sneak' ? { sneak: sneakOf(B.sneak) } : {});
       try { return mk1(base); } catch (e) { return mk1(fallbackPartyArena(key)); }
     });
   }
@@ -1931,7 +1967,8 @@ window.PG = window.PG || {};
       else if (perk(p, 'otter')) wmul = WATER_SLOW * OTTER_SWIM;
     }
     const ice = perk(p, 'penguin') && onIce(p);
-    let walk = WALK * k.walk * (slip ? 1.4 : 1) * wmul * (ice ? PENGUIN_ICE : 1) * (crownHolder(p) ? CROWN_SLOW : 1); // (왕관 뺏기: the holder is slower)
+    let walk = WALK * k.walk * (slip ? 1.4 : 1) * wmul * (ice ? PENGUIN_ICE : 1) * (crownHolder(p) ? CROWN_SLOW : 1) // (왕관 뺏기: the holder is slower)
+      * (G.mini && G.mini.id === 'sneak' ? SNEAK.walk : 1); // (살금살금 술래: everyone creeps)
     const acc = ice ? PENGUIN_GRIP : 0.5; // the penguin skates: slow to start and to stop on ice
     // ---- 특기 (the move on the JUMP button). An air press (capy / otter / penguin / cat) is looked at BEFORE the jump
     // buffer: one the gate takes sets no buffered jump; one it refuses stays today's 5-frame buffered jump (no jump is
@@ -2408,6 +2445,12 @@ window.PG = window.PG || {};
   function floatMove(b) {
     // (물 차오르기: a prison sinks toward the water instead of drifting to the gather - never through the floor)
     if (b.kind === 'player' && G.mini && G.mini.id === 'water') { b.vx *= 0.9; b.vy = MINI_SINK; b.x += b.vx; b.y = Math.min(b.y + b.vy, PF_BOT - TS - 16); clampBubble(b); return; }
+    // (살금살금 술래: a prison drifts back toward the start at SNEAK.drift px/f, over the stools' tops - a caught runner
+    // drops wherever it is let out)
+    if (b.kind === 'player' && G.mini && G.mini.id === 'sneak') {
+      const x0 = sneakLV().start.col * TS - 4;
+      b.vx = 0; b.vy = 0; if (b.x > x0) b.x = Math.max(x0, b.x - SNEAK.drift); b.y += clamp(SNEAK.driftY - b.y, -0.5, 0.5); clampBubble(b); return;
+    }
     const g = G.gather, cx = b.x + 8, cy = b.y + 8, dx = g.x - cx, dy = g.y - cy;
     let tvx, tvy;
     // rising: drift sideways toward the (off-centre) gather point while climbing; hot water below lifts faster
@@ -4079,6 +4122,8 @@ window.PG = window.PG || {};
     if (b && !b.dead && b.state !== 'pop') { b.victim = null; b.state = 'pop'; b.popT = 0; b.chain = null; b.vx = 0; b.vy = 0; }
     pl.invuln = Math.max(pl.invuln, 60); pl.vy = -1.6; pl.vx = 0; pl.onGround = false; pl.coyote = 0;
     clearMoves(pl); bumpEp(pl);
+    // (살금살금 술래: freed now - its release hop is not judged for the rest of a look this close, party-games 6.1)
+    if (G.mini && G.mini.id === 'sneak' && G.mini.freeAt) G.mini.freeAt[pl.slot] = G.frame;
   }
   function knockOut(v, by, b) {
     v.trap = null; v.koT = KO_WAIT; v.koed++; v.vx = 0; v.vy = 0; v.power = null; v.shield = 0;
@@ -4599,11 +4644,11 @@ window.PG = window.PG || {};
     G.matchNo = P ? Math.max(0, P.i) : 0;
     // spawns: the game's own rule (2.4), from its fresh state (축구: by team); everyone blinks START_INV as in battle. A
     // magazine emptied at the end of the last 판 is full again (ammoTick only runs while playing)
-    // (world: false - the animals stand on the stage spots, parked: no START_INV blink)
+    // (world: false - the animals stand on the stage spots, parked; a noFire game - nobody blows bubbles: no START_INV blink)
     G.mloc = {};
     const ini = F.init(), sp = D.world === false ? stageSpots(G.players.length) : F.spawns(ini);
     // (wsAt: waterBody's stale-state stamp starts again - one left from a 판 that ended mid-stale would judge at once)
-    G.players.forEach((pl, k) => { placePlayer(pl, sp[k] || spawnOf(pl.slot)); pl.invuln = D.world === false ? 0 : START_INV; pl.amN = undefined; pl.amT = undefined; pl.wsAt = -1; });
+    G.players.forEach((pl, k) => { placePlayer(pl, sp[k] || spawnOf(pl.slot)); pl.invuln = D.world === false || D.noFire ? 0 : START_INV; pl.amN = undefined; pl.amT = undefined; pl.wsAt = -1; });
     const total = partySecs(id) * 60;
     G.battle = { arena: i, total, left: total, intruded: true, enemyT: 1e9, powerT: 1e9 };
     G.mini = Object.assign({ id, c: D.c, n0: G.players.length, t: 0, endAt: -1, miK: {} }, ini);
@@ -5822,6 +5867,332 @@ window.PG = window.PG || {};
     if (bFoam) { dx.fillStyle = '#ffffff'; for (let k = 0; k < 5; k++) dx.fillRect(68 + ((k * 3 + (f >> 3)) % 8), 18 + ((k * 2) % 3), 1, 1); }
   }
 
+  // ---- 살금살금 술래 (party-games 6, 1대N stop-and-go): its own arena 살금살금 복도 - the runners start on the left (all
+  // at one x), the 술래 stands on the right facing the wall. One round per player at 시작! (2 players: 4, each the 술래
+  // twice), the order seat order rotated by the 판 index. A round: the 술래 mashes 거품 to chant 뽀-득-뽀-득-목-욕 (a
+  // syllable at most every sylF, up to queue presses waiting; idleF without a press and it moves on by itself every autoF)
+  // and 탕! comes tangF after 욕 by itself - the turn T. Then it looks lookF frames: a runner that moved moveTol px from
+  // where it stood at T + graceF, was in the air or still walks (from T + vxF) is caught - a prison owned by the 술래
+  // that drifts back toward the start. A free runner whose body reaches the line has arrived (3 / 2 / 1 by its stamp;
+  // 3초! after the first). Everyone has the base kit, walks at SNEAK.walk and blows nothing. The judge runs in the tick,
+  // never in the network callback: a host-local runner from its body each frame, a remote one from the states
+  // hostBodyIn keeps (rem.buf: its k, its view's rt, its epoch) by a monotonic rt never more than lagMax behind the host
+  // when it arrived - arrivals by that stamp too, so a faster link never wins a close finish. The round ends when every
+  // runner arrived or past its end (the cap, or 3초!) once every remote runner still running sent a state past it (or
+  // lagMax later); a swapF swap (every prison opened, everyone back on the spots, the next 술래), then the next round.
+  // The 판 ends endF after the last round closes
+  const sneakLV = () => (LV && LV.sneak) || { start: { col: 3, row: 24 }, it: { col: 27, row: 24 }, line: 200 };
+  // the 판's 술래 order: one round per player present (2 players: 4), seat order rotated by the 판 index (the fast
+  // party: its first SNEAK.fast)
+  function sneakOrder() {
+    const P = G.party, s = G.players.map((p) => p.slot).sort((a, b) => a - b), n = s.length, k = (P ? Math.max(0, P.i) : 0) % Math.max(1, n);
+    const R = PARTY_FAST ? SNEAK.fast : SNEAK.rounds[clamp(n, 2, 4)] || n, out = [];
+    for (let i = 0; i < R && n; i++) out.push(s[(i + k) % n]);
+    return out;
+  }
+  // every present player's spot: the runners on the start, the 술래 on its own
+  function sneakSpawns(M) { const S = sneakLV(); return G.players.map((p) => (p.slot === M.it ? S.it : S.start)); }
+  // everyone back on the spots (a new epoch: each guest's page takes its animal back there), facing the 술래's wall
+  function sneakPlace(M) { const sp = sneakSpawns(M); G.players.forEach((p, k) => { placePlayer(p, sp[k]); p.invuln = 0; p.facing = 1; }); }
+  // every prison opens and every bubble goes (as 축구's kickoff: bodyAt nulls p.trap without its bubble)
+  function sneakClear() {
+    for (const p of G.players) if (p.trap) releasePlayer(p);
+    for (const b of G.bubbles) { if (b.kind !== 'empty' && b.kind !== 'player') continue; spend(b); b.hist = null; if (!b.dead && b.state !== 'pop') burst(b.x + 8, b.y + 8, 5, BUBBLE_COLS, 1.1, 12); }
+    G.bubbles = G.bubbles.filter((b) => b.kind !== 'empty' && b.kind !== 'player');
+  }
+  // round r (1..n): its 술래, its clock, a fresh chant, nobody arrived; its end: the cap
+  function sneakRound(M, r) {
+    const capF = (PARTY_FAST ? SNEAK.fastCap : SNEAK.cap[clamp(M.n0 | 0, 2, 4)] || 13) * 60;
+    Object.assign(M, { r, ph: 0, it: M.order[r - 1], rs: G.frame, capF, end: G.frame + capF, syl: 0, q: 0, lastSyl: G.frame, lastPress: G.frame, T: -1, J: null,
+      feintT: -1, fUsed: false, arr: [], first: -1, catches: {} });
+  }
+  // the clock this screen draws the chant and the look by: the host's frame, a guest's monotonic view of it (rtHi: a
+  // view clock that stepped back never shows a look again)
+  const sneakNow = () => (G.online && G.role === 'guest' ? NET.rtHi || 0 : G.frame);
+  const sneakLook = (M, now) => M.T >= 0 && now >= M.T && now < M.T + SNEAK.lookF;
+  // the pips lit on this screen: red 7 in the look, 6 between 욕 and 탕!, else the chant's (a guest 술래: its own
+  // predicted ones until the host's catch up - G.mloc pred)
+  function sneakSyl(M, now) {
+    if (sneakLook(M, now)) return 7;
+    if (M.T >= 0 && now < M.T) return 6;
+    const L = G.mloc[M.it], pr = L && L.pred && L.pred.c === M.T ? L.pred.syl : 0;
+    return clamp(Math.max(M.syl | 0, pr), 0, 6);
+  }
+  const sneakArrived = (M, slot) => (M.arr || []).some((a) => a[0] === slot);
+  // host, a playing frame: the swap's end; the chant; the judge; the round's end
+  function sneakTick(M) {
+    if (M.r < 1) return;
+    if (M.ph === 1) { if (G.frame - M.swapAt >= SNEAK.swapF) sneakRound(M, M.r + 1); return; }
+    if (M.ph !== 0) return;
+    sneakChant(M);
+    sneakJudge(M);
+    if (M.ph !== 0) return;
+    const running = G.players.filter((p) => p.slot !== M.it && !sneakArrived(M, p.slot));
+    if (!running.length) { sneakClose(M, false); return; }
+    if (G.frame >= M.end && running.every((p) => p.local !== false || (M.rtMax[p.slot] ?? -1) >= M.end || G.frame >= M.end + SNEAK.lagMax)) sneakClose(M, false);
+  }
+  // the chant: a queued press lights the next syllable (sylF apart), idleF with none and it moves on by itself every
+  // autoF; 욕 sets T = now + tangF; at T 탕! (the one banner) and the look opens; lookF later the chant starts again.
+  // Each syllable a word pop over the 술래 (recorded: every page shows it as its view reaches it) and a chain note
+  function sneakChant(M) {
+    const it = G.players.find((p) => p.slot === M.it);
+    if (M.syl === 7) { if (G.frame >= M.T + SNEAK.lookF) Object.assign(M, { syl: 0, q: 0, fUsed: false, lastSyl: G.frame, lastPress: G.frame }); return; }
+    if (M.syl === 6) {
+      if (G.frame < M.T) return;
+      M.syl = 7; M.q = 0;
+      M.J = { T: M.T, anchor: {}, out: {} };   // (the look being judged: a later one replaces it - by then it closed)
+      showBanner(PARTY_TX.snTang, '', 60, 'hurry'); Snd.sfx('stamp');
+      return;
+    }
+    let lit = false;
+    if (M.q > 0 && G.frame - M.lastSyl >= SNEAK.sylF) { M.q--; lit = true; M.lastPress = G.frame; }
+    else if (G.frame - M.lastPress >= SNEAK.idleF && G.frame - M.lastSyl >= SNEAK.autoF) lit = true;
+    if (!lit) return;
+    M.syl++; M.lastSyl = G.frame;
+    if (it) wordPop(it.x + 8, headTop(it) - 20, PARTY_TX.snChant.charAt(M.syl - 1), it.color);
+    Snd.sfx('chain', { n: M.syl });
+    if (M.syl === 6) { M.T = G.frame + SNEAK.tangF; M.q = 0; }
+  }
+  // 흠칫! (the 술래's 점프, once a chant, from syllable feintFrom until 욕): its head flips feintF frames - no look
+  function sneakFeint(M) {
+    M.fUsed = true; M.feintT = G.frame;
+    const it = G.players.find((p) => p.slot === M.it); if (it) wordPop(it.x + 8, headTop(it) - 20, PARTY_TX.snFeint, it.color);
+  }
+  // the judge (6.4): host-local runners from their bodies now; remote ones from each new state in rem.buf (newer than the
+  // last judged k) - rt monotonic and at most lagMax behind the host when it arrived, only the runner's current epoch;
+  // then the look closes once every remote runner still judged has a state past T + lookF (or lagMax later)
+  function sneakJudge(M) {
+    for (const p of G.players) {
+      if (p.slot === M.it) continue;
+      if (p.local !== false) { sneakState(M, p, G.frame, p.x, p.onGround, p.vx); continue; }
+      const rem = NET.remote.get(p.id), L = rem && rem.buf ? rem.buf.list : null; if (!L || !L.length) continue;
+      if (L[L.length - 1].k < (M.seenK[p.slot] ?? -1)) M.seenK[p.slot] = -1;   // (its clock started again far back)
+      for (const e of L) {
+        if (e.k <= (M.seenK[p.slot] ?? -1)) continue;
+        M.seenK[p.slot] = e.k;
+        const d = e.d; if (!d || d.gid !== NET.gid) continue;
+        const rt = M.rtMax[p.slot] = Math.max(M.rtMax[p.slot] ?? -1, d.rt | 0, (d.at ?? G.frame) - SNEAK.lagMax);
+        if (d.ep !== p.ep) continue;   // (a state of the body before a catch or a swap)
+        if (!sneakState(M, p, rt, d.x, !!(d.fl & 1), d.vx)) break;
+      }
+    }
+    const J = M.J; if (!J) return;
+    const end = J.T + SNEAK.lookF, open = G.players.filter((p) => p.local === false && p.slot !== M.it && !p.trap && !sneakArrived(M, p.slot));
+    if (G.frame >= end + SNEAK.lagMax || (G.frame >= end && open.every((p) => (M.rtMax[p.slot] ?? -1) >= end))) M.J = null;
+  }
+  // one runner's state at view tick rt (x, on the ground, vx) -> false when it got caught (its later states are of the
+  // old body). In the look's window (T + graceF .. T + lookF] - not trapped, not arrived, not freed after T + graceF -
+  // freeF: the first state is its anchor (in the air: caught), a later one moveTol px from it, in the air or (from T +
+  // vxF) still walking catches it. Then a body past the line has arrived (a catch in the same state wins)
+  function sneakState(M, p, rt, x, ground, vx) {
+    if (p.trap || sneakArrived(M, p.slot) || rt < M.rs) return true;
+    const J = M.J;
+    if (J && !J.out[p.slot] && rt >= J.T + SNEAK.graceF && rt <= J.T + SNEAK.lookF && !((M.freeAt[p.slot] ?? -1e9) > J.T + SNEAK.graceF - SNEAK.freeF)) {
+      const a = J.anchor[p.slot];
+      if (a === undefined) { J.anchor[p.slot] = x; if (!ground) { sneakCatch(M, p); return false; } }
+      else if (Math.abs(x - a) >= SNEAK.moveTol || !ground || (rt >= J.T + SNEAK.vxF && Math.abs(vx) >= SNEAK.vxTol)) { sneakCatch(M, p); return false; }
+    }
+    if (x + 12 >= sneakLV().line) sneakArrive(M, p, rt);
+    return true;
+  }
+  // caught: a prison owned by the 술래 (trapPlayer: 최다 가두기상's count, trap_player; MINI_TRAP, a press a mash), 들켰다!;
+  // the 술래 +catch, at most catchMax a round
+  function sneakCatch(M, p) {
+    if (M.J) M.J.out[p.slot] = 1;
+    const b = makeBubble('empty', clamp(p.x, WALL_L, WALL_R - 16), clamp(p.y, CEIL_Y, PF_BOT - 16), M.it);
+    G.bubbles.push(b); catchPlayer(p, b);
+    if (!p.trap) return;
+    M.catches[M.it] = (M.catches[M.it] | 0) + 1;
+    if (M.catches[M.it] <= SNEAK.catchMax) M.pts[M.it] = (M.pts[M.it] | 0) + SNEAK.catch;
+    const it = G.players.find((q) => q.slot === M.it);
+    wordPop(p.x + 8, p.y - 8, PARTY_TX.snCaught, it ? it.color : p.color);
+  }
+  // an arrival at its stamp rt (the list kept in stamp order: a slower link's earlier stamp goes first); the first one
+  // starts 3초! - the round's end hurryF after the first stamp
+  function sneakArrive(M, p, rt) {
+    const first = !M.arr.length;
+    M.arr.push([p.slot, rt]); M.arr.sort((a, b) => a[1] - b[1] || a[0] - b[0]);
+    M.first = M.arr[0][1]; M.end = Math.min(M.rs + M.capF, M.first + SNEAK.hurryF);
+    burst(p.x + 8, p.y + 4, 12, STAR_COLS, 1.6, 16);
+    wordPop(p.x + 8, p.y - 6, PARTY_TX.snArrive, p.color);
+    if (first) { showBanner(PARTY_TX.snHurry1, PARTY_TX.snHurry2, 90, 'hurry'); Snd.sfx('extend'); Snd.sfx('hurry'); } else Snd.sfx('item');
+  }
+  // the round's close: arrival points 3 / 2 / 1 by stamp (equal stamps share; none when its 술래 left); arrSum + each
+  // one's frames to arrive (the cap for no arrival, and for the 술래 itself); every prison opens; then the swap to the
+  // next 술래 (everyone back on the spots, its banner) or, after the last round, the 판's end
+  function sneakClose(M, noArr) {
+    const rows = noArr ? [] : M.arr.slice();
+    let place = 0;
+    rows.forEach((a, i) => { if (i && a[1] !== rows[i - 1][1]) place = i; M.pts[a[0]] = (M.pts[a[0]] | 0) + (SNEAK.arr[place] || 0); });
+    for (const p of G.players) { const a = rows.find((q) => q[0] === p.slot); M.arrSum[p.slot] = (M.arrSum[p.slot] | 0) + (a && p.slot !== M.it ? Math.max(0, a[1] - M.rs) : M.capF); }
+    M.J = null;
+    sneakClear();
+    if (M.r >= M.n) { M.ph = 2; M.endAt = G.frame + SNEAK.endF; return; }
+    sneakSwap(M);
+  }
+  function sneakSwap(M) {
+    M.ph = 1; M.swapAt = G.frame; M.it = M.order[M.r]; M.T = -1; M.syl = 0;   // (the arrivals stay until the next round: an arrival that closed it still counts on its page)
+    sneakPlace(M);
+    const nx = G.players.find((p) => p.slot === M.it);
+    showBanner(ptx('snNext', nx ? nameOf(nx) : ''), PARTY_TX.snNext2, SNEAK.swapF, 'round'); Snd.sfx('ready');
+  }
+  // host: the 술래's own count (mi [판 i, presses, feints], cumulative over the 판) - an increase while it chants joins
+  // the queue (at most SNEAK.queue wait), a feint press from feintFrom until 욕 is the chant's one 흠칫!; anyone else's,
+  // or one during the look / a swap, counts for nothing
+  function sneakInput(M, slot, mi) {
+    const c = M.cnt[slot] || [0, 0], pn = Math.max(c[0], nInt(mi[1], 0, 1e6, 0)), fn = Math.max(c[1], nInt(mi[2], 0, 1e6, 0));
+    M.cnt[slot] = [pn, fn];
+    if (slot !== M.it || M.ph !== 0 || M.r < 1 || M.syl >= 6) return;
+    if (pn > c[0]) M.q = Math.min(SNEAK.queue, M.q + pn - c[0]);
+    if (fn > c[1] && !M.fUsed && M.syl >= SNEAK.feintFrom) sneakFeint(M);
+  }
+  // this page's own seat (local, each playing frame): as the 술래 its 거품 / 점프 presses counted over the 판 ([판 i,
+  // presses, feints]; a runner sends none) and, on a guest, its predicted pips (the 6 f rule over its own presses until
+  // the host's come back); my own lines (caught; my turn as the 술래, online) and coins (my arrival, a look survived free
+  // after progPx of progress, a chant of mine with chantN presses that reached 탕!) - all from this screen's mirror
+  function sneakLocal(M, slot, inp) {
+    const P = G.party, p = G.players.find((q) => q.slot === slot); if (!P || !p || M.r < 1) return null;
+    const S = sneakLV(), now = sneakNow(), mine = slot === G.localSlot, it = M.it === slot;
+    const L = G.mloc[slot] || (G.mloc[slot] = { p: 0, f: 0, r: -1, ph: -1, arr: false, trap: false, lx: 0, lT: -1, c0: 0, cT: -1, cE: -1, pred: null });
+    if (L.r !== M.r) Object.assign(L, { r: M.r, arr: false, lx: S.start.col * TS - 4, lT: M.T, c0: L.p, cT: M.T, cE: M.T, pred: null });
+    const chant = M.ph === 0 && it, guest = G.online && G.role === 'guest';
+    const cid = M.T < 0 || now >= M.T + SNEAK.lookF ? M.T : null;   // (the chant now on this screen, null: 욕 lit or in the look)
+    if (chant) for (const q of inp.pq || []) {
+      if (q[0] === 'jump') { L.f++; continue; }
+      if (q[0] !== 'shoot') continue;
+      L.p++;
+      if (guest && cid !== null) {
+        if (!L.pred || L.pred.c !== cid) L.pred = { c: cid, syl: 0, at: -1e9 };
+        if (G.frame - L.pred.at >= SNEAK.sylF && L.pred.syl < 5) { L.pred.syl = Math.max(L.pred.syl, M.syl | 0) + 1; L.pred.at = G.frame; }
+      }
+    }
+    // (the chant's coin: chantN of my presses between the last look's end and 탕!; the look's end starts the next count)
+    if (it && M.ph === 0 && M.T >= 0 && now >= M.T && L.cT !== M.T) { L.cT = M.T; if (mine && L.p - L.c0 >= SNEAK.chantN) coinAct(); }
+    if (it && M.T >= 0 && now >= M.T + SNEAK.lookF && L.cE !== M.T) { L.cE = M.T; L.c0 = L.p; }
+    // (a runner: my arrival - in the swap too: the last runner's arrival closes its round on that frame; each look settled
+    // on my screen - survived free with progPx since the last one)
+    if (!L.arr && M.ph <= 1 && sneakArrived(M, slot)) { L.arr = true; if (mine) coinAct(); }
+    if (!it && M.ph === 0) {
+      if (M.T >= 0 && now >= M.T + SNEAK.lookF && L.lT !== M.T) { L.lT = M.T; if (mine && !p.trap && !L.arr && p.x - L.lx >= SNEAK.progPx) coinAct(); L.lx = p.x; }
+      if (p.trap && !L.trap && mineHere(p)) partyMyLine(PARTY_TX.snMoved1, PARTY_TX.snMoved2);
+    }
+    L.trap = !!p.trap;
+    if (M.ph !== L.ph) { if (M.ph === 1 && it && G.online && mineHere(p)) partyMyLine(PARTY_TX.snMe1, PARTY_TX.snMe2); L.ph = M.ph; }
+    return it ? [P.i, L.p, L.f] : null;
+  }
+  // parked by the game (miniParked): the 술래 always, everyone in a swap or after the last round; a free runner past the
+  // line - this page's own body as soon as it stands there (a guest freezes itself, never waiting for the host's list),
+  // another page's by the arrivals
+  function sneakFrozen(M, p) {
+    if (M.ph !== 0 || p.slot === M.it) return true;
+    if (p.trap) return false;
+    const own = !(G.online && G.role === 'guest') || p.slot === G.localSlot;
+    return own ? p.x + 12 >= sneakLV().line && p.onGround : sneakArrived(M, p.slot);
+  }
+  // a leaver: its rounds still to come are dropped from the order; the 술래 leaving ends its round at once (catches
+  // kept, no arrival points); before 시작! the order is drawn again from the players left
+  function sneakDrop(slot, M) {
+    for (const k of ['anchor', 'out']) if (M.J && M.J[k]) delete M.J[k][slot];
+    if (M.r < 1) { M.order = sneakOrder(); M.n = M.order.length; M.it = M.order[0]; return; }
+    M.order = M.order.slice(0, M.r).concat(M.order.slice(M.r).filter((s) => s !== slot)); M.n = M.order.length;
+    M.arr = (M.arr || []).filter((a) => a[0] !== slot);
+    if (G.mode !== 'playing') return;
+    if (M.ph === 0 && M.it === slot) sneakClose(M, true);
+    else if (M.ph === 1 && M.it === slot) { if (M.r >= M.n) { M.ph = 2; M.endAt = G.frame + SNEAK.endF; } else { M.it = M.order[M.r]; sneakPlace(M); } }
+  }
+  // guest: the round, its 술래, the chant (syllables, T, the feint), 3초!, the arrivals in stamp order, the catches and
+  // points by seat, the phase, the round count, the order, the round start; a new arrival bursts here
+  function sneakView(mg, mg1, t, g, M) {
+    const seat = (v) => nInt(v, -1, MAX_PLAYERS - 1, -1), bySeat = (q, lo, hi) => { const o = {}; if (Array.isArray(q)) for (let s = 0; s < MAX_PLAYERS; s++) { const v = nInt(q[s], lo, hi, 0); if (v) o[s] = v; } return o; };
+    M.r = nInt(mg[1], 0, 99, 0); M.it = seat(mg[2]); M.syl = nInt(mg[3], 0, 7, 0); M.T = nInt(mg[4], -1, 1e12, -1); M.feintT = nInt(mg[5], -1, 1e12, -1);
+    M.first = nInt(mg[6], -1, 1e12, -1); M.end = nInt(mg[7], -1, 1e12, -1);
+    const arr = []; for (const v of Array.isArray(mg[8]) ? mg[8].slice(0, MAX_PLAYERS) : []) { const s = seat(v); if (s >= 0 && !arr.includes(s)) arr.push(s); }
+    M.catches = bySeat(mg[9], 0, 99); M.pts = bySeat(mg[10], 0, 999); M.ph = nInt(mg[11], 0, 2, 0); M.n = nInt(mg[12], 1, 8, SNEAK.rounds[4]);
+    M.order = (Array.isArray(mg[13]) ? mg[13].slice(0, 8) : []).map(seat).filter((s) => s >= 0); M.rs = nInt(mg[14], -1, 1e12, -1);
+    if (M.seeded) for (const s of arr) if (!sneakArrived(M, s)) { const p = G.players.find((q) => q.slot === s); if (p) burst(p.x + 8, p.y + 4, 12, STAR_COLS, 1.6, 16); }
+    M.arr = arr.map((s) => [s, 0]); M.seeded = true;
+    return M;
+  }
+  // behind the animals: the two stools (pink 목욕 의자 over their tiles), the dashed start line at the runners' front,
+  // the soft gold touch band on the floor from the line to the 술래
+  function sneakDraw(M, front) {
+    const S = sneakLV(), fy = PF_BOT - TS;
+    if (front) { sneakFront(M); return; }
+    for (let c = 2; c < COLS - 2; c++) {
+      if (!MAP || MAP[ROWS - 2][c] !== '#' || MAP[ROWS - 2][c - 1] === '#') continue;
+      const x = c * TS; let w = TS; while (MAP[ROWS - 2][c + w / TS] === '#' && c + w / TS < COLS - 2) w += TS;
+      ctx.fillStyle = '#123236'; ctx.fillRect(x, fy - TS, w, TS);
+      ctx.fillStyle = '#c86a8e'; ctx.fillRect(x, fy - TS + 1, w, 3); ctx.fillRect(x + 1, fy - TS + 4, 2, 4); ctx.fillRect(x + w - 3, fy - TS + 4, 2, 4);
+      ctx.fillStyle = '#ff9ec4'; ctx.fillRect(x + 1, fy - TS, w - 2, 3);
+    }
+    const sx = S.start.col * TS - 4 + 17;
+    ctx.fillStyle = '#fbf0d9'; ctx.globalAlpha = 0.6; for (let y = fy - 18; y < fy; y += 4) ctx.fillRect(sx, y, 1, 2); ctx.globalAlpha = 1;
+    const ix = S.it.col * TS - 4 + 8;
+    ctx.globalAlpha = 0.28; ctx.fillStyle = '#ffd447'; ctx.fillRect(S.line, fy - 3, Math.max(2, ix - S.line), 3); ctx.globalAlpha = 0.7; ctx.fillRect(S.line, fy - 10, 1, 10); ctx.globalAlpha = 1;
+  }
+  // in front: the 술래's 양머리 (item_towel_hat at 8 px), its 7 pips (grey -> gold as the chant goes, red in the look) and,
+  // in the look, the soft red edge round the playfield
+  function sneakFront(M) {
+    const it = G.players.find((p) => p.slot === M.it); if (!it || M.r < 1) return;
+    const now = sneakNow(), look = sneakLook(M, now), n = sneakSyl(M, now), hx = Math.round(it.x + 8), ht = Math.round(headTop(it));
+    const hat = frameOf('item_towel_hat', 0); if (hat) ctx.drawImage(hat.c, hx - 4, ht - 5, 8, 8);
+    for (let k = 0; k < 7; k++) { ctx.fillStyle = look ? '#ff5a5a' : k < n ? '#ffd447' : '#5f7d7a'; ctx.fillRect(hx - 13 + k * 4, ht - 11, 3, 3); }
+    if (look && M.ph === 0) {
+      ctx.fillStyle = 'rgba(255,80,80,0.18)';
+      ctx.fillRect(WALL_L, PF_TOP, WALL_R - WALL_L, 6); ctx.fillRect(WALL_L, PF_BOT - 6, WALL_R - WALL_L, 6);
+      ctx.fillRect(WALL_L, PF_TOP + 6, 6, PF_H - 12); ctx.fillRect(WALL_R - 6, PF_TOP + 6, 6, PF_H - 12);
+    }
+  }
+  // the poses: the 술래 faces its wall, the runners in its look (and for feintF after a 흠칫!); an arrived runner hops
+  function sneakPose(M, p) {
+    const now = sneakNow();
+    if (p.slot === M.it) { const fe = M.feintT >= 0 && now >= M.feintT && now - M.feintT < SNEAK.feintF; return { facing: sneakLook(M, now) || fe ? -1 : 1, vx: 0, shootAnim: 0 }; }
+    if (M.ph === 0 && !p.trap && sneakArrived(M, p.slot)) { const h = Math.abs(Math.sin(G.frame * 0.15)) * 3; return { y: p.y - h, onGround: h < 0.5, vy: -0.5 }; }
+    return null;
+  }
+  // a seat's 2nd line: its points in this 판, the 양머리 on the 술래's panel
+  function sneakHud(M, p, x) {
+    if (p.slot === M.it && M.r >= 1) { const f = frameOf('item_towel_hat', 0); if (f) ctx.drawImage(f.c, x + 17, 8, 8, 8); }
+    text(String((M.pts && M.pts[p.slot]) | 0), x + 27, 9, '#ffd447');
+  }
+  // the card's team line: 술래 순서: 방장 → 냥냥 → 까삐 → 펭펭 (each nick cut with an ellipsis, as 축구's halves)
+  function sneakTeamLine(el, order) {
+    const names = []; for (const s of order) { const p = G.players.find((q) => q.slot === s); if (p && !names.includes(nameOf(p))) names.push(nameOf(p)); }
+    const key = JSON.stringify(['s', names]); if (el._key === key) return;
+    el._key = key; el.textContent = '';
+    const row = h('span', 'pg-party-teams');
+    row.appendChild(h('span', 'pg-party-vs', PARTY_TX.snOrder.trim()));
+    names.forEach((n, k) => { if (k) row.appendChild(h('span', 'pg-party-vs', '→')); row.appendChild(h('b', 'pg-party-side', n)); });
+    el.appendChild(row);
+  }
+  // the countdown's 2 / 1 on my screen when I am the first 술래 (online): 이번 술래: 나!
+  const sneakCountMe = () => !!G.online && !!G.mini && G.mini.id === 'sneak' && Array.isArray(G.mini.order) && G.mini.order[0] === G.localSlot;
+  // 술래 (6.7): floor tiles, a pink stool at 36-44, the 술래 b at 76 facing right with 7 pips over it; a walks from 4 and
+  // c (another animal) behind it from 0 while the pips light one every 8 f; at 56 b flips, the pips red - a freezes, c
+  // takes two more steps and a bubble closes on it at 64, its prison drifting left to 0 by 110; b turns back, the pips
+  // refill while a walks on, hopping the stool at 130; b looks at 168 (a still); from 200 a walks to b and touches it,
+  // a star burst at 228
+  function sneakDemo(dx, f, a, b) {
+    const c = CHAR_IDS.find((q) => q !== a && q !== b) || a;
+    demoTiles(dx, 0, 28, 12, 8);
+    dx.fillStyle = '#c86a8e'; dx.fillRect(36, 25, 8, 3); dx.fillStyle = '#ff9ec4'; dx.fillRect(36, 24, 8, 2);
+    const look = (f >= 56 && f < 110) || (f >= 168 && f < 200);
+    const lit = f < 56 ? f >> 3 : f < 110 ? 7 : f < 168 ? Math.min(7, (f - 110) >> 3) : f < 200 ? 7 : Math.min(7, (f - 200) >> 3);
+    for (let k = 0; k < 7; k++) { dx.fillStyle = look ? '#ff5a5a' : k < lit ? '#ffd447' : '#5f7d7a'; dx.fillRect(74 + k * 3, 8, 2, 2); }
+    demoSpr(dx, b + '_idle', 0, 76, 12, 16, look);
+    // (a: walk 0-56, still in the look, walk 110-130, the hop over the stool 130-146, walk to 166, still, walk 200-226)
+    let ax = 4, aw = false, ay = 12;
+    if (f < 56) { ax = 4 + f * 0.4; aw = true; } else if (f < 110) ax = 26;
+    else if (f < 130) { ax = 26 + (f - 110) * 0.4; aw = true; } else if (f < 146) { const u = (f - 130) / 16; ax = dLerp(34, 46, u); ay = dArc(12, 12, u, 8); }
+    else if (f < 166) { ax = 46 + (f - 146) * 0.4; aw = true; } else if (f < 200) ax = 54; else { ax = Math.min(60, 54 + (f - 200) * 0.25); aw = ax < 60; }
+    demoSpr(dx, a + (ay < 12 ? '_jump' : aw ? '_walk' : '_idle'), (f / 8) | 0, Math.round(ax), Math.round(ay), 16, false);
+    // (c: walks to 62, caught at 64 - its prison drifts back to x 0 by 110 - then waits at the start)
+    const cx = f < 62 ? f * 0.4 : f < 64 ? 24.8 : f < 110 ? dLerp(24.8, 0, (f - 64) / 46) : 0;
+    demoSpr(dx, c + (f < 62 ? '_walk' : '_idle'), (f / 8) | 0, Math.round(cx), 12, 16, false);
+    if (f >= 64 && f < 110) demoSpr(dx, 'bubble', 0, Math.round(cx) - 2, 10, 20);
+    if (f >= 228) for (let k = 0; k < 6; k++) { dx.fillStyle = STAR_COLS[k % STAR_COLS.length]; dx.fillRect(Math.round(78 + Math.cos(k * 1.1 + f / 5) * (4 + (f - 228) / 2)), Math.round(18 + Math.sin(k * 1.1 + f / 5) * (3 + (f - 228) / 3)), 1, 1); }
+  }
+
   // ---- the card's animated how-to (polish 3.2.1, MINI_FN[id].demo): each screen draws its own 96x32 loop into
   // #pg-party-demo (never on the wire) from renderScene while the card shows - a pure function of f (P.t % 240), with my
   // animal a (slot 0's offline) and the next seat's b, so a page drawing it late or skipping frames is still right
@@ -6007,6 +6378,37 @@ window.PG = window.PG || {};
       hud: puffHud,
       demo: puffDemo,
     },
+    sneak: {
+      spawns: sneakSpawns,
+      // (order: the 술래 of each round; r the round (0 before 시작!); it its 술래; ph 0 a round runs, 1 the swap, 2 done;
+      // rs / capF / end the round's start, cap and end (the cap, or 3초!); the chant: syl (0-6, 7 the look), q (presses
+      // waiting), lastSyl / lastPress, T (the last turn, -1 none), J (the look being judged: T, anchor x, out), feintT /
+      // fUsed; arr [[slot, stamp]] in stamp order, first; the judge's seenK / rtMax / freeAt by seat; cnt the 술래 mi's
+      // counts by seat; catches (this round) / pts / arrSum by seat)
+      init: () => { const order = sneakOrder(); return { order, n: order.length, r: 0, it: order[0], ph: 0, rs: -1, capF: 0, end: -1, syl: 0, q: 0, lastSyl: 0, lastPress: 0, T: -1, J: null,
+        feintT: -1, fUsed: false, arr: [], first: -1, seenK: {}, rtMax: {}, freeAt: {}, cnt: {}, catches: {}, pts: {}, arrSum: {}, swapAt: -1 }; },
+      // (시작!: the order of the players there now - one who left during the card is not in it)
+      start(M) { const order = sneakOrder(); M.order = order; M.n = order.length; if (order[0] !== M.it) { M.it = order[0]; sneakPlace(M); } sneakRound(M, 1); },
+      tick: sneakTick,
+      local: sneakLocal,
+      input: sneakInput,
+      frozen: sneakFrozen,
+      // (more points, then fewer frames to arrive over the rounds - the cap for none; still equal: a shared place)
+      key: (p, M) => ((M.pts && M.pts[p.slot]) | 0) * 1e5 - ((M.arrSum && M.arrSum[p.slot]) | 0),
+      // (['s', round, 술래, syllables, T, feint, first stamp, the round's end, [arrived slots in stamp order], [catches this
+      // round by seat], [points by seat], phase, rounds, [the order], the round's start])
+      snap: (M) => ['s', M.r, M.it, M.syl, M.T, M.feintT, M.first, M.end, M.arr.filter((a) => G.players.some((p) => p.slot === a[0])).map((a) => a[0]),
+        [0, 1, 2, 3].map((s) => M.catches[s] | 0), [0, 1, 2, 3].map((s) => M.pts[s] | 0), M.ph, M.n, M.order.slice(0, 8), M.rs],
+      view: sneakView,
+      drop: sneakDrop,
+      draw: sneakDraw,
+      pose: sneakPose,
+      clock: (M) => Math.max(1, M.r | 0) + '/' + (M.n || SNEAK.rounds[4]),
+      // (the 술래's tag over its pips; everyone else's as usual)
+      tagY: (M, p) => (p.slot === M.it && M.r >= 1 ? headTop(p) - 13 : NaN),
+      hud: sneakHud,
+      demo: sneakDemo,
+    },
   };
 
   // ---- the party's HUD (9.4): the clock as in battle; per seat the party points and the minigame's 2nd line (no leader
@@ -6102,7 +6504,9 @@ window.PG = window.PG || {};
     setTxt($('pg-party-keys'), touchMode ? D.keysT || PARTY_TX.keysT : D.keys || PARTY_TX.keys);
     const demo = $('pg-party-demo'), dm = !!(MINI_FN[id] && MINI_FN[id].demo); if (demo && demo.hidden === dm) demo.hidden = !dm;
     const team = $('pg-party-team'), M = G.mini, teams = !!D.team && !!M && M.id === id && !!M.team;
-    if (team) { if (teams) partyTeamLine(team, M.team, me); if (team.hidden === teams) team.hidden = !teams; }
+    // (살금살금 술래: the line names the 술래 order instead)
+    const ord = id === 'sneak' && !!M && M.id === id && Array.isArray(M.order) && M.order.length > 0, line = teams || ord;
+    if (team) { if (teams) partyTeamLine(team, M.team, me); else if (ord) sneakTeamLine(team, M.order); if (team.hidden === line) team.hidden = !line; }
     // the ready row: each present player's bust in slot order, the room's ready mark once ready; my chip outlined
     const mine = me >= 0 ? me : G.localSlot, meOk = partyMeReady(P, mine);
     const okOf = (p) => !!P.rdy[p.slot] || (p.slot === mine && meOk);
@@ -6775,7 +7179,7 @@ window.PG = window.PG || {};
   }
   // the countdown's "2" / "1" line (and its class: letters only - guests filter it)
   // (a party, online or not: "2" / "1" say which 판 this is - "1판 / 3판", the last one "3판 / 3판 · 마지막 판!")
-  const troCountSub = () => (G.party ? partyRoundTx(true) : !G.online || G.gameMode !== 'battle' ? '' : NET.q ? '연습 경기 · 트로피 없음' : stakeNow() ? '트로피 ' + stakeNow() + '개씩 걸어요!' : '트로피 경기');
+  const troCountSub = () => (G.party ? (sneakCountMe() ? PARTY_TX.snCount : partyRoundTx(true)) :!G.online || G.gameMode !== 'battle' ? '' : NET.q ? '연습 경기 · 트로피 없음' : stakeNow() ? '트로피 ' + stakeNow() + '개씩 걸어요!' : '트로피 경기');
   const troCountCls = () => (G.party || !G.online || G.gameMode !== 'battle' ? '' : NET.q ? ' prac' : stakeNow() ? ' bet' : '');
   // (8.7) the armed label of 방으로 / 나가기 in the menu: what leaving now costs (this tab's held trophies)
   function troLeaveLabel(host) {
@@ -12446,7 +12850,9 @@ window.PG = window.PG || {};
         el.append(el._n, el._t); dom.tags.appendChild(el);
       }
       // (only the two inner elements are written: the tag's own textContent - "2뽀숑" - still contains the nick)
-      const mine = p === me, hi = mine && tagHi(p), txt = nameOf(p), num = mine ? '나' : slotNum(p) + (pod ? 'P' : '');
+      // (살금살금 술래: the 술래's tag says so - 술래 · 냥냥)
+      const sn = !pod && G.party && G.mini && G.mini.id === 'sneak' && G.mini.r >= 1 && G.mini.it === p.slot;
+      const mine = p === me, hi = mine && tagHi(p), txt = sn ? PARTY_TX.snIt + ' · ' + nameOf(p) : nameOf(p), num = mine ? '나' : slotNum(p) + (pod ? 'P' : '');
       if (el._t.textContent !== txt) el._t.textContent = txt;
       if (el._n.textContent !== num) el._n.textContent = num;
       if (el._col !== p.color) { el._col = p.color; el.style.setProperty('--slot', p.color); }
@@ -14339,7 +14745,8 @@ window.PG = window.PG || {};
         NET.bnId = id;
         const main = nStr(bn[1], 40), cls = nStr(bn[4], 24).replace(/[^a-z ]/g, '');
         // (the countdown's "3" names MY animal's move, not the host's)
-        const sub = cls === 'count' && main === '3' ? countSub() : nStr(bn[2], 90);
+        // (the 2 / 1 of a 술래 판: 이번 술래: 나! on my screen when I am the first 술래, the 판 line otherwise)
+        const sub = cls === 'count' && main === '3' ? countSub() : cls.indexOf('count') === 0 && (main === '2' || main === '1') && G.party && G.mini && G.mini.id === 'sneak' ? (sneakCountMe() ? PARTY_TX.snCount : partyRoundTx(true)) : nStr(bn[2], 90);
         if (left > 0) G.banner = { main, sub, end: G.frame + left, cls, id: 'h' + id };
       }
     } else if (NET.bnId && G.banner && String(G.banner.id).charAt(0) === 'h') { G.banner.end = Math.min(G.banner.end, G.frame); NET.bnId = 0; }
@@ -15566,7 +15973,9 @@ window.PG = window.PG || {};
       r: M.r === undefined ? null : M.r, ph: M.ph === undefined ? null : M.ph, n: M.n === undefined ? null : M.n, C: M.C === undefined ? null : M.C,
       res: M.res ? M.res.map((q) => q.slice()) : null, pts: M.pts ? Object.assign({}, M.pts) : null, ms: M.ms ? Object.assign({}, M.ms) : null,
       // (펑: the seed, the rows by seat, the window, the host's end)
-      seed: M.seed === undefined ? null : M.seed, rows: M.rows ? JSON.parse(JSON.stringify(M.rows)) : null, win: M.win === undefined ? null : M.win, fin: !!M.fin } : null);
+      seed: M.seed === undefined ? null : M.seed, rows: M.rows ? JSON.parse(JSON.stringify(M.rows)) : null, win: M.win === undefined ? null : M.win, fin: !!M.fin,
+      // (술래: the round's 술래, the chant, the turn, the arrivals, the order)
+      it: M.it === undefined ? null : M.it, syl: M.syl === undefined ? null : M.syl, T: M.T === undefined ? null : M.T, arr: M.arr ? M.arr.map((a) => a.slice()) : null, order: M.order ? M.order.slice() : null } : null);
     const api = {
       // the 판 list for n players, rounds 3 / 5, from a seeded draw (pure: the page's own draws are put back)
       plan(n, rounds, seed, from) { const keep = rng; rng = mulberry32((seed | 0) >>> 0); try { return partyPlan(n | 0, rounds | 0, from); } finally { rng = keep; } },
@@ -15576,7 +15985,7 @@ window.PG = window.PG || {};
       coin: (n, done, act, shots, playF, place, tie) => coinParty(n, done, act, shots, playF, place, tie),
       waterAt: (f, k) => waterAt(f, PARTY_ARENAS[0] && PARTY_ARENAS[0].rise, k || 1),
       arenas: () => PARTY_ARENAS, dry: () => dryArenas(), mini: () => JSON.parse(JSON.stringify(MINI, (k, v) => (typeof v === 'function' ? undefined : v))),
-      consts: () => ({ PARTY_V, MILK: JSON.parse(JSON.stringify(MILK)), PUFF: Object.assign({}, PUFF), STAGE_X: JSON.parse(JSON.stringify(STAGE_X)), MINI_OLD,
+      consts: () => ({ PARTY_V, MILK: JSON.parse(JSON.stringify(MILK)), PUFF: Object.assign({}, PUFF), SNEAK: JSON.parse(JSON.stringify(SNEAK)), STAGE_X: JSON.parse(JSON.stringify(STAGE_X)), MINI_OLD,
         PARTY_PTS, PARTY_F, PARTY_FF, PARTY_LAST_X, AWARD_PTS, AWARDS: AWARDS.map((q) => Object.assign({}, q)), ESC_MASH, SOAP: Object.assign({}, SOAP), RAFT: Object.assign({}, RAFT), SURGE_WARN, CROWN2: Object.assign({}, CROWN2), BALL2: Object.assign({}, BALL2), MINI_IDS: MINI_IDS.slice(), MINI_TRAP, MINI_SINK, WATER_SLACK, WATER_LEAD, CROWN_SLOW, CROWN_NOPICK, CROWN_SLACK, pBase: COIN.pBase, pRound: COIN.pRound, pPlace: COIN.pPlace, BALL: Object.assign({}, BALL), BALL_TEAM: BALL_TEAM.slice() }),
       text: () => PARTY_TEXT, tx: () => Object.assign({}, PARTY_TX),
       // this page's view: the phase, the sequencer and the minigame
@@ -15725,6 +16134,16 @@ window.PG = window.PG || {};
       padRec: () => (padLast && padLast.rec ? Object.assign({}, padLast.rec) : null),
       milkEv: () => { const M = G.mini; return M && M.id === 'milk' ? ((M.plan ? M.plan.ev : M.ev) || []).map((e) => e.slice()) : null; },
       remMi(slot) { const p = G.players.find((q) => q.slot === slot), rem = p && p.local === false ? NET.remote.get(p.id) : null; return rem && rem.st && Array.isArray(rem.st.mi) ? rem.st.mi.slice() : null; },
+      // (술래, party-games 13.1.5: the game's whole state on this screen (the host's, a guest's mirror); host: 욕 lit now
+      // - T tangF from now (at: a T of my own instead, the look then opens at it); a seat made the 술래 of this round;
+      // the pips this screen draws now; a 술래 row as a guest's sneakView reads it (a fresh mirror); whether a seat is
+      // parked by the game here)
+      sneak: () => { const M = G.mini; if (!M || M.id !== 'sneak') return null; const o = JSON.parse(JSON.stringify(M, (k, v) => (k === 'id' || typeof v === 'function' ? undefined : v))); o.id = 'sneak'; return o; },
+      look(at) { const M = G.mini; if (!M || M.id !== 'sneak' || M.ph !== 0) return null; M.syl = 6; M.q = 0; M.T = at === undefined ? G.frame + SNEAK.tangF : +at; return M.T; },
+      it(slot) { const M = G.mini; if (!M || M.id !== 'sneak' || !G.players.some((p) => p.slot === slot)) return null; M.order[M.r - 1] = slot; M.it = slot; sneakPlace(M); return M.it; },
+      sneakSyl: () => { const M = G.mini; return M && M.id === 'sneak' ? sneakSyl(M, sneakNow()) : null; },
+      sneakView: (mg) => { const M = sneakView(mg, null, 0, { pa: {} }, { id: 'sneak', seeded: false }); return JSON.parse(JSON.stringify(M)); },
+      parked: (slot) => { const p = G.players.find((q) => q.slot === slot); return p ? miniParked(p) : null; },
       // (unit tests) my own line on this screen (partyMyLine); the banner a snapshot of this world would send (g.bn)
       myLine(main, sub) { partyMyLine(main, sub); return G.banner ? { main: G.banner.main, sub: G.banner.sub, loc: !!G.banner.loc } : null; },
       snapBn() { const g = snapOf(0); return g.bn ? g.bn.slice() : null; },
@@ -15734,7 +16153,7 @@ window.PG = window.PG || {};
           coinPartyNow(o.n | 0, !!o.done, o.place | 0, o.tie | 0 || 1); return CO.pod ? Object.assign({}, CO.pod) : null;
         } finally { G.online = keep.online; NET.q = keep.q; NET.gid = keep.gid; NET.tr = keep.tr; CO.pod = keep.pod; }
       },
-      reload(list) { const keep = PG.PARTY_ARENAS; PG.PARTY_ARENAS = list; try { loadPartyArenas(); return PARTY_ARENAS.map((A) => ({ key: A.key, name: A.name, closed: A.closed, rise: A.rise, goals: A.goals, sides: A.sides, ball: A.ball, gapX: A.gapX, floor: A.map[ROWS - 1], ceil: A.map[0], bar: A.map[20] })); } finally { PG.PARTY_ARENAS = keep; loadPartyArenas(); } },
+      reload(list) { const keep = PG.PARTY_ARENAS; PG.PARTY_ARENAS = list; try { loadPartyArenas(); return PARTY_ARENAS.map((A) => ({ key: A.key, name: A.name, closed: A.closed, rise: A.rise, goals: A.goals, sides: A.sides, ball: A.ball, sneak: A.sneak, low: A.map[ROWS - 2], gapX: A.gapX, floor: A.map[ROWS - 1], ceil: A.map[0], bar: A.map[20] })); } finally { PG.PARTY_ARENAS = keep; loadPartyArenas(); } },
       result: () => partyResult(), next: () => partyNext(), final: (walk) => partyFinal(!!walk), places: () => (G.mini ? Array.from(miniPlaces().entries()) : []),
       // (unit) a seat's snapshot row (its flags: 512 a 오리 튜브), the game's wire array, the sequencer's g.pa
       prow: (slot) => { const r = snapPlayers().find((q) => q[0] === slot); return r ? r.slice() : null; },
