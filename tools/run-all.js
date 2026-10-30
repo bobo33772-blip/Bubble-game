@@ -224,7 +224,8 @@ const LIST = [
   // crown's authority, the podium and the coins, leavers, 파티 한 번 더
   V('party-net', HTTP + 'test-party-net.html', 'rt420000', doneZero('PARTYNET'), { done: 'PARTYNET DONE', w: 1200, h: 900 }),
   // the new games on a slow link (design/party-games.md §13.2): frame 3 at lat 100 / jit 40 - 바나나우유's RT from each
-  // page's own draw and real key events, 펑's same press pattern -> the same score at 8 and at 100 ms
+  // page's own draw and real key events, 펑's same press pattern -> the same score at 8 and at 100 ms, 술래's judge by
+  // each runner's own view (never caught stopping in time on its own screen, arrivals by stamp, a guest 술래's turn)
   V('party-net-lag', HTTP + 'test-party-net.html#lag', 'rt300000', doneZero('PARTYNET'), { done: 'PARTYNET DONE', w: 1200, h: 900 }),
   // v4 shop online (design/shop.md 16.2, pass S4; 3 bc frames): hi.lk / 'eq' / R index 5 in the room only, forged sets,
   // an old-page guest; in game the room's sets frozen and drawn on every page, game-phase R seats 4 long in every

@@ -1221,3 +1221,83 @@ snapshot budget.
 - The rotation, demo, HUD and fit checks pick `'sneak'` up from `MINI_IDS`; with 6 games 3 players draw from 5.
 - party-net `#lag` (`lagRun`) is where 13.2 section 4 goes (frame 3 = C on the slow link; `fakeBody` for party.js).
 - `localWord` (a word pop never recorded) and `localSfx` exist; 술래's word pops are host-recorded (`wordPop`).
+
+## 20. As built: builder 3 (살금살금 술래 + its online checks)
+
+All three games ship: `MINI_IDS` = `water crown ball milk puff sneak`, so 2 / 4 players draw from 6 and 3 players from 5
+(3.6). `PARTY_V` stays 5 for the verify step.
+
+### 20.1 Where the code differs from the text above
+
+| Spec | Built | Why |
+|---|---|---|
+| `g.mg` 술래 `['s', r, it, syl, T, feintT, first, end, arr, catches, pts, ph]` | + **`n`** (rounds), **`order`** (the 술래 of each round) and **`rs`** (the round's start) as `mg[12..14]`; `ph` is 0 a round runs, 1 the swap, 2 done; `T` is the **last** turn decided - sent as soon as 욕 lights (21 f ahead) and kept after the look, -1 only before a round's first | a guest's `2/4` and its card's order line need `n` / `order`; a page draws the look from `T` and its own clock, so it never needs `T` cleared |
+| "the look being judged" (`look`) | `Js`: every look still judged, each `{T, anchor, out}` | a mashed chant can turn again at T+147, while the last look's remote judging may stay open to T+150 |
+| The chant's first syllable | a press can light it 6 f into the round (`lastSyl` = the round's start); idle, the first comes 60 f in | |
+| 흠칫! "from syllable 3 until 욕" | while 3 to 5 syllables are lit (none once 욕 is) | |
+| The prison drifts "toward the start (`G.gather` = the start spot)" | toward the start's **x** at 1.2 px/f, its y easing to **188** (`SNEAK.driftY`) | a runner let out over a stool would otherwise stand inside it |
+| An arrived runner "stops there" | parked once it **stands** past the line (`onGround`); its arrival stamp is still its crossing | parked in mid-air it would hang there |
+| Arrivals cleared at the swap | kept until the next round starts (`M.arr`) | the last runner's arrival closes its round on that frame: its own page must still see it (its coin) |
+| The runners' tags "stack 7 px up per seat" | the existing `tagSpot` lifts a tag off another (no new rule); the 술래's tag sits over its pips (`tagY`: head - 13) and reads `술래 · 냥냥` | `tagSpot` already keeps tags of animals on one spot apart |
+| `START_INV` | no blink in any `noFire` game (`miniLoad`): 술래 too, though it keeps a world | nobody can blow a bubble to end it |
+| `SNEAK` | + `vxTol` 0.1, `vxF` 12 (the walking test), `driftY` 188, `chantN` 3 (the chant's coin), `fast` 2 / `fastCap` 6 (the fast party: 2 rounds of 6 s), `endF` 30 | the spec's numbers, named |
+| Coins: "a look I survived free after at least 16 px of progress" | a look settled on **my** screen (its end on my view clock), me free and not arrived, at least 16 px further on than at the last settled look (or the start) | |
+| The guest 술래's predicted pips | its own presses, 6 f apart, at most 5 lit ahead (욕 comes with the host's `T`) | |
+| party-net #lag 4: frame 3 "stops 5 f after its own view shows 탕!" | it lets go **4 view ticks** after its own view's 탕! (its `rtHi`), so it has stopped by T+6 | four pages on one thread: a frame can move the view 2+ ticks, so "5 frames" could be T+10 |
+| `mp.state()` | + `rtHi`, `delay` (the playout delay) | the #lag INFO line and the runners' timing |
+
+### 20.2 New code (game.js unless named)
+
+- Constants: `SNEAK`, `MINI.sneak` (`c 's'`, 80 s, `fastSecs` 30, `ar ['p', 3]`, `noFire`, `cues: false`, the card's texts and
+  keys), `MINI_IDS` + `'sneak'`, `PARTY_TX` `sn*`, `→` in the warm-up.
+- Arena: `PG.PARTY_ARENAS[3]` 살금살금 복도 (levels.js: stools at cols 9-10 and 21-22 of row 24, `sneak: {start, it, line}`),
+  `PARTY_KEYS` + `'sneak'`, `fallbackPartyArena('sneak')`, `sneakOf`, `loadPartyArenas`; validate-levels' sneak branch
+  (start / it standable on the floor, the line 120+ px past the start's body and short of the 술래, nothing on rows 21-24
+  between them but stools 1-2 high with 3 rows of air).
+- Shared code: `kitOf` -> `KIT_BASE` in a 술래 판; `updatePlayer`'s walk x `SNEAK.walk`; `floatMove`'s 술래 branch;
+  `releasePlayer` stamps `M.freeAt`; `syncTags`' `술래 ·` prefix; `partyCardView`'s order line (`sneakTeamLine`, the
+  축구 line's spans); `troCountSub` and a guest's `guestBanner` put `이번 술래: 나!` in the 2 / 1 of the first 술래's screen.
+- 술래: `sneakLV`, `sneakOrder`, `sneakSpawns`, `sneakPlace`, `sneakClear`, `sneakRound`, `sneakNow` (host frame / guest
+  `rtHi`), `sneakLook`, `sneakSyl`, `sneakTick`, `sneakChant`, `sneakFeint`, `sneakJudge` (host-local bodies each frame;
+  remote `rem.buf` entries newer than `seenK`, `rt = max(rtMax, rt, at - lagMax)`, current epoch only; each look closes
+  once every remote runner still judged sent a state past its T + 90, or 60 f later), `sneakState` (window, anchor, 2 px /
+  air / vx, the freed exemption, then the arrival), `sneakCatch`, `sneakArrive`, `sneakClose`, `sneakSwap`,
+  `sneakInput`, `sneakLocal` (the 술래's mi, the predicted pips, my lines and coins), `sneakFrozen`, `sneakDrop`,
+  `sneakView`, `sneakDraw` / `sneakFront` (stools, start line, gold band; 양머리, pips, the red edge), `sneakPose`,
+  `sneakHud`, `sneakCountMe`, `sneakDemo`; `MINI_FN.sneak`. No game logic in `hostBodyIn` (it only stamps `s.at`, as built).
+- Debug (`PG.debug.party`): `sneak`, `look(at)`, `it(slot)`, `sneakSyl`, `sneakView`, `parked`; `consts()` + `SNEAK`;
+  `state().mini` + `it syl T arr order`; `reload` + `sneak`, `low` (the map's row 24).
+
+### 20.3 Tests
+
+- party.js `sneakTests`: the order for 2 / 3 / 4 players by 판 index; the spots, base kit, 0.875 px/f, no bubbles, the
+  parked 술래; the queue (3) and 6 f; the auto-advance (60, then 24 f); T = 욕 + 21, 탕!, the look's end; the feint's
+  window, once a chant, none after 욕; the look's edges (let go by T+9 safe, walking at T+12 caught by vx, a hop caught,
+  1.9 / 2 px, trapped and arrived not judged); the prison (owner, `caps`, +1, 1.2 px/f at y 188); a mash-out mid-look not
+  caught again (`esc`); the 3 a round cap; the arrival (its stamp, parked, 3초!, the end at +180, 3 / 2 / 0, the swap, round
+  2); remote runners through `fakeBody` (40 f late and stopped at T+5 safe; rt stuck 90 back judged at host - 60; vx at
+  T+12; T+0 / T+40 only; an older epoch; rt stepping back; arrivals by stamp, 12 f apart; catch + arrival -> caught; two
+  looks judged at once); a remote 술래's mi; the 3초! wait for a remote runner (its state, or 60 f); the 술래 leaving; 4
+  rounds at their caps with every wait at 60 f; the key; coins (a survived look, an arrival, a chant); `sneakView`
+  bounds; the fast party; the card and texts. `arenaTests` for the fourth arena; the fit at 1x / 2x / 568x320 checks the
+  order line on one row (each long nick ellipsized). Scenes `#shot=sneak|sneakchant|sneakcard`.
+- party-net (plain, 8 / 4): a 술래 smoke - `이번 술래: 나!` only on the first 술래's screen, the `술래 ·` tag on every page, a
+  runner walking through the host's look caught on every page, a guest 술래's chant reaching the host with T the same
+  everywhere, the 판 ending by its rounds.
+- party-net #lag 4 (real lengths): frame 3 never caught over 3 looks letting go 4 view ticks after its 탕!, caught on the
+  4th on every page; a guest 술래's T the same everywhere; a guest freezing itself at the line (frame 3 too); A and C
+  pressing on their own view ticks R + 12 / R: arrivals 11-12 f apart, C first though its states reach the host later.
+  INFO: every guest's playout delay stayed at the 8-tick base throughout (lat 100 / jit 40 on frame 3). The #lag
+  바나나우유 round-1 plumbing check now also accepts a timer that fired past 1500 ms under load as an exact 느려요.
+- A test-writing lesson worth keeping: a runner must start walking only once the look is over on its OWN view - a guest
+  lags the host by 10-45 ticks, and states sent while its screen still shows the look are caught, by design.
+
+### 20.4 Open points
+
+- Not checked on real phones: the 7 pips (3x3) and the red edge's 0.18 alpha on a 568x320 screen, the gold touch band
+  (0.28 alpha) - it reads faintly in the screenshot; and whether stopping in time feels fair with a thumb on the stick.
+  Knobs: `SNEAK.tangF` / `graceF` (how hard), `walk` and the caps (round length), `catchMax`.
+- The arrival bias of 6.4 stays: a guest whose playout delay grows mid-round gets its stamp a few ticks early. In the
+  #lag run the delay never left its base, so it did not show.
+- Offline (one screen, every seat local) the my-line `움직였어요!` covers the shared banner as the other games' lines do;
+  the `이번엔 내가 술래!` line is online only.

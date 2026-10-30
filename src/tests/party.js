@@ -24,7 +24,10 @@
 // The new games (design/party-games.md §13.1, on a virtual clock - vclock - so press and draw times are exact): the
 // shared machinery, 바나나우유 잡기 (milkTests), 펑! 비눗방울 (puffTests: puffL, the 66 ms rule, 만점 / the pop at L_k, the
 // dip / foam, a bank and a puff of one frame in time order, the warnings, the bell, the wall-clock window, remote rows
-// clamped, over at the done reports or waitF, the key, a leaver, the view, the fast window, the card).
+// clamped, over at the done reports or waitF, the key, a leaver, the view, the fast window, the card), 살금살금 술래
+// (sneakTests: the order, the base kit, the chant - queue, 6 f, the auto-advance, 탕! - the feint, the look's edges, the
+// prisons, arrivals by stamp, 3초!, remote runners judged from fakeBody states by a monotonic, clamped rt, the 술래
+// leaving, 4 rounds at their caps, the key, the coins, the view, the card).
 //   scenes: #shot=milk|milkrev|milkdecoy|milkcard|puff|puffcard|sneak|sneakchant|sneakcard (&s=0: the page's own layout, a phone)
 // Prints "PARTY PASS|FAIL <name>", "PARTY INFO ..." and "PARTY DONE pass=N fail=M".
 (function () {
@@ -1174,6 +1177,14 @@
     ok('remote: rt stepping back by 60 mid-look is read monotonic (still T+41) - a runner that stopped is not caught', !pl(3).trap && rtm === T + 41, [rtm, T]);
     at(T + 180); fake(3, T + 180, 60); step(1); fake(3, T + 125, 194); fake(2, T + 150, 194); step(1);
     ok('arrive: by the stamp, not by when it reached the host - a stepped-back stamp is read monotonic (slot 3 at T+180, not T+125: after slot 2\'s T+150)', same(SN().arr, [[2, T + 150], [3, T + 180]]), [SN().arr, T]);
+    // a look still judged when the next 탕! comes (a mashed chant turns again at T+147 at the earliest, its judging may
+    // stay open to T+150): a late state of the first look still catches
+    party(['duck', 'cat', 'frog'], { plan: ['sneak'] }, 41); toPlaying(); remote(1);
+    const Ta = P.look(); at(Ta + 12); fake(1, Ta + 10, 50); at(Ta + U.lookF + 1); P.look(Ta + 147); at(Ta + 148);
+    const two = SN().Js.length; fake(1, Ta + 88, 60); step(1);
+    ok('look: the next 탕! at T+147 while a look is still judged keeps both - a late state of the first one (rt T+88, 10 px past its anchor, reaching the host at T+148) still catches', two === 2 && !!pl(1).trap && SN().catches[0] === 1, [two, !!pl(1).trap, SN().catches]);
+    at(Ta + 147 + U.lookF + U.lagMax);
+    ok('look: each look closes on its own (lagMax after its end with no state past it)', SN().Js.length === 0, SN().Js);
     // arrivals 12 f apart, the earlier stamp reaching the host later; catch + arrival in one state -> caught
     party(['duck', 'cat', 'frog', 'otter'], { plan: ['sneak'] }, 41); toPlaying(); remote(1, 2, 3);
     step(20); const fr0 = G.frame; fake(1, fr0, 190); step(4); fake(2, fr0 - 12, 190); step(1);

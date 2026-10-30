@@ -5903,7 +5903,7 @@ window.PG = window.PG || {};
   // round r (1..n): its 술래, its clock, a fresh chant, nobody arrived; its end: the cap
   function sneakRound(M, r) {
     const capF = (PARTY_FAST ? SNEAK.fastCap : SNEAK.cap[clamp(M.n0 | 0, 2, 4)] || 13) * 60;
-    Object.assign(M, { r, ph: 0, it: M.order[r - 1], rs: G.frame, capF, end: G.frame + capF, syl: 0, q: 0, lastSyl: G.frame, lastPress: G.frame, T: -1, J: null,
+    Object.assign(M, { r, ph: 0, it: M.order[r - 1], rs: G.frame, capF, end: G.frame + capF, syl: 0, q: 0, lastSyl: G.frame, lastPress: G.frame, T: -1, Js: [],
       feintT: -1, fUsed: false, arr: [], first: -1, catches: {} });
   }
   // the clock this screen draws the chant and the look by: the host's frame, a guest's monotonic view of it (rtHi: a
@@ -5940,7 +5940,7 @@ window.PG = window.PG || {};
     if (M.syl === 6) {
       if (G.frame < M.T) return;
       M.syl = 7; M.q = 0;
-      M.J = { T: M.T, anchor: {}, out: {} };   // (the look being judged: a later one replaces it - by then it closed)
+      M.Js.push({ T: M.T, anchor: {}, out: {} });   // (the looks still judged: a mashed chant can turn again before the last one closed)
       showBanner(PARTY_TX.snTang, '', 60, 'hurry'); Snd.sfx('stamp');
       return;
     }
@@ -5960,7 +5960,7 @@ window.PG = window.PG || {};
   }
   // the judge (6.4): host-local runners from their bodies now; remote ones from each new state in rem.buf (newer than the
   // last judged k) - rt monotonic and at most lagMax behind the host when it arrived, only the runner's current epoch;
-  // then the look closes once every remote runner still judged has a state past T + lookF (or lagMax later)
+  // then each look closes once every remote runner still judged has a state past its T + lookF (or lagMax later)
   function sneakJudge(M) {
     for (const p of G.players) {
       if (p.slot === M.it) continue;
@@ -5976,9 +5976,8 @@ window.PG = window.PG || {};
         if (!sneakState(M, p, rt, d.x, !!(d.fl & 1), d.vx)) break;
       }
     }
-    const J = M.J; if (!J) return;
-    const end = J.T + SNEAK.lookF, open = G.players.filter((p) => p.local === false && p.slot !== M.it && !p.trap && !sneakArrived(M, p.slot));
-    if (G.frame >= end + SNEAK.lagMax || (G.frame >= end && open.every((p) => (M.rtMax[p.slot] ?? -1) >= end))) M.J = null;
+    const open = G.players.filter((p) => p.local === false && p.slot !== M.it && !p.trap && !sneakArrived(M, p.slot));
+    M.Js = M.Js.filter((J) => { const end = J.T + SNEAK.lookF; return !(G.frame >= end + SNEAK.lagMax || (G.frame >= end && open.every((p) => (M.rtMax[p.slot] ?? -1) >= end))); });
   }
   // one runner's state at view tick rt (x, on the ground, vx) -> false when it got caught (its later states are of the
   // old body). In the look's window (T + graceF .. T + lookF] - not trapped, not arrived, not freed after T + graceF -
@@ -5986,8 +5985,8 @@ window.PG = window.PG || {};
   // vxF) still walking catches it. Then a body past the line has arrived (a catch in the same state wins)
   function sneakState(M, p, rt, x, ground, vx) {
     if (p.trap || sneakArrived(M, p.slot) || rt < M.rs) return true;
-    const J = M.J;
-    if (J && !J.out[p.slot] && rt >= J.T + SNEAK.graceF && rt <= J.T + SNEAK.lookF && !((M.freeAt[p.slot] ?? -1e9) > J.T + SNEAK.graceF - SNEAK.freeF)) {
+    for (const J of M.Js) {
+      if (J.out[p.slot] || rt < J.T + SNEAK.graceF || rt > J.T + SNEAK.lookF || (M.freeAt[p.slot] ?? -1e9) > J.T + SNEAK.graceF - SNEAK.freeF) continue;
       const a = J.anchor[p.slot];
       if (a === undefined) { J.anchor[p.slot] = x; if (!ground) { sneakCatch(M, p); return false; } }
       else if (Math.abs(x - a) >= SNEAK.moveTol || !ground || (rt >= J.T + SNEAK.vxF && Math.abs(vx) >= SNEAK.vxTol)) { sneakCatch(M, p); return false; }
@@ -5998,7 +5997,7 @@ window.PG = window.PG || {};
   // caught: a prison owned by the 술래 (trapPlayer: 최다 가두기상's count, trap_player; MINI_TRAP, a press a mash), 들켰다!;
   // the 술래 +catch, at most catchMax a round
   function sneakCatch(M, p) {
-    if (M.J) M.J.out[p.slot] = 1;
+    for (const J of M.Js) J.out[p.slot] = 1;
     const b = makeBubble('empty', clamp(p.x, WALL_L, WALL_R - 16), clamp(p.y, CEIL_Y, PF_BOT - 16), M.it);
     G.bubbles.push(b); catchPlayer(p, b);
     if (!p.trap) return;
@@ -6025,7 +6024,7 @@ window.PG = window.PG || {};
     let place = 0;
     rows.forEach((a, i) => { if (i && a[1] !== rows[i - 1][1]) place = i; M.pts[a[0]] = (M.pts[a[0]] | 0) + (SNEAK.arr[place] || 0); });
     for (const p of G.players) { const a = rows.find((q) => q[0] === p.slot); M.arrSum[p.slot] = (M.arrSum[p.slot] | 0) + (a && p.slot !== M.it ? Math.max(0, a[1] - M.rs) : M.capF); }
-    M.J = null;
+    M.Js = [];
     sneakClear();
     if (M.r >= M.n) { M.ph = 2; M.endAt = G.frame + SNEAK.endF; return; }
     sneakSwap(M);
@@ -6092,7 +6091,7 @@ window.PG = window.PG || {};
   // a leaver: its rounds still to come are dropped from the order; the 술래 leaving ends its round at once (catches
   // kept, no arrival points); before 시작! the order is drawn again from the players left
   function sneakDrop(slot, M) {
-    for (const k of ['anchor', 'out']) if (M.J && M.J[k]) delete M.J[k][slot];
+    for (const J of M.Js || []) { delete J.anchor[slot]; delete J.out[slot]; }
     if (M.r < 1) { M.order = sneakOrder(); M.n = M.order.length; M.it = M.order[0]; return; }
     M.order = M.order.slice(0, M.r).concat(M.order.slice(M.r).filter((s) => s !== slot)); M.n = M.order.length;
     M.arr = (M.arr || []).filter((a) => a[0] !== slot);
@@ -6382,10 +6381,10 @@ window.PG = window.PG || {};
       spawns: sneakSpawns,
       // (order: the 술래 of each round; r the round (0 before 시작!); it its 술래; ph 0 a round runs, 1 the swap, 2 done;
       // rs / capF / end the round's start, cap and end (the cap, or 3초!); the chant: syl (0-6, 7 the look), q (presses
-      // waiting), lastSyl / lastPress, T (the last turn, -1 none), J (the look being judged: T, anchor x, out), feintT /
+      // waiting), lastSyl / lastPress, T (the last turn, -1 none), Js (the looks still judged: T, anchor x, out), feintT /
       // fUsed; arr [[slot, stamp]] in stamp order, first; the judge's seenK / rtMax / freeAt by seat; cnt the 술래 mi's
       // counts by seat; catches (this round) / pts / arrSum by seat)
-      init: () => { const order = sneakOrder(); return { order, n: order.length, r: 0, it: order[0], ph: 0, rs: -1, capF: 0, end: -1, syl: 0, q: 0, lastSyl: 0, lastPress: 0, T: -1, J: null,
+      init: () => { const order = sneakOrder(); return { order, n: order.length, r: 0, it: order[0], ph: 0, rs: -1, capF: 0, end: -1, syl: 0, q: 0, lastSyl: 0, lastPress: 0, T: -1, Js: [],
         feintT: -1, fUsed: false, arr: [], first: -1, seenK: {}, rtMax: {}, freeAt: {}, cnt: {}, catches: {}, pts: {}, arrSum: {}, swapAt: -1 }; },
       // (시작!: the order of the players there now - one who left during the card is not in it)
       start(M) { const order = sneakOrder(); M.order = order; M.n = order.length; if (order[0] !== M.it) { M.it = order[0]; sneakPlace(M); } sneakRound(M, 1); },
