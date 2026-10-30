@@ -15133,6 +15133,27 @@ window.PG = window.PG || {};
           coinPartyNow(o.n | 0, !!o.done, o.place | 0, o.tie | 0 || 1); return CO.pod ? Object.assign({}, CO.pod) : null;
         } finally { G.online = keep.online; NET.q = keep.q; NET.gid = keep.gid; NET.tr = keep.tr; CO.pod = keep.pod; }
       },
+      // (파티 트로피 unit tests) the party room's rules for a fake roster {n, bet, free: [slots], q, role, pv, rapid} - the
+      // host is seat 0, a free seat one short of the stake with the rule; everything put back afterwards
+      rules(o) {
+        o = o || {};
+        const keep = { roster: NET.roster, mode: NET.mode, opts: NET.opts, role: NET.role, pv: NET.pv, selfId: NET.selfId, hz: NET.hz };
+        try {
+          const n = clamp(o.n | 0 || 4, 2, 4), free = o.free || [];
+          Object.assign(NET, { mode: 'party', role: o.role || 'host', pv: o.pv === undefined ? PARTY_V : o.pv | 0, selfId: 'u0', hz: true, opts: Object.assign({}, keep.opts, { bet: o.bet | 0, rounds: 3, rapid: !!o.rapid }) });
+          NET.roster = Array.from({ length: n }, (_, i) => ({ id: 'u' + i, slot: i, nick: 'P' + i, char: 'duck', ready: true, cup: free.includes(i) ? 0 : 999, z: true, free: free.includes(i), f: free.includes(i) }));
+          return partyRules(o.q | 0);
+        } finally { Object.assign(NET, keep); }
+      },
+      // ... this party's 3-2-1 sub / class and first card chip as an online host page would show them {bet, q}
+      count(o) {
+        o = o || {};
+        const keep = { online: G.online, role: G.role, mode: NET.mode, opts: NET.opts, nrole: NET.role, q: NET.q };
+        try {
+          G.online = true; G.role = 'host'; Object.assign(NET, { role: 'host', mode: 'party', q: o.q | 0, opts: Object.assign({}, keep.opts, { bet: o.bet | 0 }) });
+          return { sub: troCountSub(), cls: troCountCls(), chip: G.party ? partyCardBet(G.party) : null };
+        } finally { G.online = keep.online; G.role = keep.role; Object.assign(NET, { mode: keep.mode, opts: keep.opts, role: keep.nrole, q: keep.q }); }
+      },
       // (파티 트로피 unit tests) this page's party coin counters by hand: {gid, act, pf, shots, seen, go, bshots}
       coinPa(o) {
         o = o || {}; CO.pa = { gid: o.gid === undefined ? -1 : o.gid | 0, act: (o.act || []).slice(), pf: (o.pf || []).slice(), shots: o.shots | 0, seen: o.seen === undefined ? -1 : o.seen | 0, go: o.go === undefined ? -1 : o.go | 0 };

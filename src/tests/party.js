@@ -956,6 +956,46 @@
     ok('coins: an offline party pays nothing; the trophy store is byte-identical after it (no trophies, no stats)', G.mode === 'podium' && localStorage.getItem(T0.state().key) === before && !PS().pod, [G.mode, PS().pod]);
   }
 
+  // ---------------------------------------------------------------- 10b. 파티 트로피 (design/party-trophies.md 9.4): the room
+  // rules by size, stake, a free seat and q; the 3-2-1 sub and the card chip of the first 판 only; the new strings warmed
+  function troTests() {
+    D.tro.ns('partytro'); D.tro.set({ t: 100 });
+    const base = (n) => ['미니게임 3판! 판마다 ' + [[4, 0], [4, 2, 0], [4, 2, 1, 0]][n - 2].map((v, i) => (i + 1) + '등 ' + v + '점').join(' · '), '마지막 판은 점수 2배!', '끝나면 보너스상 3개 · 상마다 +2점'];
+    const R = (o) => P.rules(o), has = (list, l) => list.includes(l);
+    const play = '끝까지 하면 파티마다 오늘 트로피 보너스 +5 (꼴등 빼고 · 하루 40개까지)', leave = '견습 리그는 등수로 잃지 않아요 · 파티 중간에 나가면 꼴찌로 쳐요';
+    const r4 = R({ n: 4, bet: 10 }), r3 = R({ n: 3, bet: 10 }), r2 = R({ n: 2, bet: 10 });
+    ok('rules at 10: 모두 10개씩 걸고 최종 등수대로 나눠요 - 4p +26 / +10 / 0 / -16, 3p +23 / +4 / -13, 2p +22 / -16; the +5 and 견습 / leaving lines; no 트로피는 걸지 않아요',
+      has(r4, '모두 10개씩 걸고 최종 등수대로 나눠요: 1등 +26 · 2등 +10 · 3등 0 · 4등 -16') && has(r3, '모두 10개씩 걸고 최종 등수대로 나눠요: 1등 +23 · 2등 +4 · 3등 -13') && has(r2, '모두 10개씩 걸고 최종 등수대로 나눠요: 1등 +22 · 2등 -16')
+      && [r4, r3, r2].every((r) => has(r, play) && has(r, leave) && has(r, '트로피가 모자라면 안 걸고 참여해요 (등수 점수만 받아요)') && !has(r, '트로피는 걸지 않아요') && same(r.slice(0, 3), base(r === r4 ? 4 : r === r3 ? 3 : 2))), [r4, r3, r2]);
+    ok('rules at 10: the trophy lines sit where 트로피는 걸지 않아요 was (after the coin line, before the magazine); 13 lines for 4 players', r4.length === 13 && r4[5] === '끝까지 하면 등수대로 비누 코인을 받아요' && r4[6].indexOf('모두 10개씩') === 0 && r4[10].indexOf('거품') >= 0, r4);
+    const rf = R({ n: 4, bet: 10, free: [3] });
+    ok('rules with a free seat: 판돈 30개 (3명이 10개씩): 건 사람끼리 최종 등수대로 나눠요 and what 안 걸고 참여 pays', has(rf, '판돈 30개 (3명이 10개씩): 건 사람끼리 최종 등수대로 나눠요') && has(rf, '안 걸고 참여: 등수 점수만 받아요 · 1등 +16 · 2등 +8 · 3등 +2 · 4등 -6'), rf);
+    const r0 = R({ n: 4, bet: 0 }), was = base(4).concat(['같은 기록이면 같은 등수 · 동점이면 1등을 더 많이 한 친구가 위예요', '물 차오르기 · 왕관 뺏기 · 거품 축구', '끝까지 하면 등수대로 비누 코인을 받아요', '트로피는 걸지 않아요']);
+    ok('rules at 안 걸기: exactly as before - 트로피는 걸지 않아요, no trophy line (a party at 안 걸기 is no 트로피 경기)', same(r0.slice(0, 7), was) && r0.length === 10 && !r0.some((l) => /최종 등수|파티마다|트로피 경기/.test(l)), r0);
+    const q1 = R({ n: 3, bet: 10, q: 1 }), q2 = R({ n: 3, bet: 10, q: 2 });
+    ok('rules in practice (q 1 / 2) at 10: 연습 경기라 트로피는 그대로예요 beside the coin line, no other trophy line', [q1, q2].every((r) => has(r, '연습 경기라 트로피는 그대로예요') && !r.some((l) => /최종 등수|파티마다/.test(l))) && /이 브라우저의 탭끼리는/.test(q1[5]) && /같은 기기에서/.test(q2[5]), [q1, q2]);
+    const old = R({ n: 3, bet: 10, role: 'guest', pv: 0 });
+    ok('rules for a guest of an older host (no R.pv): 트로피는 걸지 않아요 (its party holds nothing for it)', has(old, '트로피는 걸지 않아요') && !old.some((l) => /최종 등수|파티마다/.test(l)), old);
+    // the 3-2-1 of the first 판 and its card chip (each page's own stake / q; later 판 unchanged)
+    party(['duck', 'cat', 'frog', 'capy'], { plan: ['crown', 'water', 'crown'] }); step(30);
+    const c10 = P.count({ bet: 10 }), cp = P.count({ bet: 10, q: 1 }), c0 = P.count({ bet: 0 });
+    ok('3-2-1 (1판): "1판 / 3판 · 트로피 10개씩 걸어요!" (bet), practice " · 연습 경기" (prac), 안 걸기 unchanged', c10.sub === '1판 / 3판 · 트로피 10개씩 걸어요!' && c10.cls === ' bet' && cp.sub === '1판 / 3판 · 연습 경기' && cp.cls === ' prac' && c0.sub === '1판 / 3판' && c0.cls === '', [c10, cp, c0]);
+    ok('card chip (1판): 10개씩 (aria 트로피 10개씩 걸어요); none in practice or at 안 걸기', same(c10.chip, ['10개씩', '트로피 10개씩 걸어요']) && cp.chip === null && c0.chip === null, [c10.chip, cp.chip, c0.chip]);
+    D.tro.set({ t: 3 });
+    ok('card chip: the host short of the stake plays without it - 안 걸고 참여 (aria 안 걸고 참여해요)', same(P.count({ bet: 10 }).chip, ['안 걸고 참여', '안 걸고 참여해요']), P.count({ bet: 10 }).chip);
+    D.tro.set({ t: 100 });
+    toPlaying(); P.skip(); toCard();
+    const c2 = P.count({ bet: 10 });
+    ok('2판: the 3-2-1 and the card say nothing about the stake (the hold was at the first 시작!)', c2.sub === '2판 / 3판' && c2.cls === '' && c2.chip === null, c2);
+    D.toTitle();
+    // the new strings: every syllable warmed (PARTY_TEXT), 7.4 verbatim
+    const tx = P.tx(), strs = [tx.troZero, tx.troAll, tx.troPot, tx.troPlay, tx.troLeave, tx.troPrac, tx.toParty, tx.toBattle, tx.countBet, tx.countPrac, tx.chipFree, tx.chipBetA, tx.chipFreeA, tx.short, tx.walkVoid, tx.walkPaid, tx.nextFreeMe, tx.nextFree, tx.waitBet, tx.recRow];
+    ok('texts (7.4): the party trophy strings verbatim', tx.troAll === '모두 {0}개씩 걸고 최종 등수대로 나눠요: ' && tx.short === '파티가 너무 빨리 끝나서 트로피는 그대로예요' && tx.walkPaid === '친구가 나가서 일찍 끝났어요 · 기권승' && tx.toParty === '파티로 바뀌었어요: ' && tx.waitBet === ' · 다음 파티도 {0}개씩' && tx.recRow === '배틀·파티' && tx.troPlay === play && tx.troLeave === leave, strs);
+    const warm = $('pg-fontwarm').textContent, miss = new Set();
+    for (const s of strs.concat(['판돈 30개 (3명이 10개씩): 건 사람끼리 최종 등수대로 나눠요', '내 트로피가 모자라서 다음 파티는 안 걸고 해요'])) for (const ch of s) if (/[가-힣]/.test(ch) && (warm.indexOf(ch) < 0 || P.text().indexOf(ch) < 0 && D.tro.text().indexOf(ch) < 0)) miss.add(ch);
+    ok('fonts: every party trophy syllable is warmed (PARTY_TEXT / TRO_TEXT, #pg-fontwarm)', !miss.size, [...miss].join(''));
+  }
+
   // ---------------------------------------------------------------- 11. the card texts, the podium switch, the HUD, the demos
   function longNicks() { return ['가나다라마바사아자차카타', '하늘바다구름별달해님', '뽀득뽀득거품왕자님아', '까삐까삐까삐까삐까삐'].map((nick, i) => ({ char: ['duck', 'capy', 'otter', 'frog'][i], nick })); }
   function cardTests() {
@@ -1011,7 +1051,14 @@
       toPlaying(); P.skip(); toCard(); step(80);   // (the 2nd card, past its splash)
       if (id === 'ball') P.fill(0);                 // (축구: with my own side line, as an online screen)
       await sleep(120);
+      // (파티 트로피: the first card's stake chip in the round line - its longest text - as a staked online party shows it:
+      // this view is the party's last card, so it is shown as a first one - 1판 / 3판, no 점수 2배!)
+      const chip = $('pg-party-bet'), x2 = $('pg-party-x2'), rt0 = $('pg-party-rt').textContent, x20 = x2.hidden;
+      chip.hidden = false; chip.querySelector('span').textContent = '안 걸고 참여'; x2.hidden = true; $('pg-party-rt').textContent = '1판 / 3판';
       const m = measure(label + ' ' + id + ' card', cardEl()), c = P.card();
+      const ra = $('pg-party-rt').getBoundingClientRect(), rb = chip.getBoundingClientRect(), rr = $('pg-party-round').getBoundingClientRect();
+      if (getComputedStyle($('pg-party-round')).display !== 'none') ok(label + ' ' + id + ': the round line with the stake chip stays one line (the chip beside 2판 / 3판, the line no taller)', Math.abs(ra.top + ra.bottom - rb.top - rb.bottom) / 2 < ra.height * 0.5 && rb.right <= rr.right + 1 && rr.height < ra.height * 1.6, [ra.top, ra.bottom, rb.top, rb.bottom, rr.height]);
+      chip.hidden = true; x2.hidden = x20; $('pg-party-rt').textContent = rt0;
       ok(label + ' ' + id + ': the how-to on one line, the keys on one line; the ready row and the button shown', lines($('pg-party-how')) === 1 && lines($('pg-party-keys')) === 1 && c.ready.length === 4 && !!c.button, [lines($('pg-party-how')), lines($('pg-party-keys'))]);
       if (wantRule !== undefined) ok(label + ' ' + id + ': the rule line ' + (wantRule ? 'shown' : 'hidden (a short screen)'), c.ruleShown === wantRule, [c.ruleShown, m.em]);
       ok(label + ' ' + id + ': the ready row inside the card (no chip cut off)', $('pg-party-ready').scrollWidth <= $('pg-party-ready').clientWidth + 1);
@@ -1092,7 +1139,7 @@
     if (/touch/.test(location.hash)) window.dispatchEvent(new Event('touchstart'));
     const sm = /shot=([a-z]+)/.exec(location.hash);
     if (sm) { await shot(sm[1]); return; }
-    const steps = FIT_ONLY ? [fitTests] : [rotationTests, pointTests, waterTests, soapTests, raftTests, crownTests, ballTests, noKoTests, cardFlowTests, beatTests, flowTests, coinTests, arenaTests, cardTests, fitTests, touchTests];
+    const steps = FIT_ONLY ? [fitTests] : [rotationTests, pointTests, waterTests, soapTests, raftTests, crownTests, ballTests, noKoTests, cardFlowTests, beatTests, flowTests, coinTests, troTests, arenaTests, cardTests, fitTests, touchTests];
     for (const f of steps) {
       try { await f(); } catch (e) { fail++; log('PARTY FAIL ' + f.name + ' threw: ' + (e && e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : e)); }
     }
