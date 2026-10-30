@@ -1438,7 +1438,7 @@
 
   // ---------------------------------------------------------------- screenshot scenes (#shot=card|water|crown|ball|ballcard|win|tally|award|podium[&s=1|2])
   async function shot(name) {
-    const sc = +((/[&#]s=([0-9.]+)/.exec(location.hash) || [])[1] || 2); setScale(sc);
+    const sm0 = /[&#]s=([0-9.]+)/.exec(location.hash), sc = sm0 ? +sm0[1] : 2; if (sc > 0) setScale(sc);   // (s=0: the page's own layout - a phone)
     if (name === 'card') { party(longNicks(), { plan: ['water', 'crown', 'water'] }); toPlaying(); P.skip(); toCard(); step(100); P.ready(1); P.ready(2); step(20); }
     else if (name === 'water') {
       party(longNicks(), { plan: ['water'] }); toPlaying();
@@ -1472,6 +1472,7 @@
       const L1 = P.puffL(P.puff().seed, 1), kOf = (w) => { let b = 0; for (let k = 1; k * 34 < L1 * 10; k++) if (P.puffWarn(k * 34, L1) === w) b = k; return b; };
       [1, 2, 3].forEach((s) => blow(s, kOf(s)));
       blow(0, Math.ceil(L1 * 10 / 34)); step(4);
+      until(() => G.frame % 6 === 1, 6);   // (a frame of the flash: it blinks 3 on / 3 off)
       info('puff scene: L1 ' + L1 + ' - ' + [0, 1, 2, 3].map((s) => P.puffSeat(s).s10 / 10 + '% warn ' + P.puffWarn(P.puffSeat(s).s10, L1) + ' score ' + P.puffSeat(s).score).join(' | '));
     } else if (name === 'puffcard') { party(longNicks(), { plan: ['water', 'puff'] }, 101); toPlaying(); P.skip(); toCard(); step(170); }
     else if (name === 'milkdecoy') { P.vclock(true, 1000); party(longNicks(), { plan: ['milk'] }, 101); toPlaying(); toRound(3); until(() => P.seen() && P.seen().r === 3 && P.seen().d.length > 0, 400); step(3); }

@@ -5405,10 +5405,23 @@ window.PG = window.PG || {};
       if (e[1] > vt) continue;
       if (e[0] === 0) { if (sh.arm === undefined) sh.arm = G.drawT; }
       else if (e[0] === 8) { if (sh.end === undefined) sh.end = G.drawT; }
-      else if (e[0] === 9) { if (sh.milk === undefined) { sh.milk = G.drawT; sh.mf = G.frame; localSfx('ticket'); } }
-      else if (!sh.d.some((q) => q[1] === e[1])) { sh.d.push([e[0], e[1], G.frame, G.drawT]); localSfx('ticket'); }
+      else if (e[0] === 9) { if (sh.milk === undefined) { sh.milk = G.drawT; sh.mf = G.frame; localSfx('ticket'); if (PAD) padFire('milk', sh.milk); } }
+      else if (!sh.d.some((q) => q[1] === e[1])) { sh.d.push([e[0], e[1], G.frame, G.drawT]); localSfx('ticket'); if (PAD) padFire('decoy', G.drawT); }
     }
     return sh;
+  }
+  // (tests only, party-games 13.2 - PG.debug.party.pressAfterDraw: armed, this screen's own first draw of the next milk
+  // or decoy sets a timer that dispatches a REAL X keydown ms later - so evT and the rAF time base are exercised, not a
+  // stamp the test wrote; rec keeps the draw time and the event's timeStamp)
+  let PAD = null, padLast = null;
+  function padFire(on, draw) {
+    const q = PAD; if (!q || q.on !== on) return;
+    PAD = null;
+    setTimeout(() => {
+      const e = new KeyboardEvent('keydown', { code: 'KeyX', key: 'x', bubbles: true });
+      window.dispatchEvent(e); window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyX', key: 'x', bubbles: true }));
+      q.rec = { draw, ts: e.timeStamp, r: G.mini && G.mini.r };
+    }, q.ms);
   }
   // a decoy on this screen's counter now (each stays decoyF frames from its own first draw)
   const milkDecoy = (sh) => { for (let k = sh.d.length - 1; k >= 0; k--) if (G.frame - sh.d[k][2] < MILK.decoyF) return sh.d[k]; return null; };
@@ -5749,8 +5762,10 @@ window.PG = window.PG || {};
       text(String(S.score), cx, PF_TOP + TS + 11, p.color, { align: 'center', outline: '#16363a' });
       if (S.s10 > 0) {
         const r = puffR(S.s10), w = puffWarn(S.s10, puffL(M.seed, S.n)), a = w >= 2 ? 2 : w;
-        const dx = a ? ((G.frame >> 1) & 1 ? a : -a) : 0, dy = a ? ((G.frame >> 2) & 1 ? 1 : -1) : 0;
-        ball(w === 3 && G.frame % 6 < 3 && g ? tintOf(g, '#ffffff', 0.8) : tint, cx + dx, hy - 4 - r + dy, r);
+        const dx = a ? ((G.frame >> 1) & 1 ? a : -a) : 0, dy = a ? ((G.frame >> 2) & 1 ? 1 : -1) : 0, fl = w === 3 && G.frame % 6 < 3;
+        // (the flash: the whole bubble blinks white - the ring alone is near white already, too faint on a phone)
+        if (fl) { ctx.globalAlpha = 0.55; ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(cx + dx, hy - 4 - r + dy, r * 0.9, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; }
+        ball(fl && g ? tintOf(g, '#ffffff', 0.8) : tint, cx + dx, hy - 4 - r + dy, r);
       }
       const pp = v.pop, pt = pp ? G.frame - pp[0] : 99;
       if (pt < 12) { const f = frameOf('bubble_pop', pt < 6 ? 0 : 1); if (f) ctx.drawImage(f.c, Math.round(pp[2] - pp[1]), Math.round(pp[3] - pp[1]), Math.round(2 * pp[1]), Math.round(2 * pp[1])); }
@@ -5782,7 +5797,11 @@ window.PG = window.PG || {};
   function puffDemo(dx, f, a, b) {
     demoTiles(dx, 0, 28, 12, 8);
     dx.fillStyle = '#5fa9ad'; dx.fillRect(48, 0, 1, 28);
-    const bub = (x, y, r, white) => { const g = frameOf('giant_bubble', 0); if (!g || r <= 0) return; const t = white ? tintOf(g, '#ffffff', 0.8) : g; dx.drawImage(t.c, Math.round(x - r), Math.round(y - r), Math.round(2 * r), Math.round(2 * r)); };
+    const bub = (x, y, r, white) => {
+      const g = frameOf('giant_bubble', 0); if (!g || r <= 0) return;
+      if (white) { dx.globalAlpha = 0.55; dx.fillStyle = '#ffffff'; dx.beginPath(); dx.arc(x, y, r * 0.9, 0, Math.PI * 2); dx.fill(); dx.globalAlpha = 1; }
+      const t = white ? tintOf(g, '#ffffff', 0.8) : g; dx.drawImage(t.c, Math.round(x - r), Math.round(y - r), Math.round(2 * r), Math.round(2 * r));
+    };
     const arrow = (x) => { dx.fillStyle = '#ffffff'; dx.fillRect(x, 28, 1, 1); dx.fillRect(x - 1, 29, 3, 1); dx.fillRect(x, 30, 1, 1); };
     const spark = (x, y) => { for (let k = 0; k < 4; k++) { dx.fillStyle = STAR_COLS[k]; dx.fillRect(Math.round(x + Math.cos(k * 1.6 + f / 3) * 4), Math.round(y + Math.sin(k * 1.6 + f / 3) * 3), 1, 1); } };
     // (a: the first bubble 0-70, sent off at 72 to the top (20, 3); the second 160-220, sent off at 220 beside it)
@@ -15699,6 +15718,13 @@ window.PG = window.PG || {};
       puffSeat: (slot) => (G.mini && G.mini.id === 'puff' ? puffSeat(G.mini, slot | 0) : null),
       puffView: (mg) => { const M = puffView(mg, null, 0, { pa: {} }, { id: 'puff', seeded: false }); return { seed: M.seed, rows: M.rows, win: M.win, ns: M.ns }; },
       clock: () => { const M = G.mini, F = M && MINI_FN[M.id]; return F && F.clock ? F.clock(M) : null; },
+      // (party-net #lag) a real X keydown ms after this screen's next first draw of the milk (on 'milk') or of a decoy
+      // ('decoy'); the last armed one's record {draw, ts, r}; this round's 바나나우유 events as this screen has them (the
+      // host's whole plan, a guest's merged view); the host's latest mi from a remote seat's body state (null: none)
+      pressAfterDraw(ms, on) { PAD = padLast = { ms: Math.max(0, +ms || 0), on: on === 'decoy' ? 'decoy' : 'milk', rec: null }; return true; },
+      padRec: () => (padLast && padLast.rec ? Object.assign({}, padLast.rec) : null),
+      milkEv: () => { const M = G.mini; return M && M.id === 'milk' ? ((M.plan ? M.plan.ev : M.ev) || []).map((e) => e.slice()) : null; },
+      remMi(slot) { const p = G.players.find((q) => q.slot === slot), rem = p && p.local === false ? NET.remote.get(p.id) : null; return rem && rem.st && Array.isArray(rem.st.mi) ? rem.st.mi.slice() : null; },
       // (unit tests) my own line on this screen (partyMyLine); the banner a snapshot of this world would send (g.bn)
       myLine(main, sub) { partyMyLine(main, sub); return G.banner ? { main: G.banner.main, sub: G.banner.sub, loc: !!G.banner.loc } : null; },
       snapBn() { const g = snapOf(0); return g.bn ? g.bn.slice() : null; },
