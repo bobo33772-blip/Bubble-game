@@ -10,6 +10,10 @@ up to more than the pot.
 The user asked for something like Rummikub's trophies: a standing of your own, plus "몇 개 걸고" (betting a few)
 when playing with friends.
 
+> **파티 트로피** (design/party-trophies.md, built on feat/party-trophies): a party room at a stake is a 트로피 경기 too -
+> the same store, holds, 안 걸고 참여, 꼴등 빼고 and cloud; its own table (`troPartyTable`), one hold per party, a 2-minute
+> void floor. 내 기록's row reads 배틀·파티. A party at 안 걸기 holds nothing (as before).
+
 ---
 
 ## As built: the 2026-10 balance pass (option B)

@@ -473,7 +473,10 @@ body {
    how-to with the demo, the ready row, 준비 완료! and the bar), tally (N판 결과 / 최종 순위: the board counting up),
    stand (마지막 판!), award (보너스상! and each award) */
 .pg-party-x2 { margin-left: 0.4em; padding: 0 0.45em; border-radius: 999px; background: var(--pink); color: var(--ink); font-size: 0.95em; }
-.pg-party-x2[hidden], .pg-party-sub[hidden], .pg-party-skip[hidden], .pg-party-award[hidden] { display: none; }
+/* (파티 트로피, design/party-trophies.md 7.2: the first card of a staked party says its stake - duck on ink, as the room's stake badge) */
+.pg-party-bet { margin-left: 0.4em; padding: 0 0.45em; border-radius: 999px; background: var(--ink); color: var(--duck); box-shadow: inset 0 0 0 1.5px var(--duck); font-size: 0.95em; white-space: nowrap; }
+.pg-party-bet .pg-ic { width: 0.9em; height: 0.9em; margin-right: 0.2em; vertical-align: -0.08em; }   /* (no taller than the text: the round line keeps its height) */
+.pg-party-x2[hidden], .pg-party-bet[hidden], .pg-party-sub[hidden], .pg-party-skip[hidden], .pg-party-award[hidden] { display: none; }
 .pg-party-sub { margin: -0.1em 0 0.25em; font-size: 0.85em; line-height: 1.3; font-weight: 700; color: var(--pink); }
 .pg-party-demo { display: block; margin: 0.05em auto 0.3em; width: calc(96px * var(--pg-px, 1)); height: calc(32px * var(--pg-px, 1)); image-rendering: pixelated; border-radius: 0.25em; background: #0c2629; }
 .pg-party-demo[hidden] { display: none; }
@@ -1487,7 +1490,7 @@ html.pg-sa, html.pg-sa body { overscroll-behavior: none; }
                 <i class="pg-rec-bar" aria-hidden="true"><i id="pg-rec-fill"></i></i></div>
               <b class="pg-rec-n"><canvas class="pg-ic pg-cup" width="8" height="8" aria-hidden="true"></canvas><span id="pg-rec-n">30</span></b></div>
             <dl class="pg-rec-stats">
-              <dt>최고 트로피</dt><dd id="pg-rec-best">30</dd><dt>배틀</dt><dd id="pg-rec-win">0승 / 0판</dd>
+              <dt>최고 트로피</dt><dd id="pg-rec-best">30</dd><dt>배틀·파티</dt><dd id="pg-rec-win">0승 / 0판</dd>
               <dt>뽀득 KO</dt><dd id="pg-rec-ko">0</dd><dt>혼자 최고 점수</dt><dd id="pg-rec-hi">0</dd>
             </dl>
             <ol id="pg-rec-ladder" class="pg-rec-ladder" aria-label="리그"></ol>
@@ -1518,7 +1521,7 @@ html.pg-sa, html.pg-sa body { overscroll-behavior: none; }
              each 판 over the shut doors, and the result beats' tally / 마지막 판! / award views (game.js fillParty) -->
         <section id="pg-party" class="pg-ov pg-party" aria-labelledby="pg-party-name" data-view="card" hidden>
           <div class="pg-card pg-party-card" aria-live="polite">
-            <p id="pg-party-round" class="pg-party-round"><span id="pg-party-rt">1판 / 3판</span><b id="pg-party-x2" class="pg-party-x2" hidden>점수 2배!</b></p>
+            <p id="pg-party-round" class="pg-party-round"><span id="pg-party-rt">1판 / 3판</span><b id="pg-party-x2" class="pg-party-x2" hidden>점수 2배!</b><b id="pg-party-bet" class="pg-party-bet" hidden><canvas class="pg-ic pg-cup" width="8" height="8" aria-hidden="true"></canvas><span>10개씩</span></b></p>
             <h2 id="pg-party-name" class="pg-h2">물 차오르기</h2>
             <p id="pg-party-sub" class="pg-party-sub" hidden></p>
             <canvas id="pg-party-demo" class="pg-party-demo" width="96" height="32" aria-hidden="true"></canvas>

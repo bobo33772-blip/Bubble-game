@@ -227,6 +227,8 @@ window.PG = window.PG || {};
   ];
   const STAKES = [0, 5, 10, 20, 50];
   const BASE = { 2: [12, -6], 3: [15, 5, -6], 4: [16, 8, 2, -6] };     // by place; n = players at 시작! (last place -6: the hold stays s + 6)
+  // 파티 트로피 (design/party-trophies.md): a staked party's pot in % by final place, over the stakers' own order
+  const PARTY_SHARE = { 2: [100, 0], 3: [60, 30, 10], 4: [50, 30, 20, 0] };
   // 목욕 보너스 per run / the 오늘 트로피 보너스 per local day (solo, co-op and battles share it) / per real battle (troReal)
   const RUN_CAP = 30, DAY_CAP = 40, TRO_PLAY = 5;
   const TRO_WAIT_MS = 15000, TRO_AWAY_MS = 30000, TRO_STALE_MS = 15 * 60000, TRO_SLACK_MS = 15000;
@@ -234,8 +236,8 @@ window.PG = window.PG || {};
   const leagueOf = (t) => { let i = 0; while (i + 1 < LEAGUES.length && t >= LEAGUES[i + 1].min) i++; return i; };
   // every Korean string the trophy UI shows (warmed in setupDOM next to V3_TEXT; kept apart from it on purpose)
   const TRO_TEXT = LEAGUES.map((l) => l.name).join(' ') +
-    ' 내 트로피 내 기록 트로피 개 개씩 개부터 최고 트로피 배틀 승 판 뽀득 KO 혼자 최고 점수 리그 다음 리그까지 최고 리그예요! 닫기' +
-    ' 오늘 트로피 보너스 목욕도 배틀도 받아요 이 브라우저에서는 기록이 저장되지 않아요 처음 선물로 트로피 100개를 받았어요! 친구와 배틀할 때 걸어 봐요' +
+    ' 내 트로피 내 기록 트로피 개 개씩 개부터 최고 트로피 배틀 배틀·파티 승 판 뽀득 KO 혼자 최고 점수 리그 다음 리그까지 최고 리그예요! 닫기' +
+    ' 오늘 트로피 보너스 목욕도 배틀도 파티도 받아요 이 브라우저에서는 기록이 저장되지 않아요 처음 선물로 트로피 100개를 받았어요! 친구와 배틀할 때 걸어 봐요' +
     ' 끝까지 한 판마다 꼴등 빼고 하루 개까지' +
     ' 트로피 걸기 안 걸기 트로피 부족 연습 경기 트로피가 모자라요 방장에게 걸기를 낮춰 달라고 해요 트로피가 모자란 친구가 있어요 걸기를 낮춰 주세요 내 트로피가 모자라요' +
     ' 걸기를 낮췄어요: 걸기가 바뀌었어요: 다시 준비해 주세요 트로피 경기: 모두 개씩 걸고 1등이 다 가져요: 1등 2등 3등 4등' +
@@ -249,9 +251,15 @@ window.PG = window.PG || {};
   // ---- 파티 (design/party.md): constants up here - PARTY_TEXT and the font warm-up read them at load (the sequencer and
   // the minigames are their own section after rematch)
   // hi's pa: the minigames this page plays - 1 물 + 왕관, 2 + 거품 축구, 3 the polish (물 v2, the beats, the card's 준비 -
-  // design/party-polish.md); a seat under it is never ready in a party room (a page with pa 2 would read the beats and
-  // 물 v2's wire as noise), so it is told to refresh; the board PR takes the next number
-  const PARTY_V = 3;
+  // design/party-polish.md), 4 (fix/crown-last), 5 the party trophies (design/party-trophies.md: a page under it has no
+  // 안 걸고 참여 for a party - its unpaid stake would count in the pot); a seat under it is never ready in a party room (a
+  // page with pa 2 would read the beats and 물 v2's wire as noise), so it is told to refresh; the board PR takes the next
+  // number
+  const PARTY_V = 5;
+  // 파티 트로피 (design/party-trophies.md): the PARTY_V of the release that first ranks a staked party (R.pv: a guest of an
+  // older host holds nothing for its party); a finished party pays only when its first 시작! -> final standing took this
+  // many host frames (G.frame: cards, 3-2-1s and beats included; 2 min = the shortest battle's clock - the guests' 105 s)
+  const PARTY_TRO_V = 5, PARTY_TRO_MINF = 7200;
   const PARTY_ROUNDS = [3, 5];
   const PARTY_PTS = { 2: [4, 0], 3: [4, 2, 0], 4: [4, 2, 1, 0] };   // by place; n = players at that 판's 시작!
   // frames (polish 3.1): early - last one standing; the card: the title splash, the earliest start, everyone ready ->
@@ -336,6 +344,15 @@ window.PG = window.PG || {};
     revive: '역전!', reviveMe: '다시 올라왔어요!', crownFly: '왕관이 날아가요!', gold1: '황금 왕관!', gold2: '2배!',
     two1: '공이 하나 더!', two2: '골을 넣으면 공이 다시 떨어져요', golden1: '골든 골!', golden2: '먼저 넣는 팀이 이겨요!',
     roomLast: '마지막 판은 점수 2배!', roomAwards: '끝나면 보너스상 3개 · 상마다 +2점',
+    // (파티 트로피, design/party-trophies.md 7.4: only a staked party - 안 걸기 stays as it was, noTro)
+    troZero: '트로피 경기: 최종 ', troAll: '모두 {0}개씩 걸고 최종 등수대로 나눠요: ', troPot: '판돈 {0}: 건 사람끼리 최종 등수대로 나눠요',
+    troPlay: '끝까지 하면 파티마다 오늘 트로피 보너스 +' + TRO_PLAY + ' (꼴등 빼고 · 하루 ' + DAY_CAP + '개까지)',
+    troLeave: '견습 리그는 등수로 잃지 않아요 · 파티 중간에 나가면 꼴찌로 쳐요', troPrac: '연습 경기라 트로피는 그대로예요',
+    toParty: '파티로 바뀌었어요: ', toBattle: '배틀로 바뀌었어요: ', countBet: ' · 트로피 {0}개씩 걸어요!', countPrac: ' · 연습 경기',
+    chipFree: '안 걸고 참여', chipBetA: '트로피 {0}개씩 걸어요', chipFreeA: '안 걸고 참여해요',
+    short: '파티가 너무 빨리 끝나서 트로피는 그대로예요', walkVoid: '친구가 나가서 일찍 끝났어요 · 트로피는 그대로예요',
+    walkPaid: '친구가 나가서 일찍 끝났어요 · 기권승', nextFreeMe: '내 트로피가 모자라서 다음 파티는 안 걸고 해요',
+    nextFree: '다음 파티는 안 걸고 하는 친구가 있어요', waitBet: ' · 다음 파티도 {0}개씩', recRow: '배틀·파티',
   };
   const ptx = (k, v) => PARTY_TX[k].replace('{0}', String(v));
   const PARTY_TEXT = MINI_IDS.map((id) => MINI[id].name + ' ' + MINI[id].how + ' ' + MINI[id].rule).join(' ') + ' ' +
@@ -1799,8 +1816,9 @@ window.PG = window.PG || {};
       if (G.gameMode === 'coop' && LV) { showBanner(LV.name, (G.round + 1) + '번째 탕 · 다 함께!', INTRO_NAME, 'round'); G.introT = Math.max(G.introT, INTRO_NAME + 1); }
       // (몬스터 출현 off: 시작! says 몬스터 없음 - the arena's own banner, '배틀 · N분 · 몬스터 없음', is replaced by the
       // "3" on the countdown's first frame, so a countdown start would never show the word otherwise)
-      // (파티: 시작! names the minigame; its players are counted now - a leaver during the card / 3-2-1 is not)
-      else if (G.party && G.mini) { showBanner('시작!', MINI[G.mini.id].name, 60, 'ready'); coinGo(); miniStart(); }
+      // (파티: 시작! names the minigame; its players are counted now - a leaver during the card / 3-2-1 is not; a staked
+      // party holds at its first 판's 시작! only - troHostGo)
+      else if (G.party && G.mini) { showBanner('시작!', MINI[G.mini.id].name, 60, 'ready'); coinGo(); miniStart(); troHostGo(); }
       else { showBanner('시작!', G.gameMode === 'battle' && G.opts.monsters === false ? '몬스터 없음' : '', 60, 'ready'); troHostGo(); coinGo(); }
     }
   }
@@ -4206,7 +4224,8 @@ window.PG = window.PG || {};
 
   // ------------------------------------------------------------------ 파티 (design/party.md)
   // 2-4 friends play 3 or 5 short minigames (판) in a row, each on one fixed screen, for placement points (4 / 2 / 1 / 0),
-  // and finish on the podium; 비누 코인 only (no trophies). G.gameMode stays 'battle' (rival capture, the magazine, the
+  // and finish on the podium; 비누 코인, and trophies only for a staked online party (design/party-trophies.md: one hold
+  // at the first 시작!, settled by the final standing - troPartyResult). G.gameMode stays 'battle' (rival capture, the magazine, the
   // claims, the snapshots' lc / am work unchanged); G.party is the sequencer, G.mini the minigame now. Host flow:
   //   newParty -> partyNext: miniLoad, 'card' (the splash, then 준비 완료 / the auto start) -> 3-2-1 -> 시작! (miniStart)
   //   -> 'playing' (miniTick each frame) -> miniOver -> partyResult: places -> points (the last 판 x2), 'result': its
@@ -4452,6 +4471,7 @@ window.PG = window.PG || {};
     G.mini = null; G.boss = null; G.hazards = []; G.drops = []; G.bubbles = []; G.bolts = []; G.pickup = null;
     G.bannerQ = []; G.banner = null;
     setMusic('podium'); Snd.sfx('win');
+    troPartyResult(walk);   // (파티 트로피: a staked party's hold settles on this final standing - before the podium shows)
     const k = G.podium.order.indexOf(G.localSlot), place = k >= 0 ? G.podium.pl[k] : 0;
     coinPartyNow(G.podium.order.length, !walk, place, place ? G.podium.pl.filter((q) => q === place).length : 1);
     showOverlay('podium');
@@ -5417,6 +5437,10 @@ window.PG = window.PG || {};
     const id = P.plan[clamp(P.i, 0, P.plan.length - 1)], D = MINI[id] || MINI.water;
     setTxt($('pg-party-rt'), partyRoundTx(false)); setTxt($('pg-party-name'), D.name);
     const x2 = $('pg-party-x2'), dbl = partyX() > 1; if (x2 && x2.hidden === dbl) x2.hidden = !dbl;
+    // (파티 트로피: the first card of a ranked staked party - the hold comes at its 시작! - says the stake, or 안 걸고 참여
+    // for my seat; never on a page that plays it as practice for itself: troGuestGo's tests)
+    const bet = $('pg-party-bet'), bs = partyCardBet(P);
+    if (bet) { if (bs) { setTxt(bet.querySelector('span'), bs[0]); if (bet.getAttribute('aria-label') !== bs[1]) bet.setAttribute('aria-label', bs[1]); } if (bet.hidden === !!bs) bet.hidden = !bs; }
     setTxt($('pg-party-how'), D.how); setTxt($('pg-party-rule'), D.rule);
     setTxt($('pg-party-keys'), touchMode ? D.keysT || PARTY_TX.keysT : D.keys || PARTY_TX.keys);
     const demo = $('pg-party-demo'), dm = !!(MINI_FN[id] && MINI_FN[id].demo); if (demo && demo.hidden === dm) demo.hidden = !dm;
@@ -5450,7 +5474,14 @@ window.PG = window.PG || {};
     }
     setTxt($('pg-party-bart'), all ? PARTY_TX.allReady : partyAutoTx(P));
   }
-  const partyAutoTx = (P) => ptx('autoIn', Math.max(1, Math.ceil(Math.max(0, (P.auto || P.cl || PARTY_F.auto) - P.t) / 60)));
+  // the first card's stake chip: [text, aria-label] or null
+  function partyCardBet(P) {
+    if (!G.online || P.i !== 0 || NET.q !== 0 || !troPartyOn()) return null;
+    const s = stakeNow();
+    if (G.role === 'guest' && ((NET.tr === 'bc' && !TRO.allowBc) || TRO.agreed !== s || TRO.agreedM !== NET.mode)) return null;
+    return troSeatFree({ id: NET.selfId }) ? [PARTY_TX.chipFree, PARTY_TX.chipFreeA] : [s + '개씩', ptx('chipBetA', s)];
+  }
+  const partyAutoTx = (P) => ptx('autoIn',Math.max(1, Math.ceil(Math.max(0, (P.auto || P.cl || PARTY_F.auto) - P.t) / 60)));
   // one board row: the place, the bust, the nick, 나, the points, the gain (or a gap line), the move mark
   function partyRow(p, place, pts, me) {
     const li = h('li', 'pg-party-row' + (p.slot === me ? ' is-me' : ''));
@@ -5610,12 +5641,17 @@ window.PG = window.PG || {};
     setTxt($('pg-podium-h'), t);
     if (dom.podium && dom.podium.getAttribute('aria-label') !== t.replace('!', '')) dom.podium.setAttribute('aria-label', t.replace('!', ''));
   }
+  // (파티 트로피, design/party-trophies.md 7.3: the tag - 3판 / 5판, or 승급! - and my bonus line are troPodiumTag /
+  // troPodBonus; the note, one line in this order: a walkover (void / 기권승 when staked), the host's blocked gate, the
+  // ties, the host's next-party-without-the-stake lines; 파티 한 번 더 waits for the gate as 한 판 더; the wait line says
+  // the next party's stake)
   function partyPodiumUI() {
-    const P = G.party, pd = G.podium, tag = $('pg-podium-tag'), note = $('pg-podium-note'), bonus = $('pg-podium-bonus');
-    if (tag) { setTxt(tag, P.n + '판'); if (tag.className !== 'pg-podium-tag') tag.className = 'pg-podium-tag'; tag.hidden = false; }
-    if (bonus) bonus.hidden = true;
+    const P = G.party, pd = G.podium, note = $('pg-podium-note');
+    troPodiumTag(); troPodBonus();
+    const host = G.online && NET.sess && NET.role === 'host', T = G.online ? troPodNow() : null, ok = troCanRematch(), L = TRO.lastRes;
     let txt = '';
-    if (P.walk) txt = PARTY_TX.noteWalk;
+    if (P.walk) txt = T && T.kind === 'void' ? PARTY_TX.walkVoid : T && T.kind === 'walk' ? PARTY_TX.walkPaid : PARTY_TX.noteWalk;
+    else if (host && !ok && L && NET.roster.some((r) => r.id !== NET.selfId && r.cupM === L.mid && !r.z && r.cup < L.s)) txt = '트로피가 모자란 친구가 있어요 · 방으로 가서 걸기를 바꿔요';
     else if (pd && pd.pl) {
       // (equal points next to each other: a shared place says so, an order a tie-break decided says by what)
       let wins = false, last = false, shared = 0;
@@ -5626,10 +5662,15 @@ window.PG = window.PG || {};
       }
       txt = wins ? PARTY_TX.noteWins : last ? PARTY_TX.noteLast : shared ? PARTY_TX.shared + ' ' + shared + '등!' : '';
     }
+    if (!txt && host && L && L.s > 0) {
+      // (안 걸고 참여: who plays the next party without the stake - the host by its own count, a friend by its 'cup')
+      if (troSeatFree({ id: NET.selfId })) txt = PARTY_TX.nextFreeMe;
+      else if (NET.roster.some((r) => r.id !== NET.selfId && troSeatFree(r))) txt = PARTY_TX.nextFree;
+    }
     if (note) { setTxt(note, txt); note.hidden = !txt; }
-    const again = $('pg-podium-again'); if (again) again.disabled = false;
+    const again = $('pg-podium-again'); if (again) again.disabled = !!host && !ok;
     const w = dom.podium ? dom.podium.querySelector('[data-net-wait]') : null;
-    if (w) setTxt(w, '방장이 다음 판을 고르고 있어요');
+    if (w) setTxt(w, '방장이 다음 판을 고르고 있어요' + (G.online && troPartyOn() ? ptx('waitBet', stakeNow()) + (troSeatFree({ id: NET.selfId }) ? ' · 나는 안 걸고 해요' : '') : ''));
   }
   // host: a 판 ended - my own counters close it (8.3)
   function coinPartyRound() { const A = CO.pa, P = G.party; if (!A || !P || !G.mini) return; A.pf[P.i] = Math.max(A.pf[P.i] | 0, G.mini.t | 0); A.go = P.i; coinPartyClose(P.i); }
@@ -5657,13 +5698,17 @@ window.PG = window.PG || {};
   //    Each player holds stake + 6 (견습: the stake) at "시작!" (troEscrow); the host's 'tro' result settles it (troApply:
   //    my own row, once, clamped by my own hold). Without a result it is refunded (no fault of mine) or forfeited (I left
   //    or went away: last place) - troSessionEnd, troWait, troStale
+  //  - 파티 트로피 (a staked online party, design/party-trophies.md; 안 걸기 holds nothing): one hold for the whole party at
+  //    its first 시작!, settled at the final standing - the battle's BASE and the pot split by place (troPartyTable)
   //  - 목욕 보너스 (solo, online co-op): progress only (troBonus)
   //  - 연습 경기 (troPractice): tabs of one browser (bc), two players from one device's store - nothing changes
   //  - 안 걸고 참여 (a stake I cannot cover): I play that match without putting it in - place points and the +5 like
   //    everyone, never a share of the pot (only the stakes put in are in it, and only those who put one in share it)
   // (tab: this page load's id; everything else per tab lives here, never in storage. free: I readied without the stake)
-  const TRO = { s: null, key: TRO_KEY, tab: '', mem: false, ro: false, allowBc: false, fast: false, day: null, awayAt: 0,
-    seen: new Set(), live: new Map(), agreed: -1, free: false, match: null, lastRes: null, last: null, run: null, pod: null, msg: null, msgT: 0, waits: new Map() };
+  // (agreedM: the room mode my ready was for - ready means ready for that stake in that mode, design/party-trophies.md 4;
+  // pmin: the debug override of the party's void floor, null = PARTY_TRO_MINF - troPartyMinF)
+  const TRO = { s: null, key: TRO_KEY, tab: '', mem: false, ro: false, allowBc: false, fast: false, day: null, awayAt: 0, pmin: null,
+    seen: new Set(), live: new Map(), agreed: -1, agreedM: '', free: false, match: null, lastRes: null, last: null, run: null, pod: null, msg: null, msgT: 0, waits: new Map() };
   function troRand(n) {
     const A = '0123456789abcdefghijklmnopqrstuvwxyz';
     let b = null; try { b = new Uint8Array(n); window.crypto.getRandomValues(b); } catch (e) { b = null; }
@@ -5844,8 +5889,47 @@ window.PG = window.PG || {};
     }
     return out;                                                 // (what the floors leave over is simply not paid)
   }
-  // 트로피 걸기: the host's stake for everyone (co-op never has one); a roster entry's count (my own: my real count)
-  const stakeNow = () => (NET.mode === 'battle' ? NET.opts.bet | 0 : 0);
+  // 파티 트로피 (design/party-trophies.md 2.1), host only, pure: one row [slot, place, base, share, 0, st] per finisher of
+  // a staked party. fin = the players at the podium, best first (G.podium.order), each {slot, pl, p, z}: pl its podium
+  // place (G.podium.pl: shared places repeat), p 견습 at the first 시작!, z 안 걸고 참여. n, s, gl, gz as troTable (n =
+  // players at the first 시작!). The pot (only the stakes put in) is split by PARTY_SHARE[n] over the STAKERS' order: the
+  // k-th staker's place (k >= 2) gets floor(pot x share / 100), the best staker the rest - the floors and the places no
+  // staker filled - so the pot is paid out exactly. A tie group adds up the amounts of the staker places it covers and
+  // splits them evenly; the remainder goes one each to its stakers in seat order, starting at (rot mod their count) -
+  // rot = the game id, so it turns from party to party (never always the host). Place points: BASE[n] by place as a
+  // battle; a tie group averages its places' (rounded), 견습 never below 0. 무승부 (everyone tied): base 0, the pot split
+  // among the stakers. A 기권승 / void: exactly as troTable. r[4] (KOs) is 0: a party has no 뽀득 KO
+  function troPartyTable(n, s, fin, gl, gz, rot) {
+    const m = fin.length, B = BASE[n], W = PARTY_SHARE[n], st = (r) => (s > 0 && r.z ? 0 : 1);
+    const K = fin.filter(st).length, pot = s * (K + Math.max(0, gl - (gz | 0)));
+    if (!B || !m || (m === 1 && !gl)) return [];
+    if (m === 1) return [[fin[0].slot, 1, 0, st(fin[0]) ? pot : 0, 0, st(fin[0])]];     // 기권승: the pot only
+    const amt = []; let rest = pot;
+    for (let q = 1; q < K; q++) { amt[q] = Math.floor(pot * (W[q] || 0) / 100); rest -= amt[q]; }
+    if (K) amt[0] = rest;                                                               // (the best staker: the rest)
+    const draw = fin.every((r) => r.pl === fin[0].pl), out = []; let c = 0;
+    for (let i = 0; i < m;) {
+      let j = i; while (j + 1 < m && fin[j + 1].pl === fin[i].pl) j++;
+      let b = 0; for (let q = i; q <= j; q++) b += B[q];
+      const k = j - i + 1, bb = draw ? 0 : Math.round(b / k), stk = fin.slice(i, j + 1).filter(st);
+      let g = 0; for (let q = c; q < c + stk.length; q++) g += amt[q] | 0;
+      c += stk.length;
+      const each = stk.length ? Math.floor(g / stk.length) : 0, r = g - each * stk.length, r0 = stk.length ? (rot | 0) % stk.length : 0;
+      for (let q = i; q <= j; q++) {
+        const f = fin[q], si = stk.indexOf(f), extra = si >= 0 && (si - r0 + stk.length) % stk.length < r ? 1 : 0;
+        out.push([f.slot, draw ? 1 : i + 1, f.p && bb < 0 ? 0 : bb, si >= 0 ? each + extra : 0, 0, st(f)]);
+      }
+      i = j + 1;
+    }
+    return out;
+  }
+  // 트로피 걸기: the host's stake for everyone - a battle or a party room (pvp: co-op never has one); a roster entry's
+  // count (my own: my real count)
+  const stakeNow = () => (NET.mode === 'battle' || NET.mode === 'party' ? NET.opts.bet | 0 : 0);
+  // 파티 트로피 (design/party-trophies.md 7.1, owner 2026-10-30): is this party a 트로피 경기 for me - only a staked party
+  // room (안 걸기 stays exactly as before: coins only), and a guest only with a host that ranks parties (R.pv). One test
+  // for every party trophy text (rules, summary, countdown, card chip, podium lines)
+  const troPartyOn = () => NET.mode === 'party' && stakeNow() > 0 && (NET.role === 'host' || NET.pv >= PARTY_TRO_V);
   const troCupOf = (r) => (r && r.id === NET.selfId ? (TRO.s ? TRO.s.t : 0) : r ? r.cup : -1);
   const troCovers = (r) => stakeNow() === 0 || troCupOf(r) >= stakeNow();
   // 안 걸고 참여: does this seat play the stake without putting it in. Me: readied without it (TRO.free), or short of it
@@ -5899,7 +5983,7 @@ window.PG = window.PG || {};
       if (s > 0 && (nos === 2 || S.t < s)) { if (!nos) return false; put = 0; }   // (can't cover it, no rule: practice for me)
       const p = leagueOf(S.t) === 0 ? 1 : 0, h = Math.min(S.t, put + (p ? 0 : 6));
       S.t -= h; S.esc = S.esc.concat([{ m: mid, tab: TRO.tab, h, s: put, n: clamp(n | 0, 2, 4), p, st: 'open', t0: Date.now() }]).slice(-8);
-      TRO.live.set(mid, { at: performance.now(), min });
+      TRO.live.set(mid, { at: performance.now(), min });                 // (+ pa: a party's coin counters, troGuestGo)
       if (put > 0) troSfx('stake');
       return true;
     });
@@ -6010,17 +6094,20 @@ window.PG = window.PG || {};
   // st (안 걸고 참여): whose stake is in the pot - mine from my own hold; a guest page with the rule (r.z) says what it put
   // in ('st', at its own 시작!) and counts nothing until it does (a hold it never made, a practice match for it, a lost
   // message: no stake in the pot, and its row tells it to pay none); an older guest page (no r.z) can only ready covering
-  // the stake and pays it from its own hold, so it counts when its count covers it, as before
+  // the stake and pays it from its own hold, so it counts when its count covers it, as before. (파티: one hold for the
+  // whole party - a staked one only - at its first 판's 시작!: all 판 share the game id, so a later 판 finds its mid in
+  // TRO.match and keeps the gg / st / f0 of the earlier ones; f0 = the frame of that first 시작!, the void floor's start)
   function troHostGo() {
-    if (!G.online || G.role !== 'host' || G.gameMode !== 'battle' || G.party || NET.q !== 0 || !NET.ms) return; // (a party holds no trophies)
+    if (!G.online || G.role !== 'host' || G.gameMode !== 'battle' || (G.party && !(stakeNow() > 0)) || NET.q !== 0 || !NET.ms) return;
     const mid = NET.ms + '.' + NET.gid, s = stakeNow(), p = {}, st = {};
+    if (TRO.match && TRO.match.mid === mid) return;
     let hs = 0;
     for (const pl of G.players) {
       const r = NET.roster.find((q) => q.id === pl.id), me = pl.id === NET.selfId, t = me ? TRO.s.t : r ? r.cup : -1;
       p[pl.slot] = t >= 0 && t < LEAGUES[1].min ? 1 : 0;
       if (me) hs = pl.slot; else st[pl.slot] = s > 0 && r && !r.z && t >= s ? 1 : 0;
     }
-    TRO.match = { mid, s, n: G.players.length, p, st, slots: G.players.map((q) => q.slot), gg: new Set() };
+    TRO.match = { mid, s, n: G.players.length, p, st, slots: G.players.map((q) => q.slot), gg: new Set(), f0: G.frame };
     // (false = the host plays this one as practice for itself: read-only storage; short of the stake: without it)
     if (troEscrow(mid, s, G.players.length, 0, 1)) st[hs] = s > 0 && troPut(mid) === s ? 1 : 0;
   }
@@ -6040,6 +6127,40 @@ window.PG = window.PG || {};
     TRO.lastRes = { mid: M.mid, s: M.s };            // the 한 판 더 gate waits for each guest's 'cup' of this mid
     troPodium(M.mid, rows, M.n, M.s, res);
   }
+  // 파티 트로피 (design/party-trophies.md 3.2) - host, in partyFinal after G.podium is set: the table over the final
+  // standing; void (refund at once) when nobody gave up in a walkover, or when a finished party's first 시작! -> now took
+  // under troPartyMinF host frames (cards and beats included: the guests refuse a result before their 105 s anyway - a
+  // short honest party would pay the host alone) - then every guest is told (v: 1) to refund its hold now; else my row and
+  // the reliable 'tro'
+  function troPartyResult(walk) {
+    const M = TRO.match; TRO.match = null;
+    if (!M || !G.online || G.role !== 'host' || M.mid !== NET.ms + '.' + NET.gid || !G.podium) return;   // (none before the first 시작!, nor at 안 걸기)
+    const z = (sl) => (M.s > 0 && !M.st[sl] ? 1 : 0), pd = G.podium;
+    const fin = pd.order.map((sl, i) => ({ slot: sl, pl: (pd.pl && pd.pl[i]) || i + 1, p: M.p[sl] | 0, z: z(sl) }));
+    const left = M.slots.filter((sl) => !fin.some((f) => f.slot === sl) && M.gg.has(sl));
+    const short = !walk && G.frame - (M.f0 | 0) < troPartyMinF();
+    const rows = short ? [] : troPartyTable(M.n, M.s, fin, left.length, left.filter(z).length, NET.gid);
+    if (!rows.length) {
+      troClose(M.mid, 'refund', short ? 'short' : 'void');
+      if (short && NET.sess) NET.sess.send('*', { t: 'tro', m: M.mid, n: M.n, s: M.s, r: [], v: 1 });
+      troPodium(M.mid, [], M.n, M.s, null, short ? 'short' : 'void'); return;
+    }
+    const res = troApply(M.mid, rows, 0, true, troPartyReal(CO.pa, fin.length));
+    if (NET.sess) NET.sess.send('*', { t: 'tro', m: M.mid, n: M.n, s: M.s, r: rows });
+    TRO.lastRes = { mid: M.mid, s: M.s };            // (the 파티 한 번 더 gate waits for each guest's 'cup')
+    troPodium(M.mid, rows, M.n, M.s, res);
+  }
+  // the +5's real party (troReal for a party): 2+ finishers, >= COIN.gameShots of my blows and >= COIN.minF frames of play
+  // over the whole party - A is that party's CO.pa (closed per 판; the 판 still open counts while A is still the current
+  // one); the fast debug party waives the play time, as coinPartyNow does. Read only: never closes a 판 itself (a late
+  // result must not close a 판 of the next party)
+  function troPartyReal(A, nf) {
+    if (!A || nf < 2) return false;
+    const open = A === CO.pa && A.go > A.seen ? CO.bshots : 0, pf = A.pf.reduce((s, f) => s + (f | 0), 0);
+    return A.shots + open >= COIN.gameShots && (PARTY_FAST || pf >= COIN.minF);
+  }
+  // the void floor in host frames: the debug override, else 0 in the fast debug party (12 s games), else PARTY_TRO_MINF
+  const troPartyMinF = () => (TRO.pmin !== null ? TRO.pmin : PARTY_FAST ? 0 : PARTY_TRO_MINF);
   // 한 판 더 after a staked result: every guest has reported its new count for it (견습 and the room chips follow it), and
   // an older guest page (no r.z) can still cover the stake - the host and every guest with 안 걸고 참여 who are short now
   // play the next match without it
@@ -6051,23 +6172,42 @@ window.PG = window.PG || {};
   function troResultIn(m) {
     const mid = typeof m.m === 'string' && MID_RE.test(m.m) ? m.m : ''; if (!mid) return;
     const rows = Array.isArray(m.r) ? m.r.slice(0, 4) : [];
-    const res = troApply(mid, rows, NET.slots.get(NET.selfId), false, troReal(rows.filter(Array.isArray).length, 0));
-    // display only (8.8). A repeat for a match already shown (a replay, a hostile extra) keeps my own applied change and
-    // never restarts the podium's animation
+    // (파티 트로피: a party is known by MY hold of it - its counters, TRO.live's pa, ride with the hold: G.party is gone
+    // once I am back in the room, and a quick 파티 한 번 더 replaces CO.pa while this result may still be on its way)
+    const L = TRO.live.get(mid), A = L && L.pa;
     const P = TRO.pod && TRO.pod.mid === mid ? TRO.pod : null;
-    if (!P || P.t0 < 0) troPodium(mid, rows, nInt(m.n, 2, 4, 2), STAKES.includes(m.s) ? m.s : 0, res || (P && P.net !== null ? { net: P.net, now: P.now, promo: P.promo, bonus: P.bonus, put: P.put } : null), undefined, P ? P.at : undefined);
+    // (v: 1 - the host's party was too short to count: this tab's hold of THAT party refunded now; a battle hold, one
+    // already applied, a replay: nothing)
+    if (m.v === 1 && !rows.length) {
+      if (!A) return;
+      troClose(mid, 'refund', 'short');                                              // (troClose sends the 'cup')
+      if (!P || P.t0 < 0) troPodium(mid, [], nInt(m.n, 2, 4, 2), STAKES.includes(m.s) ? m.s : 0, null, 'short', P ? P.at : undefined);
+      if (shownOverlay === 'podium') { fillPodium(); troPodiumUI(); }
+      return;
+    }
+    const nf = rows.filter(Array.isArray).length;
+    const res = troApply(mid, rows, NET.slots.get(NET.selfId), false, A ? troPartyReal(A, nf) : troReal(nf, 0));
+    // display only (8.8). A repeat for a match already shown (a replay, a hostile extra) keeps my own applied change and
+    // never restarts the podium's animation (nor a short party's line)
+    if (!P || (P.t0 < 0 && P.kind !== 'short')) troPodium(mid, rows, nInt(m.n, 2, 4, 2), STAKES.includes(m.s) ? m.s : 0, res || (P && P.net !== null ? { net: P.net, now: P.now, promo: P.promo, bonus: P.bonus, put: P.put } : null), undefined, P ? P.at : undefined);
     troCupOut(mid);                                                                   // always: the host's rematch gate
     if (shownOverlay === 'podium') { fillPodium(); troPodiumUI(); }
   }
-  // guest: the first 'p' snapshot of a ranked battle's game id = "시작!" for me (on a network event: a hidden tab too)
-  function troGuestGo(id) {
+  // guest: the first 'p' snapshot of a ranked battle's game id = "시작!" for me (on a network event: a hidden tab too).
+  // party: that snapshot's own mode - a staked party's first 판 (its later 판 find the mid in TRO.seen): the result is
+  // taken no sooner than the void floor's 2 min less the slack (105 s), and the hold keeps this party's coin counters
+  // (TRO.live's pa) for the +5's real test of its result (troResultIn)
+  function troGuestGo(id, party) {
     const mid = NET.ms + '.' + id;
     if (TRO.seen.has(mid)) return;
     if (NET.tr === 'bc' && !TRO.allowBc) return;                       // this browser's tabs share one store
-    const s = stakeNow(); if (s > 0 && s !== TRO.agreed) return;      // not the stake I readied for: practice for me
+    // (not the stake - or the mode - I readied for: practice for me)
+    const s = stakeNow(); if (s > 0 && (s !== TRO.agreed || NET.mode !== TRO.agreedM)) return;
+    const min = party ? PARTY_TRO_MINF / 60 * 1000 - TRO_SLACK_MS : NET.opts.time * 60000 - TRO_SLACK_MS;
     // (안 걸고 참여, where the host has it - NET.hz: readied without the stake, or short of it now -> held without it; an
     // older host's room: short = practice for me, as before)
-    if (!troEscrow(mid, s, G.players.length, NET.opts.time * 60000 - TRO_SLACK_MS, !NET.hz ? 0 : TRO.free ? 2 : 1)) return;
+    if (!troEscrow(mid, s, G.players.length, min, !NET.hz ? 0 : TRO.free ? 2 : 1)) return;
+    if (party) { const L = TRO.live.get(mid); if (L) L.pa = CO.pa; }
     // (what I put in, to the host: only that is in the pot - its row then says so, and I never pay more than I held)
     if (s > 0 && NET.hz && NET.sess) NET.sess.send(NET.hostId, { t: 'st', m: mid, s: troPut(mid) });
     if (document.hidden) troGg(1);
@@ -6078,7 +6218,7 @@ window.PG = window.PG || {};
     let nb = 0; for (const s of STAKES) if (s <= TRO.s.t) nb = s;
     NET.opts.bet = nb;
     for (const r of NET.roster) if (r.id !== NET.selfId) r.ready = false;
-    if (NET.mode === 'battle') troMsgSet('걸기를 낮췄어요: ' + troStakeTxt(nb));
+    if (pvp()) troMsgSet('걸기를 낮췄어요: ' + troStakeTxt(nb));   // (a battle or a party room: both have the stake)
     NET.roomDirty = true;
     return true;
   }
@@ -6093,23 +6233,31 @@ window.PG = window.PG || {};
     return L.how === 'refund' ? '걸었던 트로피를 돌려받았어요' : '이번 판은 진 걸로 쳤어요';
   }
   // the countdown's "2" / "1" line (and its class: letters only - guests filter it)
-  // (a party, online or not: "2" / "1" say which 판 this is - "1판 / 3판", the last one "3판 / 3판 · 마지막 판!")
-  const troCountSub = () => (G.party ? partyRoundTx(true) : !G.online || G.gameMode !== 'battle' ? '' : NET.q ? '연습 경기 · 트로피 없음' : stakeNow() ? '트로피 ' + stakeNow() + '개씩 걸어요!' : '트로피 경기');
-  const troCountCls = () => (G.party || !G.online || G.gameMode !== 'battle' ? '' : NET.q ? ' prac' : stakeNow() ? ' bet' : '');
+  // (a party, online or not: "2" / "1" say which 판 this is - "1판 / 3판", the last one "3판 / 3판 · 마지막 판!"; a staked
+  // online party's first 판 adds its stake - "1판 / 3판 · 트로피 10개씩 걸어요!", practice " · 연습 경기": the host's view,
+  // carried to the guests in g.bn as a battle's)
+  const troPartyCount = () => (G.party && G.party.i === 0 && G.online && troPartyOn() ? (NET.q ? PARTY_TX.countPrac : ptx('countBet', stakeNow())) : '');
+  const troCountSub = () => (G.party ? partyRoundTx(true) + troPartyCount() : !G.online || G.gameMode !== 'battle' ? '' : NET.q ? '연습 경기 · 트로피 없음' : stakeNow() ? '트로피 ' + stakeNow() + '개씩 걸어요!' : '트로피 경기');
+  const troCountCls = () => (G.party ? (troPartyCount() ? (NET.q ? ' prac' : ' bet') : '') : !G.online || G.gameMode !== 'battle' ? '' : NET.q ? ' prac' : stakeNow() ? ' bet' : '');
   // (8.7) the armed label of 방으로 / 나가기 in the menu: what leaving now costs (this tab's held trophies)
   function troLeaveLabel(host) {
     const h = troHeld(), base = host ? '한 번 더 누르면 모두 방으로' : '한 번 더 누르면 나가요';
     return h > 0 ? base + ' · ' + (host ? '내 트로피' : '트로피') + ' -' + h : base;
   }
-  // the room's rules line: the final result per place for this room's size and stake (troTable, distinct places); with
-  // seats that play without the stake (안 걸고 참여), the pot those who put it in make and who takes it
-  const troParts = (s) => { const n = clamp(NET.roster.length, 2, 4), fin = []; for (let i = 0; i < n; i++) fin.push({ slot: i, sc: n - i, k: 0, ko: 0, p: 0 });
-    return troTable(n, s, fin, 0).map((r) => r[1] + '등 ' + troSigned(r[2] + r[3] - s)).join(' · '); };
+  // the room's rules line: the final result per place for this room's size and stake (troTable, distinct places; a party
+  // room: troPartyTable - the pot shared out by place); with seats that play without the stake (안 걸고 참여), the pot
+  // those who put it in make and who takes it
+  const troParts = (s) => {
+    const n = clamp(NET.roster.length, 2, 4), fin = [], pt = NET.mode === 'party';
+    for (let i = 0; i < n; i++) fin.push({ slot: i, sc: n - i, k: 0, ko: 0, p: 0, pl: i + 1 });
+    return (pt ? troPartyTable(n, s, fin, 0, 0, 0) : troTable(n, s, fin, 0)).map((r) => r[1] + '등 ' + troSigned(r[2] + r[3] - s)).join(' · ');
+  };
   function troRulesLine() {
-    const s = stakeNow(), k = NET.roster.filter((r) => !troSeatFree(r)).length;
-    if (!s || !k) return '트로피 경기: ' + troParts(0);
-    if (k >= NET.roster.length) return '모두 ' + s + '개씩 걸고 1등이 다 가져요: ' + troParts(s);
-    return '판돈 ' + s * k + '개 (' + k + '명이 ' + s + '개씩): 건 사람 중 1등이 다 가져요';
+    const s = stakeNow(), k = NET.roster.filter((r) => !troSeatFree(r)).length, pt = NET.mode === 'party';
+    if (!s || !k) return (pt ? PARTY_TX.troZero : '트로피 경기: ') + troParts(0);
+    if (k >= NET.roster.length) return (pt ? ptx('troAll', s) : '모두 ' + s + '개씩 걸고 1등이 다 가져요: ') + troParts(s);
+    const pot = s * k + '개 (' + k + '명이 ' + s + '개씩)';
+    return pt ? ptx('troPot', pot) : '판돈 ' + pot + ': 건 사람 중 1등이 다 가져요';
   }
   // ... and 안 걸고 참여's own line (a stake, a host with the rule): nobody short blocks the room, and what it pays
   function troFreeLine() {
@@ -6138,8 +6286,9 @@ window.PG = window.PG || {};
       const all = Array.from(m.values()), rl = (Array.isArray(rows) ? rows : []).filter(Array.isArray);
       kind = rl.length >= 2 && rl.every((r) => +r[1] === 1 && +r[2] === 0) ? 'draw' : rl.length === 1 ? 'walk' : all.length ? 'win' : 'prac';
     }
+    // (party: a party's result - its cups fly to every block with a gain, troPodiumTick)
     TRO.pod = { mid, kind, rows: m, n, s, net: res ? res.net : null, now: res ? res.now : null, promo: res ? res.promo : -1, bonus: res ? res.bonus | 0 : 0, put: res ? res.put : s, free,
-      at: at !== undefined ? at : G.podium ? G.podium.t : 0, t0: -1, fl: null, flipAt: -1, landed: 0, upDone: false, promoDone: false };
+      at: at !== undefined ? at : G.podium ? G.podium.t : 0, t0: -1, fl: null, flipAt: -1, landed: 0, upDone: false, promoDone: false, party: !!G.party };
   }
   // the result of THIS game id only (a late one for the previous game is never drawn on the next podium)
   function troPodNow() { const P = TRO.pod; return P && G.podium && P.mid === NET.ms + '.' + NET.gid ? P : null; }
@@ -6151,9 +6300,11 @@ window.PG = window.PG || {};
     if (t < P.t0) return;
     if (!P.fl) {
       P.fl = [];
-      // (to the 1st-place animal(s) - staked: to whoever took the pot, which is the best who put a stake in: 안 걸고 참여)
+      // (to the 1st-place animal(s) - staked: to whoever took the pot, which is the best who put a stake in: 안 걸고 참여;
+      // a party: to every block with a gain, best first, round-robin - its pot is shared out by place)
       const order = G.podium.order, first = order.filter((sl) => P.rows.has(sl) && P.rows.get(sl).place === 1);
-      const pot = P.s > 0 ? order.filter((sl) => P.rows.has(sl) && P.rows.get(sl).share > 0) : [], win = pot.length ? pot : first;
+      const pot = P.party ? order.filter((sl) => P.rows.has(sl) && P.rows.get(sl).net > 0) : P.s > 0 ? order.filter((sl) => P.rows.has(sl) && P.rows.get(sl).share > 0) : [];
+      const win = pot.length ? pot : first;
       if (!rm && win.length && P.kind !== 'draw') {
         for (const sl of order) {
           const r = P.rows.get(sl); if (!r || r.net >= 0) continue;
@@ -6196,11 +6347,13 @@ window.PG = window.PG || {};
     }
   }
   // the podium's DOM: the title tag, the host's note + 한 판 더 gate, the guest's wait line (podium shown, 'cup', roster)
+  // (파티: its 판 count, or 승급! after my count-up - never 연습 / 기권승 / 무승부: the party's note and lines say those)
   function troPodiumTag() {
     const el = $('pg-podium-tag'); if (!el) return;
     const P = G.online ? troPodNow() : null;
     let txt = '', cls = 'pg-podium-tag';
     if (P && P.promo >= 0 && P.promoDone) { txt = '승급! ' + LEAGUES[P.promo].name; cls += ' pg-promo'; }
+    else if (G.party) txt = G.party.n + '판';
     else if (P && P.kind === 'draw') txt = '무승부';
     else if (P && P.kind === 'walk') txt = '기권승';
     else if (P && P.kind === 'prac') { txt = '연습'; cls += ' is-prac'; }
@@ -6209,23 +6362,26 @@ window.PG = window.PG || {};
     el.hidden = !txt;
   }
   // my 오늘 트로피 보너스 of this match (troApply's bonus, apart from the net on my block): its own line once my change has
-  // counted up (troPodiumTick's upDone), led by 안 걸고 참여 when I played without the stake
+  // counted up (troPodiumTick's upDone), led by 안 걸고 참여 when I played without the stake. A party too short to count
+  // says so at once (no rows: no count-up)
   function troPodBonus() {
     const el = $('pg-podium-bonus'); if (!el) return;
     const P = G.online ? troPodNow() : null;
-    const txt = P && P.upDone ? [P.free ? '안 걸고 참여' : '', P.bonus > 0 ? '오늘 트로피 보너스 +' + P.bonus : ''].filter(Boolean).join(' · ') : '';
+    const txt = P && P.kind === 'short' ? PARTY_TX.short
+      : P && P.upDone ? [P.free ? '안 걸고 참여' : '', P.bonus > 0 ? '오늘 트로피 보너스 +' + P.bonus : ''].filter(Boolean).join(' · ') : '';
     if (el.textContent !== txt) el.textContent = txt;
     el.hidden = !txt;
   }
   function troPodiumUI() {
-    // (파티: its own title, tag, note and buttons - before the practice TRO.pod below, which would add a trophy line to a
-    // party that has no trophies; a battle afterwards gets 결과 발표! back)
+    // (파티: its own title - a battle afterwards gets 결과 발표! back; a practice party builds the practice TRO.pod only
+    // when staked - 안 걸기 has no trophy line at all - then its own tag, notes, gate and wait line: partyPodiumUI)
     partyPodiumTitle();
-    if (G.party) { partyPodiumUI(); return; }
-    if (G.online && NET.sess && NET.q !== 0 && G.podium) {
+    if (G.online && NET.sess && NET.q !== 0 && G.podium && (!G.party || troPartyOn())) {
       const mid = NET.ms + '.' + NET.gid;
-      if (!TRO.pod || TRO.pod.mid !== mid) TRO.pod = { mid, kind: 'prac', rows: new Map(), promo: -1, at: 0, t0: -1, fl: null, flipAt: -1, landed: 0 };
+      // (the sr line says so too: a party's podium was filled before this pod existed)
+      if (!TRO.pod || TRO.pod.mid !== mid) { TRO.pod = { mid, kind: 'prac', rows: new Map(), promo: -1, at: 0, t0: -1, fl: null, flipAt: -1, landed: 0 }; if (shownOverlay === 'podium') fillPodium(); }
     }
+    if (G.party) { partyPodiumUI(); return; }
     troPodiumTag(); troPodBonus();
     const host = G.online && NET.sess && NET.role === 'host', P = G.online ? troPodNow() : null;
     const again = $('pg-podium-again'), note = $('pg-podium-note');
@@ -6323,7 +6479,7 @@ window.PG = window.PG || {};
     // (the deploy with the cloud, in a frame: it is the frame that keeps nothing - the cloud line offers the game's own page)
     setTxt($('pg-rec-note'), TRO.mem || TRO.ro ? (CLOUD.on && clEnv().framed ? CL_NOTE : '이 브라우저에서는 기록이 저장되지 않아요')
       : S.g === 0 && S.de === 0 ? '처음 선물로 트로피 ' + S.best + '개를 받았어요! 친구와 배틀할 때 걸어 봐요'   // (the store's own gift: 30 before 2026-10)
-        : '오늘 트로피 보너스 ' + de + '/' + DAY_CAP + '개 · 목욕도 배틀도 받아요');
+        : '오늘 트로피 보너스 ' + de + '/' + DAY_CAP + '개 · 목욕도 배틀도 파티도 받아요');
     clUI();                                      // (cloud trophies: the status line and the sign-in button)
   }
   // the 목욕 끝 / ending cards (8.9): the 트로피 row (+N and the count, or "오늘 보너스 끝"), then the 승급 chip
@@ -11651,9 +11807,9 @@ window.PG = window.PG || {};
   }
   function fillPodium() {
     if (!dom.podiumSum || !G.podium) return;
-    // (an online battle: what it did to my trophies, or that it was practice)
+    // (an online battle or staked party: what it did to my trophies, or that it was practice / a party too short to count)
     const P = G.online ? troPodNow() : null, mine = P && P.rows.get(G.localSlot);
-    const tro = !P ? '' : P.kind === 'prac' ? ', 연습 경기라 트로피는 그대로예요' : mine && P.now !== null ? ', 내 트로피 ' + troSigned(mine.net) + '개' + (P.free ? ' (안 걸고 참여)' : '') + (P.bonus > 0 ? ', 오늘 트로피 보너스 +' + P.bonus + '개' : '') + ', 지금 ' + P.now + '개' : '';
+    const tro = !P ? '' : P.kind === 'prac' ? ', 연습 경기라 트로피는 그대로예요' : P.kind === 'short' ? ', ' + PARTY_TX.short : mine && P.now !== null ? ', 내 트로피 ' + troSigned(mine.net) + '개' + (P.free ? ' (안 걸고 참여)' : '') + (P.bonus > 0 ? ', 오늘 트로피 보너스 +' + P.bonus + '개' : '') + ', 지금 ' + P.now + '개' : '';
     dom.podiumSum.textContent = G.podium.order.map((slot, i) => {
       const p = G.players.find((q) => q.slot === slot), pl = G.podium.pl ? G.podium.pl[i] || i + 1 : i + 1; // (파티: a shared place repeats)
       return p ? pl + '위 ' + nameOf(p) + ' (' + CHARS[p.char].name + ') ' + p.score.toLocaleString('ko-KR') + '점' : '';
@@ -12401,6 +12557,8 @@ window.PG = window.PG || {};
   const MODE_DESC = { coop: '2~4명이 힘을 합쳐 모든 탕을 청소해요', battle: '거품으로 친구를 가두고 터뜨려 점수를 겨뤄요', party: PARTY_TX.desc };
   // (a mode with the kit options - 능력 끄기, 연사, the magazine line: battle and party)
   const pvp = () => NET.mode !== 'coop';
+  // the room mode on the wire (R.m, rd.md): 'b' battle, 'p' party, 'c' co-op
+  const modeCode = () => (NET.mode === 'battle' ? 'b' : NET.mode === 'party' ? 'p' : 'c');
   // ready as this host counts it (6.1): in a party room a seat whose hi said no pa (an older page) is never ready - its own
   // ready flag is kept, so a switch back to 같이 하기 / 배틀 needs no new 준비 (a guest: the host's R.p flag already is this)
   const seatReady = (r) => !!r.ready && (NET.role !== 'host' || NET.mode !== 'party' || r.id === NET.selfId || r.pa >= PARTY_V);
@@ -12443,8 +12601,9 @@ window.PG = window.PG || {};
     // NET.tr stays this page's first choice: the friends panel, localOnly)
     str: null, fb: null,
     sess: null, role: null, code: '', selfId: null, hostId: null, screen: null, unsubs: [],
-    // (rounds: 파티's 판 수, 3 | 5; partyU: a guest's copy of the host's R.u - the seats whose page cannot play the party)
-    mode: 'coop', opts: { arena: -1, time: 3, perks: true, monsters: true, intrusion: true, rapid: false, bet: 0, rounds: 3 }, partyU: [],
+    // (rounds: 파티's 판 수, 3 | 5; partyU: a guest's copy of the host's R.u - the seats whose page cannot play the party;
+    // pv: a guest's copy of the host's R.pv - its party version, 0 none: the party trophies, design/party-trophies.md 4)
+    mode: 'coop', opts: { arena: -1, time: 3, perks: true, monsters: true, intrusion: true, rapid: false, bet: 0, rounds: 3 }, partyU: [], pv: 0,
     // (partyReady: the 판 index my 준비 is for, -1 none - sent as pr in my body state while the card shows)
     partyReady: -1,
     roster: [], slots: new Map(), gid: 0, ph: 'room', hostPh: 'room', ready: false, nick: '', busy: false, err: '', status: '',
@@ -12758,7 +12917,7 @@ window.PG = window.PG || {};
     NET.hostId = role === 'host' ? s.selfId : h ? h.id : null;
     NET.roster = role === 'host' ? [{ id: s.selfId, slot: 0, nick: NET.nick, char: G.sel, ready: true, cup: -1, d: '' }] : [];
     // (trophies: the host's series id; a guest is practice until the host's R says otherwise; ready again for any stake)
-    NET.ms = role === 'host' ? troRand(6) : ''; NET.q = role === 'host' ? 0 : 1; NET.hz = false; TRO.agreed = -1; TRO.free = false; TRO.match = null; TRO.lastRes = null; TRO.pod = null;
+    NET.ms = role === 'host' ? troRand(6) : ''; NET.q = role === 'host' ? 0 : 1; NET.hz = false; NET.pv = 0; TRO.agreed = -1; TRO.agreedM = ''; TRO.free = false; TRO.match = null; TRO.lastRes = null; TRO.pod = null;
     if (role === 'host') troLowerStake();
     NET.unsubs = [
       s.onPeers((list) => netPeers(list)),
@@ -12871,7 +13030,7 @@ window.PG = window.PG || {};
   // ignores it); every seat's ready flag is seatReady (an older seat in a party room shows "not ready" everywhere)
   function roomInfo() {
     const room = NET.screen !== 'game', q = room ? troPractice() : NET.q;
-    const R = { gid: NET.gid, ph: NET.ph, m: NET.mode === 'battle' ? 'b' : NET.mode === 'party' ? 'p' : 'c',
+    const R = { gid: NET.gid, ph: NET.ph, m: modeCode(),
       o: [NET.opts.arena, NET.opts.time, NET.opts.perks ? 1 : 0, NET.opts.intrusion ? 1 : 0, stakeNow(), NET.opts.monsters === false ? 0 : 1, NET.opts.rapid ? 1 : 0, NET.opts.rounds === 5 ? 5 : 3],
       p: NET.roster.map((r) => {
         const e = [r.slot, r.nick, r.char, seatReady(r) ? 1 : 0];
@@ -12882,13 +13041,16 @@ window.PG = window.PG || {};
     // presence tells a guest this host has the rule. An older guest ignores it)
     if (room) R.f = NET.roster.filter(troSeatFree).map((r) => r.slot);
     if (room && NET.mode === 'party') { const u = NET.roster.filter(seatOld).map((r) => r.slot); if (u.length) R.u = u; }
+    // (파티 트로피: pv, this host's party version - room and game phase - a guest ranks a party only with a host that
+    // ranks it, design/party-trophies.md 4; an older guest ignores it)
+    if (NET.mode === 'party') R.pv = PARTY_V;
     if (q === 0) R.ms = NET.ms; else R.q = q;
     return R;
   }
   function netSetOpts(o) {
     if (NET.sess && NET.role !== 'host') return;
     o = o || {};
-    const s0 = stakeNow();
+    const s0 = stakeNow(), m0 = NET.mode;
     if ('arena' in o) NET.opts.arena = nInt(o.arena, -1, Math.max(0, ARENAS.length - 1), -1);
     if ('time' in o) NET.opts.time = [2, 3, 5].includes(+o.time) ? +o.time : 3;
     if ('perks' in o) NET.opts.perks = !!o.perks;
@@ -12899,8 +13061,9 @@ window.PG = window.PG || {};
     if ('rounds' in o && (!NET.sess || NET.screen === 'room')) NET.opts.rounds = +o.rounds === 5 ? 5 : 3; // (파티's 판 수)
     // 트로피 걸기: one of STAKES the host can cover, set in the room (or before hosting) - never mid-game
     if ('bet' in o && (!NET.sess || NET.screen === 'room')) { const b = nInt(o.bet, 0, 99, -1); if (STAKES.includes(b) && (b === 0 || (TRO.s && b <= TRO.s.t))) NET.opts.bet = b; }
-    // (consent: ready means ready for that stake - any change of it un-readies every guest; they are told in guestRoom)
-    if (stakeNow() !== s0) for (const r of NET.roster) if (r.id !== NET.selfId) r.ready = false;
+    // (consent: ready means ready for that stake - any change of it un-readies every guest; they are told in guestRoom.
+    // Battle and party share the stake: a switch between them with a stake on is a change too - 안 걸기 is not)
+    if (stakeNow() !== s0 || (NET.mode !== m0 && stakeNow() > 0)) for (const r of NET.roster) if (r.id !== NET.selfId) r.ready = false;
     NET.roomDirty = true;
     netAdvertise();
     renderFriends(); renderRoom();
@@ -12913,9 +13076,10 @@ window.PG = window.PG || {};
     const want = on === undefined ? !NET.ready : !!on;
     if (want && !canAfford({ id: NET.selfId })) { renderRoom(); return false; }
     NET.ready = want;
-    TRO.agreed = NET.ready ? stakeNow() : -1;
+    TRO.agreed = NET.ready ? stakeNow() : -1; TRO.agreedM = NET.ready ? NET.mode : '';   // (for that stake in that mode)
     TRO.free = NET.ready && stakeNow() > 0 && NET.hz && !troCovers({ id: NET.selfId });
-    NET.sess.send(NET.hostId, { t: 'rd', on: NET.ready ? 1 : 0, b: stakeNow(), cu: TRO.s ? TRO.s.t : -1, z: 1, f: TRO.free ? 1 : 0 });
+    // (md: the mode I saw - a staked ready that raced a switch between 배틀 and 파티 is refused by the host)
+    NET.sess.send(NET.hostId, { t: 'rd', on: NET.ready ? 1 : 0, b: stakeNow(), cu: TRO.s ? TRO.s.t : -1, z: 1, f: TRO.free ? 1 : 0, md: modeCode() });
     uiSfx('ready');
     renderRoom();
     return NET.ready;
@@ -13050,8 +13214,11 @@ window.PG = window.PG || {};
     const k = nInt(g.k, 0, 1e12, -1);
     if (k < 0 || !bufPush(NET.buf, k, g)) return;
     // (trophies, on this network event - a hidden tab too: a ranked battle's first 'p' is "시작!" for me, its podium
-    // without a result for me starts the 15 s wait)
-    if (g.m === 'b' && NET.q === 0 && NET.ms) { if (g.ph === 'p') troGuestGo(id); else if (g.ph === 'd') troWait(NET.ms + '.' + id); }
+    // without a result for me starts the 15 s wait. 파티 트로피: a staked party of a host that ranks parties - it holds on
+    // a 'p' of the first 판 only (a page that missed all of them plays it without a hold: a hold made in a later 판 could
+    // be refused by its 105 s and refunded while the host paid its stake out), its 'd' is only the final podium)
+    const pt = g.m === 'p' && NET.pv >= PARTY_TRO_V && stakeNow() > 0;
+    if ((g.m === 'b' || pt) && NET.q === 0 && NET.ms) { if (g.ph === 'p') { if (!pt || (g.pa && g.pa.i === 0)) troGuestGo(id, pt); } else if (g.ph === 'd') troWait(NET.ms + '.' + id); }
     // (비누 코인, on the same event: co-op - the 탕 indexes the team passed; battle - its first 'p' is my 시작!, every 'p'
     // carries the clock, its first 'd' is my podium; 파티 - per 판 the same, and its own podium: coinPartyGuest)
     if (g.m === 'c') coinGuestIdx(nInt(g.lp, 0, 99, 0) * LEVELS.length + nInt(g.r, 0, 99, 0), g);
@@ -13098,6 +13265,7 @@ window.PG = window.PG || {};
     else for (const q of roster) { const o = NET.roster.find((x) => x.slot === q.slot); q.f = !!(o && o.f); }
     NET.roster = roster;
     NET.mode = R.m === 'b' ? 'battle' : R.m === 'p' ? 'party' : 'coop';
+    NET.pv = R.m === 'p' ? nInt(R.pv, 0, 99, 0) : 0;   // (파티 트로피: the host's party version - none from an older host)
     // (o[5] 몬스터 출현: only an explicit 0 is off - missing (an older host), junk or 1 all mean on, as an older host plays;
     // o[6] 연사: only an explicit 1 is on - missing (an older host), junk or 0 all mean off, the magazine as an older host plays;
     // o[7] 파티's 판 수: 5 only when it says 5 - missing (an older host), junk: 3)
@@ -13107,10 +13275,12 @@ window.PG = window.PG || {};
     // ranked (a valid series id) or practice (anything else: an old page fails safe)
     NET.q = typeof R.ms === 'string' && ID6_RE.test(R.ms) ? 0 : nInt(R.q, 1, 2, 1);
     NET.ms = NET.q === 0 ? R.ms : '';
-    // consent: ready was for the stake I agreed to; the host changed it -> not ready any more, and told so for 4 s
-    if (NET.screen === 'room' && NET.ready && stakeNow() !== TRO.agreed) {
-      NET.ready = false; TRO.agreed = -1; TRO.free = false;
-      troMsgSet('걸기가 바뀌었어요: ' + troStakeTxt(stakeNow()) + ' · 다시 준비해 주세요');
+    // consent: ready was for the stake I agreed to; the host changed it -> not ready any more, and told so for 4 s. (A
+    // stake is agreed per mode: the same stake in 파티 after 배틀, or back, is a change too - 안 걸기 never is)
+    const sw = stakeNow() > 0 && stakeNow() === TRO.agreed && NET.mode !== TRO.agreedM;
+    if (NET.screen === 'room' && NET.ready && (stakeNow() !== TRO.agreed || sw)) {
+      NET.ready = false; TRO.agreed = -1; TRO.agreedM = ''; TRO.free = false;
+      troMsgSet((sw ? (NET.mode === 'party' ? PARTY_TX.toParty : PARTY_TX.toBattle) : '걸기가 바뀌었어요: ') + troStakeTxt(stakeNow()) + ' · 다시 준비해 주세요');
     }
     const was = NET.hostPh;
     NET.hostPh = R.ph === 'game' ? 'game' : 'room';
@@ -13138,7 +13308,7 @@ window.PG = window.PG || {};
     if (NET.screen === 'room' && !G.online) return;
     // (trophies: a match that ended without a result for me waits 15 s for it, then is refunded; ready again for a stake)
     if (TRO.s) for (const e of TRO.s.esc.slice()) if (e.tab === TRO.tab && e.st === 'open') troWait(e.m);
-    TRO.agreed = -1; TRO.free = false;
+    TRO.agreed = -1; TRO.agreedM = ''; TRO.free = false;
     NET.screen = 'room'; NET.ready = false; NET.buf = mkBuf(); NET.evQ = []; NET.pred = [];
     idleWorld();
     showOverlay('room');
@@ -13170,8 +13340,11 @@ window.PG = window.PG || {};
       case 'eq': if (NET.screen !== 'room') return; r.lk = lookParse(m.lk); break;
       // ready only for the stake shown now (b: the stake the guest saw), and only if it can cover it - or plays without it
       // (안 걸고 참여: z, a page with the rule; f, it readied without the stake)
+      // (md: the mode it readied for - a stake is agreed per mode; an older page sends none: its staked ready counts in a
+      // battle room only, design/party-trophies.md 4)
       case 'rd': if (NET.screen === 'room') { r.cup = nInt(m.cu, -1, TRO_MAX, r.cup); r.z = m.z === 1;
-        r.ready = !!m.on && nInt(m.b, 0, 99, 0) === stakeNow() && canAfford(r); r.free = r.ready && r.z && m.f === 1; } break;
+        const md = !stakeNow() || (!('md' in m) ? NET.mode === 'battle' : m.md === modeCode());
+        r.ready = !!m.on && nInt(m.b, 0, 99, 0) === stakeNow() && md && canAfford(r); r.free = r.ready && r.z && m.f === 1; } break;
       // a guest's count after a result / a hold closed (m: for that match - the 한 판 더 gate)
       case 'cup': r.cup = nInt(m.cu, -1, TRO_MAX, r.cup); if (typeof m.m === 'string' && MID_RE.test(m.m)) r.cupM = m.m;
         if (NET.screen === 'room' && !canAfford(r)) r.ready = false;
@@ -14074,9 +14247,10 @@ window.PG = window.PG || {};
     chk('rapid', '연사', RAPID_SUB, 'bp');
     chk('monsters', '몬스터 출현', '경기 내내 때 몬스터가 나와요', 'b');
     chk('intrusion', '보스 난입', '1분 30초 남으면 보스가 와요', 'b');
-    // 트로피 걸기 (v4 trophies): 안 걸기 / 5 / 10 / 20 / 50 - everyone puts it in, 1st takes it all
-    lab('트로피 걸기', 'b');
-    const bets = h('div', 'pg-seg pg-bets'); bets.setAttribute('role', 'radiogroup'); bets.setAttribute('aria-label', '트로피 걸기'); bets.dataset.for = 'b';
+    // 트로피 걸기 (v4 trophies): 안 걸기 / 5 / 10 / 20 / 50 - everyone puts it in, 1st takes it all (a party: shared out
+    // by the final standing, design/party-trophies.md)
+    lab('트로피 걸기', 'bp');
+    const bets = h('div', 'pg-seg pg-bets'); bets.setAttribute('role', 'radiogroup'); bets.setAttribute('aria-label', '트로피 걸기'); bets.dataset.for = 'bp';
     for (const s of STAKES) {
       const b = h('button'); b.type = 'button'; b.setAttribute('role', 'radio'); b.dataset.bet = String(s);
       b.setAttribute('aria-label', s ? '트로피 ' + s + '개씩 걸기' : '트로피 안 걸기');
@@ -14330,7 +14504,8 @@ window.PG = window.PG || {};
       // (몬스터 없음 only when off, 연사 only when on: the default line stays as it was; 파티: 미니게임 N판 · 능력 · 연사)
       const parts = NET.mode === 'battle' ? [(A ? A.name : '랜덤 경기장'), o.time + '분', o.perks ? '능력 있음' : '능력 없음'].concat(o.rapid ? ['연사'] : [], o.monsters === false ? ['몬스터 없음'] : [],
         [o.intrusion ? '보스 난입' : '보스 없음', '트로피 ' + troStakeTxt(stake)])
-        : NET.mode === 'party' ? [PARTY_TX.minis + ' ' + (o.rounds === 5 ? 5 : 3) + '판', o.perks ? PARTY_TX.perksOn : PARTY_TX.perksOff].concat(o.rapid ? ['연사'] : []) : ['첫 번째 탕부터 끝까지 청소'];
+        // (a staked party: its stake too - 안 걸기 says nothing about trophies, as before)
+        : NET.mode === 'party' ? [PARTY_TX.minis + ' ' + (o.rounds === 5 ? 5 : 3) + '판', o.perks ? PARTY_TX.perksOn : PARTY_TX.perksOff].concat(troPartyOn() ? ['트로피 ' + troStakeTxt(stake)] : [], o.rapid ? ['연사'] : []) : ['첫 번째 탕부터 끝까지 청소'];
       if (q) parts.push('연습 경기');
       const key = NET.mode + parts.join();
       if (dom.roomSum._key !== key) {
@@ -14401,12 +14576,15 @@ window.PG = window.PG || {};
     if (PAL.open) palRender();
   }
   // the party room's rules (9.1): points by the room's size, ties, the games (3 players: no 거품 축구 - listed with the
-  // next PR), coins by the room's practice kind q (no trophy lines: a party has none), the magazine / 연사, traps, leaving
+  // next PR), coins by the room's practice kind q, the trophies (a staked party - troPartyOn: what each final place gets,
+  // 안 걸고 참여, the +5, 견습 and leaving; practice: nothing changes; 안 걸기: 트로피는 걸지 않아요, as before), the
+  // magazine / 연사, traps, leaving
   function partyRules(q) {
     const n = clamp(NET.roster.length, 2, 4), pts = PARTY_PTS[n].map((v, i) => (i + 1) + '등 ' + v + '점').join(' · ');
     const coin = q === 1 && !(CO.allowBc && NET.tr === 'bc') ? PARTY_TX.coin1 : q === 2 ? PARTY_TX.coin2 : PARTY_TX.coin0;
-    return ['미니게임 ' + (NET.opts.rounds === 5 ? 5 : 3) + '판! 판마다 ' + pts, PARTY_TX.roomLast, PARTY_TX.roomAwards, PARTY_TX.tie, n === 3 ? PARTY_TX.games3 : PARTY_TX.games, coin, PARTY_TX.noTro,
-      NET.opts.rapid ? RAPID_RULE : AMMO_RULE, PARTY_TX.trap, PARTY_TX.leave];
+    const tro = !troPartyOn() ? [PARTY_TX.noTro] : q ? [PARTY_TX.troPrac] : [troRulesLine(), troFreeLine(), PARTY_TX.troPlay, PARTY_TX.troLeave].filter(Boolean);
+    return ['미니게임 ' + (NET.opts.rounds === 5 ? 5 : 3) + '판! 판마다 ' + pts, PARTY_TX.roomLast, PARTY_TX.roomAwards, PARTY_TX.tie, n === 3 ? PARTY_TX.games3 : PARTY_TX.games, coin]
+      .concat(tro, [NET.opts.rapid ? RAPID_RULE : AMMO_RULE, PARTY_TX.trap, PARTY_TX.leave]);
   }
   // 코드 복사: an invite (the code, plus this page's link with ?join= on the standalone deploy); phones get the share sheet
   function inviteText() {
@@ -14494,7 +14672,7 @@ window.PG = window.PG || {};
       renderTick: NET.rt, newestTick: NET.buf ? NET.buf.last : -1, viewFrames: NET.viewFrames, starvedFrames: NET.starveFrames, evQ: NET.evQ.length, pred: NET.pred.length, games: NET.games.slice(),
       predSplit: NET.predSplit | 0, predGiveUp: NET.predGiveUp | 0, // (v4: predictions handed to the host row by the 6 px rule / given up)
       // (파티: the room's mode and 판 수, each seat's hi / pa as the host knows them, the seats it says must refresh)
-      party: { mode: NET.mode, rounds: NET.opts.rounds === 5 ? 5 : 3, seats: NET.roster.map((r) => ({ slot: r.slot, hi: !!r.hi, pa: r.pa | 0, ready: seatReady(r) || r.slot === 0, old: seatOld(r) })), u: NET.role === 'host' ? NET.roster.filter(seatOld).map((r) => r.slot) : (NET.partyU || []).slice() },
+      party: { mode: NET.mode, rounds: NET.opts.rounds === 5 ? 5 : 3, pv: NET.role === 'host' ? (NET.mode === 'party' ? PARTY_V : 0) : NET.pv | 0, seats: NET.roster.map((r) => ({ slot: r.slot, hi: !!r.hi, pa: r.pa | 0, ready: seatReady(r) || r.slot === 0, old: seatOld(r) })), u: NET.role === 'host' ? NET.roster.filter(seatOld).map((r) => r.slot) : (NET.partyU || []).slice() },
     };
   }
   function netDebugApi() {
@@ -14526,9 +14704,9 @@ window.PG = window.PG || {};
       // a crafted R through the guest's reader (backward / hostile R tests) -> the options it read. Everything it sets
       // is put back afterwards, so it is harmless on any page (no session, a host); a guest's next R wins anyway
       guestRoom(R) {
-        const keep = {}; for (const k of ['roster', 'mode', 'opts', 'q', 'ms', 'hostPh', 'ready', 'outR', 'partyU']) keep[k] = NET[k];
+        const keep = {}; for (const k of ['roster', 'mode', 'opts', 'q', 'ms', 'hostPh', 'ready', 'outR', 'partyU', 'pv']) keep[k] = NET[k];
         let o = null;
-        try { guestRoom(R && typeof R === 'object' ? R : {}); o = Object.assign({}, NET.opts, { mode: NET.mode }); } finally { Object.assign(NET, keep); renderRoom(); } // (mode: the mode it decoded - 파티 6.1)
+        try { guestRoom(R && typeof R === 'object' ? R : {}); o = Object.assign({}, NET.opts, { mode: NET.mode, pv: NET.pv }); } finally { Object.assign(NET, keep); renderRoom(); } // (mode: the mode it decoded - 파티 6.1)
         return o;
       },
       session: () => NET.sess,
@@ -14777,10 +14955,12 @@ window.PG = window.PG || {};
       state() {
         const S = TRO.s || troFresh(), M = TRO.match;
         return { t: S.t, best: S.best, lg: leagueOf(S.t), bl: S.bl, w: S.w, g: S.g, ko: S.ko, day: S.day, de: S.de, seen: S.seen, esc: S.esc.map((e) => Object.assign({}, e)),
-          dev: S.dev, mem: TRO.mem, ro: TRO.ro, key: TRO.key, tab: TRO.tab, q: NET.q, ms: NET.ms, agreed: TRO.agreed, free: TRO.free, hz: NET.hz,
-          match: M ? { mid: M.mid, s: M.s, n: M.n, p: Object.assign({}, M.p), st: Object.assign({}, M.st), slots: M.slots.slice(), gg: Array.from(M.gg) } : null,
+          dev: S.dev, mem: TRO.mem, ro: TRO.ro, key: TRO.key, tab: TRO.tab, q: NET.q, ms: NET.ms, agreed: TRO.agreed, agreedM: TRO.agreedM, free: TRO.free, hz: NET.hz, pv: NET.pv | 0,
+          match: M ? { mid: M.mid, s: M.s, n: M.n, p: Object.assign({}, M.p), st: Object.assign({}, M.st), slots: M.slots.slice(), gg: Array.from(M.gg), f0: M.f0 } : null,
           lastRes: TRO.lastRes ? Object.assign({}, TRO.lastRes) : null, pod: podOut(TRO.pod), run: TRO.run ? Object.assign({}, TRO.run) : null,
-          last: TRO.last ? Object.assign({}, TRO.last) : null, live: Array.from(TRO.live.keys()), waits: Array.from(TRO.waits.keys()) };
+          // (livePa: the holds that carry a party's coin counters - troGuestGo; live stays the list of mids)
+          last: TRO.last ? Object.assign({}, TRO.last) : null, live: Array.from(TRO.live.keys()), livePa: Array.from(TRO.live).filter(([, L]) => !!L.pa).map(([mid]) => mid),
+          waits: Array.from(TRO.waits.keys()) };
       },
       // merge into the store (clamped by troParse; a bad dev keeps the current one) and save
       set(o) {
@@ -14792,7 +14972,7 @@ window.PG = window.PG || {};
       ns(name) {
         TRO.key = TRO_KEY + '-' + String(name || '').replace(/[^0-9A-Za-z_-]/g, '').slice(0, 24);
         TRO.seen = new Set(); TRO.live = new Map(); for (const id of TRO.waits.values()) clearTimeout(id); TRO.waits = new Map();
-        TRO.match = null; TRO.lastRes = null; TRO.last = null; TRO.pod = null; TRO.agreed = -1; TRO.free = false;
+        TRO.match = null; TRO.lastRes = null; TRO.last = null; TRO.pod = null; TRO.agreed = -1; TRO.agreedM = ''; TRO.free = false;
         troLoad(); troSync(); clReboot();
         return api.state();
       },
@@ -14802,14 +14982,27 @@ window.PG = window.PG || {};
       fast(on) { TRO.fast = !!on; },                               // (skip the minimum match time in troApply)
       today(n) { TRO.day = n === null || n === undefined ? null : nInt(n, 19700101, 99991231, null); return troToday(); },
       table: (n, s, fin, gl, gz) => troTable(n, s, fin, gl | 0, gz | 0),
-      apply(m) { troResultIn(m || {}); return api.state(); },       // a 'tro' as if from the host (replay / hostile tests)
+      // (파티 트로피) the pure party table; the void floor in host frames (null: the default - 0 in the fast party, else
+      // PARTY_TRO_MINF); the +5's real test over this page's CO.pa; a guest's gg on / off (an iframe cannot be hidden)
+      ptable: (n, s, fin, gl, gz, rot) => troPartyTable(n, s, fin, gl | 0, gz | 0, rot | 0),
+      partyMin(f) { TRO.pmin = f === null || f === undefined ? null : Math.max(0, +f || 0); return troPartyMinF(); },
+      preal: (nf) => troPartyReal(CO.pa, nf | 0),
+      gg(on) { troGg(on ? 1 : 0); },
+      // a 'tro' as if from the host (replay / hostile tests); slot: as that seat's page (offline unit tests: this page's
+      // own seat for troResultIn, put back afterwards)
+      apply(m, slot) {
+        if (slot === undefined) troResultIn(m || {});
+        else { const keep = [NET.selfId, NET.slots]; NET.selfId = NET.selfId || 'unit'; NET.slots = new Map([[NET.selfId, slot | 0]]); try { troResultIn(m || {}); } finally { NET.selfId = keep[0]; NET.slots = keep[1]; } }
+        return api.state();
+      },
       end(why) { troSessionEnd(why || 'left'); return api.state(); },
       away(on) { TRO.awayAt = on === false ? 0 : Date.now(); },    // (false: not away - tests that start right after load)
       wait: (mid) => troWait(mid), stale: () => troStale(),
       // every pending 'wait' refund now, and troStale() as if 15 min had passed
       expire() { for (const [mid, id] of Array.from(TRO.waits)) { clearTimeout(id); troWaitEnd(mid); } troStale(Date.now() + TRO_STALE_MS + 1000); return api.state(); },
       // (unit tests) the pieces themselves: a hold, a close, a result, the 목욕 보너스 / its run, the podium data
-      hold: (mid, s, n, min, nos) => troEscrow(mid, s, n, min | 0, nos | 0),
+      // (pa: mark the hold as a party's - TRO.live's pa = this page's CO.pa, as troGuestGo does)
+      hold(mid, s, n, min, nos, pa) { const ok = troEscrow(mid, s, n, min | 0, nos | 0); if (ok && pa) { const L = TRO.live.get(mid); if (L) L.pa = CO.pa; } return ok; },
       close: (mid, how, why) => troClose(mid, how, why || 'test'),
       result: (mid, rows, slot, host, real) => troApply(mid, rows, slot, !!host, !!real),
       bonus: (ended) => troBonus(!!ended),
@@ -14941,6 +15134,33 @@ window.PG = window.PG || {};
         try { G.online = true; NET.q = 0; NET.gid = 4242; NET.tr = null; CO.pod = null; CO.pa = { gid: 4242, act: (o.act || []).slice(), pf: (o.pf || []).slice(), shots: o.shots | 0, seen: (o.act || []).length - 1, go: -1 };
           coinPartyNow(o.n | 0, !!o.done, o.place | 0, o.tie | 0 || 1); return CO.pod ? Object.assign({}, CO.pod) : null;
         } finally { G.online = keep.online; NET.q = keep.q; NET.gid = keep.gid; NET.tr = keep.tr; CO.pod = keep.pod; }
+      },
+      // (파티 트로피 unit tests) the party room's rules for a fake roster {n, bet, free: [slots], q, role, pv, rapid} - the
+      // host is seat 0, a free seat one short of the stake with the rule; everything put back afterwards
+      rules(o) {
+        o = o || {};
+        const keep = { roster: NET.roster, mode: NET.mode, opts: NET.opts, role: NET.role, pv: NET.pv, selfId: NET.selfId, hz: NET.hz };
+        try {
+          const n = clamp(o.n | 0 || 4, 2, 4), free = o.free || [];
+          Object.assign(NET, { mode: 'party', role: o.role || 'host', pv: o.pv === undefined ? PARTY_V : o.pv | 0, selfId: 'u0', hz: true, opts: Object.assign({}, keep.opts, { bet: o.bet | 0, rounds: 3, rapid: !!o.rapid }) });
+          NET.roster = Array.from({ length: n }, (_, i) => ({ id: 'u' + i, slot: i, nick: 'P' + i, char: 'duck', ready: true, cup: free.includes(i) ? 0 : 999, z: true, free: free.includes(i), f: free.includes(i) }));
+          return partyRules(o.q | 0);
+        } finally { Object.assign(NET, keep); }
+      },
+      // ... this party's 3-2-1 sub / class and first card chip as an online host page would show them {bet, q}
+      count(o) {
+        o = o || {};
+        const keep = { online: G.online, role: G.role, mode: NET.mode, opts: NET.opts, nrole: NET.role, q: NET.q };
+        try {
+          G.online = true; G.role = 'host'; Object.assign(NET, { role: 'host', mode: 'party', q: o.q | 0, opts: Object.assign({}, keep.opts, { bet: o.bet | 0 }) });
+          return { sub: troCountSub(), cls: troCountCls(), chip: G.party ? partyCardBet(G.party) : null };
+        } finally { G.online = keep.online; G.role = keep.role; Object.assign(NET, { mode: keep.mode, opts: keep.opts, role: keep.nrole, q: keep.q }); }
+      },
+      // (파티 트로피 unit tests) this page's party coin counters by hand: {gid, act, pf, shots, seen, go, bshots}
+      coinPa(o) {
+        o = o || {}; CO.pa = { gid: o.gid === undefined ? -1 : o.gid | 0, act: (o.act || []).slice(), pf: (o.pf || []).slice(), shots: o.shots | 0, seen: o.seen === undefined ? -1 : o.seen | 0, go: o.go === undefined ? -1 : o.go | 0 };
+        if ('bshots' in o) CO.bshots = o.bshots | 0;
+        return api.state().coins;
       },
       reload(list) { const keep = PG.PARTY_ARENAS; PG.PARTY_ARENAS = list; try { loadPartyArenas(); return PARTY_ARENAS.map((A) => ({ key: A.key, name: A.name, closed: A.closed, rise: A.rise, goals: A.goals, sides: A.sides, ball: A.ball, gapX: A.gapX, floor: A.map[ROWS - 1], ceil: A.map[0], bar: A.map[20] })); } finally { PG.PARTY_ARENAS = keep; loadPartyArenas(); } },
       result: () => partyResult(), next: () => partyNext(), final: (walk) => partyFinal(!!walk), places: () => (G.mini ? Array.from(miniPlaces().entries()) : []),

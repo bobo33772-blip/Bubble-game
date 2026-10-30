@@ -23,6 +23,10 @@
 //   13 안 걸고 참여, 4 players (a 4th frame): one cannot cover 10 -> the match starts, the pot is the 3 stakes put in,
 //      the best with a stake in takes it, every page agrees; the rematch: a staker now short (the host's count stale) and
 //      the one who readied without it both play without it - the pot is the 2 stakes put in
+//   14 파티 트로피 in the room (design/party-trophies.md 9.3): 배틀 -> 파티 at 10 un-readies (파티로 바뀌었어요), a late rd
+//      for the battle (md 'b') or without md is refused; a party room's R (o[4], pv, f), the 트로피 걸기 row, the rules and
+//      the guest summary; 안 걸기 exactly as before (트로피는 걸지 않아요) and 파티 -> 배틀 at 안 걸기 un-readies nobody; an
+//      older host (no R.pv): no trophy line, summary item, card chip or hold for its guests
 // Screenshot scenes (?shot=room|roomg|count|podfly|podend|prac|friends: the scene's frame fills the window, then "SHOT READY").
 // Prints "TROPHYNET PASS|FAIL <name>", "TROPHYNET INFO ..." and "TROPHYNET DONE pass=N fail=M".
 (function () {
@@ -445,11 +449,75 @@
     await toRoom(F4);
     ok('4p: back in the room, the one who readied without the stake must ready again (TRO.free off)', !N(C).ready && TS(C).free === false && TS(C).agreed === -1, [N(C).ready, TS(C).free]);
     C.mp.leave(); await until(() => N(H).roster.length === 3, 4000);
+    await partyRoomTests([H, A, B]);
     const sn = N(H).snap;
     ok('snapshots stayed under 3400 bytes (max ' + sn.max + ')', sn.max > 0 && sn.max <= 3400 && sn.refused === 0, sn);
     ok('no page errors in any frame', frames.every((f) => !f.errors.length), frames.map((f) => f.errors));
   }
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+  // ---------------------------------------------------------------- 14. 파티 트로피 in the room (design/party-trophies.md 9.3)
+  // mode consent (a stake is agreed per mode), R in a party room, 안 걸기 unchanged, an older host (no R.pv)
+  async function partyRoomTests(P3) {
+    const [H, A, B] = P3, PV = H.D.party.consts().PARTY_V;
+    for (const f of P3) { f.T.set({ t: 100, de: 0 }); f.D.party.fast(true); }
+    const sumOf = (f) => doc(f, 'pg-room-sum').textContent;
+    const msgOf = (f) => doc(f, 'pg-room-msg').textContent;
+    H.mp.setOpts({ mode: 'battle', bet: 10 }); await sleep(200);
+    await readyAll(P3);
+    ok('party consent: (setup) both guests ready for a battle at 10 (agreedM battle)', N(H).canStart && [A, B].every((g) => TS(g).agreed === 10 && TS(g).agreedM === 'battle'), [A, B].map((g) => [TS(g).agreed, TS(g).agreedM]));
+    H.mp.setOpts({ mode: 'party' });
+    await until(() => [A, B].every((g) => !N(g).ready), 3000);
+    ok('party consent: 배틀 -> 파티 at 10 un-readies every guest on the host (the stake is the same: the mode is not)', N(H).roster.filter((r) => !r.host).every((r) => !r.ready) && !N(H).canStart, N(H).roster);
+    ok('party consent: ... and on each guest, told "파티로 바뀌었어요: 10개씩 · 다시 준비해 주세요"', [A, B].every((g) => !N(g).ready && TS(g).agreed === -1 && TS(g).agreedM === '' && msgOf(g) === '파티로 바뀌었어요: 10개씩 · 다시 준비해 주세요'), [A, B].map((g) => [N(g).ready, msgOf(g)]));
+    // a battle ready landing after the switch (md 'b'), and an older page's staked ready (no md): refused in a party room
+    A.mp.session().send(hostIdOf(A), { t: 'rd', on: 1, b: 10, cu: 100, z: 1, f: 0, md: 'b' }); await sleep(300);
+    const late = N(H).roster[1].ready;
+    A.mp.session().send(hostIdOf(A), { t: 'rd', on: 1, b: 10, cu: 100, z: 1, f: 0 }); await sleep(300);
+    ok('party consent: an rd with md \'b\' after the switch is refused; so is a staked rd without md (an older page) in a party room', !late && !N(H).roster[1].ready, [late, N(H).roster[1]]);
+    // R and the room in a staked party room: B short of 10 readies without it
+    B.T.set({ t: 7, best: 7, bl: 0 }); await sleep(200);
+    await readyAll(P3);
+    const Rp = N(H).tro.R;
+    ok('party R: m \'p\', o[4] = 10, pv = ' + PV + ', R.f = [2] (the short seat plays without the stake)', Rp && Rp.m === 'p' && Rp.o[4] === 10 && Rp.pv === PV && same(Rp.f, [2]) && N(A).party.pv === PV, [Rp, N(A).party.pv]);
+    const bets = doc(H, 'pg-room-opts').querySelector('.pg-bets'), betBtns = bets ? [...bets.querySelectorAll('button')] : [];
+    ok('party room: the 트로피 걸기 row shows for the host, enabled up to its count (the 판 수 row still last)', !!bets && !bets.hidden && bets.getClientRects().length > 0 && betBtns.filter((b) => +b.dataset.bet <= 100).every((b) => !b.disabled)
+      && [...doc(H, 'pg-room-opts').querySelectorAll('[data-for]')].filter((e) => !e.hidden).pop().querySelector('[data-rounds]') !== null, [bets && bets.hidden, betBtns.map((b) => b.disabled)]);
+    const wantRules = ['판돈 20개 (2명이 10개씩): 건 사람끼리 최종 등수대로 나눠요', '안 걸고 참여: 등수 점수만 받아요 · 1등 +15 · 2등 +5 · 3등 -6',
+      '끝까지 하면 파티마다 오늘 트로피 보너스 +5 (꼴등 빼고 · 하루 40개까지)', '견습 리그는 등수로 잃지 않아요 · 파티 중간에 나가면 꼴찌로 쳐요'];
+    await until(() => P3.every((f) => wantRules.every((l) => rulesOf(f).includes(l))), 3000);
+    ok('party room: the rules (every page) carry the trophy lines instead of 트로피는 걸지 않아요', P3.every((f) => wantRules.every((l) => rulesOf(f).includes(l)) && !rulesOf(f).includes('트로피는 걸지 않아요')), P3.map(rulesOf));
+    ok('party room: the guest summary says the stake (파티 · 미니게임 3판 · 능력 있음 · 트로피 10개씩 · 연사)', sumOf(A) === '파티 · 미니게임 3판 · 능력 있음 · 트로피 10개씩 · 연사', sumOf(A));
+    // (B covers 10 again: its ready was without the stake and stays so - it readies again to put it in)
+    B.T.set({ t: 100 }); B.mp.ready(false); await sleep(150); B.mp.ready(true);
+    H.mp.setOpts({ rapid: false });
+    await until(() => P3.every((f) => rulesOf(f).includes('모두 10개씩 걸고 최종 등수대로 나눠요: 1등 +23 · 2등 +4 · 3등 -13')), 3000);
+    ok('party room: all staking now - 모두 10개씩 걸고 최종 등수대로 나눠요: 1등 +23 · 2등 +4 · 3등 -13', P3.every((f) => rulesOf(f).includes('모두 10개씩 걸고 최종 등수대로 나눠요: 1등 +23 · 2등 +4 · 3등 -13')), P3.map(rulesOf));
+    // 안 걸기: a party is no 트로피 경기 - exactly as before (rules, summary); a switch to 배틀 at 안 걸기 un-readies nobody
+    H.mp.setOpts({ bet: 0 }); await sleep(200);
+    await readyAll(P3);
+    ok('party at 안 걸기: 트로피는 걸지 않아요, no trophy line, no 트로피 summary item (as before)', P3.every((f) => rulesOf(f).includes('트로피는 걸지 않아요') && !rulesOf(f).some((l) => /최종 등수|오늘 트로피 보너스|트로피 경기/.test(l))) && sumOf(A) === '파티 · 미니게임 3판 · 능력 있음', [P3.map(rulesOf), sumOf(A)]);
+    H.mp.setOpts({ mode: 'battle' }); await sleep(400);
+    ok('party consent: 파티 -> 배틀 at 안 걸기 un-readies nobody', N(H).canStart && [A, B].every((g) => N(g).ready), [N(H).canStart, [A, B].map((g) => N(g).ready)]);
+    // an older host: its party room's R has no pv -> the new guest ranks nothing (rules, summary, chip, no hold)
+    H.mp.setOpts({ mode: 'party', bet: 10 }); await sleep(200);
+    const sess = H.mp.session(), ss = sess.setState;
+    sess.setState = function (st) { if (st && st.R && 'pv' in st.R) { const R = Object.assign({}, st.R); delete R.pv; st = Object.assign({}, st, { R }); } return ss.call(this, st); };
+    await until(() => [A, B].every((g) => N(g).party.pv === 0), 3000);
+    await readyAll(P3);
+    ok('older host (no R.pv): the guest\'s rules say 트로피는 걸지 않아요, no 트로피 summary item (its party holds nothing for it)', [A, B].every((g) => rulesOf(g).includes('트로피는 걸지 않아요') && !/트로피/.test(sumOf(g))) && !rulesOf(H).includes('트로피는 걸지 않아요'), [rulesOf(A), sumOf(A), rulesOf(H)]);
+    const bt0 = counts(P3);
+    H.mp.start();
+    await until(() => P3.every((f) => S(f).phase === 'card') && P3.every((f) => f.D.party.card().shown), 6000);
+    ok('older host: the first card has no stake chip on the guests (the host\'s says 10개씩)', [A, B].every((g) => doc(g, 'pg-party-bet').hidden) && !doc(H, 'pg-party-bet').hidden && doc(H, 'pg-party-bet').textContent === '10개씩', P3.map((f) => [doc(f, 'pg-party-bet').hidden, doc(f, 'pg-party-bet').textContent]));
+    await until(() => P3.every((f) => S(f).phase === 'playing'), 9000); await sleep(600);
+    ok('older host: at the first 시작! the guests hold nothing (the host holds 16)', [A, B].every((g) => !TS(g).esc.length && TS(g).t === 100) && TS(H).esc.length === 1 && TS(H).esc[0].h === 16, [bt0, counts(P3), TS(H).esc]);
+    sess.setState = ss;
+    await toRoom(P3);
+    ok('older host: the host\'s 방으로 mid-party forfeits its own hold (-16); the guests had none', TS(H).t === bt0[0] - 16 && TS(A).t === bt0[1] && TS(B).t === bt0[2], [bt0, counts(P3)]);
+    for (const f of P3) f.D.party.fast(false);
+    H.mp.setOpts({ mode: 'battle', bet: 0 }); await sleep(200);
+  }
 
   // ---------------------------------------------------------------- screenshots (?shot=...)
   function fill(fr) {
