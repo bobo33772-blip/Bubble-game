@@ -930,9 +930,11 @@ details (the owner was told these defaults); the rule is in 4.2's note.
   that page's card and demo teach "가장 오래 버티면 1등" and "황금 왕관 2배!" while the host's banner says `끝날 때 쓴 사람이
   1등!` - a kid would play for the wrong goal. The reverse (a pa 4 guest under a stale pa 3 host) is still let in by the
   old host's gate, as in 14.4's open point.
-- Tests: party.js (304 checks) - the holder at time-up over a longer holder, a capture 0.5 s before the buzzer (the
-  grabber 1st), one 4 frames before it (still flying: by held time), a leaver's free crown (by held time), gold `held`
+- Tests: party.js (305 checks) - the holder at time-up over a longer holder, a capture 0.5 s before the buzzer (the
+  grabber 1st), one 4 frames before it (still flying: by held time), a pick-up on the very last frame (1st with 0
+  held), a leaver's free crown (by held time), gold `held`
   +1 a frame, the card texts, the gold banner's sub on one line at 1x / 2x / 568x320; the x2 points helper puts the crown
   back free before time-up. party-net.js (86 checks) - the crafted older guest sends `PARTY_V - 1`; at the 왕관 result
   the 1st on every page is the one the host gave the crown 1 s before time-up, over a longer holder who is 2nd
-  everywhere, and the held times agree.
+  everywhere, and the held times agree. The full run-all (2026-10-30): 292 / 292 jobs pass (ws-workerd skipped: no
+  wrangler on that machine). PR [#24](https://github.com/bobo33772-blip/Bubble-game/pull/24).
