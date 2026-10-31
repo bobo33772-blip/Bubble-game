@@ -338,6 +338,11 @@ window.PG = window.PG || {};
   // pictures - owner, 2026-10-30)
   const EGG = { rounds: 6, dropF: 36, fuse: [210, 420], coolF: 45, slack: 3, steamF: 90, shakeF: 180, glowF: 240, revealF: 72,
     survF: 60, endF: 30, fast: 3, moveCoinPx: 64, run: 1.2 };
+  // 미끌미끌 비누 씨름 (party-games-2 7): the soap's acc on the 평상 (the last 10 s: acc2), the push bubble (px/f, f), the
+  // push (vx, the last 10 s push2) and its hop (vy), the credit window (f), a set's end after at most one is left, the
+  // survivor beat, the reset, 역전's blink, a stale seat falls in after (f), the last stretch (s)
+  const SUMO = { acc: 0.07, acc2: 0.045, shotV: 2.0, shotF: 60, push: 2.4, push2: 3.0, hop: -1.3, creditF: 120, early: 60, survF: 60,
+    resetF: 72, revInv: 90, staleF: 120, lastS: 10 };
   // each minigame: c its wire code, secs, ar the arena (['p', i] PG.PARTY_ARENAS[i], ['b'] a dry battle arena), fits(n),
   // team (two sides: the card's team line), and the card texts: name; how - the ONE-LINE how-to, which also says how to
   // win (<= 17 syllables: one line at 0.9em in the 1x window's 17.4em, 9.2); rule - the one extra line, hidden on short
@@ -379,6 +384,12 @@ window.PG = window.PG || {};
     egg: { c: 'e', secs: 70, fastSecs: 35, ar: ['b'], noFire: true, cues: false, fits: (n) => n >= 2, short: '계란', name: '맥반석 계란 돌리기',
       how: '계란을 부딪혀 넘겨요! 들고 터지면 빠져요', rule: '왕관과 반대예요 · 빠져도 유령으로 계속 해요 · 안 걸리면 1점, 끝까지 남으면 +2점',
       keys: '←→ 달리기 · Z 점프 · 부딪히면 넘어가요', keysT: '조이스틱 · 점프 · 친구에게 부딪혀요' },
+    // (party-games-2 7: a world game on 비누 평상, everyone on the base kit; bubbles on - they push, never trap; the clock
+    // and its cues as in battle - 45 s, the last 10 s 더 미끌미끌!; fastSecs 20: the debug fast party's 12 s would start
+    // the last stretch at 2 s)
+    sumo: { c: 'u', secs: 45, fastSecs: 20, ar: ['p', 4], base: true, fits: (n) => n >= 2, short: '씨름', name: '미끌미끌 비누 씨름',
+      how: '비눗방울로 밀어내요! 탕에 빠지면 탈락', rule: '빠지면 오리 튜브로 밀어서 역전! · 밀어 빠뜨리면 1점, 끝까지 남으면 +2점',
+      keys: 'X 비눗방울 · Z 점프 · ←→ 미끌미끌', keysT: '거품으로 밀기 · 점프로 피하기' },
   };
   // (optional per game, polish 5: keys / keysT - the card's own keys line (a 연타 game's "X 연타!"), else PARTY_TX.keys /
   // keysT; party-games 3.1: world: false - a game that draws its own scene over the plain 무대 목욕탕 (the animals parked on
@@ -444,6 +455,7 @@ window.PG = window.PG || {};
     tpLate: '시간 끝!', tpAll1: '모두 틀렸어요!', tpAll2: '이번엔 아무도 안 빠져요', tpEnd: '끝까지 남은 친구 +2점',
     chStop: '그만!', chBump: '쿵!', chBump1: '밀려났어요!', chBump2: '다른 의자로!',
     egDrop: '{0}한테 떨어졌어요!', egMine1: '내 계란!', egMine2: '친구에게 부딪혀요', egHot: '앗 뜨거!',
+    suFall: '풍덩!', suPush: '밀어냈다!', suKeep: '버텼다!', suRaft1: '풍덩!', suRaft2: '오리 튜브로 밀어서 역전!', suLast1: '더 미끌미끌!', suLast2: '10초 남았어요',
     // (파티 트로피, design/party-trophies.md 7.4: only a staked party - 안 걸기 stays as it was, noTro)
     troZero: '트로피 경기: 최종 ', troAll: '모두 {0}개씩 걸고 최종 등수대로 나눠요: ', troPot: '판돈 {0}: 건 사람끼리 최종 등수대로 나눠요',
     troPlay: '끝까지 하면 파티마다 오늘 트로피 보너스 +' + TRO_PLAY + ' (꼴등 빼고 · 하루 ' + DAY_CAP + '개까지)',
@@ -2057,7 +2069,8 @@ window.PG = window.PG || {};
     let walk = WALK * k.walk * (slip ? 1.4 : 1) * wmul * (ice ? PENGUIN_ICE : 1) * (crownHolder(p) ? CROWN_SLOW : 1) // (왕관 뺏기: the holder is slower)
       * (G.mini && G.mini.id === 'sneak' ? SNEAK.walk : 1) // (살금살금 술래: everyone creeps)
       * (eggRun(p) ? EGG.run : 1); // (맥반석 계란 돌리기: hot feet - the holder after its juggle, as this page sees it)
-    const acc = ice ? PENGUIN_GRIP : 0.5; // the penguin skates: slow to start and to stop on ice
+    // the penguin skates: slow to start and to stop on ice; 씨름's soap: everyone over the 평상 (party-games-2 7.1)
+    const acc = ice ? PENGUIN_GRIP : sumoSoap(p) ? sumoAcc() : 0.5;
     // ---- 특기 (the move on the JUMP button). An air press (capy / otter / penguin / cat) is looked at BEFORE the jump
     // buffer: one the gate takes sets no buffered jump; one it refuses stays today's 5-frame buffered jump (no jump is
     // ever eaten)
@@ -2313,6 +2326,9 @@ window.PG = window.PG || {};
       one.go = s.go; one.f = s.go + (battle ? s.holdB : s.hold); one.cap = sh ? (battle ? sh.capB : sh.cap) : battle ? s.capB : s.cap;
       if (wall) { one.float = false; one.ph = 1; } // (laid at the wall: it hangs there at once)
     }
+    // (씨름, party-games-2 7.1: the pushing bubble - slower and longer; never floats: blown into a wall it flies into it and
+    // pops, as at the 평상's side and at its end - sumoShotEnd)
+    if (sumoOn()) { Object.assign(one, { v: SUMO.shotV, vx: d * SUMO.shotV, f: SUMO.shotF, float: false }); return [one]; }
     if (wall || s.ty !== 'fan') return [one];
     const dr = s.drop, ds = big ? dr.sh : null;
     const drop = (vy) => Object.assign({}, one, { vx: d * dr.vx, vy, v: dr.vx, f: dr.f, r: ds ? ds.r : dr.r, rP: ds ? ds.rP : dr.rP, drop: true });
@@ -2685,6 +2701,7 @@ window.PG = window.PG || {};
         const ev = stepShot(b);
         if (G.gameMode === 'battle') shotNote(b);
         if (b.kind === 'empty' && shotHits(b)) continue;
+        if (sumoShot(b) && sumoShotEnd(b, ev)) { popBubble(b, null, 'self'); continue; } // (씨름: a wall, the 평상's side, its end)
         // a few frames of grace so a bubble blown while floating on 냉탕 is not frozen in the duck's face (an otter's
         // droplet never freezes)
         if (freezable && !b.drop && b.age >= 4 && waterCells.length && tryFreeze(b)) continue;
@@ -3929,7 +3946,8 @@ window.PG = window.PG || {};
   // A fresh prison cannot be popped for TRAP_GRACE frames (no same-frame KO), and not by its own trapper for
   // OWNER_LOCK frames (the victim gets its chance to mash out).
   const HIST_KEEP = 48, TRAP_GRACE = 15, OWNER_LOCK = 60;
-  const trappable = (v, b) => v.slot !== b.owner && free(v) && !(v.invuln > 0) && !v.raft;
+  // (씨름, party-games-2 7.5: its bubbles push, nobody is ever caught - claimCheck / playerTrapCheck / lagTrapCheck too)
+  const trappable = (v, b) => v.slot !== b.owner && free(v) && !(v.invuln > 0) && !v.raft && !sumoOn();
   // A touch you can SEE is a catch: the owner's ring (2 px at r 9 x the drawn scale sc: its outer edge 9 s + 1) on the
   // drawn 16x16 animal, outline included (tol: the host's slack on a guest's claim). (Before: rP on the 12x14 body box -
   // a fifth of the visible touches did not count.)
@@ -5024,6 +5042,7 @@ window.PG = window.PG || {};
     const dir = (inp.right ? 1 : 0) - (inp.left ? 1 : 0);
     p.vx = dir * WALK * RAFT.walk; if (dir) p.facing = dir;
     p.x = clamp(p.x + p.vx, WALL_L - 2, WALL_R - 14);
+    if (M && M.id === 'sumo') { const t = sumoTub(M, p); p.x = clamp(p.x, t[0], t[1]); } // (씨름, party-games-2 7.2: its own 탕 - the 평상's side stops it)
     if (p.onGround && inp.jumpP) { p.vy = RAFT.hop; p.onGround = false; Snd.sfx('jump'); }
     if (!p.onGround) { p.vy = Math.min(p.vy + GRAV, MAX_FALL); p.y += p.vy; if (p.y < CEIL_Y) { p.y = CEIL_Y; p.vy = Math.max(0, p.vy); } }
     if (p.onGround || p.y >= base) { p.y = base; p.vy = 0; p.onGround = true; }
@@ -7177,6 +7196,291 @@ window.PG = window.PG || {};
     if (f >= 200) egg(cx + 4, f < 236 ? dLerp(-8, 0, (f - 200) / 36) : 0, 0.15);
   }
 
+  // ---- 미끌미끌 비누 씨름 (party-games-2 7, ring-out): 비누 평상 (PG.PARTY_ARENAS[4]) - a 144 px wooden 평상 over two 탕,
+  // everyone on the base kit, the battle clock (45 s; the last 10 s 더 미끌미끌!: acc2 / push2 and the hurry music). Over
+  // the 평상 everyone slides (sumoSoap: updatePlayer's acc). Every bubble pushes instead of trapping (trappable and
+  // guestClaim off): slower (shotV) for shotF, then it pops - a wall or the 평상's side pops it too, it never floats.
+  // A push is decided by the page that moves the body pushed (7.5): its own screen's bubbles (a guest: its view, never its
+  // own predicted copies) touching its own body push it there at once (vx the bubble's way, a small hop), the bubble
+  // hidden there; mi [판 i, set, pushes, last pusher, view tick - F0, the last two bubble ids] tells the host, which pops
+  // them and keeps last[slot] = [pusher, stamp]. Falls are the host's, from body states as 물's (feet WATER_SLACK under
+  // wl; a remote one stamped by its own view): a 오리 튜브 in the nearer 탕 (kept there: raftMove), the last pusher within
+  // creditF +1 (밀어냈다!) - a raft whose push brings its target in comes back (역전: sumoBack, once a set). At most one
+  // left on the 평상: early later its survivor +2 (none on equal last stamps, none when a leaver did it), the survivor's
+  // beat, then the reset (the spots, rafts and bubbles gone) and the next set. Time-up: everyone still on in the live set
+  // +1 (버텼다!). Places: points, then frames on the 평상
+  const sumoOn = () => !!G.mini && G.mini.id === 'sumo';
+  const sumoNow = () => tapNow();   // (this screen's view clock: the host's frame, a guest's monotonic view)
+  // the arena's field (the 탕's surface, the spots by players, 역전's x) and its 평상 from the map: row 21's solid run
+  const sumoField = () => (LV && LV.sumo) || { wl: 196, spots: { 2: [96, 160], 3: [80, 128, 176], 4: [76, 108, 148, 180] }, revive: 128 };
+  function sumoDeck() {
+    const row = MAP && MAP[21]; let c0 = -1, c1 = -1;
+    if (row) for (let c = 2; c < COLS - 2; c++) if (row.charCodeAt(c) === 35) { if (c0 < 0) c0 = c; c1 = c; }
+    return c0 < 0 ? { x0: 56, x1: 200, top: 184 } : { x0: c0 * TS, x1: (c1 + 1) * TS, top: PF_TOP + 21 * TS };
+  }
+  // a feet centre x on the 평상 as a cell for placePlayer (bodyAt: x = col * 8 - 4, y = (row + 1) * 8 - its top)
+  const sumoCell = (x) => ({ col: (x - 4) / TS, row: sumoDeck().top / TS - 3 });
+  // on the soap: a body (not a raft) with its feet centre over the 평상, standing or in the air (a push's hop keeps sliding)
+  const sumoSoap = (p) => { if (!sumoOn() || p.raft) return false; const d = sumoDeck(), cx = p.x + 8; return cx >= d.x0 && cx <= d.x1; };
+  const sumoAcc = () => (G.mini && G.mini.last10 ? SUMO.acc2 : SUMO.acc);
+  // a raft's 탕 (M.tub: 0 left, 1 right - else the nearer one) as its body's x range there
+  function sumoTub(M, p) {
+    const d = sumoDeck(), side = M && M.tub && M.tub[p.slot] >= 0 ? M.tub[p.slot] : p.x + 8 < (d.x0 + d.x1) / 2 ? 0 : 1;
+    return side ? [d.x1, WALL_R - 16] : [WALL_L, d.x0 - 16];
+  }
+  // a pushing bubble (every empty one in 씨름) and its end this frame: a wall, a solid cell (the 평상's side - a raft
+  // must hop to blow over it), or its last frame (the caller pops it: the host's popBubble, a guest's predicted copy)
+  const sumoShot = (b) => sumoOn() && b.kind === 'empty';
+  function sumoShotEnd(b, ev) {
+    if (ev === 'wall' || b.shotT <= 1) return true;
+    const cx = b.x + 8, cy = b.y + 8;
+    for (const [dx, dy] of [[-5, 0], [5, 0], [0, 5], [0, -5]]) if (solidCell(Math.floor((cx + dx) / TS), Math.floor((cy + dy - PF_TOP) / TS))) return true;
+    return false;
+  }
+  // the spots of n players in slot order (spawns, the reset)
+  function sumoSpots() {
+    const xs = sumoField().spots[clamp(G.players.length, 2, 4)], slots = G.players.map((p) => p.slot).sort((a, b) => a - b);
+    return G.players.map((p) => sumoCell(xs[slots.indexOf(p.slot)] === undefined ? 128 : xs[slots.indexOf(p.slot)]));
+  }
+  // a new set: live from now (F0: its anchor - mi's view ticks are sent relative to it)
+  function sumoGo(M) { Object.assign(M, { set: M.set + 1, ph: 0, F0: G.frame, endAt0: -1, surv: -1, outs: [], last: {}, rv: {}, tub: {}, hits: {}, lv: 0 }); }
+  // the bubble touching body p on this screen (the host: its world; a guest: its view - never my own predicted copies):
+  // a flying one, not p's own, not one this page already took; p free on the 평상 (not a raft, not blinking)
+  function sumoHit(M, p, L) {
+    if (M.ph !== 0 || p.raft || !free(p) || p.invuln > 0) return null;
+    for (const b of G.bubbles) {
+      if (b.pred || b.dead || b.kind !== 'empty' || b.state !== 'shot' || b.owner === p.slot || !(b.owner >= 0)) continue;
+      if (L.used.indexOf(b.id % 1e6) >= 0) continue;
+      if (circBox(b.x + 8, b.y + 8, 7.5, p.x + 2, p.y + 2, 12, 14)) return b;
+    }
+    return null;
+  }
+  // the push on this page: vx the bubble's way (away from it), the hop, 4 suds pixels at the contact, the bounce (local)
+  function sumoPush(M, p, b) {
+    const d = Math.abs(p.x - b.x) >= 2 ? Math.sign(p.x - b.x) : b.vx ? Math.sign(b.vx) : p.facing < 0 ? 1 : -1;
+    p.vx = d * (M.last10 ? SUMO.push2 : SUMO.push); p.vy = Math.min(p.vy, SUMO.hop); p.onGround = false; p.coyote = 0; p.jumpBuf = 0;
+    const cx = (b.x + p.x) / 2 + 8, cy = Math.min(b.y + 8, p.y + 10);
+    for (let k = 0; k < 4 && G.parts.length < 360; k++) G.parts.push({ x: cx, y: cy + (k - 1.5) * 2, vx: d * (0.4 + k * 0.15), vy: -0.3 - k * 0.1, life: 14, max: 14, c: k % 2 ? '#ffffff' : '#e6fbff', sz: 1, g: 0.05 });
+    localSfx('bounce');
+  }
+  // each page's own seats (the host's local ones; a guest itself), every playing frame: the bubbles that pushed me stay
+  // hidden here (a guest's view keeps them until the host's pop arrives); a push; my own 풍덩! line (a guest: my raft flag
+  // from the host). Returns my latest report
+  function sumoLocal(M, slot, inp) {
+    const P = G.party, p = G.players.find((q) => q.slot === slot); if (!P || !p || M.set < 1) return null;
+    const guest = G.online && G.role === 'guest';
+    let L = G.mloc[slot]; if (!L || L.set !== M.set) L = G.mloc[slot] = { set: M.set, n: 0, by: -1, tick: -1, used: [], raft: !!p.raft };
+    if (guest && L.used.length) G.bubbles = G.bubbles.filter((b) => b.pred || L.used.indexOf(b.id % 1e6) < 0);
+    if (guest) { if (p.raft && !L.raft) partyMyLine(PARTY_TX.suRaft1, PARTY_TX.suRaft2); L.raft = !!p.raft; }
+    const b = sumoHit(M, p, L);
+    if (b) {
+      sumoPush(M, p, b);
+      if (guest) burst(b.x + 8, b.y + 8, 7, [SLOT_COLS[b.owner] || '#ffffff', '#ffffff', '#c8f4ff'], 1.5, 14);   // (hidden here: its pop)
+      L.n++; L.by = b.owner; L.tick = Math.round(sumoNow()); L.used.push(b.id % 1e6); if (L.used.length > 8) L.used.shift();
+    }
+    return L.n > 0 ? [P.i, M.set, L.n, L.by, Math.max(0, L.tick - M.F0), L.used[L.used.length - 1] | 0, L.used.length > 1 ? L.used[L.used.length - 2] | 0 : 0] : null;
+  }
+  // host: a seat's push report - new pushes this set: the bubbles it names pop here (everywhere), the pusher and its
+  // stamp (miniStamp: its view tick, F0 added back) are the credit a fall within creditF pays
+  function sumoInput(M, slot, mi) {
+    if (nInt(mi[1], 0, 9999, -1) !== M.set) return;
+    const n = nInt(mi[2], 0, 1e5, 0), by = nInt(mi[3], -1, MAX_PLAYERS - 1, -1), p = G.players.find((q) => q.slot === slot);
+    if (!p || n <= (M.hits[slot] | 0)) return;
+    M.hits[slot] = n;
+    for (const id of [nInt(mi[5], 0, 1e6, 0), nInt(mi[6], 0, 1e6, 0)]) {
+      const b = id > 0 ? G.bubbles.find((o) => !o.dead && o.kind === 'empty' && o.state === 'shot' && o.id % 1e6 === id) : null;
+      if (b) popBubble(b, null, 'self');
+    }
+    if (by >= 0 && by !== slot && G.players.some((q) => q.slot === by)) M.last[slot] = [by, miniStamp(M, p, M.F0 + nInt(mi[4], 0, 1e6, 0))];
+  }
+  // host: has body p fallen in? A host-local one now (G.frame); a remote one by its latest state of this epoch, stamped by
+  // its own view (max(rt, arrival - LAG_MAX)), at that state's x; a seat silent for staleF falls in now where the host has
+  // it and credits nobody (t -1). null: not
+  function sumoFallAt(M, p) {
+    const lim = M.wl + WATER_SLACK;
+    if (p.local !== false) return p.y + 16 > lim ? { t: G.frame, x: p.x } : null;
+    const rem = NET.remote.get(p.id), st = rem && rem.st;
+    if (!st || !(st.at >= 0) || G.frame - st.at > SUMO.staleF) return { t: -1, x: p.x };
+    if (st.gid !== NET.gid || st.ep !== p.ep || !(nNum(st.y, -1e4, 1e4, 0) + 16 > lim)) return null;
+    return { t: clamp(Math.max(st.rt | 0, st.at - LAG_MAX), st.at - LAG_MAX, G.frame), x: nNum(st.x, WALL_L - 4, WALL_R - 12, p.x) };
+  }
+  // this frame's falls, in stamp order (two close together: in view-tick order)
+  function sumoFalls(M, live) {
+    const now = [], T = (q) => (q.t < 0 ? G.frame : q.t);
+    for (const p of G.players) { if (p.raft) continue; const q = sumoFallAt(M, p); if (q) now.push([p, q]); }
+    now.sort((a, b) => T(a[1]) - T(b[1]) || a[0].slot - b[0].slot);
+    for (const [p, q] of now) { p.x = q.x; sumoFall(M, p, T(q), live && q.t >= 0); }
+  }
+  // a fall: 풍덩! - a 오리 튜브 in the nearer 탕 (x into it: a stale seat's body may still stand on the 평상), its stamp in
+  // outs; the last pusher within creditF +1 (밀어냈다!) - a raft pusher comes back (역전), once a set
+  function sumoFall(M, p, t, credit) {
+    const d = sumoDeck();
+    M.tub[p.slot] = p.x + 8 < (d.x0 + d.x1) / 2 ? 0 : 1; M.outs.push([p.slot, t]);
+    raftOn(p, M);
+    const r = sumoTub(M, p); p.x = clamp(p.x, r[0], r[1]);
+    splash(p.x + 8, M.wl, 2, 12);
+    wordPop(p.x + 8, M.wl - 12, PARTY_TX.suFall, p.color);
+    Snd.sfx('b_splash'); Snd.sfx('splash');   // (NO_ECHO: each guest plays its own when the raft shows up - sumoView)
+    if (mineHere(p)) partyMyLine(PARTY_TX.suRaft1, PARTY_TX.suRaft2);
+    const l = M.last[p.slot]; delete M.last[p.slot];
+    const q = l && credit && t - l[1] <= SUMO.creditF ? G.players.find((o) => o.slot === l[0] && o !== p) : null;
+    if (!q) return;
+    M.pts[q.slot] = (M.pts[q.slot] | 0) + 1;
+    wordPop(q.x + 8, headTop(q) - 14, PARTY_TX.suPush, q.color);
+    if (q.raft && !M.rv[q.slot]) sumoBack(M, q);
+  }
+  // 역전 (7.2): the raft back on the 평상's centre (sumo.revive - not water's raftBack), blinking revInv (not pushable)
+  function sumoBack(M, p) {
+    p.raft = false;
+    placePlayer(p, sumoCell(sumoField().revive));
+    p.invuln = SUMO.revInv;
+    M.rv[p.slot] = 1; delete M.tub[p.slot];
+    burst(p.x + 8, p.y + 8, 12, STAR_COLS, 1.6, 16);
+    wordPop(p.x + 8, p.y - 6, PARTY_TX.revive, p.color); Snd.sfx('revive');
+    if (mineHere(p)) partyMyLine(PARTY_TX.revive, PARTY_TX.reviveMe);
+  }
+  // the set's end (early after at most one was left): its survivor +2 - the one still on, or with nobody on the last
+  // fall by stamp (equal stamps: nobody); none when a leaver left it (lv); then the survivor's beat
+  function sumoSet(M) {
+    M.endAt0 = -1;
+    const on = G.players.filter((p) => !p.raft);
+    let s = -1;
+    if (!M.lv && on.length === 1) s = on[0].slot;
+    else if (!M.lv && !on.length) {
+      const o = M.outs.filter((q) => G.players.some((p) => p.slot === q[0])).sort((a, b) => b[1] - a[1]);
+      if (o.length && (o.length < 2 || o[0][1] > o[1][1])) s = o[0][0];
+    }
+    M.surv = s; M.ph = 1; M.C = G.frame;
+    const p = G.players.find((q) => q.slot === s); if (!p) return;
+    M.pts[s] = (M.pts[s] | 0) + GHOST.bonus;
+    wordPop(p.x + 8, headTop(p) - 14, '+' + GHOST.bonus, p.color);
+    showBanner(ptx('surv1', nameOf(p)), PARTY_TX.surv2, 60, 'clear'); Snd.sfx('extend');
+  }
+  // the reset (72 f, everyone held): back on the spots (a new epoch each), rafts gone, bubbles gone
+  function sumoReset(M) {
+    M.ph = 2; M.C = G.frame;
+    const sp = sumoSpots();
+    G.players.forEach((p, k) => { if (p.trap) releasePlayer(p); p.raft = false; placePlayer(p, sp[k]); p.invuln = 0; });
+    for (const b of G.bubbles) if (!b.dead && b.state !== 'pop') popBubble(b, null, 'self');
+  }
+  // host, each playing frame (after every seat's mi): the last 10 s; the reset and the beat; a live set - frames on the
+  // 평상, the falls, at most one left -> early later the set's end; time-up's 버텼다! (+1 for everyone on in a live set)
+  function sumoTick(M) {
+    if (M.set < 1) return;
+    const bt = G.battle;
+    if (!M.last10 && bt && bt.left === SUMO.lastS * 60) { M.last10 = 1; showBanner(PARTY_TX.suLast1, PARTY_TX.suLast2, 90, 'hurry'); Snd.sfx('hurry'); setMusic('hurry'); }
+    if (M.ph === 2) { if (G.frame >= M.C + SUMO.resetF) sumoGo(M); return; }
+    if (M.ph === 1) { sumoFalls(M, false); if (G.frame >= M.C + SUMO.survF) sumoReset(M); return; }
+    for (const p of G.players) if (!p.raft) M.platF[p.slot] = Math.min(99999, (M.platF[p.slot] | 0) + 1);
+    sumoFalls(M, true);
+    const on = G.players.filter((p) => !p.raft);
+    if (on.length <= 1 && G.players.length >= 2) { if (M.endAt0 < 0) M.endAt0 = G.frame + SUMO.early; } else M.endAt0 = -1;
+    if (M.endAt0 >= 0 && G.frame >= M.endAt0) { sumoSet(M); return; }
+    if (bt && bt.left <= 0 && !M.keep) {
+      M.keep = 1;
+      for (const p of on) { M.pts[p.slot] = (M.pts[p.slot] | 0) + 1; wordPop(p.x + 8, headTop(p) - 14, PARTY_TX.suKeep, p.color); }
+    }
+  }
+  // a leaver (already out of G.players): its push credits nobody; one standing (no 탕 this set) that leaves at most one
+  // on: nobody beat anyone - no +2 this set
+  function sumoDrop(slot, M) {
+    const stood = !(M.tub[slot] >= 0);
+    delete M.last[slot]; delete M.tub[slot]; delete M.rv[slot];
+    for (const s of Object.keys(M.last)) if (M.last[s][0] === slot) delete M.last[s];
+    if (M.set >= 1 && M.ph === 0 && stood && M.endAt0 < 0 && G.players.filter((p) => p.slot !== slot && !p.raft).length <= 1) M.lv = 1;
+  }
+  // guest: the set, phase, points, pushes (another seat's new one: its bounce and suds here), 역전 bits, the last 10 s,
+  // wl, the survivor, F0, the rafts' 탕; a raft appearing - its splash here (splash / b_splash are NO_ECHO); my 역전 line;
+  // a new set: my predicted copies gone (the host's world lost its bubbles)
+  function sumoView(mg, mg1, t, g, M) {
+    const set0 = M.set, hits0 = M.hits || {}, rv0 = M.rv || {};
+    M.set = nInt(mg[1], 0, 9999, 0); M.ph = nInt(mg[2], 0, 2, 0);
+    M.pts = mgSeats(mg[3], 0, 999); M.hits = mgSeats(mg[4], 0, 1e5);
+    M.rv = {}; const rb = nInt(mg[5], 0, 15, 0); for (let s = 0; s < MAX_PLAYERS; s++) if (rb & (1 << s)) M.rv[s] = 1;
+    M.last10 = nInt(mg[6], 0, 1, 0); M.wl = nNum(mg[7], CEIL_Y, PF_BOT, sumoField().wl); M.surv = nInt(mg[8], -1, MAX_PLAYERS - 1, -1); M.F0 = nInt(mg[9], -1, 1e12, -1);
+    M.tub = {}; if (Array.isArray(mg[10])) for (let s = 0; s < MAX_PLAYERS; s++) { const v = nInt(mg[10][s], -1, 1, -1); if (v >= 0) M.tub[s] = v; }
+    const rf = M.rf || {}; M.rf = {};
+    for (const p of G.players) {
+      if (p.raft) M.rf[p.slot] = 1;
+      if (!M.seeded) continue;
+      if (p.raft && !rf[p.slot]) { splash(p.x + 8, M.wl, 2, 12); localSfx('splash'); localSfx('b_splash'); }
+      if (M.set === set0 && p.slot !== G.localSlot && (M.hits[p.slot] | 0) > (hits0[p.slot] | 0)) { localSfx('bounce'); burst(p.x + 8, p.y + 8, 4, ['#ffffff', '#e6fbff'], 0.8, 10); }
+    }
+    if (M.seeded && M.rv[G.localSlot] && !rv0[G.localSlot]) partyMyLine(PARTY_TX.revive, PARTY_TX.reviveMe);
+    if (M.seeded && M.set !== set0) NET.pred = NET.pred.filter((pb) => pb.state === 'pop');
+    M.seeded = true;
+    return M;
+  }
+  // the 평상 (behind the animals): its tiles as wooden boards (seams, a lit top edge), soap suds dots on its top that
+  // shiver under a sliding body, steam wisps over the 탕; the 탕 water (in front): 물's layer at wl in each 탕
+  function sumoDraw(M, front) {
+    const d = sumoDeck(), wl = Math.round(M.wl !== undefined ? M.wl : sumoField().wl), fl = PF_BOT - TS;
+    if (front) {
+      ctx.fillStyle = 'rgba(63,191,224,0.45)';
+      for (const [x0, x1] of [[WALL_L, d.x0], [d.x1, WALL_R]]) {
+        ctx.fillRect(x0, wl + 3, x1 - x0, fl - wl - 3);
+        ctx.globalAlpha = 0.82;
+        for (let x = x0; x < x1; x += TS) { const f = frameOf('water_cold_top', ((G.frame / 14) | 0) + x / TS); if (f) ctx.drawImage(f.c, x, wl, TS, TS); else { ctx.fillStyle = '#8fdcff'; ctx.fillRect(x, wl, TS, 2); } }
+        ctx.globalAlpha = 1; ctx.fillStyle = 'rgba(63,191,224,0.45)';
+      }
+      return;
+    }
+    const w = d.x1 - d.x0, h = fl - d.top;
+    ctx.fillStyle = '#c98c4c'; ctx.fillRect(d.x0, d.top, w, h);
+    ctx.fillStyle = '#8a5428';
+    for (let y = d.top + 7; y < fl; y += 8) ctx.fillRect(d.x0, y, w, 1);
+    for (let y = d.top, k = 0; y < fl; y += 8, k++) for (let x = d.x0 + (k % 2 ? 12 : 24); x < d.x1; x += 24) ctx.fillRect(x, y, 1, 7);
+    ctx.fillStyle = '#e8b878'; ctx.fillRect(d.x0, d.top, w, 1);
+    for (let x = d.x0 + 4, k = 0; x < d.x1 - 2; x += 9, k++) {
+      const slide = G.players.some((p) => !p.raft && Math.abs(p.x + 8 - x) < 8 && Math.abs(p.vx) > 0.3 && Math.abs(p.y + 16 - d.top) < 2);
+      const jx = slide && !reducedMotion() ? ((G.frame + k) & 1 ? 1 : -1) : 0;
+      ctx.globalAlpha = 0.75; ctx.fillStyle = k % 3 ? '#ffffff' : '#d9fff4'; ctx.fillRect(x + jx, d.top - 1 - (k % 2), k % 3 ? 1 : 2, 1); ctx.globalAlpha = 1;
+    }
+    if (!reducedMotion()) for (const [x0, x1] of [[WALL_L, d.x0], [d.x1, WALL_R]]) for (let q = 0; q < 3; q++) {
+      const u = ((G.frame + q * 23 + x0) % 70) / 70;
+      ctx.globalAlpha = 0.5 * (1 - u); ctx.fillStyle = '#ffffff'; ctx.fillRect(Math.round(x0 + 6 + q * 11 + Math.sin(u * 6 + q) * 2), Math.round(wl - 2 - u * 26), 1, 2);
+    }
+    ctx.globalAlpha = 1;
+  }
+  // a seat's 2nd line: a bubble and its points in this 판
+  function sumoHud(M, p, x) {
+    const f = frameOf('bubble', 0); if (f) ctx.drawImage(f.c, x + 17, 8, 8, 8);
+    text(String((M.pts && M.pts[p.slot]) | 0), x + 27, 9, '#bdf0ff');
+  }
+  // 씨름 (7.8): the 평상 as tiles (x 16-80, top y 24) over water at x 0-16 / 80-96 (from y 26); a at x 20, b at x 56 on it.
+  // 20: a blows a bubble right (20-44 it flies to b); 44: b slides right with suds (44-70), off the edge, falls into the
+  // right 탕 (70-82, a splash); b bobs on a duck ring; 150 it hops and blows a bubble left (150-176 to a); 176 a slides
+  // left off the edge into the left 탕 (a splash); 204 b pops back onto the 평상 with stars (역전)
+  function sumoDemo(dx, f, a, b) {
+    demoTiles(dx, 16, 24, 8, 8);
+    const bob = Math.round(Math.sin(f / 8)), raft = (ch, x, y) => {
+      dx.save(); dx.beginPath(); dx.rect(0, 0, 96, y + 11); dx.clip(); demoSpr(dx, ch + '_idle', 0, x, y, 16, false); dx.restore();
+      demoSpr(dx, 'duck_ring', (f >> 4) & 1, x, y + 7, 16);
+    };
+    const splashAt = (x, f0) => { if (f >= f0 && f < f0 + 12) for (let k = 0; k < 5; k++) { dx.fillStyle = k % 2 ? '#ffffff' : '#8fdcff'; dx.fillRect(Math.round(x + (k - 2) * 2), Math.round(25 - Math.sin(Math.PI * (f - f0) / 12) * (3 + k % 3)), 1, 1); } };
+    // a
+    if (f < 176) demoSpr(dx, a + (f >= 20 && f < 30 ? '_shoot' : '_idle'), 0, 20, 8, 16, false);
+    else if (f < 188) demoSpr(dx, a + '_fall', 0, dLerp(20, 4, (f - 176) / 12), 8, 16, false);
+    else if (f < 198) demoSpr(dx, a + '_fall', 0, dLerp(4, 0, (f - 188) / 10), dLerp(8, 14, (f - 188) / 10), 16, false);
+    else raft(a, 0, 14 + bob);
+    splashAt(8, 196);
+    // b
+    if (f < 44) demoSpr(dx, b + '_idle', 0, 56, 8, 16, true);
+    else if (f < 70) {
+      const x = dLerp(56, 74, (f - 44) / 26); demoSpr(dx, b + '_fall', 0, x, 8, 16, true);
+      if ((f >> 1) & 1) { dx.fillStyle = '#ffffff'; dx.fillRect(Math.round(x) - 1, 23, 1, 1); dx.fillRect(Math.round(x) + 2, 22, 1, 1); }
+    } else if (f < 82) demoSpr(dx, b + '_fall', 0, dLerp(74, 80, (f - 70) / 12), dLerp(8, 14, (f - 70) / 12), 16, true);
+    else if (f < 204) raft(b, 80, (f >= 150 && f < 166 ? 14 - Math.round(Math.sin(Math.PI * (f - 150) / 16) * 6) : 14 + bob));
+    else { demoSpr(dx, b + '_idle', 0, 40, 8, 16, true); if (f < 218) for (let k = 0; k < 5; k++) { dx.fillStyle = STAR_COLS[k % STAR_COLS.length]; dx.fillRect(Math.round(48 + Math.cos(k * 1.3 + f / 3) * (f - 200)), Math.round(12 + Math.sin(k * 1.3 + f / 3) * (f - 200) / 2), 1, 1); } }
+    splashAt(88, 80);
+    // the bubbles
+    if (f >= 20 && f < 44) demoSpr(dx, 'bubble', 0, dLerp(36, 50, (f - 20) / 24), 12, 8);
+    if (f >= 150 && f < 176) demoSpr(dx, 'bubble', 0, dLerp(72, 34, (f - 150) / 26), 10, 8);
+    // the water in front
+    dx.globalAlpha = 0.45; dx.fillStyle = '#3fbfe0'; dx.fillRect(0, 26, 16, 6); dx.fillRect(80, 26, 16, 6);
+    dx.globalAlpha = 0.9; dx.fillStyle = '#8fdcff'; dx.fillRect(0, 26, 16, 1); dx.fillRect(80, 26, 16, 1); dx.globalAlpha = 1;
+  }
+
   // ---- the card's animated how-to (polish 3.2.1, MINI_FN[id].demo): each screen draws its own 96x32 loop into
   // #pg-party-demo (never on the wire) from renderScene while the card shows - a pure function of f (P.t % 240), with my
   // animal a (slot 0's offline) and the next seat's b, so a page drawing it late or skipping frames is still right
@@ -7482,6 +7786,31 @@ window.PG = window.PG || {};
       tagY: (M, p) => { const gh = ghostIn(M, p.slot); return M.r >= 1 && M.ph <= 2 && eggShown(M) === p.slot ? headTop(p) - 22 - (gh ? 8 : 0) : gh ? headTop(p) - 15 : NaN; },
       hud: eggHud,
       demo: eggDemo,
+    },
+    sumo: {
+      spawns: () => sumoSpots(),   // (the 평상's spots by players, in slot order)
+      // (set the set (0 before 시작!), ph 0 live / 1 the survivor's beat / 2 the reset (held); F0 the set's start (mi's
+      // anchor), C the beat's / reset's start, endAt0 the set's end once at most one is on (-1 none); wl the 탕's surface;
+      // outs [[slot, stamp]] this set, last {slot: [pusher, stamp]}, rv {slot: 1} came back this set, tub {slot: 0 | 1};
+      // hits (this set's pushes by seat), pts / platF by seat; last10, surv the last survivor, keep time-up's +1 given,
+      // lv a leaver left one on)
+      init: () => ({ set: 0, ph: 0, F0: -1, C: -1, endAt0: -1, wl: sumoField().wl, outs: [], last: {}, rv: {}, tub: {}, hits: {}, pts: {}, platF: {}, last10: 0, surv: -1, keep: 0, lv: 0 }),
+      start(M) { M.wl = sumoField().wl; sumoGo(M); },
+      tick: sumoTick,
+      local: sumoLocal,
+      input: sumoInput,
+      frozen: (M) => M.ph === 2,
+      // (more points, then more frames on the 평상; still equal: a shared place)
+      key: (p, M) => ((M.pts && M.pts[p.slot]) | 0) * 1e5 + Math.min((M.platF && M.platF[p.slot]) | 0, 99999),
+      // (['u', set, phase, [points by seat], [this set's pushes by seat], 역전 bits, last10, wl, survivor, F0, [탕 by seat: -1
+      // none, 0 left, 1 right]])
+      snap: (M) => ['u', M.set, M.ph, [0, 1, 2, 3].map((s) => M.pts[s] | 0), [0, 1, 2, 3].map((s) => M.hits[s] | 0), [0, 1, 2, 3].reduce((n, s) => n | (M.rv[s] ? 1 << s : 0), 0),
+        M.last10 | 0, Math.round(M.wl), M.surv, M.F0, [0, 1, 2, 3].map((s) => (M.tub[s] >= 0 ? M.tub[s] : -1))],
+      view: sumoView,
+      drop: sumoDrop,
+      draw: sumoDraw,
+      hud: sumoHud,
+      demo: sumoDemo,
     },
   };
 
@@ -16271,7 +16600,8 @@ window.PG = window.PG || {};
     // (물 차오르기: my feet WATER_SLACK under the surface I draw - the host's clock, so the host will agree: input frozen
     // for at most 30 frames while its verdict comes - I never walk on under the water; no verdict, input comes back)
     let mi = inp;
-    if (G.mini && G.mini.id === 'water' && !me.raft && me.y + 16 > G.mini.wl + WATER_SLACK) { me.sinkT = (me.sinkT | 0) + 1; if (me.sinkT <= 30) { mi = NO_INPUT; me.vx = 0; } } else me.sinkT = 0;
+    // (씨름, party-games-2 8.4: the same under its 탕's surface)
+    if (G.mini && (G.mini.id === 'water' || G.mini.id === 'sumo') && !me.raft && me.y + 16 > G.mini.wl + WATER_SLACK) { me.sinkT = (me.sinkT | 0) + 1; if (me.sinkT <= 30) { mi = NO_INPUT; me.vx = 0; } } else me.sinkT = 0;
     if (me.stunT > 0) { me.stunT--; updatePlayer(me, NO_INPUT); } else updatePlayer(me, mi);
     guestBounce(me, mi);
     if (G.gameMode === 'coop') guestReviveTouch(me);
@@ -16361,6 +16691,8 @@ window.PG = window.PG || {};
       if (pb.state === 'shot') {
         const ev = stepShot(pb);
         if (ev && ev !== 'wall') shotSfx(ev);
+        // (씨름: my copy pops where the host's does - a wall, the 평상's side, its end)
+        if (sumoShot(pb) && sumoShotEnd(pb, ev)) { pb.state = 'pop'; pb.popT = 0; pb.vx = 0; pb.vy = 0; burst(pb.x + 8, pb.y + 8, 7, [SLOT_COLS[pb.owner] || '#ffffff', '#ffffff', '#c8f4ff'], 1.5, 14); keep.push(pb); continue; }
         guestClaim(pb);
         if (pb.state === 'shot' && --pb.shotT <= 0) {
           if (pb.drop) { // my droplet bursts at the end, as the host's does (whose rows I do not show)
@@ -16382,6 +16714,7 @@ window.PG = window.PG || {};
   // rival, updatePredicted). Only with a host that checks claims (g.lc); one claim per bubble
   function guestClaim(pb) {
     if (!NET.hostLc || !NET.sess || pb.claim || G.gameMode !== 'battle' || (pb.drop && pb.age > KIT.otter.shot.drop.rivalAge)) return;
+    if (sumoOn()) return; // (씨름, party-games-2 7.5: a bubble pushes on the pushed one's page - no catch to claim or show)
     const sc = bubbleScale(pb, bubbleChar(pb));
     for (const q of G.players) {
       if (q.slot === G.localSlot || !free(q) || q.invuln > 0 || !(q.shownK >= 0)) continue;
@@ -17292,7 +17625,7 @@ window.PG = window.PG || {};
       coin: (n, done, act, shots, playF, place, tie) => coinParty(n, done, act, shots, playF, place, tie),
       waterAt: (f, k) => waterAt(f, PARTY_ARENAS[0] && PARTY_ARENAS[0].rise, k || 1),
       arenas: () => PARTY_ARENAS, dry: () => dryArenas(), mini: () => JSON.parse(JSON.stringify(MINI, (k, v) => (typeof v === 'function' ? undefined : v))),
-      consts: () => ({ PARTY_V, LAG_MAX, GHOST: Object.assign({}, GHOST), TAP: JSON.parse(JSON.stringify(TAP)), CHAIR: JSON.parse(JSON.stringify(CHAIR)), EGG: JSON.parse(JSON.stringify(EGG)), MILK: JSON.parse(JSON.stringify(MILK)), PUFF: Object.assign({}, PUFF), SNEAK: JSON.parse(JSON.stringify(SNEAK)), STAGE_X: JSON.parse(JSON.stringify(STAGE_X)), MINI_OLD,
+      consts: () => ({ PARTY_V, LAG_MAX, GHOST: Object.assign({}, GHOST), TAP: JSON.parse(JSON.stringify(TAP)), CHAIR: JSON.parse(JSON.stringify(CHAIR)), EGG: JSON.parse(JSON.stringify(EGG)), SUMO: Object.assign({}, SUMO), MILK: JSON.parse(JSON.stringify(MILK)), PUFF: Object.assign({}, PUFF), SNEAK: JSON.parse(JSON.stringify(SNEAK)), STAGE_X: JSON.parse(JSON.stringify(STAGE_X)), MINI_OLD,
         PARTY_PTS, PARTY_F, PARTY_FF, PARTY_LAST_X, AWARD_PTS, AWARDS: AWARDS.map((q) => Object.assign({}, q)), ESC_MASH, SOAP: Object.assign({}, SOAP), RAFT: Object.assign({}, RAFT), SURGE_WARN, CROWN2: Object.assign({}, CROWN2), BALL2: Object.assign({}, BALL2), MINI_IDS: MINI_IDS.slice(), MINI_TRAP, MINI_SINK, WATER_SLACK, WATER_LEAD, CROWN_SLOW, CROWN_NOPICK, CROWN_SLACK, pBase: COIN.pBase, pRound: COIN.pRound, pPlace: COIN.pPlace, BALL: Object.assign({}, BALL), BALL_TEAM: BALL_TEAM.slice() }),
       text: () => PARTY_TEXT, tx: () => Object.assign({}, PARTY_TX),
       // this page's view: the phase, the sequencer and the minigame
@@ -17488,7 +17821,7 @@ window.PG = window.PG || {};
         if ('bshots' in o) CO.bshots = o.bshots | 0;
         return api.state().coins;
       },
-      reload(list) { const keep = PG.PARTY_ARENAS; PG.PARTY_ARENAS = list; try { loadPartyArenas(); return PARTY_ARENAS.map((A) => ({ key: A.key, name: A.name, closed: A.closed, rise: A.rise, goals: A.goals, sides: A.sides, ball: A.ball, sneak: A.sneak, low: A.map[ROWS - 2], gapX: A.gapX, floor: A.map[ROWS - 1], ceil: A.map[0], bar: A.map[20] })); } finally { PG.PARTY_ARENAS = keep; loadPartyArenas(); } },
+      reload(list) { const keep = PG.PARTY_ARENAS; PG.PARTY_ARENAS = list; try { loadPartyArenas(); return PARTY_ARENAS.map((A) => ({ key: A.key, name: A.name, closed: A.closed, rise: A.rise, goals: A.goals, sides: A.sides, ball: A.ball, sneak: A.sneak, sumo: A.sumo, low: A.map[ROWS - 2], gapX: A.gapX, floor: A.map[ROWS - 1], ceil: A.map[0], bar: A.map[20], deck: A.map[21] })); } finally { PG.PARTY_ARENAS = keep; loadPartyArenas(); } },
       // (party-games-2 12) the track this page asked for (Snd.cur - PG.Audio's own stays null while audio is locked in a
       // headless run); the 유령 of the game now; the stamps' helpers on the game now (host); the stick's press direction
       music: () => (Snd.cur === undefined ? null : Snd.cur),
@@ -17556,6 +17889,32 @@ window.PG = window.PG || {};
       eggShown: () => (G.mini && G.mini.id === 'egg' ? eggShown(G.mini) : null),
       eggRun: (slot) => { const p = G.players.find((q) => q.slot === slot); return p ? eggRun(p) : null; },
       eggView: (mg, mg1) => { const M = eggView(mg, mg1 || null, 0, { pa: {} }, { id: 'egg', seeded: false }); return JSON.parse(JSON.stringify({ r: M.r, ph: M.ph, holder: M.holder, since: M.since, L: M.L, B: M.B, loser: M.loser, gh: M.gh, pts: M.pts, n: M.n, from: M.from })); },
+      // (씨름) the game's state on this screen; the 평상 (x0 / x1 / top); a pushing bubble blown by seat owner from (x, y)
+      // facing dir in the host's world (as fire would: its id back); a push on a body this page moves, as a bubble from
+      // the other side would give it (o: {by} - its report too); a body falling in now (host: credit as sumoFall does);
+      // a fake remote seat's push report - pushed by by at its view tick tick, ids the bubbles (through fakeBody: o {x, y,
+      // rt, at}); a 씨름 row as a guest's sumoView reads it (a fresh mirror)
+      sumo: () => { const M = G.mini; return M && M.id === 'sumo' ? JSON.parse(JSON.stringify({ set: M.set, ph: M.ph, F0: M.F0, C: M.C, endAt0: M.endAt0, wl: M.wl, outs: M.outs, last: M.last, rv: M.rv, tub: M.tub, hits: M.hits, pts: M.pts, platF: M.platF, last10: M.last10, surv: M.surv, keep: M.keep, lv: M.lv, endAt: M.endAt })) : null; },
+      deck: () => sumoDeck(),
+      soap: (slot) => { const p = G.players.find((q) => q.slot === slot); return p ? sumoSoap(p) : null; },
+      sumoBub(owner, x, y, dir) {
+        const M = G.mini, p = G.players.find((q) => q.slot === owner); if (!M || M.id !== 'sumo' || !p) return null;
+        const keep = { x: p.x, y: p.y, facing: p.facing }; p.x = +x; p.y = +y + 1; p.facing = dir < 0 ? -1 : 1;
+        try { const s = newShot(p, false)[0], b = shotFrom(makeBubble('empty', s.x, s.y, owner), s); b.born = G.frame; b.vol = b.id; b.vi = 0; G.bubbles.push(b); return b.id; } finally { Object.assign(p, keep); }
+      },
+      pushMe(slot, dir, o) {
+        const M = G.mini, p = G.players.find((q) => q.slot === slot); if (!M || M.id !== 'sumo' || !p) return null;
+        const d = dir < 0 ? -1 : 1; sumoPush(M, p, { x: p.x - 13 * d, y: p.y, vx: d });
+        if (o && o.by !== undefined) M.last[slot] = [o.by | 0, o.t === undefined ? G.frame : o.t | 0];
+        return p.vx;
+      },
+      fall(slot, t) { const M = G.mini, p = G.players.find((q) => q.slot === slot); if (!M || M.id !== 'sumo' || !p || p.raft) return null; sumoFall(M, p, t === undefined ? G.frame : +t, M.ph === 0); return M.tub[slot]; },
+      pushRep(slot, by, tick, ids, o) {
+        const M = G.mini; if (!M || M.id !== 'sumo' || !G.party) return null;
+        dbgRecv[slot] = (dbgRecv[slot] | 0) + 1; const q = ids || [];
+        return api.fakeBody(slot, Object.assign({ rt: Math.max(0, tick | 0), mi: [G.party.i, M.set, dbgRecv[slot], by | 0, Math.max(0, (tick | 0) - M.F0), (q[0] | 0) % 1e6, (q[1] | 0) % 1e6] }, o || {}));
+      },
+      sumoView: (mg, mg1) => { const M = sumoView(mg, mg1 || null, 0, { pa: {} }, { id: 'sumo', seeded: false }); return JSON.parse(JSON.stringify({ set: M.set, ph: M.ph, pts: M.pts, hits: M.hits, rv: M.rv, last10: M.last10, wl: M.wl, surv: M.surv, F0: M.F0, tub: M.tub })); },
       result: () => partyResult(), next: () => partyNext(), final: (walk) => partyFinal(!!walk), places: () => (G.mini ? Array.from(miniPlaces().entries()) : []),
       // (unit) a seat's snapshot row (its flags: 512 a 오리 튜브), the game's wire array, the sequencer's g.pa
       prow: (slot) => { const r = snapPlayers().find((q) => q[0] === slot); return r ? r.slice() : null; },

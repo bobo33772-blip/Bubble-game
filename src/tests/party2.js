@@ -565,8 +565,156 @@
     ok('after an egg party: nobody runs hot in a battle', !P.eggRun(0) && !P.eggRun(1) && G.music === 'battle', [P.eggRun(0), G.music]);
   }
 
+  // ---------------------------------------------------------------- 6. 미끌미끌 비누 씨름 (7)
+  const SU = () => K.SUMO;
+  const su = () => P.sumo();
+  // a body standing on the 평상 with its feet centre at x (not blinking)
+  const on = (slot, x) => { const p = pl(slot); p.x = x - 8; p.y = 168; p.vx = 0; p.vy = 0; p.onGround = true; p.invuln = 0; };
+  const calm = () => { for (const p of G.players) p.invuln = 0; };
+  const sumoAt = (chars, seed) => { party(chars || ['duck', 'cat', 'frog'], { plan: ['sumo'] }, seed === undefined ? 81 : seed); toPlaying(); calm(); return su(); };
+  function sumoTests() {
+    const S = SU();
+    ok('SUMO: acc 0.07 / acc2 0.045, the shot 2.0 px/f for 60 f, push 2.4 / push2 3.0, hop -1.3, credit 120, early 60, survivor 60, reset 72, 역전 blink 90, stale 120, the last 10 s',
+      S.acc === 0.07 && S.acc2 === 0.045 && S.shotV === 2 && S.shotF === 60 && S.push === 2.4 && S.push2 === 3 && S.hop === -1.3 && S.creditF === 120 && S.early === 60 && S.survF === 60 && S.resetF === 72 && S.revInv === 90 && S.staleF === 120 && S.lastS === 10, S);
+    // the arena (and its fallback)
+    const A = P.arenas()[4], MI = P.mini().sumo;
+    ok('arena: 비누 평상 (PARTY_ARENAS[4], key sumo) - the 평상 rows 21-24 at cols 7-24, the 탕 open beside it; wl 196, the spots, revive 128',
+      A && A.key === 'sumo' && A.name === '비누 평상' && A.closed && A.map[21] === '##.....##################.....##' && A.map[24] === A.map[21] && A.sumo.wl === 196 && same(A.sumo.spots[4], [76, 108, 148, 180]) && same(A.sumo.spots[2], [96, 160]) && A.sumo.revive === 128, A && A.sumo);
+    const rl = P.reload([null, null, null, null, { key: 'sumo', name: '비누 평상', map: ['#'], sumo: { wl: 'x' } }]);
+    ok('arena: a broken 비누 평상 entry gets the built-in one (the same 평상, its field)', rl[4].key === 'sumo' && rl[4].deck === A.map[21] && rl[4].sumo && rl[4].sumo.wl === 196, rl[4]);
+    ok('MINI.sumo: code u, 45 s (fastSecs 20), 비누 평상, the base kit, bubbles on (no noFire), the clock cues on, short 씨름', MI.c === 'u' && MI.secs === 45 && MI.fastSecs === 20 && same(MI.ar, ['p', 4]) && MI.base === true && !MI.noFire && MI.cues !== false && MI.short === '씨름' && MI.music === undefined, MI);
+    let s = sumoAt(CH4);
+    const xs = G.players.map((p) => p.x + 8);
+    ok('start: set 1 live, everyone on the 평상\'s 4-player spots (76 / 108 / 148 / 180) on its top, the base kit, the battle track', s.set === 1 && s.ph === 0 && s.F0 >= 0 && same(xs, [76, 108, 148, 180]) && G.players.every((p) => p.y === 168 && !p.raft) && G.players.every((p) => P.kitBase(p.slot)) && G.music === 'battle' && PS().arena === 4, [s, xs, G.music]);
+    const d = P.deck();
+    ok('the 평상 from the map: x 56-200, top y 184', d.x0 === 56 && d.x1 === 200 && d.top === 184, d);
+    // soap: from rest to the top speed and back ~18 f over the 평상; the normal 0.5 off it (feet past its edge)
+    const ramp = (slot) => { let up = -1, dn = -1; D.press('right', true, slot); for (let f = 1; f <= 40 && up < 0; f++) { step(1); if (pl(slot).vx >= 1.25 - 1e-6) up = f; } D.press('right', false, slot); for (let f = 1; f <= 40 && dn < 0; f++) { step(1); if (Math.abs(pl(slot).vx) < 1e-6) dn = f; } return [up, dn]; };
+    on(0, 70); for (const q of [1, 2, 3]) on(q, 150 + q * 10);
+    const r1 = ramp(0);
+    ok('soap: from rest to the top speed in ' + r1[0] + ' f and back to rest in ' + r1[1] + ' f on the 평상 (acc 0.07: 18)', r1[0] === 18 && r1[1] === 18, r1);
+    const p0 = pl(0); p0.x = 30 - 8; p0.y = 120; p0.vx = 0; p0.vy = 0; p0.onGround = false;
+    ok('soap: only over the 평상 - a body whose feet are past its edge (over a 탕) is not on it; a raft never', P.soap(0) === false && P.soap(1) === true, [P.soap(0), P.soap(1)]);
+    // the shot: 2.0 px/f for 60 f, then it pops; never floats
+    s = sumoAt(CH4, 82); for (const q of [0, 1, 2, 3]) on(q, 70 + q * 30);
+    const id = P.sumoBub(0, 60, 60, 1), bub = () => G.bubbles.find((b) => b.id === id);
+    const x0 = bub().x; step(10); const v = (bub().x - x0) / 10; let float = 0, life = 10;
+    while (bub() && bub().state === 'shot' && life < 90) { step(1); life++; if (bub() && bub().state === 'float') float++; }
+    ok('shot: flies ' + v.toFixed(2) + ' px/f and pops after ' + life + ' f (60) - never floats', Math.abs(v - 2) < 1e-6 && life === 60 && !float && (!bub() || bub().state === 'pop'), [v, life, float]);
+    const w = P.sumoBub(0, 30, 60, -1); let wl = 0; while (G.bubbles.some((b) => b.id === w && b.state === 'shot') && wl < 60) { step(1); wl++; }
+    ok('shot: into the wall - it pops there (' + wl + ' f), never floats at it', wl > 0 && wl < 12 && !G.bubbles.some((b) => b.id === w && b.state === 'float'), wl);
+    const sd = P.sumoBub(0, 24, 183, 1); let sl = 0; while (G.bubbles.some((b) => b.id === sd && b.state === 'shot') && sl < 60) { step(1); sl++; }
+    for (const q of [0, 1, 2, 3]) on(q, 186 + q * 2);   // (everyone at the far end: nobody in the bubble's way)
+    const ov = P.sumoBub(0, 24, 163, 1); step(40); const ob = G.bubbles.find((b) => b.id === ov);
+    ok('shot: from a raft at rest (y 183) the 평상\'s side pops it (' + sl + ' f); from the hop\'s top (y 163) it flies on over the 평상', sl > 0 && sl < 12 && ob && ob.state === 'shot' && ob.x > 100, [sl, ob && [ob.state, ob.x]]);
+    // a push on a host-local body: vx the bubble's way, the hop, once per bubble (popped), my report; never a capture
+    s = sumoAt(['duck', 'cat', 'frog'], 83); on(0, 70); on(1, 120); on(2, 190);
+    const pb = P.sumoBub(0, 82, 167, 1); let pushed = -1;
+    for (let f = 0; f < 20 && pushed < 0; f++) { step(1); if (pl(1).vx > 2) pushed = f; }
+    const p1 = pl(1), m1 = P.mi(1), pbb = G.bubbles.find((b) => b.id === pb);
+    ok('push: the bubble touching seat 1 pushes it the bubble\'s way (vx 2.4, the hop) - never a capture; the bubble pops', pushed >= 0 && Math.abs(p1.vx - 2.4) < 1e-6 && p1.vy < 0 && !p1.trap && !p1.onGround && (!pbb || pbb.state === 'pop'), [pushed, p1.vx, p1.vy, !!p1.trap, pbb && pbb.state]);
+    ok('push: seat 1\'s report [판 i, set, 1, by 0, tick - F0, bubble id], the host\'s last[1] = [0, its stamp]', m1 && m1[1] === 1 && m1[2] === 1 && m1[3] === 0 && m1[4] === G.frame - su().F0 && m1[5] === pb % 1e6 && same(su().last[1], [0, G.frame]), [m1, su()]);
+    let sx = []; for (let f = 0; f < 50; f++) { step(1); sx.push(p1.x + 8); }
+    const slid = sx[sx.length - 1] - 120;
+    ok('push: on soap one push slides ~40 px (' + slid.toFixed(1) + ')', slid > 34 && slid < 48 && Math.abs(p1.vx) < 1e-6, [slid, p1.vx]);
+    // a remote report: pops the bubbles it names, its stamp from its view tick (F0 added back, clamped by LAG_MAX)
+    const rb = P.sumoBub(0, 30, 60, 1); step(2);
+    P.pushRep(2, 0, G.frame - 20, [rb]); step(1);
+    ok('host: a remote push report pops the bubble it names and keeps last[seat] = [pusher, its view tick]', !G.bubbles.some((b) => b.id === rb && b.state === 'shot') && same(su().last[2], [0, G.frame - 21]) && su().hits[2] >= 1, [su().last, su().hits]);
+    step(120); P.pushRep(2, 0, G.frame - 100); step(1);
+    ok('host: a stamp older than its arrival - LAG_MAX is clamped to it', su().last[2][1] === G.frame - 1 - K.LAG_MAX, [su().last, G.frame, su().F0]);
+    // falls: a host-local body at wl + 3; a remote one by its own state of this epoch (feet 199 not, 199.5 yes), stamped by its view
+    s = sumoAt(['duck', 'cat', 'frog'], 84); on(0, 70); on(1, 120);
+    P.fakeBody(2, { x: 30, y: 183, rt: G.frame - 5 }); step(1);
+    const f0 = su();
+    P.fakeBody(2, { x: 30, y: 183.5, rt: G.frame - 5 }); step(1);
+    const f1 = su(), p2 = pl(2);
+    ok('fall: a remote body with its feet at wl + 3 (199) stays; at 199.5 it is a 오리 튜브 in the left 탕, stamped by its own view (rt)', !f0.outs.length && f1.outs.length === 1 && f1.outs[0][0] === 2 && f1.outs[0][1] === G.frame - 6 && p2.raft && f1.tub[2] === 0 && p2.x >= 16 && p2.x <= 40, [f0.outs, f1.outs, p2.raft, p2.x, f1.tub]);
+    // the raft: kept in its 탕 - walking into the 평상's side stops it; its hop (top ~164)
+    p2.local = true;
+    D.press('right', true, 2); step(60); const rx = p2.x; D.press('right', false, 2);
+    D.press('left', true, 2); step(60); const lx = p2.x; D.press('left', false, 2);
+    D.press('jump', true, 2); step(1); D.press('jump', false, 2); let top = 999; for (let f = 0; f < 40; f++) { step(1); top = Math.min(top, p2.y); }
+    ok('raft: kept in its own 탕 (x ' + rx.toFixed(1) + ' at the 평상\'s side - 40; ' + lx.toFixed(1) + ' at the wall - 16), its hop tops out at y ' + top.toFixed(1), Math.abs(rx - 40) < 1e-6 && Math.abs(lx - 16) < 1e-6 && top > 160 && top < 168 && p2.raft, [rx, lx, top]);
+    // credit within 120 f (121 none), no credit for a lone fall
+    s = sumoAt(['duck', 'cat', 'frog', 'otter'], 85); on(0, 70); on(1, 100); on(2, 140); on(3, 180);
+    const F = G.frame;
+    P.pushMe(1, 1, { by: 0, t: F }); P.fall(1, F + 120);
+    P.pushMe(2, 1, { by: 0, t: F }); P.fall(2, F + 121);
+    P.fall(3);
+    ok('credit: the last pusher within 120 f of the fall +1 (밀어냈다!); 121 f - nobody; a lone fall - nobody', su().pts[0] === 1 && !su().pts[1] && !su().pts[2] && !su().pts[3], su().pts);
+    // 역전: a raft's push that brings its target in - +1 and back on the 평상's centre, blinking; once a set
+    s = sumoAt(['duck', 'cat', 'frog', 'otter'], 86); on(0, 70); on(1, 100); on(2, 140); on(3, 180);
+    P.fall(3); P.pushMe(1, -1, { by: 3 }); P.fall(1);
+    const b3 = pl(3), e1 = su();
+    ok('역전: raft 3 pushes seat 1 in - +1, back on the 평상\'s centre (revive 128), blinking 90 (not pushable), its tub gone, rv', e1.pts[3] === 1 && !b3.raft && b3.x + 8 === 128 && b3.y === 168 && b3.invuln === S.revInv && e1.rv[3] === 1 && e1.tub[3] === undefined && P.pushMe(3, 1) !== undefined, [e1, b3.x, b3.y, b3.invuln]);
+    b3.invuln = 0; P.fall(3); P.pushMe(2, -1, { by: 3 }); P.fall(2);
+    ok('역전: once a set - a second push-in from the raft scores +1 but it stays a raft', su().pts[3] === 2 && pl(3).raft, [su().pts, pl(3).raft]);
+    // the set: at most one left on - early later the survivor +2, the beat, the reset (spots, no rafts, no bubbles), the next set
+    s = sumoAt(['duck', 'cat', 'frog'], 87); on(0, 70); on(1, 120); on(2, 170);
+    P.sumoBub(0, 30, 40, 1); P.fall(1); P.fall(2); step(1); const tF = G.frame;
+    const e2 = su(); step(S.early - 1); const e3 = su(); step(1); const e4 = su();
+    ok('set: one left on - its end ' + S.early + ' f later: the survivor +2 ({0} 살아남았다!), the beat', e2.endAt0 === tF + S.early && e3.ph === 0 && e4.ph === 1 && e4.surv === 0 && e4.pts[0] === 2 && G.banner && G.banner.main === (pl(0).nick || 'P1') + ' 살아남았다!', [e2.endAt0, tF, e3.ph, e4]);
+    step(S.survF); const e5 = su();
+    ok('set: the reset - everyone on the spots (80 / 128 / 176), no rafts, no bubbles, held still', e5.ph === 2 && same(G.players.map((p) => p.x + 8), [80, 128, 176]) && G.players.every((p) => !p.raft) && !G.bubbles.some((b) => b.state === 'shot'), [e5, G.players.map((p) => [p.x + 8, p.raft])]);
+    const hx = pl(0).x; D.press('right', true, 0); step(S.resetF - 2); const held = pl(0).x === hx; step(3); D.press('right', false, 0); const e6 = su();
+    ok('set: held for the reset\'s 72 f, then set 2 live (F0 now), the 탕 / outs / last cleared', held && e6.set === 2 && e6.ph === 0 && e6.F0 > tF && !e6.outs.length && same(e6.tub, {}) && same(e6.last, {}), [held, e6]);
+    // equal stamps: nobody; the later stamp wins
+    s = sumoAt(['duck', 'cat'], 88); const T0 = G.frame; P.fall(0, T0 - 3); P.fall(1, T0 - 3); step(S.early + 1);
+    const q1 = su();
+    s = sumoAt(['duck', 'cat'], 88); const T1 = G.frame; P.fall(0, T1 - 3); P.fall(1, T1 - 2); step(S.early + 1);
+    const q2 = su();
+    ok('set: 2 players both in - equal last stamps: nobody +2; the later stamp is the survivor', q1.ph === 1 && q1.surv === -1 && !q1.pts[0] && !q1.pts[1] && q2.surv === 1 && q2.pts[1] === 2, [q1, q2]);
+    // the last 10 s: acc2 / push2, the banner, the hurry music
+    s = sumoAt(['duck', 'cat', 'frog'], 89); on(0, 70); on(1, 120); on(2, 170);
+    G.battle.left = S.lastS * 60 + 1; step(1);
+    const l10 = su(), bn = G.banner;
+    const vP = P.pushMe(1, 1); step(40); on(1, 120); on(0, 70);
+    const r2 = ramp(0);
+    ok('last 10 s: 더 미끌미끌! / 10초 남았어요, the hurry track, a push of 3.0, acc2 (rest to top in ' + r2[0] + ' f)', l10.last10 === 1 && bn && bn.main === '더 미끌미끌!' && bn.sub === '10초 남았어요' && G.music === 'hurry' && Math.abs(vP - 3) < 1e-6 && r2[0] === Math.ceil(1.25 / S.acc2 - 1e-9), [l10.last10, bn, G.music, vP, r2]);
+    // time-up: everyone still on in the live set +1 (버텼다!)
+    P.fall(2); G.battle.left = 2; step(2);
+    ok('time-up: everyone still on the 평상 +1 (버텼다!) - not the raft; the 판 ends', G.mode === 'result' && su().pts[0] === 1 && su().pts[1] === 1 && !su().pts[2], [G.mode, su()]);
+    // a stale seat falls in after 120 f (its raft in the nearer 탕), credits nobody
+    s = sumoAt(['duck', 'cat', 'frog'], 90); on(0, 70); on(1, 120);
+    P.fakeBody(2, { x: 172, y: 168, rt: G.frame }); P.pushMe(0, 1, { by: 1 }); const lastB = su().last;
+    step(S.staleF); const st0 = su(); step(2); const st1 = su(), p2b = pl(2);
+    ok('stale: a seat silent for 120 f falls in - a raft in the nearer (right) 탕, no credit', !st0.outs.some((o) => o[0] === 2) && st1.outs.some((o) => o[0] === 2) && p2b.raft && st1.tub[2] === 1 && p2b.x >= 200 && p2b.x <= 224 && !st1.pts[1] && !!lastB, [st0.outs, st1, p2b.x]);
+    // the key: points, then frames on the 평상
+    Object.assign(G.mini, { pts: { 0: 2, 1: 2, 2: 2 }, platF: { 0: 900, 1: 1200, 2: 900 } });
+    const pm = new Map(P.places());
+    ok('key: equal points - more frames on the 평상 places higher; equal both - a shared place', pm.get(1) === 1 && pm.get(0) === 2 && pm.get(2) === 2, P.places());
+    // coins: every blow through coinShot (no coinAct of its own)
+    s = sumoAt(['duck', 'cat'], 91); on(0, 70); on(1, 180);
+    const bs0 = PS().coins.bshots; D.press('shoot', true, 0); step(1); D.press('shoot', false, 0); step(30);
+    ok('coins: a blow is one action (coinShot, as in the arena games)', PS().coins.bshots === bs0 + 1, [bs0, PS().coins.bshots]);
+    // a leaver standing that leaves one on: the set ends without +2
+    s = sumoAt(['duck', 'cat', 'frog'], 92); on(0, 70); on(1, 120); on(2, 170);
+    P.fall(2); P.drop(1); step(S.early + 2);
+    ok('leaver: one standing leaves - one left on: the set ends, no +2 (nobody beat anyone)', su().ph === 1 && su().surv === -1 && !su().pts[0] && su().lv === 1, su());
+    // the view: bounds, the tub array
+    const v1 = P.sumoView(['u', 3, 1, [2, 0, 1, 0], [1, 0, 0, 2], 5, 1, 196, 0, 900, [-1, 0, 1, -1]]);
+    const v2 = P.sumoView(['u', 'x', 9, [99999, -3], 'y', 99, 7, 9999, 12, -5, 'z']);
+    ok('view: sumoView mirrors the row (rv bits, the tub by seat, wl) and keeps every field within bounds', v1.set === 3 && v1.ph === 1 && same(v1.pts, { 0: 2, 2: 1 }) && same(v1.hits, { 0: 1, 3: 2 }) && same(v1.rv, { 0: 1, 2: 1 }) && v1.last10 === 1 && v1.wl === 196 && v1.surv === 0 && v1.F0 === 900 && same(v1.tub, { 1: 0, 2: 1 })
+      && v2.set === 0 && v2.ph === 2 && v2.pts[0] === 999 && v2.last10 === 1 && v2.wl === 224 && v2.surv === 3 && v2.F0 === -1 && same(v2.tub, {}), [v1, v2]);
+    // the fast party: 20 s; the 판 by its clock
+    P.fast(true); party(['duck', 'cat'], { plan: ['sumo'] }); const ftot = PS().total; toPlaying(); const t0 = G.frame;
+    until(() => G.mode !== 'playing', 25 * 60); const flen = G.frame - t0; P.fast(false);
+    ok('fast party: 20 s (fastSecs) - the clock ends it (' + (flen / 60).toFixed(1) + ' s)', ftot === 20 * 60 && G.mode === 'result' && flen <= 20 * 60 + 2, [ftot, flen, G.mode]);
+    // the card and the demo
+    party(longNicks(), { plan: ['sumo'] }); step(80);
+    const c = P.card();
+    ok('card: 미끌미끌 비누 씨름 - its how, rule and keys lines as specified', c.name === '미끌미끌 비누 씨름' && c.how === '비눗방울로 밀어내요! 탕에 빠지면 탈락' && c.rule === '빠지면 오리 튜브로 밀어서 역전! · 밀어 빠뜨리면 1점, 끝까지 남으면 +2점' && c.keys === 'X 비눗방울 · Z 점프 · ←→ 미끌미끌' && P.mini().sumo.keysT === '거품으로 밀기 · 점프로 피하기' && c.demo, c);
+    const dm = P.demo('sumo');
+    ok('demo [sumo]: 240 frames into a 96x32 context without errors, pixels left', dm && !dm.err && dm.lit > 200, dm);
+    // no regressions: a battle after a sumo party - bubbles trap again, the normal acc, a raft-free raftMove, the music
+    D.local.battle(['duck', 'cat']); step(200);
+    const a = pl(0), bb = pl(1); a.invuln = 0; bb.invuln = 0;
+    ok('after a sumo party: no soap, no push bubbles in a battle (the base kit\'s 3.5 px/f line again)', P.soap(0) === false && P.soap(1) === false && G.music === 'battle', [P.soap(0), G.music]);
+  }
+
   // ---------------------------------------------------------------- screenshot scenes (#shot=tap|tapgo|taprev|tapcard|
-  // chair|chairstop|chairrev|chaircard|egg|eggpass|eggburst|eggcard[&s=1|2|0]) - to LOOK at
+  // chair|chairstop|chairrev|chaircard|egg|eggpass|eggburst|eggcard|sumo|sumopush|sumoraft|sumocard[&s=1|2|0]) - to LOOK at
   function setScale(s) {
     const st = $('pg-stage'); st.style.flex = 'none'; st.style.width = Math.round(256 * s + 22) + 'px'; st.style.height = Math.round(224 * s + 22) + 'px';
     window.dispatchEvent(new Event('resize'));
@@ -586,6 +734,15 @@
       party(longNicks(), { plan: ['chair'] }, 31);
       if (name === 'chaircard') step(100);
       else { toPlaying(); P.ghost(3, true); step(60); if (name !== 'chair') { P.stopAt(G.frame + 2); step(name === 'chairrev' ? 400 : 30); } }
+    } else if (/^sumo/.test(name)) {
+      party(longNicks(), { plan: ['sumo'] }, 31);
+      if (name === 'sumocard') step(100);
+      else {
+        toPlaying(); calm(); on(0, 76); on(1, 108); on(2, 148); on(3, 180);
+        if (name === 'sumo') { P.sumoBub(0, 76, 167, 1); step(4); }
+        else if (name === 'sumopush') { P.sumoBub(1, 100, 167, 1); step(12); }
+        else { P.fall(3); P.fall(0); D.press('jump', true, 0); step(1); D.press('jump', false, 0); step(10); P.sumoBub(0, pl(0).x, pl(0).y - 1, 1); step(8); }
+      }
     } else if (/^egg/.test(name)) {
       party(longNicks(), { plan: ['egg'] }, 31);
       if (name === 'eggcard') step(100);
@@ -607,7 +764,9 @@
     D.tro.ns('party2'); D.tro.away(false);
     const sm = /shot=([a-z]+)/.exec(location.hash);
     if (sm) { await shot(sm[1]); return; }
-    const steps = [machineryTests, stampTests, tapTests, chairTests, eggTests];
+    // (#only=<name>: one section - e.g. #only=sumo while building)
+    const om = /only=([a-z]+)/.exec(location.hash);
+    const steps = [machineryTests, stampTests, tapTests, chairTests, eggTests, sumoTests].filter((f) => !om || f.name === om[1] + 'Tests');
     for (const f of steps) {
       try { await f(); } catch (e) { fail++; log('PARTY2 FAIL ' + f.name + ' threw: ' + (e && e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : e)); }
     }
