@@ -618,6 +618,10 @@
     let sx = []; for (let f = 0; f < 50; f++) { step(1); sx.push(p1.x + 8); }
     const slid = sx[sx.length - 1] - 120;
     ok('push: on soap one push slides ~40 px (' + slid.toFixed(1) + ')', slid > 34 && slid < 48 && Math.abs(p1.vx) < 1e-6, [slid, p1.vx]);
+    // near the edge: it slides on while any foot is on the 평상, so a push 20 px from the edge carries it off - it falls in
+    on(2, 180); P.pushMe(2, 1); let offAt = -1;
+    for (let f = 0; f < 60 && offAt < 0; f++) { step(1); if (pl(2).raft) offAt = f; }
+    ok('push: 20 px from the edge one push carries it off (soap until no foot is on) - a raft in the right 탕 (' + offAt + ' f)', offAt > 0 && su().tub[2] === 1, [offAt, pl(2).x, su().tub]);
     // a remote report: pops the bubbles it names, its stamp from its view tick (F0 added back, clamped by LAG_MAX)
     const rb = P.sumoBub(0, 30, 60, 1); step(2);
     P.pushRep(2, 0, G.frame - 20, [rb]); step(1);

@@ -3,12 +3,14 @@
 //   node tools/run-chrome.js http://localhost:8765/test-party-net.html - 1200 900 rt780000 "PARTYNET DONE"
 //   the new games on a slow link (design/party-games.md §13.2, party-games-2.md §14.2, frame 3 at lat 100 / jit 40 - lagRun below):
 //   node tools/run-chrome.js http://localhost:8765/test-party-net.html#lag - 1200 900 rt420000 "PARTYNET DONE"
-// (party-games-2 14.2: 수도꼭지, 의자 and 계란 smokes after 술래's below - each page's own measured answer, the cold water
-// and a 유령 everywhere; the stools the same on every page, sits kept, the one standing a 유령, the music cut on each page's
-// own view of the stop; a pass decided on the receiver's screen, its juggle from its own stamp, the burst's 유령 - and #lag
-// 4b / 4c / 4d: exact ms from each page's own go draw, a slow link wins nothing in 수도꼭지; a stool C reaches first on its
-// own view is C's, the host provisionally seated is bumped; 계란's pass on the receiver's screen both ways, since = the
-// stamp, a late pass across B that makes C the loser)
+// (party-games-2 14.2: 수도꼭지, 의자, 계란 and 씨름 smokes after 술래's below - each page's own measured answer, the cold
+// water and a 유령 everywhere; the stools the same on every page, sits kept, the one standing a 유령, the music cut on each
+// page's own view of the stop; a pass decided on the receiver's screen, its juggle from its own stamp, the burst's 유령; a
+// push on the pushed one's screen, its fall a raft everywhere with the pusher credited, a raft's push back = 역전 - and
+// #lag 4b / 4c / 4d / 4e: exact ms from each page's own go draw, a slow link wins nothing in 수도꼭지; a stool C reaches
+// first on its own view is C's, the host provisionally seated is bumped; 계란's pass on the receiver's screen both ways,
+// since = the stamp, a late pass across B that makes C the loser; 씨름 - C dodging the host's bubble on its own screen is
+// no push anywhere, standing it is pushed everywhere, pushed off its fall is stamped by its own view)
 // Every frame: tro.ns('f' + i), tro.allowBc(true) (bc is practice otherwise), party.fast(true) (every game 12 s, the card
 // and the result beats PARTY_FF). host = slot 0 (꽥꽥이), A = slot 1 (까삐), B = slot 2 (펭펭), C = slot 3 (냥냥).
 //   1  the room: hi carries pa: 8 (PARTY_V: the new games 2); a party room's R says m 'p' and o[7] = the 판 수, its o[0..6] as
@@ -645,6 +647,35 @@
     const ePod = await until(() => D3.every((f) => PS(f).ph === 'podium'), 60000);
     ok('계란: the 판 ends by its 3 fast rounds and the podium shows on every page', ePod, D3.map((f) => [PS(f).ph, f.P.egg() && f.P.egg().r]));
 
+    // ---- 미끌미끌 비누 씨름 online (party-games-2 14.2.5; the 45 s clock, ended by hand): A blows at B standing near the
+    // 평상's right edge - B's own screen pushes it (its report: one push by A, mi only from B), it slides off and falls in:
+    // a 오리 튜브 on every page (flag 512), A +1 everywhere, every page heard the push; then B's raft hops and blows over the
+    // 평상 at A near the left edge - A pushed in on its own screen: B +1 and back on the 평상 (역전) on every page
+    H.mp.toRoom(); await until(() => D3.every((f) => N(f).screen === 'room'), 6000);
+    H.P.force(['sumo']); H.P.fast(false);
+    await readyAll(D3);
+    H.mp.start();
+    const uOn = await until(() => D3.every((f) => PS(f).ph === 'playing' && f.P.sumo() && f.P.sumo().set === 1), 15000);
+    ok('씨름: the 판 plays on every page (비누 평상, set 1, the 탕 at wl 196)', uOn && D3.every((f) => f.P.arenas()[PS(f).arena].key === 'sumo' && f.P.sumo().wl === 196), D3.map((f) => [PS(f).ph, f.P.sumo()]));
+    await until(() => D3.every((f) => me(f).invuln === 0), 4000, 10);   // (START_INV: a blinking body is not pushed)
+    await place(H, 50, 160); await place(A, 92, 160, 'right'); await place(B, 170, 160, 'left');
+    await sleep(250);
+    const sfx0 = D3.map((f) => f.sfx.length);
+    await press(A, 'shoot');
+    const uFell = await until(() => D3.every((f) => slotP(f, 2).raft && f.P.sumo().pts[1] === 1), 6000, 5);
+    const bm = B.P.mloc(2) || {}, um = H.P.remMi(2);
+    ok('씨름: A blows at B - B\'s own screen pushes it (one push by A), it slides off: a 오리 튜브 in the right 탕 on every page, A +1 everywhere', uFell && bm.n === 1 && bm.by === 1 && D3.every((f) => f.P.sumo().tub[2] === 1 && slotP(f, 2).x >= 200), [bm, D3.map((f) => [slotP(f, 2).raft, f.P.sumo()])]);
+    ok('mi: during 씨름 B\'s body state carries its push report [판 i, set, 1, by A, tick - F0, its bubble id, 0]', um && um.length === 7 && um[0] === PS(H).i && um[1] === 1 && um[2] === 1 && um[3] === 1 && um[4] === bm.tick - H.P.sumo().F0 && um[5] > 0, um);
+    ok('씨름: every page heard B\'s push (its own bounce at once, the others from the report / the mirror)', D3.every((f, k) => f.sfx.slice(sfx0[k]).includes('bounce')), D3.map((f, k) => f.sfx.slice(sfx0[k])));
+    await place(A, 67, 160); await press(B, 'left'); await sleep(250);
+    await press(B, 'jump'); await sleep(170); await press(B, 'shoot');
+    const uBack = await until(() => D3.every((f) => slotP(f, 1).raft && !slotP(f, 2).raft && f.P.sumo().rv[2] === 1 && f.P.sumo().pts[2] === 1), 6000, 5);
+    const am = A.P.mloc(1) || {};
+    ok('씨름: B\'s raft hops and blows over the 평상 - A pushed in on its own screen (by B); B +1 and back on the 평상\'s centre (역전) on every page', uBack && am.n === 1 && am.by === 2 && D3.every((f) => f.P.sumo().tub[1] === 0 && Math.abs(slotP(f, 2).x + 8 - 128) < 24), [am, D3.map((f) => [slotP(f, 1).raft, slotP(f, 2).raft, slotP(f, 2).x, f.P.sumo()])]);
+    H.P.skip(); H.P.fast(true);
+    const uPod = await until(() => D3.every((f) => PS(f).ph === 'podium'), 30000);
+    ok('씨름: the 판 ends (by hand here) and the podium shows on every page', uPod, D3.map((f) => PS(f).ph));
+
     // ---- 10. 파티 트로피: a staked party (design/party-trophies.md 9.5)
     await stakedTests(F);
     H.mp.toRoom(); await until(() => D3.every((f) => N(f).screen === 'room'), 6000);
@@ -978,6 +1009,56 @@
     ok('lag 계란: C receives at its view tick T, the host sets B = T + 5 before C\'s report arrives - it passes B, waits, takes the late pass: C loses, a 유령 on every page', cLost && lateB && lateB.hold === 0 && lateB.hf >= lateB.T + 5 && el.log.some((q) => q[0] === 0 && q[1] === 3 && q[2] === lateB.T && q[3] > lateB.T + 5), [lateB, el, F.map((f) => [f.P.egg() && f.P.egg().loser, f.P.ghosts()])]);
     if (lateB) info('lag 계란: C\'s receipt at its view tick ' + lateB.T + ', the host was at ' + lateB.hf + ' (' + (lateB.hf - lateB.T) + ' ticks ahead); the late pass reached it ' + ((el.log.find((q) => q[1] === 3 && q[2] === lateB.T) || [0, 0, 0, 0])[3] - lateB.T) + ' ticks after C\'s tick');
     await until(() => F.every((f) => PS(f).ph === 'podium'), 60000);
+
+    // ---- 4e. 씨름 (party-games-2 14.2.10; the 45 s clock, ended by hand): the push is decided on the pushed one's own
+    // screen - (a) the host blows at C and C jumps over the bubble as its OWN screen shows it coming: no push anywhere;
+    // (b) C stands still: pushed on its screen, and the push shows on every page (C slides, its count in every mirror);
+    // (c) C near the edge, pushed off: its fall is stamped by its own view (the state that first showed its feet under),
+    // not the host's later frame, and the host is credited (+1)
+    H.mp.toRoom(); await until(() => F.every((f) => N(f).screen === 'room'), 6000);
+    H.P.force(['sumo']); H.P.fast(false);
+    await readyAll(F);
+    H.mp.start();
+    const uOn = await until(() => F.every((f) => PS(f).ph === 'playing' && f.P.sumo() && f.P.sumo().set === 1), 20000);
+    await until(() => F.every((f) => me(f).invuln === 0), 4000, 10);
+    await place(A, 40 + 16, 160); await place(B, 52 + 16, 160); await place(H, 92, 160, 'right'); await place(C, 142, 160);
+    await sleep(400);
+    // (a) C's page watches the host's bubble on its own screen and jumps 16 px before it would touch (its feet clear the
+    // bubble's top ~5 frames into the jump; the bubble takes ~14 frames to pass under the body)
+    let jumpAt = null, aMin = 1e9;
+    const jw = setInterval(() => {
+      const cp = slotP(C, 3), b = C.G.bubbles.find((q) => !q.pred && q.owner === 0 && q.state === 'shot' && q.kind === 'empty');
+      if (!cp || !b) return;
+      const gap = cp.x + 2 - (b.x + 15.5); aMin = Math.min(aMin, gap);
+      if (jumpAt === null && gap < 16) { jumpAt = N(C).rtHi; C.D.press('jump', true, 3); setTimeout(() => C.D.press('jump', false, 3), 120); }
+    }, 1);
+    const hx0 = slotP(C, 3).x;
+    await press(H, 'shoot');
+    await sleep(1600); clearInterval(jw);
+    const cA = C.P.mloc(3) || {};
+    ok('lag 씨름: the host blows at C; C jumps over it as its own screen shows it coming - no push on any page (C\'s count 0 everywhere, C still where it stood)', uOn && jumpAt !== null && !(cA.n > 0) && F.every((f) => !(f.P.sumo().hits[3] > 0)) && Math.abs(slotP(C, 3).x - hx0) < 2, [jumpAt, aMin, cA, F.map((f) => f.P.sumo().hits), slotP(C, 3).x, hx0]);
+    // (b) C stands still: pushed on its own screen; every page shows it sliding and counts it
+    await place(C, 142, 160); await sleep(300);
+    const cx0 = F.map((f) => slotP(f, 3).x);
+    await press(H, 'shoot');
+    const pushedAll = await until(() => F.every((f) => f.P.sumo().hits[3] === 1), 5000, 5);
+    await sleep(900);
+    const cB = C.P.mloc(3) || {}, cx1 = F.map((f) => slotP(f, 3).x);
+    ok('lag 씨름: C stands still - pushed on its own screen (by the host), and every page counts it and shows C slid on (~40 px)', pushedAll && cB.n === 1 && cB.by === 0 && cx1.every((x, k) => x - cx0[k] > 25) && F.every((f) => !slotP(f, 3).raft), [cB, cx0, cx1]);
+    // (c) C near the edge, pushed off: its fall stamped by its own view; the host credited
+    await place(H, 132, 160, 'right'); await place(C, 172, 160); await sleep(400);
+    let cUnder = null;
+    const fw = setInterval(() => { const cp = slotP(C, 3); if (cUnder === null && cp && !cp.raft && cp.y + 16 > 199) cUnder = N(C).rtHi; }, 1);
+    let hRaftAt = null;
+    const uhw = setInterval(() => { if (hRaftAt === null && slotP(H, 3).raft) hRaftAt = H.G.frame; }, 1);
+    await press(H, 'shoot');
+    const cFell = await until(() => F.every((f) => slotP(f, 3).raft && f.P.sumo().pts[0] === 1), 6000, 5);
+    clearInterval(fw); clearInterval(uhw);
+    const uo = (H.P.sumo().outs || []).find((o) => o[0] === 3);
+    ok('lag 씨름: C pushed off the edge on its own screen - its fall stamped by its own view (within 3 ticks of the tick its screen first had its feet under), before the host\'s verdict frame; the host +1 on every page', cFell && uo && cUnder !== null && Math.abs(uo[1] - cUnder) <= 3 && hRaftAt !== null && uo[1] < hRaftAt, [uo, cUnder, hRaftAt, F.map((f) => f.P.sumo().pts)]);
+    if (uo && hRaftAt !== null) info('lag 씨름: C\'s fall stamped at its view tick ' + uo[1] + ' (its screen: ' + cUnder + '), the host made it a raft at its frame ' + hRaftAt + ' (' + (hRaftAt - uo[1]) + ' ticks later)');
+    H.P.skip(); H.P.fast(true);
+    await until(() => F.every((f) => PS(f).ph === 'podium'), 30000);
 
     // ---- 5. the snapshot budget
     ok('lag: snapshots under 3400 bytes throughout', N(H).snap.max > 0 && N(H).snap.max <= 3400, N(H).snap);

@@ -7220,8 +7220,9 @@ window.PG = window.PG || {};
   }
   // a feet centre x on the 평상 as a cell for placePlayer (bodyAt: x = col * 8 - 4, y = (row + 1) * 8 - its top)
   const sumoCell = (x) => ({ col: (x - 4) / TS, row: sumoDeck().top / TS - 3 });
-  // on the soap: a body (not a raft) with its feet centre over the 평상, standing or in the air (a push's hop keeps sliding)
-  const sumoSoap = (p) => { if (!sumoOn() || p.raft) return false; const d = sumoDeck(), cx = p.x + 8; return cx >= d.x0 && cx <= d.x1; };
+  // on the soap: a body (not a raft) with any of its feet (x + 3 .. x + 13, as landTile stands it) over the 평상, standing
+  // or in the air (a push's hop keeps sliding) - it slides on until no foot is left on it, so a push past the edge falls
+  const sumoSoap = (p) => { if (!sumoOn() || p.raft) return false; const d = sumoDeck(); return p.x + 13 > d.x0 && p.x + 3 < d.x1; };
   const sumoAcc = () => (G.mini && G.mini.last10 ? SUMO.acc2 : SUMO.acc);
   // a raft's 탕 (M.tub: 0 left, 1 right - else the nearer one) as its body's x range there
   function sumoTub(M, p) {
@@ -7281,12 +7282,14 @@ window.PG = window.PG || {};
     return L.n > 0 ? [P.i, M.set, L.n, L.by, Math.max(0, L.tick - M.F0), L.used[L.used.length - 1] | 0, L.used.length > 1 ? L.used[L.used.length - 2] | 0 : 0] : null;
   }
   // host: a seat's push report - new pushes this set: the bubbles it names pop here (everywhere), the pusher and its
-  // stamp (miniStamp: its view tick, F0 added back) are the credit a fall within creditF pays
+  // stamp (miniStamp: its view tick, F0 added back) are the credit a fall within creditF pays; a remote seat's push
+  // sounds here (its bounce and suds - a host-local one's played as it happened)
   function sumoInput(M, slot, mi) {
     if (nInt(mi[1], 0, 9999, -1) !== M.set) return;
     const n = nInt(mi[2], 0, 1e5, 0), by = nInt(mi[3], -1, MAX_PLAYERS - 1, -1), p = G.players.find((q) => q.slot === slot);
     if (!p || n <= (M.hits[slot] | 0)) return;
     M.hits[slot] = n;
+    if (p.local === false) { localSfx('bounce'); burst(p.x + 8, p.y + 8, 4, ['#ffffff', '#e6fbff'], 0.8, 10); }
     for (const id of [nInt(mi[5], 0, 1e6, 0), nInt(mi[6], 0, 1e6, 0)]) {
       const b = id > 0 ? G.bubbles.find((o) => !o.dead && o.kind === 'empty' && o.state === 'shot' && o.id % 1e6 === id) : null;
       if (b) popBubble(b, null, 'self');
