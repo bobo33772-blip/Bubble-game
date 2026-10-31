@@ -311,7 +311,12 @@
     D.toTitle();
   }
   async function t3c() {
-    ok('T3 transport: in Toss \'peer\' or nothing - no bc fallback (?net=bc forces it only)', A.pick({ room: false, peer: false, bc: true }) === null && A.pick({ room: false, peer: true, bc: true }) === 'peer' && A.pick({ room: true, peer: true, bc: true }) === 'peer');
+    const ord = (t) => JSON.stringify(A.order(t));
+    ok('T3 transport: in Toss the relay first, then PeerJS, nothing else - never the artifact\'s room, no bc fallback (?net=bc forces it only)',
+      A.pick({ room: false, ws: false, peer: false, bc: true }) === null && A.pick({ room: false, ws: false, peer: true, bc: true }) === 'peer' && A.pick({ room: true, ws: true, peer: true, bc: true }) === 'ws' &&
+      ord({ room: true, ws: true, peer: true, bc: true }) === '["ws","peer"]' && ord({ ws: true, bc: true }) === '["ws"]' && ord({ room: true, bc: true }) === '[]',
+      [ord({ room: true, ws: true, peer: true, bc: true }), ord({ ws: true, bc: true }), ord({ room: true, bc: true })]);
+    ok('T3 transport: the Toss page\'s PeerJS ids are ppodeuk-t- + code; with no relay here (and no ?relay=) no relay space', PG.Net.peerId('abcd') === 'ppodeuk-t-abcd' && PG.Net.relaySpace() === null, [PG.Net.peerId('abcd'), PG.Net.relaySpace()]);
     // the key never leaks
     const st = JSON.stringify(A.state()), ls = JSON.stringify(lsAll()), nat = JSON.stringify([...F.storage]), an = JSON.stringify(F.calls('Analytics.screen'));
     const dom = document.documentElement.cloneNode(true); for (const sc of dom.querySelectorAll('script')) sc.remove();
@@ -349,6 +354,14 @@
     const pr = [...$('pg-room-rules').querySelectorAll('li')].map((l) => l.textContent);
     ok('T4 party room: 친선 경기예요… instead of 트로피는 걸지 않아요', pr.includes(TX.friendly) && !pr.some((l) => /걸지/.test(l)), pr);
     ok('T4 party: partyRules(2) takes the Toss coin2 line', A.partyRules(2).includes(TX.coin2) && !A.partyRules(2).some((l) => /같은 기기/.test(l)));
+    // 파티 트로피 off (design/party-trophies.md 14): the stake the host asked for stays 0 in a party room too, no party
+    // trophy text, and a party's final standing settles nothing even with a match record planted
+    const PS = MP.state();
+    ok('T4 party trophies: the host asked for 20 in a party room -> stakeNow() 0, troPartyOn() false', PS.opts.bet === 20 && PS.tro.stake === 0 && A.partyOn() === false, [PS.opts.bet, PS.tro.stake, A.partyOn()]);
+    ok('T4 party trophies: the rules have no party trophy line (no 1등 share, no 트로피 경기)', !pr.some((l) => /트로피 (경기|\d+개)|나눠/.test(l)), pr);
+    const raw1 = localStorage.getItem(TR.state().key);
+    const left = A.partySettle({ mid: 'abc123.1', s: 20, p: {}, st: {}, slots: [0, 1], gg: new Set(), f0: 0 });
+    ok('T4 party trophies: troPartyResult returns at once (TRO.match cleared, no hold or result, the store byte-equal)', left === null && localStorage.getItem(TR.state().key) === raw1 && TR.state().esc.length === 0, left);
     noStake('T4 party room');
     MP.setOpts({ mode: 'battle' }); await sleep(80);
     // a forced start (one player): the countdown's lines, no TRO.match at 시작!

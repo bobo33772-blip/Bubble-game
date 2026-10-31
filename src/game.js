@@ -10396,11 +10396,16 @@ window.PG = window.PG || {};
       practice: () => troPractice(), devHash: (code) => troDevHash(code),
       tx: () => Object.assign({}, AIT_TX),
       // (tests) the gate card in one of its states without the key changing ('wait' | 'old' | 'err'; key() goes back),
-      // the countdown's 2 / 1 line and class, the party room's rules for a practice kind, the transport rule
+      // the countdown's 2 / 1 line and class, the party room's rules for a practice kind, the transport rule (the first
+      // and the whole list for a transports() answer)
       stage(st) { if (!AIT.on || !['wait', 'old', 'err'].includes(st)) return null; AIT.st = st; AIT.hash = ''; aitGateUI(); return AIT.st; },
       count: () => ({ sub: troCountSub(), cls: troCountCls() }),
       partyRules: (q) => partyRules(q | 0),
-      pick: (t) => trPick(t),
+      pick: (t) => aitOrder(t)[0] || null, order: (t) => aitOrder(t),
+      // (파티 트로피 off, design/party-trophies.md 14): is this party a trophy match (never in Toss); a party's final
+      // standing settling a match record m planted as TRO.match (as troHostGo would) -> what TRO.match is afterwards
+      partyOn: () => troPartyOn(),
+      partySettle(m, walk) { TRO.match = m && typeof m === 'object' ? m : null; troPartyResult(!!walk); return TRO.match; },
     };
   }
 

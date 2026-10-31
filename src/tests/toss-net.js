@@ -11,7 +11,10 @@
 //      Android back on the podium arms 로비로 first (a friend is in the room)
 //   3  the same with keys A / A (one Toss account on two phones): the rules 연습 경기예요: 같은 토스 계정으로…, the countdown
 //      연습 경기 · 비누 코인 없음, coins 0, the tag 연습, trophies unchanged
-//   4  a 3판 party A / B: coins paid by places, trophies unchanged
+//   4  a 3판 party A / B (the host's stake of 20 still asked for): coins paid by places, trophies unchanged
+//   5  the relay (frames with ?relay= to serve.js's local relay, no ?net=, no PeerJS: 'ws' or nothing): the Toss room in
+//      the relay's space t (t:<code>); a web page (space w) cannot join it, a Toss page cannot join a web room; then a
+//      friendly battle A / B over ws as in 2
 // Prints "TOSSNET PASS|FAIL <name>", "TOSSNET INFO ..." and "TOSSNET DONE pass=N fail=M".
 (function () {
   'use strict';
@@ -26,10 +29,11 @@
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
   // ---------------------------------------------------------------- frames
-  function frame(i, k) {
+  // (q: how the frame goes online - this browser's tabs by default, or ?relay= to serve.js's local relay)
+  function frame(i, k, q) {
     return new Promise((resolve, reject) => {
       const f = document.createElement('iframe');
-      f.src = 'toss-fx/index.html?net=bc&lat=8&jit=4&drop=0&k=' + k + '&frame=' + i;
+      f.src = 'toss-fx/index.html?' + (q || 'net=bc&lat=8&jit=4&drop=0') + '&k=' + k + '&frame=' + i;
       f.style.cssText = 'position:fixed;left:' + (i % 2) * 600 + 'px;top:' + (i >> 1) * 450 + 'px;width:600px;height:450px;border:0;background:#0a2327';
       const t = setTimeout(() => reject(new Error('frame ' + i)), 30000);
       f.onload = async () => {
@@ -152,6 +156,8 @@
     await until(() => F.every((f) => N(f).mode === 'party'), 3000);
     const tx = H.A.tx();
     ok('party: the rules say 친선 경기예요… (no 트로피는 걸지 않아요) on both pages', F.every((f) => rulesOf(f).includes(tx.friendly) && !rulesOf(f).some((l) => /걸지/.test(l))), F.map(rulesOf));
+    // (파티 트로피 off, design/party-trophies.md 14: the host's stake of 20 from the battle is still asked for)
+    ok('party: the host asks for a stake of 20, yet stakeNow() 0 and no party trophy match on either page', N(H).opts.bet === 20 && F.every((f) => N(f).tro.stake === 0 && f.A.partyOn() === false), F.map((f) => [N(f).opts.bet, N(f).tro.stake, f.A.partyOn()]));
     if (H.P.force) H.P.force(['water', 'crown', 'water']);
     B.mp.ready(true); await until(() => N(H).canStart, 4000);
     H.mp.start();
@@ -194,6 +200,48 @@
     await join(B); spy(B); await until(() => N(H).roster.length === 2, 4000);
     await party([H, B]);
     for (const f of [H, B, A2]) { try { f.mp.leave(); } catch (e) { /* ignore */ } }
+    await relay();
+  }
+
+  // ---------------------------------------------------------------- the relay (design/toss.md 2.5)
+  // The same Toss page with ?relay= to serve.js's local relay (tools/ws-relay.js: the real room code behind the real gate)
+  // and no ?net=: these frames have no window.Peer at all, so the room can only run on 'ws' - no WebRTC. Its rooms live
+  // in the relay's space t; a web page (space w) never finds a Toss code, nor a Toss page a web one
+  async function relay() {
+    const RL = encodeURIComponent('ws://' + location.host + '/ws');
+    const admin = () => fetch('/ws-admin/info', { cache: 'no-store' }).then((r) => r.json());
+    const W1 = await frame(3, 'A', 'relay=' + RL), W2 = await frame(4, 'B', 'relay=' + RL);
+    await host(W1, 'battle', { bet: 20 });
+    ok('relay: a Toss host with a relay and no PeerJS opens its room on ws (aitOrder: the relay first)', !!code && N(W1).str === 'ws' && W1.A.state().tr === 'ws', [code, N(W1).str, W1.A.state().tr]);
+    ok('relay: the Toss page asks for the relay space t', W1.w.PG.Net.relaySpace() === 't' && PG.Net.relaySpace() === null, [W1.w.PG.Net.relaySpace(), PG.Net.relaySpace()]);
+    let inf = await admin();
+    ok('relay: the room lives in the relay as t:<code>, not w:<code>', !!inf.rooms['t:' + code] && !inf.rooms['w:' + code], Object.keys(inf.rooms));
+    // a web page (preview.html: no PG_AIT, the space w) with the Toss code: no such room; its own room: no Toss page finds it
+    const wf = document.createElement('iframe');
+    wf.src = 'preview.html?net=ws&relay=' + RL + '&frame=web';
+    wf.style.cssText = 'position:fixed;left:0;top:0;width:200px;height:150px;border:0;opacity:0.05;pointer-events:none';
+    document.body.appendChild(wf);
+    await until(() => wf.contentWindow && wf.contentWindow.PG && wf.contentWindow.PG.Net, 15000);
+    const WN = wf.contentWindow.PG.Net;
+    let jr = null; try { jr = { ok: await WN.join({ transport: 'ws', code }) }; } catch (e) { jr = { error: e && e.code }; }
+    ok('relay: a web page (space w) cannot join the Toss room by its code (not_found)', jr.error === 'not_found', jr.error || 'joined');
+    if (jr.ok) { try { jr.ok.leave(); } catch (e) { /* ignore */ } }
+    let wh = null; try { wh = await WN.host({ transport: 'ws' }); } catch (e) { wh = null; }
+    inf = await admin();
+    ok('relay: a web room lives in w:<code>', !!wh && !!inf.rooms['w:' + wh.code], [wh && wh.code, Object.keys(inf.rooms)]);
+    if (wh) {
+      const r = await W2.mp.join(wh.code, { nick: '까삐', char: 'capy' });
+      await sleep(300);
+      ok('relay: a Toss page cannot join the web room by its code (no session, still on 친구와 하기)', !W2.mp.session() && N(W2).screen !== 'room', [r, N(W2).screen]);
+      try { wh.leave(); } catch (e) { /* ignore */ }
+    }
+    wf.remove();
+    // the Toss guest joins the Toss room over the relay: a friendly battle as on bc (coins as the web pays, no trophies)
+    await join(W2);
+    await until(() => N(W1).roster.length === 2 && N(W2).roster.length === 2, 4000);
+    ok('relay: two Toss players in one room over ws', N(W1).roster.length === 2 && N(W2).str === 'ws', [N(W1).roster.length, N(W2).str]);
+    await battle([W1, W2], 'relay battle A/B', false);
+    for (const f of [W1, W2]) { try { f.mp.leave(); } catch (e) { /* ignore */ } }
   }
   main().catch((e) => { fail++; log('TOSSNET FAIL exception :: ' + (e && e.stack ? e.stack : e)); }).then(() => log('TOSSNET DONE pass=' + pass + ' fail=' + fail));
 })();

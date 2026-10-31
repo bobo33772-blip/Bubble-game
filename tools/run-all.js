@@ -309,15 +309,16 @@ const LIST = [
   ...[['iv', 844, 390], ['gate', 844, 390], ['iv-1x', 900, 760], ['gate-1x', 900, 760]].map(([sc, w, h]) => V(`pal-${sc}${/1x/.test(sc) ? '' : '-' + w}`, HTTP + 'test-cloud.html?shot=pal-' + sc, 'rt60000', (out) => (/CLOUD SHOT error/.test(out) ? 'shot error' : /CLOUD SHOT READY/.test(out) ? true : 'no CLOUD SHOT READY'), { done: 'CLOUD SHOT READY', shot: `pal-${sc}${/1x/.test(sc) ? '' : '-' + w}.png`, w, h })),
   // ---- 앱인토스 (design/toss.md 15): check-toss - the Toss page and its engine files as build.js writes them, the
   // artifact / deploy free of Toss, a build copy (bad markers stop it; --toss leaves dist/, deploy/, the zip and
-  // .firebaserc byte for byte; TURN in / out). toss - the real src/ait.js over a fake SDK in virtual time (boot, the
-  // storage mirror, the game-key gate, trophies off, the leaderboard, back / awake / sound / screen logs) + its other
+  // .firebaserc byte for byte; the relay line: default / PG_RELAY_URL / none, never a TURN list). toss - the real
+  // src/ait.js over a fake SDK in virtual time (boot, the storage mirror, the game-key gate, trophies off, the leaderboard, back / awake / sound / screen logs) + its other
   // boots (a wiped WebView restored from native, the desktop where every SDK call throws, a native read that never
-  // answers). toss-net - two Toss frames over bc (friendly battles A/B and A/A, a party). toss-fit-* - the Toss layout
-  // on phones with the SDK's Safe Area = the emulated insets, clear of the 더보기 / X box (C:/Temp/bogeul/toss-fit-*.png)
+  // answers). toss-net - Toss frames over bc (friendly battles A/B and A/A, a party) and over serve.js's local relay
+  // (its space t, apart from w; no PeerJS: ws alone). toss-fit-* - the Toss layout on phones with the SDK's Safe Area =
+  // the emulated insets, clear of the 더보기 / X box (C:/Temp/bogeul/toss-fit-*.png)
   V('check-toss', 'check-toss.js', 0, has(/CHECK-TOSS OK: \d+ passed, 0 failed/), { runner: 'node' }),
   V('toss', HTTP + 'test-toss.html?net=bc', 400000, doneZero('TOSS')),
   ...['restore', 'throw', 'slow'].map((b) => V('toss-boot-' + b, HTTP + 'test-toss.html?net=bc#boot=' + b, 90000, doneZero('TOSS'))),
-  V('toss-net', HTTP + 'test-toss-net.html', 'rt300000', doneZero('TOSSNET'), { done: 'TOSSNET DONE', w: 1200, h: 900 }),
+  V('toss-net', HTTP + 'test-toss-net.html', 'rt420000', doneZero('TOSSNET'), { done: 'TOSSNET DONE', w: 1200, h: 900 }),
   ...(() => {
     const SIZES = [[640, 360, [0, 0, 0, 0]], [667, 375, [0, 0, 0, 0]], [844, 390, [47, 47, 21, 0]], [932, 430, [59, 59, 21, 0]], [915, 412, [0, 0, 0, 24]], [1180, 820, [0, 0, 20, 0]]];
     const ALL = ['title', 'play', 'room', 'rec'], TWO = ['pause', 'gate-wait', 'gate-err', 'friends', 'count', 'podium', 'over', 'hub'];
