@@ -6868,6 +6868,8 @@ window.PG = window.PG || {};
       const j = nInt(q[0], -1, 2, -1), s = nInt(q[1], -1, MAX_PLAYERS - 1, -1);
       if (j >= 0 && j < M.k && s >= 0) M.own[j] = [s, M.S + nInt(q[2], 0, 1e6, 0), 0, -1, nInt(q[3], 0, 1, 0) === 1];
     }
+    // (the reveal's sitters - this stop's owners, as the host's close keeps them in M.sat: the ? over the ones standing)
+    M.sat = {}; if (M.ph >= 2) for (const j of Object.keys(M.own)) M.sat[M.own[j][0]] = M.own[j][1];
     ghostView(M, nInt(mg[7], 0, 15, 0));
     M.pts = mgSeats(mg[8], 0, 999); M.n = nInt(mg[9], 1, 99, CHAIR.stops);
     const bb = nInt(mg[11], 0, 15, 0); M.bump = {}; for (let s = 0; s < MAX_PLAYERS; s++) if (bb & (1 << s)) M.bump[s] = M.i;
@@ -17864,7 +17866,7 @@ window.PG = window.PG || {};
         const x = (o && o.x !== undefined ? +o.x : chairStools(M, Math.max(M.S, G.frame))[stool]) - 8;
         return api.fakeBody(slot, Object.assign({ x, y: chairFloor() - 16, fl: 1, rt: Math.max(0, o && o.rt !== undefined ? o.rt | 0 : tick | 0), mi: [G.party.i, M.i, stool | 0, Math.max(0, (tick | 0) - M.S), (o && o.dx) | 0] }, o && o.at !== undefined ? { at: o.at } : {}));
       },
-      chairView: (mg, mg1) => { const M = chairView(mg, mg1 || null, 0, { pa: {} }, { id: 'chair', seeded: false }); return JSON.parse(JSON.stringify({ i: M.i, ph: M.ph, seed: M.seed, Ms: M.Ms, S: M.S, k: M.k, own: M.own, gh: M.gh, pts: M.pts, n: M.n, bump: M.bump, surv: M.surv })); },
+      chairView: (mg, mg1) => { const M = chairView(mg, mg1 || null, 0, { pa: {} }, { id: 'chair', seeded: false }); return JSON.parse(JSON.stringify({ i: M.i, ph: M.ph, seed: M.seed, Ms: M.Ms, S: M.S, k: M.k, own: M.own, sat: M.sat, gh: M.gh, pts: M.pts, n: M.n, bump: M.bump, surv: M.surv })); },
       // (계란) the game's state on this screen; host: a seat holding the egg now (since: its juggle's start - else coolF
       // ago, over now), the burst tick by hand (hidden until reached); a fake remote seat's receipt from giver at its view
       // tick tick (its state with its mi through fakeBody - o: {x, y, rt, at}); the heat stage a frames after landing; the

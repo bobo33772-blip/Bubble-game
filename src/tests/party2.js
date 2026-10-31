@@ -380,6 +380,9 @@
     const v = P.chairView(['h', 2, 0, 9, 400, -1, [], 0, [1, 0, 0, 0], 8, 3, 0, -1], ['h', 2, 0, 9, 400, 600, [[0, 1, 4, 0]], 0, [], 8, 3, 0, -1]);
     const v2 = P.chairView(['h', 2, 0, 9, 400, 600, [[0, 1, 4, 1], ['x'], [7, 2, 1, 0], [1, 9, 0, 0]], 4, [], 8, 3, 2, 3]);
     ok('view: chairView takes S from the next snapshot of the same stop; owners [slot, S + rel, ..., final] within bounds (junk dropped), the 유령 / bump bits', v.S === 600 && same(v.own, {}) && same(v2.own['0'], [1, 604, 0, -1, true]) && Object.keys(v2.own).length <= 2 && same(v2.gh, { 2: 1 }) && same(v2.bump, { 1: 2 }) && v2.surv === 3, [v, v2]);
+    // (review: a guest's reveal - its ? over the ones standing - reads the sitters from the owners, as the host's M.sat)
+    const v3 = P.chairView(['h', 2, 2, 9, 400, 600, [[0, 1, 4, 1], [2, 3, 9, 1]], 0, [], 8, 3, 0, -1]);
+    ok('view: in the reveal a guest\'s sitters (M.sat) are the stop\'s owners - the ? goes over everyone else; none before the reveal', same(v3.sat, { 1: 604, 3: 609 }) && same(v2.sat, {}), [v3.sat, v2.sat]);
     // the fast party: 3 stops under 35 s; the worst honest 판 (nobody ever sits: every stop to its cap) under 95 s
     for (const fast of [true, false]) {
       P.fast(fast); party(['duck', 'cat', 'frog'], { plan: ['chair'] }); toPlaying();
