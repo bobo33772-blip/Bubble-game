@@ -172,6 +172,8 @@
     ok('party: coins paid on both pages (by places)', F.every((f, k) => SS(f).co > c0[k]), F.map((f, k) => SS(f).co - c0[k]));
     ok('party: trophies unchanged on both pages', F.every((f, k) => same(tro(f), t0[k])), F.map(tro));
     ok('party: no \'tro\' message', F.every((f) => !f.got.includes('tro') && !f.sent.includes('tro')));
+    const tt = F.map(seen).join('\n');
+    ok('party: no 걸다 / 판돈 / 가져요 about trophies visible on the final podium (no party trophy line)', !/걸[기고어지었]|판돈|가져요/.test(tt), (tt.match(/[^\n]*(걸[기고어지었]|판돈|가져요)[^\n]*/) || [])[0]);
   }
 
   async function main() {

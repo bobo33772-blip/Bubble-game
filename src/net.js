@@ -343,7 +343,7 @@ window.PG = window.PG || {};
   }
 
   // ------------------------------------------------------------------ the relay ('ws', design/relay.md 4.2 / 4.6)
-  // where this page's relay is: {base: 'wss://host[:port][/path]', space} or null. A test page's loopback ?relay= first,
+  // where this page's relay is: {base: 'wss://<host>[:port][/path]', space} or null. A test page's loopback ?relay= first,
   // else window.PG_RELAY (build.js: {url, space?}; this file only ever reads it), else none
   function relayInfo() {
     let r = null;

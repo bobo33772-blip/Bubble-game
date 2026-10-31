@@ -1,6 +1,9 @@
 # 뽀득뽀득 목욕탕: 앱인토스 (Apps in Toss) v1 — design spec
 
-Status: **spec only** (2026-10-27, `feat/toss`); nothing is built yet. The goal of v1 is one thing: a working
+Status: **built** (spec 2026-10-27; built on `feat/toss` 2026-10-28 → 2026-10-31, after merging main's #22 relay, #23
+party polish, #24 crown and #25 party trophies). What changed against this spec while building, the test results and
+the open points: section 20. Online in Toss now goes through main's WebSocket relay (its own room space `t`), not
+TURN: 2.5 and 20.1 replace every TURN line below that 20.1 names. The goal of v1 is one thing: a working
 `ppodeuk-bath.ait` that the owner uploads in the Apps in Toss console and opens with **토스앱 테스트** (the QR code) on
 real phones. Review (검토 요청), the GRAC rating (게임물 등급분류) and the store listing come later and are researched
 separately. Code is referenced by function name and section, never by line number (`src/game.js` changes all the
@@ -8,7 +11,7 @@ time). Every function named here exists today unless it is marked **new**.
 
 The owner's decisions (2026-10-27), which this spec builds on:
 1. The first Toss version has **online play by the game key**. `getUserKeyForGame()`'s hash is the Toss player's
-   identity, and the online rooms (같이 하기, 배틀, 파티, by room code over PeerJS + TURN) are open to any Toss player
+   identity, and the online rooms (같이 하기, 배틀, 파티, by room code over the relay, PeerJS behind it; 20.1) are open to any Toss player
    who has a key. **No trophy stakes in the Toss build**: battles and parties there are friendly matches (친선 경기).
    **No Google login anywhere** in the Toss build. **No server and no 사업자**, so there is no Toss login, no IAP and
    no ads.
@@ -31,7 +34,7 @@ settles. Those items are listed again in 15.6 as things the QR test must answer.
 |---|---|
 | Build target | `node build.js --toss` (also `PG_TOSS=1`) writes a **Toss variant of the deploy page** into the new Vite project `toss/`: `toss/index.html` plus the five engine files as `toss/public/pg/*.js`. With the flag it writes **only** the Toss outputs and the `TMP` fixtures: `dist/`, `deploy/`, the itch zip and `.firebaserc` are not touched, so a Toss build can never change what the web serves (2.1). In `toss/`, `npm run build` runs the page build, then `vite build`, the bundle check, `ait build` and the check again, and ends with `toss/ppodeuk-bath.ait` (2). |
 | SDK hand-off | `toss/src/main.js` imports the SDK, PeerJS and the fonts, then calls `PG.Ait.boot(SDK)` from the **new** plain file `src/ait.js`. That function reads native Storage into localStorage (at most 3 s), locks landscape, sets the Safe Area CSS variables, sets `window.PG_AIT` (a small bridge, 2.4) and only **then** loads the five engine files in order. The engine never imports anything. |
-| CDNs | None at run time. PeerJS comes from npm (`peerjs@1.5.4`, the same version as the deploy). The two Google Fonts come from npm `@fontsource/*` and are emitted into `dist/assets`. TURN uses the same `turn.config.json` the deploy uses, inlined as `window.PG_PEER_OPTIONS`. Firebase is not in the Toss build at all. |
+| CDNs | None at run time. PeerJS comes from npm (`peerjs@1.5.4`, the same version as the deploy). The two Google Fonts come from npm `@fontsource/*` and are emitted into `dist/assets`. **No TURN** (built: 20.1): the rooms go through main's relay Worker (`window.PG_RELAY`, space `t`), PeerJS behind it with its own default ICE servers; `turn.config.json` stays the deploy's. Firebase is not in the Toss build at all. |
 | Removed | Service worker and its registration, manifest and app metas, the 앱으로 설치 pill and the fullscreen button (both already disappear without a manifest link), the `FB_HOP` `location.replace`, `PG_CLOUD`, the Google Fonts links, the PeerJS CDN tag, the "open outside" links (`intent://`, `kakaotalk://`), and the Google sign-in calls (cut from the Toss copy of game.js, 2.2). |
 | Online gate | **손님은 온라인 불가** (Google sign-in) is replaced by a **game-key gate**: `netGated()` is true in Toss while `AIT.hash` is empty. The friends panel then shows a card without any login button (4.2). |
 | Identity uses | (1) the online gate; (2) the room's same-player check: `troDevHash` hashes the game key instead of the store's random `dev`, so the same Toss account in one room twice is a practice match (`NET.q === 2`, no coins); (3) through (2), the coin rules of friendly matches; (4) a one-way tag of the key is saved (`ppogeul-ait-who`), which is what the checklist's "사용자 식별자 값을 확인하여 저장" asks. The key itself is never shown, sent, logged or stored (4.5). |
@@ -44,7 +47,7 @@ settles. Those items are listed again in 15.6 as things the QR test must answer.
 | Exit | The game nav bar's X with its automatic exit modal (SDK >= 2.9.2; we ship 3.9.0). Android back goes back on every screen. At the bare title the listener is removed, so Toss's own back applies (docs: without a listener the default is history back; what it does with an empty history is UNCONFIRMED). Fallback, if it does not exit: the game's own two-press confirm, then `Screen.close()`. Never a bare close without a confirmation (the checklist wants one). iOS swipe back is off and the screen stays awake only while a game runs; both are restored on `pagehide` (11). |
 | Analytics | No `init` export exists in 3.9.0. "Analytics init" is the bridge's first `Analytics.screen({log_name:'title'})`, and then one screen log per overlay change, with no personal data (12). |
 | Eval scanner | Today the five engine files contain 0 `eval(`, 0 `new Function` and 0 string timers, and so do the published files of every library the bundle pulls in (the SDK 3.9.0 and its bridge, valibot, semver, PeerJS 1.5.4 and its four dependencies: pre-scan of 2026-10-27, 13). `tools/check-toss.js` (**new**) scans the built `dist/` for a list of banned patterns and for every external host; any match fails the build. |
-| Rooms | The Toss build uses its **own PeerJS id prefix** (`ppodeuk-t-`), so Toss rooms and web rooms never meet: the web deploy has stakes and Google accounts, Toss has friendly matches and game keys. Joining is by code only (PeerJS has no 열린 방 lobby today either). 코드 복사 copies the code and a how-to line, never a URL (3). |
+| Rooms | The Toss build has its **own room space** on both transports, so Toss rooms and web rooms never meet: the relay's space `t` (the Worker lets only the two Toss origins in there) and the PeerJS id prefix `ppodeuk-t-`. The web deploy has stakes and Google accounts, Toss has friendly matches and game keys. Joining is by code only (neither transport has an 열린 방 lobby). 코드 복사 copies the code and a how-to line, never a URL (3). |
 | Out of scope | Toss login (`appLogin`, needs 사업자 + a server + mTLS), IAP, ads, Toss share links (`getTossShareLink` only works after launch), haptics, cloud saves, 친구 순위 and invites, the GRAC rating, the console listing and review (17). |
 
 ---
@@ -159,7 +162,8 @@ toss/  npm run build:  node ../build.js --toss → vite build → node ../tools/
 - `tossOf(build)` builds the page from the same pieces as `deployOf`, in this order:
   `<!doctype html>`, `<html lang="ko" class="pg-sa pg-ait">`, charset, the same viewport (`viewport-fit=cover`,
   `user-scalable=no`), `<title>`, description, `<meta name="pg-build" content="BUILD">` (so 웹 디버그 툴즈 shows which
-  build runs), `peerTag` (`PG_PEER_OPTIONS`, when `turn.config.json` exists), `<style>${RESET_SA}</style>`, `headRest`
+  build runs), the relay line (built, 20.1: `<script id="pg-relay">window.PG_RELAY={url:…,space:"t"};</script>`; never
+  `PG_PEER_OPTIONS`), `<style>${RESET_SA}</style>`, `headRest`
   **without** the two `preconnect` links and `#pg-fontcss` (checked swaps), then
   `<script type="module" src="/src/main.js"></script>`, `</head><body>`, the body of `page.html` with `<!--SCRIPTS-->`
   replaced by nothing, and `</body></html>`.
@@ -172,12 +176,12 @@ toss/  npm run build:  node ../build.js --toss → vite build → node ../tools/
   (`/* … */`) are dropped from the head's `<style>` blocks too: two of page.html's comments describe the Google
   button's styling. (page.html has no `/*` inside a CSS string; `tossOf` checks that before it strips.)
 - The engine files: `toss/public/pg/<f>` = the same text the deploy inlines, except `game.js`, which has the cut
-  regions of 2.2 removed. A `turn.config.json` is optional, but without it the build prints
-  `WARNING toss: turn.config.json 없음 - 다른 네트워크의 친구와는 연결이 안 될 수 있어요 / no TURN relay in the Toss build`.
+  regions of 2.2 removed. (Built, 20.1: no TURN; only `PG_RELAY_URL=none` leaves the relay out, and the build then prints
+  `WARNING toss: 중계 서버 없음 (PG_RELAY_URL=none) - 다른 네트워크의 친구와는 연결이 안 될 수 있어요 / no relay in the Toss build`.)
 - Checks, which stop the build: the Toss page has exactly one `<script type="module">` (`/src/main.js`) and no other
   `<script src>`; none of `serviceWorker`, `rel="manifest"`, `PG_CLOUD`, `firebase`, `fonts.googleapis`,
-  `fonts.gstatic`, `cdnjs`, `peerjs.min.js`, `location.replace`, `구글`, `Google` (case-sensitive: the lowercase STUN host
-  `stun.l.google.com` in `PG_PEER_OPTIONS` is allowed); every pattern of 13's list absent
+  `fonts.gstatic`, `cdnjs`, `peerjs.min.js`, `location.replace`, `구글`, `Google` (case-sensitive); the relay line exactly when
+  the build has a relay, with the space `t`, and no `PG_PEER_OPTIONS` (20.1); every pattern of 13's list absent
   from `toss/public/pg/*.js`; the cut markers balanced (2.2). The **artifact and the deploy are checked for no Toss**,
   structurally, because page.html's own CSS names `.pg-ait` (9.3) and game.js reads `window.PG_AIT` in every build:
   no `<html …pg-ait` class (`/<html\b[^>]*\bpg-ait\b/`), no assignment `/PG_AIT\s*=(?!=)/`, no `@apps-in-toss`, no
@@ -192,7 +196,7 @@ toss/  npm run build:  node ../build.js --toss → vite build → node ../tools/
   hosts the two frames).
 - The build hash `BUILD` for the Toss page: sha256 over `tossOf('-')` and the five `pg/` files, 12 hex chars (as
   `deployFilesOf`).
-- The final log line gains: `toss/: index.html + pg/*.js (build X, TURN: yes|no)`.
+- The final log line gains: `toss/: index.html + pg/*.js (build X, relay: <url> space t | none)`.
 
 ### 2.2 The cut regions (Toss copy of `game.js` only)
 Line markers, each on its own line: `// <ait-cut>` … `// </ait-cut>`. `tossOf` removes from the opening marker through
@@ -359,16 +363,22 @@ Steps 2 to 5 run in parallel. The engine starts at most about 3 s after `T0`, we
   `!!window.PG_AIT || !!document.querySelector('script[src*="peerjs"]')`, and the friends panel's `why` line uses
   `peerTag()` instead of its own `querySelector`. Signalling stays the PeerJS cloud (`wss://0.peerjs.com`, port 443),
   and the host id is `'ppodeuk-t-' + code` (14, `net.js`).
-- **TURN**: the same `turn.config.json` → `window.PG_PEER_OPTIONS` as on the deploy. The owner keeps the file
-  locally (never committed; CI has it as `TURN_CONFIG`). It should contain Metered's
-  `turns:…:443?transport=tcp` entry: it is the one most likely to pass a strict mobile network. The credential is
-  readable by anyone who unpacks the .ait, exactly as on the deploy today.
+- **The relay, not TURN** (built 2026-10-31, after main's #22 replaced the paid TURN): the Toss page carries the same
+  one-line `window.PG_RELAY` as the deploy, with `space:"t"` (`build.js` `tossRelayTag`). The URL is the deploy's
+  (`PG_RELAY_URL` / `relay.config.json`), else `TOSS_RELAY` in `build.js` = the owner's Worker
+  `https://ppodeuk-relay.ppodeuk.workers.dev` (not a secret; the Toss build runs on the owner's PC, where neither is
+  set). `net.js` asks for the space `t` itself whenever `window.PG_AIT` is set, whatever the line says, and the
+  Worker lets only `https://ppodeuk-bath.apps.tossmini.com` and `https://ppodeuk-bath.private-apps.tossmini.com` into
+  `t` (`cloudflare/wrangler.toml` `ORIGINS`), so a Toss code never opens a web room and a web code never a Toss one.
+  The relay is a WebSocket on 443 (`wss://`): no WebRTC, no TURN. PeerJS stays behind it (`ppodeuk-t-` ids) with
+  its own default ICE servers; `turn.config.json` is the deploy's only and never reaches the Toss page (checked).
 - **Fonts**: `@fontsource/black-han-sans` and `@fontsource/gowun-dodum` (2.3). `setupDOM`'s `#pg-fontcss` media
   switch finds no element and does nothing. `#pg-fontwarm` warms the slices as before.
 - **Firebase**: nothing. `PG_CLOUD` is never written into the Toss page, and the check fails on the word `firebase`.
 - **`domReady`** in `game.js`: `document.readyState === 'complete' || !!window.PG_AIT`. Under Toss the engine runs
   after `DOMContentLoaded`, and PeerJS is already there.
-- **`netTransport`** in Toss: the automatic choice is `'peer'` or nothing. Today it falls back to `'bc'` when
+- **`netTransport`** in Toss (as specified here; built on main's `netOrder` as `aitOrder`, 20.1: `['ws', 'peer']` of
+  what the page has): the automatic choice is `'peer'` or nothing. Today it falls back to `'bc'` when
   `window.Peer` is missing, which in a phone's single WebView would make a room nobody can join, under the line
   `지금은 이 브라우저의 다른 탭끼리만 함께 할 수 있어요`. With `AIT.on` and no `Peer`, `NET.tr` is `null` and the panel
   shows its existing `peerOff` card. `'bc'` stays reachable only when forced by `?net=bc` (`Net.fromQuery`, the
@@ -393,6 +403,8 @@ Steps 2 to 5 run in parallel. The engine starts at most about 3 s after `T0`, we
 | Room hint (`NET.tr === 'peer'`) | `친구에게 이 게임 링크와 방 코드 C를 보내 주세요 (코드 복사에 링크도 담겨요)` | `친구가 토스에서 뽀득뽀득 목욕탕을 열고 ‘코드로 참여’에 C를 넣으면 돼요` | `renderRoom`, `AIT_TX.hint` |
 | `inviteText()` (코드 복사 / share sheet) | code + `location.href?join=` | `뽀득뽀득 목욕탕 같이 해요! 토스에서 뽀득뽀득 목욕탕 → 친구와 하기 → 코드로 참여: C` (no URL) | `AIT.on` branch first in `inviteText` |
 | PeerJS id prefix | `ppodeuk-` | `ppodeuk-t-` | `net.js` (14) |
+| Relay room space (built, 20.1) | `w` (a PR preview `p`) | `t` (the Worker admits only the Toss origins) | `net.js` `relayInfo`, `build.js` `tossRelayTag` |
+| TURN list (`PG_PEER_OPTIONS`) | with `turn.config.json` | never (the relay needs no WebRTC) | `tossOf`, checked |
 | 내 기록 note | `처음 선물로 트로피 N개를 받았어요! 친구와 배틀할 때 걸어 봐요` / `오늘 트로피 보너스 d/40개 · 목욕도 배틀도 받아요` | `처음 선물로 트로피 N개를 받았어요! 목욕을 끝까지 할수록 늘어요` / `오늘 트로피 보너스 d/40개 · 혼자 하기·같이 하기에서 받아요` | `fillRec` |
 | 내 기록 stats | 최고 트로피 · 배틀 · 뽀득 KO · 혼자 최고 점수 | 최고 트로피 · 혼자 최고 점수 (friendly matches record nothing, so 배틀 / 뽀득 KO would stay 0) | `fillRec` hides the 배틀 and 뽀득 KO `dt` / `dd` and puts `is-ait` on the `dl` (2 columns) |
 | 내 기록 buttons | 닫기 (+ 구글로 로그인, 친구 순위 with the cloud) | 닫기 + **토스 랭킹** (after the first accepted score, 7) | **new** `#pg-ait-lb`, made by JS only when `AIT.on` |
@@ -767,7 +779,8 @@ it is reviewed and allowlisted the same way).
   file, the pattern and 60 characters around it.
   **Hosts**: every `https?://` and `wss?://` host in those files (and every `stun:` / `turn:` / `turns:` host) must be
   in the check's own allowlist: `0.peerjs.com`
-  (PeerJS signalling), the hosts of `turn.config.json`, `stun.l.google.com` (the STUN entry `build.js` adds),
+  (PeerJS signalling), the host of the page's own relay line (built, 20.1: read from `dist/index.html`, so the owner's
+  Worker name never has to be listed by hand; there is no TURN list any more), `stun.l.google.com` (PeerJS's default),
   `localhost` (the net.js comment), and the hosts the SDK bundle names, **each added by hand with a comment** after
   someone has looked at it. Any other host fails.
   Also: `dist/index.html` at the top; `dist/pg/` has the five files, byte-equal to `TMP/toss/pg/`; `dist/assets`
@@ -788,15 +801,16 @@ it is reviewed and allowlisted the same way).
 |---|---|
 | `src/ait.js` | **new**: `PG.Ait = { boot, make, store }` (2.4, 8) |
 | `src/game.js`, top constants | `AIT_TX` (every Korean line of 3, 4, 5, 7, 11.2) next to `PARTY_TX`; `AIT_TEXT` = their joined values, warmed in `setupDOM` with the others |
-| `src/game.js`, trophy core | `troEscrow` and `troApply`: `if (AIT.on) return false;` / `return null;` first (5, 0a / 0b) |
+| `src/game.js`, trophy core | `troEscrow` and `troApply`: `if (AIT.on) return false;` / `return null;` first (5, 0a / 0b). Since main's #25 (파티 트로피, design/party-trophies.md 14): `stakeNow` = `(battle or party) && !AIT.on`, `troPartyOn()` false under `AIT.on`, `troPartyResult` returns on `AIT.on` (it clears `TRO.match` first), `troHostGo` keeps `AIT.on` first in its rewritten return line, `troGuestGo(id, party)` returns first |
 | `src/game.js`, section "v5 앱인토스" (**new**, after "v4 friends", before "attract-mode autopilot") | `AIT`, `aitKey`, `aitGateBuild`, `aitGatePaint`, `aitLbRun`, `aitLbBtn`, `aitBack`, `aitSync`, `aitScreen`, and `PG.debug.ait` = `aitDebugApi()` like `troDebugApi()` (`state()` → `{on, st, hasKey, who, lb, back, play, scr}`: never the key or the tag itself) |
-| `src/game.js`, hooks (one line each) | `boot` → `aitKey()` after `setupDOM`; `showOverlay` → `aitSync(); aitScreen();` and for `'over'` / `'ending'` `aitLbRun()`; `toTitle` → `aitSync()`; `fillRec` → the Toss note lines, the hidden stats, `aitLbBtn()`; `renderFriends` → 4.2; `netGated`; `troDevHash`; `peerTag`; `domReady`; `fit` (9.3); `safeInsets` probe (9.2); `inviteText` and the room hint (3); the nine trophy sites (5); `partyRules` coin2 and `noTro`; `netTransport` (2.5);
+| `src/game.js`, hooks (one line each) | `boot` → `aitKey()` after `setupDOM`; `showOverlay` → `aitSync(); aitScreen();` and for `'over'` / `'ending'` `aitLbRun()`; `toTitle` → `aitSync()`; `fillRec` → the Toss note lines, the hidden stats, `aitLbBtn()`; `renderFriends` → 4.2; `netGated`; `troDevHash`; `peerTag`; `domReady`; `fit` (9.3); `safeInsets` probe (9.2); `inviteText` and the room hint (3); the nine trophy sites (5); `partyRules` coin2 and `noTro` (built: `AIT_TX.friendly` before main's party trophy lines); `netTransport` (2.5; built: main's `netOrder()` has an `AIT.on` branch, `aitOrder(t)` = `['ws', 'peer']` of what is there, never `room` / `bc`; `netTransport` sets `NET.tr` from it);
 `Snd.hold`; the `visibilitychange` / `pagehide` listeners → `Snd.hold`; `PG_AIT.onShow` subscribed in the AIT section's init |
 | `src/game.js`, cut markers | regions 1 to 6 (2.2) and the two reworded comments |
 | `src/audio.js` | `hold(on)` in `PG.Audio`, and `pagehide` → hold |
-| `src/net.js` | `const PEER_PREFIX = W.PG_AIT ? 'ppodeuk-t-' : 'ppodeuk-';` plus a header line saying why. The code check (`CODE_RE`), the reroll on `unavailable-id` and the rest do not change. |
+| `src/net.js` | `const PEER_PREFIX = W.PG_AIT ? 'ppodeuk-t-' : 'ppodeuk-';` plus a header line saying why. The code check (`CODE_RE`), the reroll on `unavailable-id` and the rest do not change. Built on main's relay: `relayInfo()` uses the space `t` whenever `W.PG_AIT` is set; tests read `peerId(code)` and `relaySpace()` |
 | `src/page.html` | `--sa-*` on `:root`, the 20 `env()` → `var()`, the `/* v5 앱인토스 */` block (9.3) |
-| `build.js` | `--toss` / `PG_TOSS` (and the guard: with it, no write to `dist/`, `deploy/`, `TMP/deploy/`, the itch zip or `.firebaserc`), `tossOf`, `RESET_SA`, the cuts, the checks, the `TMP/toss/`, `TMP/toss-fx/`, `TMP/ait.js` and `test-toss.html` outputs, the generic test-page loop skipping `toss.js` / `toss-fake.js`, the structural "no Toss in the artifact / deploy" checks (2.1); header comment |
+| `build.js` | `--toss` / `PG_TOSS` (and the guard: with it, no write to `dist/`, `deploy/`, `TMP/deploy/`, the itch zip or `.firebaserc`), `tossOf`, `RESET_SA`, the cuts, the checks, the `TMP/toss/`, `TMP/toss-fx/`, `TMP/ait.js` and `test-toss.html` outputs, the generic test-page loop skipping `toss.js` / `toss-fake.js`, the structural "no Toss in the artifact / deploy" checks (2.1); header comment. Built on main: the relay line with `space:"t"` (`TOSS_RELAY`, `tossRelayTag`), never `PG_PEER_OPTIONS`; the test pages get no relay (`tossOf(build, entry, null)`) |
+| `tools/relay-node-test.js`, `tools/check-integration.js` (main's) | the relay test's build copy also copies `tools/toss-rules.js`; the lobby-call scan skips a member `.lb` (the bridge's leaderboard) |
 | `toss/` | **new** (2.3) |
 | `tools/check-toss.js` | **new** (13) |
 | `tools/run-all.js` | jobs `check-toss` (node, `--static`), `toss` (virtual time), `toss-net` (rt), `toss-fit-*` (cdp) (15.5) |
@@ -810,8 +824,9 @@ it is reviewed and allowlisted the same way).
 ## 15. Test plan (one suite run at the end; headless Chrome always with `--mute-audio`)
 
 ### 15.1 `check-toss --static` (node, every run)
-Section 13's static part, plus: `tossOf` without `turn.config.json` has no `PG_PEER_OPTIONS`, and with a test config
-it has exactly one. A bad marker layout (an opener without a closer, nesting) stops `build.js` with its message: tried
+Section 13's static part, plus (built, 20.1): the Toss page's relay line - the owner's Worker when nothing names
+one, `PG_RELAY_URL`'s when set, none and a warning with `PG_RELAY_URL=none`, always `space:"t"` - and never a
+`PG_PEER_OPTIONS`, not even with a TURN list given. A bad marker layout (an opener without a closer, nesting) stops `build.js` with its message: tried
 on a copy of the repo built with `PG_BUILD_TEMP`, the way `check-cloud` builds its copy. On the same copy, with a
 made-up `firebase.config.json`: a plain build, then `--toss`; `dist/`, `deploy/` and the zip are byte-equal before and
 after the `--toss` run (the deploy keeps its `PG_CLOUD`), and `toss/index.html` has no `firebase`.
@@ -874,6 +889,10 @@ message spy), both trophy stores unchanged in `t / w / g / ko / de / esc`, coins
 countdown line `친선 경기 · 트로피 없음`, the tag `친선 경기`. The same with keys A / A: `연습 경기 · 비누 코인 없음`,
 `AIT_TX.same` in the rules, coins 0. A 2-player party with A / B: coins paid, no trophies. The host id starts with
 `ppodeuk-t-` (the 'peer' prefix is checked as a pure call, because `bc` does not use it). Prints `TOSSNET DONE`.
+Built, 20.1: the party part also checks the host's stake of 20 stays 0 there (`troPartyOn()` false on both pages), and
+a fifth part runs over `serve.js`'s local relay: two Toss frames with `?relay=` and no PeerJS at all open their room
+on `ws` in the space `t` (`/ws-admin/info` lists `t:<code>`), a web page (`preview.html`, space `w`) cannot join that
+code, a Toss page cannot join a web room's code, and a friendly battle A / B runs over `ws` as on `bc`.
 
 ### 15.4 Fit (`cdp`, mobile emulation, `PG_CDP_INSETS`)
 `test-toss.html#shot=<scene>&ins=l,r,b,t`. The fake insets equal the emulated ones. Scenes: `title`, `play` (the
@@ -890,10 +909,14 @@ existing job must still pass: the artifact, deploy, preview and cloud fixtures m
 `run-all`. The npm part (`npm run build` in `toss/`) runs on the owner's PC only in v1.
 
 ### 15.6 What only the QR test on real phones can show (one iPhone and one Android at least; the owner + friends)
-1. **WebRTC in the Toss WebView**: PeerJS signalling (`wss://0.peerjs.com`), a DataChannel, and Metered TURN
-   (`turns:…:443`). Rooms with 2, 3 and 4 phones in 같이 하기, 배틀 and 파티; Wi-Fi ↔ cellular; two different home
-   networks. If no direct connection works, the relay must. 웹 디버그 툴즈 → Network shows only peerjs / TURN /
-   SDK traffic.
+1. **The relay in the Toss WebView** (built, 20.1; it replaced Metered TURN): the socket to
+   `wss://ppodeuk-relay.ppodeuk.workers.dev/r/t/<code>` opens (the WebView must send `Origin:
+   https://ppodeuk-bath.private-apps.tossmini.com`, or the Worker answers 4403; whether Toss must allowlist the
+   workers.dev host is UNCONFIRMED). Rooms with 2, 3 and 4 phones in 같이 하기, 배틀 and 파티; Wi-Fi ↔ cellular; two
+   different home networks; `?netinfo=1` is not reachable in Toss, so the room hint shows no transport - 웹 디버그
+   툴즈 → Network shows the `r/t/` socket. PeerJS (`wss://0.peerjs.com` + a DataChannel) is only the fallback when the
+   relay is down or capped (the room then says 직접 연결로 열었어요); it is seen only if that happens, nothing on the
+   phone can force it. Network shows only the relay / peerjs / SDK traffic.
 2. Landscape locks at entry, the game is fullscreen, and Toss is upright again after X (and the screen dims again
    normally: awake mode restored). A Toss app below 5.232.0 cannot open the game at all (Toss's own update screen);
    the rotate screen is only the fallback for a failed `setOrientation`.
@@ -938,9 +961,13 @@ One time:
    account, 19 or older, logged into the Toss app on their phone. Only workspace members can open the QR build.
 3. App info → **리더보드 (게임 앱)**: set the policy: an integer score, **higher is better**. It only works after the
    app info is approved; until then the game keeps the best score for later (7).
-4. Put `turn.config.json` into the `bogeul` folder: Metered's "ICE Servers Array", pasted as it is (the same text as
-   the GitHub secret `TURN_CONFIG`). Never commit it. Without it the build warns, and phones on different networks
-   may not connect.
+4. Online (built 2026-10-31: the relay, no TURN): **no `turn.config.json` for Toss** - the Toss build never reads it.
+   The rooms use the relay Worker you already run for the web (`https://ppodeuk-relay.ppodeuk.workers.dev`,
+   CLOUDFLARE-SETUP.md); `build.js` names it by itself. One check: Cloudflare dashboard → Workers → **ppodeuk-relay** →
+   Settings → Variables → `ORIGINS` contains `t=https://ppodeuk-bath.private-apps.tossmini.com` (the QR test) and
+   `t=https://ppodeuk-bath.apps.tossmini.com` (live). `cloudflare/wrangler.toml` has both since #22; if the variable
+   lacks them, run `npx wrangler deploy` in `cloudflare\` once (outside play time: it ends open rooms). If the Worker's
+   address ever changes, put the new one in `relay.config.json` (`{"url": "https://..."}`) or change `TOSS_RELAY`.
 5. In PowerShell: `cd "C:\Users\뽀숑\OneDrive\바탕 화면\미니게임\bogeul\toss"` then `npm ci` (installs the pinned
    packages from the lock file; Node 24 is fine). `toss\node_modules` lands inside OneDrive: if `npm ci` stops with
    `EPERM` / `EBUSY`, pause OneDrive sync (tray icon → 동기화 일시 중지) and run it again.
@@ -969,9 +996,13 @@ Every build to test:
 - The GRAC rating, the console listing, 검토 요청, 출시.
 
 ## 18. Risks and open questions
-1. **WebRTC inside the WebView** is the largest unknown. If DataChannels or TURN fail on one platform, v1 still ships
-   solo, and the friends panel would need a Toss line saying online is not available there (a follow-up, after
-   15.6.1).
+1. **Online inside the WebView** was the largest unknown (WebRTC). Built on the relay (20.1) it is a plain `wss://`
+   socket on 443, which the Toss rules allow; what is left unknown is the `Origin` the WebView sends (the Worker
+   refuses anything but the two Toss origins in the space `t`) and whether Toss wants the workers.dev host
+   allowlisted. If the relay fails on one platform, PeerJS is tried behind it; if both fail, v1 still ships solo, and
+   the friends panel would need a Toss line saying online is not available there (a follow-up, after 15.6.1). The
+   relay's free allowance (about 4.8 h of 4-player play a day, design/relay.md) is shared by the web, PR previews and
+   Toss.
 2. The capsule size, the nav bar's icon theme and the default back behaviour are guesses until the QR test (9.3,
    11.2).
 3. The eval pre-scan of the libraries' published files found nothing (13), but the bundled output is what Toss scans;
@@ -1052,3 +1083,75 @@ Corrected in this pass (the implementer's watch list):
     (0 hits), and the hosts the bundle check will meet are listed so the first build does not fail by surprise (13).
 17. Owner steps: 앱 유형 vs 카테고리, invites by e-mail through +초대하기, the leaderboard policy, and OneDrive locking
     `node_modules` during `npm ci` (16).
+
+---
+
+## 20. As built (2026-10-31)
+
+Built in two sittings: the 2026-10-28 one stopped at a usage limit (WIP `0f5e5a9`: everything of 14 in a first form);
+on 2026-10-31 main was merged in and the rest finished. Every row of 14 is in the code. Nothing of 14 is missing; what
+only phones can settle is 20.3.
+
+### 20.1 What changed against the spec while building
+- **main merged first** (`origin/main` at `95be06c`: #22 relay, #23 party polish, #24 crown, #25 party trophies;
+  PARTY_V 6). Twelve conflicts in `game.js`, two in `net.js`, two in `build.js`, one each in `README.md` and
+  `pr.yml`, resolved so both sides keep their meaning: main's party trophy lines appear only where `AIT.on` is false;
+  main's `netOrder()` carries the Toss branch; main's relay checks stand next to the Toss checks.
+- **Online: the relay, not TURN** (main's #22 replaced the paid TURN). 2.5's new bullet is the design. In code:
+  `build.js` `TOSS_RELAY` / `tossRelay` / `tossRelayTag` (the line `window.PG_RELAY={url:…,space:"t"}`, the owner's
+  Worker unless `PG_RELAY_URL` / `relay.config.json` name another, none with `PG_RELAY_URL=none`), never
+  `PG_PEER_OPTIONS`; `net.js` `relayInfo()` takes the space `t` under `PG_AIT`; `game.js` `aitOrder(t)` =
+  `['ws', 'peer']` of what the page has, used by `netOrder()` and `netTransport()`; PeerJS stays the fallback with
+  `ppodeuk-t-` ids. `check-toss` reads the relay host from the page itself (the bundle's host allowlist needs no
+  hand-written Worker name). Toss and web rooms are apart on both transports: space `t` vs `w`, `ppodeuk-t-` vs
+  `ppodeuk-`.
+- **파티 트로피 off** (design/party-trophies.md 14's three points): `stakeNow()` = `(battle or party) && !AIT.on`;
+  `troPartyOn()` false under `AIT.on` (so no party trophy rule, summary item, countdown part, card chip or podium
+  line); `troPartyResult` returns on `AIT.on` after clearing `TRO.match`; `troHostGo` keeps `AIT.on` first in main's
+  rewritten return line; `troGuestGo(id, party)` returns first; the party rules show `AIT_TX.friendly`.
+- Small fixes the merged suite found: the `AIT_TX` hint / invite name the game through `GAME_NAME` (check-integration
+  allows the title once); page.html's `--sa-*` comment no longer writes an html tag (check-pages); check-integration's
+  lobby-call scan skips a member `.lb` (the bridge's leaderboard); `relay-node-test`'s build copy also copies
+  `tools/toss-rules.js`; a `net.js` comment's sample `wss://host…` became `wss://<host>…` (the bundle's host scan read
+  `host` as a host name).
+- `PG.debug.ait` gained `order(t)` (the whole `aitOrder`), `partyOn()` and `partySettle(m, walk)` (tests only).
+
+### 20.2 Tests (2026-10-31; `PG_BUILD_TEMP=C:/Temp/bogeul-toss`, port 8792, `--mute-audio`; no full suite)
+| Job | Result |
+|---|---|
+| `check-toss` (`--static` + the build copy) | 127 passed, 0 failed |
+| `toss` (virtual time) | 136 / 0, with the new T3 transport order and T4 party trophy checks |
+| `toss-boot-restore` / `-throw` / `-slow` | 6 / 0, 6 / 0, 3 / 0 |
+| `toss-net` (real time) | 68 / 0: bc battles A/B and A/A, a party with a stake of 20 asked for, the relay part (space `t`, web and Toss codes apart, a battle over ws without PeerJS) |
+| `toss-fit-*` (cdp, 41 jobs) | 41 / 41 |
+| party, smoke, check-integration, trophies, check-pages, check-cloud, relay-node, audio-node, net-node, party-net, net-ws, battle-net-ws, ws-deploy, peer-deploy, pwa, cloud, touch-input, touch-play/title-844/932, touch-rec-844, touch-room-844 | all pass |
+| trophies-net | 113 / 1 once (its `party R … R.f = [2]` line read the room before the short seat was listed), 114 / 0 on the rerun: a timing flake in main's test, no Toss code on that path |
+
+`toss/`: `npm ci` ran inside OneDrive without EPERM / EBUSY (npm 11 only warns that the esbuild and protobufjs install
+scripts are not approved; the build does not need them). `npm run build`: `check-toss --dist` 34 / 0 (374 files,
+5.67 MB uncompressed), `ait build`, then `CHECK-TOSS OK: ppodeuk-bath.ait 4657.4 KB, build 83257e6964b1`. The .ait is
+not committed (`toss/.gitignore`). The built `toss/dist` opened in Chrome outside Toss (every SDK call throws there)
+shows the title with the bundled fonts and logs no error.
+
+### 20.3 Open points
+1. Everything in 15.6, with 15.6.1 now about the relay: the `Origin` the Toss WebView sends on the socket (the Worker
+   admits only the two Toss origins into `t`) and whether Toss wants the workers.dev host allowlisted.
+2. `NAV = { w: 96, h: 44 }` (the 더보기 / X box) and `AIT_ROOT_BACK = false` (Toss's own back at the bare title) wait
+   for the QR test (9.3, 11.2).
+3. The relay's free daily allowance is shared by the web, PR previews and Toss (design/relay.md 9).
+4. `TOSS_RELAY` is the owner's Worker address written in `build.js`: if the Worker ever moves, change it (or give
+   `relay.config.json`).
+5. Before 검토 요청 (not v1), from the 2026-10-30 research: the game SDK must-haves are all in (game key, leaderboard,
+   Safe Area - missing it is a rejection -, native Storage, analytics screen logs); Google sign-in is not allowed
+   (none is left: 2.2, 4); the known rejection causes and where the build stands - a duplicate header or back button
+   (the nav bar's X is the only exit; the game's own header row shows its title and the sound / pause buttons, and
+   the panels have their own 나가기 / 닫기: in-game navigation, but a reviewer may read the title row as a second
+   header - look at it on the QR test, `.pg-ait .pg-brand { display: none }` is the one-line answer), no exit
+   confirmation (the X's modal; Android back at the title is 15.6.5), `eval` in a library (`check-toss` scans the
+   bundle on every build: 0 hits), links that leave Toss (none: cut regions, code-only invites), other payment means
+   (none); only HTTPS / `wss://` (the relay and PeerJS signalling are `wss://`, nothing is plain http).
+6. **The bridge view** (the screen Toss shows while a mini-app opens) must show the game's rating proof for the review:
+   the rating class and its classification number from the GRAC (게임물관리위원회) or a self-rating business
+   (자체등급분류사업자), entered in the console's app info, not in the .ait. Its exact fields and image sizes are
+   UNCONFIRMED and belong to the rating research, together with the listing (names, icon 600x600, thumbnail 1932x828,
+   screenshots).
