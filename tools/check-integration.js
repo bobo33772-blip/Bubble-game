@@ -281,7 +281,8 @@ async function checkNet() {
     if (!body) { bad(`game.js: function ${fn} not found`); continue; }
     for (const m of body.matchAll(/\bs\.([A-Za-z_]+)\(/g)) sessUsed.add(m[1]);
   }
-  const lobbyUsed = new Set([...game.matchAll(/\b(?:NET\.lobby|lb)\.([A-Za-z_]+)\(/g)].map((m) => m[1]));
+  // (a bare lb, never a member .lb: the 앱인토스 bridge's leaderboard is AIT.br.lb)
+  const lobbyUsed = new Set([...game.matchAll(/(?<![\w$.])(?:NET\.lobby|lb)\.([A-Za-z_]+)\(/g)].map((m) => m[1]));
   if (!sessUsed.size || !lobbyUsed.size || !netUsed.size) bad('game.js: could not find the engine\'s PG.Net calls');
 
   // a page: net.js in its own context

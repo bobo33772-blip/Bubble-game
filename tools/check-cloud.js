@@ -157,7 +157,7 @@ const hasCfg = fs.existsSync(path.join(ROOT, 'firebase.config.json'));
   fs.rmSync(B, { recursive: true, force: true });
   fs.mkdirSync(path.join(SRC, 'tools'), { recursive: true });
   fs.copyFileSync(path.join(ROOT, 'build.js'), path.join(SRC, 'build.js'));
-  for (const f of ['pack-itch.js', 'fb-config.js']) fs.copyFileSync(path.join(ROOT, 'tools', f), path.join(SRC, 'tools', f));
+  for (const f of ['pack-itch.js', 'fb-config.js', 'toss-rules.js']) fs.copyFileSync(path.join(ROOT, 'tools', f), path.join(SRC, 'tools', f));
   fs.cpSync(path.join(ROOT, 'src'), path.join(SRC, 'src'), { recursive: true, filter: (p) => !/[\\/]tests([\\/]|$)/.test(path.relative(path.join(ROOT, 'src'), p)) && path.basename(p) !== 'tests' });
   fs.mkdirSync(path.join(SRC, 'firebase'), { recursive: true });
   fs.writeFileSync(path.join(SRC, '.firebaserc'), '{\n  "projects": {\n    "default": "YOUR-PROJECT-ID"\n  }\n}\n');

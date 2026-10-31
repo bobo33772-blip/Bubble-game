@@ -307,6 +307,27 @@ const LIST = [
   V('pal-in-1x', HTTP + 'test-cloud.html?shot=pal-in-1x', 'rt60000', (out) => (/CLOUD SHOT error/.test(out) ? 'shot error' : /CLOUD SHOT READY/.test(out) ? true : 'no CLOUD SHOT READY'), { done: 'CLOUD SHOT READY', shot: 'pal-in-1x.png' }),
   // 친구 초대 (design/friends.md "As built (invites)"): the invite banner over the title, 친구와 하기's sign-in card for a guest
   ...[['iv', 844, 390], ['gate', 844, 390], ['iv-1x', 900, 760], ['gate-1x', 900, 760]].map(([sc, w, h]) => V(`pal-${sc}${/1x/.test(sc) ? '' : '-' + w}`, HTTP + 'test-cloud.html?shot=pal-' + sc, 'rt60000', (out) => (/CLOUD SHOT error/.test(out) ? 'shot error' : /CLOUD SHOT READY/.test(out) ? true : 'no CLOUD SHOT READY'), { done: 'CLOUD SHOT READY', shot: `pal-${sc}${/1x/.test(sc) ? '' : '-' + w}.png`, w, h })),
+  // ---- 앱인토스 (design/toss.md 15): check-toss - the Toss page and its engine files as build.js writes them, the
+  // artifact / deploy free of Toss, a build copy (bad markers stop it; --toss leaves dist/, deploy/, the zip and
+  // .firebaserc byte for byte; the relay line: default / PG_RELAY_URL / none, never a TURN list). toss - the real
+  // src/ait.js over a fake SDK in virtual time (boot, the storage mirror, the game-key gate, trophies off, the leaderboard, back / awake / sound / screen logs) + its other
+  // boots (a wiped WebView restored from native, the desktop where every SDK call throws, a native read that never
+  // answers). toss-net - Toss frames over bc (friendly battles A/B and A/A, a party) and over serve.js's local relay
+  // (its space t, apart from w; no PeerJS: ws alone). toss-fit-* - the Toss layout on phones with the SDK's Safe Area =
+  // the emulated insets, clear of the 더보기 / X box (C:/Temp/bogeul/toss-fit-*.png)
+  V('check-toss', 'check-toss.js', 0, has(/CHECK-TOSS OK: \d+ passed, 0 failed/), { runner: 'node' }),
+  V('toss', HTTP + 'test-toss.html?net=bc', 400000, doneZero('TOSS')),
+  ...['restore', 'throw', 'slow'].map((b) => V('toss-boot-' + b, HTTP + 'test-toss.html?net=bc#boot=' + b, 90000, doneZero('TOSS'))),
+  V('toss-net', HTTP + 'test-toss-net.html', 'rt420000', doneZero('TOSSNET'), { done: 'TOSSNET DONE', w: 1200, h: 900 }),
+  ...(() => {
+    const SIZES = [[640, 360, [0, 0, 0, 0]], [667, 375, [0, 0, 0, 0]], [844, 390, [47, 47, 21, 0]], [932, 430, [59, 59, 21, 0]], [915, 412, [0, 0, 0, 24]], [1180, 820, [0, 0, 20, 0]]];
+    const ALL = ['title', 'play', 'room', 'rec'], TWO = ['pause', 'gate-wait', 'gate-err', 'friends', 'count', 'podium', 'over', 'hub'];
+    const job = (sc, w, h, ins) => V(`toss-fit-${sc}-${w}`, HTTP + `test-toss.html?net=bc#shot=${sc}&ins=${ins.join(',')}`, 30000, doneZero('TOSS'), {
+      shot: `toss-fit-${sc}-${w}x${h}.png`, w, h, runner: 'cdp', mobile: true, done: 'TOSS DONE', env: { PG_CDP_INSETS: JSON.stringify({ left: ins[0], right: ins[1], bottom: ins[2], top: ins[3] }) } });
+    return ALL.flatMap((sc) => SIZES.map(([w, h, ins]) => job(sc, w, h, ins)))
+      .concat(TWO.flatMap((sc) => SIZES.filter(([w]) => w === 844 || w === 640).map(([w, h, ins]) => job(sc, w, h, ins))))
+      .concat([V('toss-fit-rot-390', HTTP + 'test-toss.html?net=bc#shot=rot&noorient=1&ins=0,0,34,47', 30000, doneZero('TOSS'), { shot: 'toss-fit-rot-390x844.png', w: 390, h: 844, runner: 'cdp', mobile: true, done: 'TOSS DONE', env: { PG_CDP_INSETS: '{"top":47,"bottom":34}' } })]);
+  })(),
   // ---- v3 screenshots to LOOK at (C:/Temp/bogeul/v3-*.png): the title + picker on desktop and a real phone viewport,
   // and the online scenes of test-mp-net.html (?shot=..., the chosen player's frame fills the window)
   V('v3-title-1280', 'test-review.html#title', 8000, has(/\bDONE\b/), { shot: 'v3-title-1280.png', w: 1280, h: 800 }),
