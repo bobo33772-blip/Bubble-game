@@ -388,8 +388,170 @@
     ok('after a chair party: a battle blows bubbles, the capy\'s kit is back (no base flag left over), battle music', !PS().on && G.bubbles.length > nb && G.music === 'battle', [G.bubbles.length, nb, G.music]);
   }
 
+  // ---------------------------------------------------------------- 5. 맥반석 계란 돌리기 (6)
+  const EG = () => K.EGG;
+  const egg = () => P.egg();
+  // a body standing on the arena's floor (feet y 216; x 16..104 is floor in every battle arena), still
+  const stand = (slot, x) => { const p = pl(slot); p.x = x; p.y = 200; p.vx = 0; p.vy = 0; p.onGround = true; };
+  const toLive = () => until(() => G.mode !== 'playing' || egg().ph === 1, 200);
+  const toEggRound = (r) => until(() => G.mode !== 'playing' || (egg().r === r && egg().ph <= 1), 3000);
+  // the bodies apart (no touch): seat s at 20 + 26 s
+  const apart = () => { for (const p of G.players) stand(p.slot, 20 + 26 * p.slot); };
+  function eggTests() {
+    const E = EG();
+    ok('EGG: 6 rounds, drop 36, fuse 210..420, juggle 45, slack 3, heat 90 / 180 / 240, reveal 72, run 1.2', E.rounds === 6 && E.dropF === 36 && same(E.fuse, [210, 420]) && E.coolF === 45 && E.slack === 3 && E.steamF === 90 && E.shakeF === 180 && E.glowF === 240 && E.revealF === 72 && E.run === 1.2, E);
+    ok('heat: by the frames since the landing only - 0 / steam at 90 / shake at 180 / the red rim at 240', same([0, 89, 90, 179, 180, 239, 240, 999].map((a) => P.eggHeat(a)), [0, 0, 1, 1, 2, 2, 3, 3]));
+    P.vclock(true, 1000);
+    party(CH4, { plan: ['egg'] }, 61); toPlaying();
+    const e1 = egg(), MI = P.mini().egg;
+    ok('egg: a dry battle arena (not 냉온탕), kits on (no base), nobody blows (noFire), the battle track; round 1 drops onto a present player, landing within 36 f of 시작!', e1.r === 1 && e1.ph === 0 && e1.holder >= 0 && e1.since === e1.L && e1.L > G.frame && e1.L <= G.frame + E.dropF && MI.noFire && !MI.base && G.arenaKind === 'b' && G.arena !== 1 && G.music === 'battle', [e1, G.frame, G.arenaKind, G.arena, G.music]);
+    const bn = G.banner && G.banner.loc ? G.banner.under : G.banner;
+    ok('drop: the banner {0}한테 떨어졌어요! (under my own 내 계란! when it is me)', !!bn && bn.main === (pl(e1.holder).nick || 'P' + (e1.holder + 1)) + '한테 떨어졌어요!', [G.banner, bn]);
+    let leak = 0; const B1 = egg().B;
+    for (let f = 0; f < 500 && egg().ph < 2; f++) { if (G.frame < B1 && P.mg()[6] !== -1) leak++; step(1); }
+    ok('B: the fuse 210..420 f after the landing, never in g.mg before the host reached it, then there', B1 - e1.L >= E.fuse[0] && B1 - e1.L <= E.fuse[1] && !leak && P.mg()[6] === B1 && egg().ph >= 2, [B1, e1.L, leak, P.mg()]);
+    // the drop: never the last round's loser when another is there (6 rounds x 3 parties: the burst right after each landing)
+    const bad = [];
+    for (const seed of [62, 63, 64]) {
+      party(['duck', 'cat', 'frog'], { plan: ['egg'] }, seed); toPlaying();
+      let last = -1;
+      for (let r = 1; r <= 6 && G.mode === 'playing'; r++) {
+        toEggRound(r); if (egg().r !== r) break;
+        if (last >= 0 && egg().holder === last) bad.push([seed, r, last]);
+        toLive(); apart(); P.burstAt(G.frame + 1); until(() => egg().ph >= 3, 80); last = egg().loser;
+      }
+    }
+    ok('drop: never onto the last round\'s loser (3 parties x 6 rounds)', !bad.length, bad);
+    // receipts on this screen: the slack (3 px counts, 3.1 does not); the juggle; a pass back after it
+    party(CH4, { plan: ['egg'] }, 65); toPlaying(); toLive();
+    apart(); P.eggHold(1); stand(1, 40); stand(0, 40 + 12 + 3.1); step(1);
+    ok('receipt: my box 3.1 px from the holder (slack 3) - no pass', egg().holder === 1, egg());
+    stand(1, 40); stand(0, 40 + 12 + 3); step(1);
+    const r1 = egg();
+    ok('receipt: 3 px from the holder past its juggle - the egg is mine (since = my stamp, from the giver), 앗 뜨거!', r1.holder === 0 && r1.from === 1 && r1.since === G.frame && same(P.mi(0).slice(2, 4), [1, 1]) && P.mi(0)[4] === G.frame - r1.L, [r1, P.mi(0)]);
+    let back = -1;
+    for (let f = 0; f < 60 && back < 0; f++) { stand(1, 40); stand(0, 55); step(1); if (egg().holder === 1) back = G.frame; }
+    ok('juggle: the giver touching me gets nothing back for 45 f - then it receives (a pass back after the juggle is fair)', back === r1.since + E.coolF, [back, r1.since]);
+    // run: 1.0 during the juggle, 1.2 after it - the holder on this page (offline: the host's own)
+    const runs = [P.eggRun(1)]; apart(); step(E.coolF); runs.push(P.eggRun(1), P.eggRun(0));
+    ok('hot feet: the holder runs 1.2x only after its juggle; nobody else does', same(runs, [false, true, false]), runs);
+    const vx = (slot) => { for (const p of G.players) stand(p.slot, 96 + p.slot * 2); stand(slot, 16); D.press('right', true, slot); step(24); const v = pl(slot).vx; D.press('right', false, slot); step(12); return v; };
+    const vHot = vx(1); P.eggHold(3); const vCool = vx(1);
+    ok('hot feet: the holder\'s walk is EGG.run x its own (' + vHot.toFixed(3) + ' / ' + vCool.toFixed(3) + ')', Math.abs(vHot / vCool - E.run) < 0.01, [vHot, vCool]);
+    // remote receipts (fakeBody): from a non-holder refused; since = the receipt's stamp (30 f before it arrived)
+    apart(); P.eggHold(1, G.frame - 200); step(2);
+    P.recv(2, 3, G.frame - 5); step(1);
+    ok('host: a receipt from a seat that does not hold the egg is refused', egg().holder === 1, egg());
+    P.eggHold(1, G.frame - 10); P.recv(2, 1, G.frame - 1); step(1);
+    ok('host: a receipt stamped inside the giver\'s juggle is refused', egg().holder === 1, egg());
+    P.eggHold(1, G.frame - 200); const ts = G.frame - 30; P.recv(3, 1, ts); step(1);
+    ok('host: a remote receipt stamped 30 f before it arrived - the receiver holds it from its stamp (its juggle ends 30 f earlier than with G.frame)', egg().holder === 3 && egg().since === ts && egg().from === 1, [egg(), ts]);
+    // the host's own screen judges a remote holder by its shownAt sample (PEER_DELAY behind), not its latest state
+    party(CH4, { plan: ['egg'] }, 66); toPlaying(); toLive(); apart();
+    // (a fresh remote id: a new buffer - 24 older states then the latest; the shown sample is PEER_DELAY+ behind the latest)
+    const near = 40, far = 90, pushRun = (xOld, xNew) => { pl(3).id = 'egg3.' + G.frame; for (let k = 24; k >= 1; k--) P.fakeBody(3, { k: G.frame - k, x: xOld, y: 200 }); P.fakeBody(3, { k: G.frame, x: xNew, y: 200 }); pl(3).x = xNew; pl(3).y = 200; };
+    P.eggHold(3); pushRun(far, near); stand(0, near + 14); step(1);
+    ok('host: a remote holder whose LATEST state touches me but whose shown sample does not - no pass', egg().holder === 3, [egg(), P.mi(0)]);
+    for (let k = 0; k < 4; k++) step(1);
+    party(CH4, { plan: ['egg'] }, 66); toPlaying(); toLive(); apart();
+    P.eggHold(3); pushRun(near, far); stand(0, near + 14); step(1);
+    ok('host: ... and one whose shown sample touches me (its latest far away) - the pass, as this screen draws it', egg().holder === 0, egg());
+    // a page's own prediction: kept until the mirror shows it, undone by another holder / the round moving on / no answer
+    party(CH4, { plan: ['egg'] }, 67); toPlaying(); toLive(); apart();
+    P.eggHold(1, G.frame); const tk = G.frame; P.eggPred(0, 1, tk); step(1);
+    ok('prediction: my receipt shows the egg on me at once (the host has not taken it: inside the juggle)', P.eggShown() === 0 && egg().holder === 1, [P.eggShown(), egg()]);
+    let undo = -1, hotP = false;
+    for (let f = 0; f < 120 && undo < 0; f++) { apart(); step(1); if (P.eggRun(0)) hotP = true; if (P.eggShown() !== 0) undo = G.frame; }
+    ok('prediction: no answer - undone when my view passes tick + LAG_MAX + 30; meanwhile I ran hot after my own juggle', undo === tk + K.LAG_MAX + 31 && hotP && egg().holder === 1, [undo, tk, hotP]);
+    P.eggHold(1, G.frame); P.eggPred(0, 1, G.frame); step(1); P.eggHold(2, G.frame); step(1);
+    ok('prediction: undone at once when the mirror shows a third holder', P.eggShown() === 2, P.eggShown());
+    P.eggHold(1, G.frame); P.eggPred(0, 1, G.frame); step(1); P.burstAt(G.frame); until(() => egg().ph >= 3, 80); step(1);
+    ok('prediction: undone when the round moves on (the burst): the giver loses it', egg().loser === 1 && P.mloc(0).pred === null, [egg(), P.mloc(0)]);
+    // the burst's wait (seats 1-3 remote, their views behind): a receipt stamped B - 5 arriving at B + 20 moves the loss
+    const keep = (rt, ...skip) => { for (const s of [1, 2, 3]) if (!skip.includes(s)) P.fakeBody(s, { rt, x: 20 + 26 * s, y: 200 }); };
+    party(CH4, { plan: ['egg'] }, 68); toPlaying(); toLive(); apart(); keep(G.frame);
+    P.eggHold(1); const Bw = G.frame + 6; P.burstAt(Bw);
+    while (G.frame < Bw + 20) { keep(Bw - 30); step(1); }
+    const w1 = egg();
+    ok('burst: the host waits at B for the seats whose views are behind it (ph 2, the holder noted)', w1.ph === 2 && w1.bh === 1 && w1.loser === -1, w1);
+    P.recv(2, 1, Bw - 5, { x: 46, y: 200 }); keep(Bw - 30, 2); step(1);
+    ok('burst: a receipt stamped B - 5 arriving at B + 20 is a last-second pass (the receiver holds it)', egg().holder === 2 && egg().since === Bw - 5, egg());
+    keep(Bw + 1, 2); step(1);
+    ok('burst: the wait ends once every seat but the holder is past B - the receiver of the late pass loses the round', egg().ph === 3 && egg().loser === 2, egg());
+    toEggRound(2); toLive(); apart(); keep(G.frame);
+    const h2 = egg().holder; const B2 = G.frame + 4; P.burstAt(B2);
+    const rx = [1, 2, 3].find((s) => s !== h2);
+    while (G.frame < B2 + 10) { keep(B2 - 30); step(1); }
+    if (h2 >= 1) P.recv(rx, h2, B2, { x: 20 + 26 * rx, y: 200 });
+    let end2 = -1; for (let f = 0; f < 90 && end2 < 0; f++) { keep(B2 - 30, rx); step(1); if (egg().ph >= 3) end2 = G.frame; }
+    ok('burst: a receipt stamped AT B is ignored; with every view behind B the wait ends at B + LAG_MAX', egg().loser === h2 && end2 === B2 + K.LAG_MAX, [egg(), end2, B2, h2, rx]);
+    // points, 유령 (a 유령 holding at the burst: nobody out), the survivor's +2 (3 players)
+    party(['duck', 'cat', 'frog'], { plan: ['egg'] }, 69); toPlaying(); toLive(); apart();
+    P.eggHold(0); P.burstAt(G.frame + 1); until(() => egg().ph === 3, 80);
+    ok('burst: the holder loses the round - a living one is a 유령 (탈락!); everyone else +1', same(egg().pts, { 1: 1, 2: 1 }) && same(egg().gh, { 0: 1 }), egg());
+    toEggRound(2); toLive(); apart(); P.eggHold(0); P.burstAt(G.frame + 1); until(() => egg().ph === 3, 80);
+    ok('유령: still in every round - holding at the burst costs it the point, nobody goes out (꽝!)', same(egg().pts, { 1: 2, 2: 2 }) && same(egg().gh, { 0: 1 }), egg());
+    toEggRound(3); toLive(); apart(); P.eggHold(1); P.burstAt(G.frame + 1); until(() => egg().ph === 4, 200);
+    ok('set: one living player left (seat 2) - its +2 after the reveal (살아남았다!), then everyone back', egg().surv === 2 && egg().pts[2] === 3 + 2 && egg().pts[0] === 1 && G.banner && G.banner.sub === P.tx().surv2, [egg(), G.banner]);
+    toEggRound(4);
+    ok('set: ... everyone living again at the next round', same(egg().gh, {}), egg());
+    // a leaver holding the egg: it falls again onto a present player, B pushed past the new juggle; a stale holder loses
+    toLive(); apart(); P.eggHold(2); const Bl = G.frame + 10; P.burstAt(Bl); P.drop(2); step(1);
+    const lv = egg();
+    ok('leaver: the holder leaves - the egg falls again (36 f) onto a present player; the fuse never bursts before the new juggle ends', lv.ph === 0 && lv.holder >= 0 && lv.holder !== 2 && lv.L === G.frame - 1 + E.dropF && lv.B >= lv.L + E.coolF + 30, lv);
+    party(['duck', 'cat', 'frog'], { plan: ['egg'] }, 70); toPlaying(); toLive(); apart();
+    P.fakeBody(2, { rt: G.frame, x: 72, y: 200 }); P.eggHold(2); P.burstAt(G.frame + 40); until(() => egg().ph >= 3, 140);
+    ok('hidden tab: a stale holder (no states) keeps the egg and loses the round - nobody waits for it', egg().loser === 2 && egg().ph === 3, egg());
+    // the key: points, then fewer frames holding
+    Object.assign(G.mini, { pts: { 0: 3, 1: 3, 2: 3 }, heldF: { 0: 500, 1: 300, 2: 500 } });
+    const pm = new Map(P.places());
+    ok('key: equal points - fewer frames holding the egg places higher; equal both - a shared place', pm.get(1) === 1 && pm.get(0) === 2 && pm.get(2) === 2, P.places());
+    // coins: a pass I made (my mirror's holder moves from me to a friend); a round I came through having walked 64 px
+    party(['duck', 'cat', 'frog'], { plan: ['egg'] }, 71); toPlaying(); toLive(); apart();
+    const bs0 = PS().coins.bshots; P.eggHold(0); stand(0, 40); stand(1, 55); step(2);
+    ok('coins: MY pass (seat 0 -> seat 1) is one action', egg().holder === 1 && PS().coins.bshots === bs0 + 1, [egg(), bs0, PS().coins.bshots]);
+    apart(); D.press('right', true, 0); step(50); D.press('right', false, 0); P.eggHold(2); P.burstAt(G.frame + 1); until(() => egg().ph === 3, 80); step(1);
+    ok('coins: a round I came through having walked 64 px is one action (and not for the loser)', PS().coins.bshots === bs0 + 2, [bs0, PS().coins.bshots, P.mloc(0)]);
+    // two players: every round a set - the loser a 유령, the other +1 +2, then both back
+    party(['duck', 'cat'], { plan: ['egg'] }, 72); toPlaying(); toLive(); apart();
+    P.eggHold(1); P.burstAt(G.frame + 1); until(() => egg().ph === 3, 80);
+    const t2 = egg(); until(() => egg().ph === 4, 120); const t3 = egg(); toEggRound(2);
+    ok('2 players: the holder at the burst a 유령, the other +1, then +2 at once (a set), both back next round', same(t2.gh, { 1: 1 }) && t2.pts[0] === 1 && t3.surv === 0 && t3.pts[0] === 3 && same(egg().gh, {}), [t2, t3, egg()]);
+    // the view: B from the next snapshot of the same round; bounds
+    const v = P.eggView(['e', 2, 1, 1, 400, 300, -1, -1, 4, [1, 0, 2, 0], 6, 0], ['e', 2, 2, 1, 400, 300, 700, -1, 4, [], 6, 0]);
+    const v2 = P.eggView(['e', 2, 1, 9, 'x', 300, -1, 7, 99, [1], 6, -5], ['e', 3, 0, 1, 1, 1, 900, -1, 0, [], 6, 0]);
+    ok('view: eggView takes B from the next snapshot of the same round (not another round\'s); fields within bounds', v.B === 700 && v.holder === 1 && same(v.gh, { 2: 1 }) && same(v.pts, { 0: 1, 2: 2 }) && v2.B === -1 && v2.holder === 3 && v2.loser === 3 && v2.since === -1 && v2.from === -1, [v, v2]);
+    P.vclock(false);
+    // 6 rounds then the end; the fast party: 3 rounds under fastSecs 35; the worst honest 판 under 70 s - 2 players (a
+    // survivor's beat every round), every fuse its longest, seat 1 remote with its view far behind (the burst waits LAG_MAX
+    // whenever seat 0 holds), nobody passes
+    const worst = (E.dropF + E.fuse[1] + K.LAG_MAX + E.revealF + E.survF) * E.rounds + E.endF;
+    ok('worst honest 판 by the numbers: 6 x (drop + the longest fuse + the burst wait + reveal + survivor) + endF = ' + (worst / 60).toFixed(1) + ' s - under the 70 s cap', worst < 70 * 60, worst);
+    for (const fast of [true, false]) {
+      P.fast(fast); party(['duck', 'cat'], { plan: ['egg'] }); toPlaying();
+      const t0 = G.frame, n = egg().n; let lastR = 0;
+      for (let f = 0; f < 70 * 60 + 60 && G.mode === 'playing'; f++) {
+        stand(0, 20); P.fakeBody(1, { rt: Math.max(0, G.frame - 100), x: 90, y: 200 });
+        const e = egg(); if (e && e.r !== lastR && e.ph === 0) { lastR = e.r; P.burstAt(e.L + E.fuse[1]); }
+        step(1);
+      }
+      const len = G.frame - t0;
+      ok((fast ? 'fast party: 3 rounds, done in ' : 'a long 판 (6 rounds, every fuse its longest, the wait, a survivor every round): ') + (len / 60).toFixed(1) + ' s - under ' + (fast ? 'fastSecs 35' : 'the 70 s cap'), n === (fast ? E.fast : E.rounds) && G.mode === 'result' && len < (fast ? 35 : 70) * 60 && PS().left > 0, [n, len, G.mode]);
+    }
+    P.fast(false);
+    // the card
+    party(longNicks(), { plan: ['egg'] }); step(80);
+    const c = P.card();
+    ok('card: 맥반석 계란 돌리기 - its how, rule and keys lines as specified', c.name === '맥반석 계란 돌리기' && c.how === '계란을 부딪혀 넘겨요! 들고 터지면 빠져요' && c.rule === '왕관과 반대예요 · 빠져도 유령으로 계속 해요 · 안 걸리면 1점, 끝까지 남으면 +2점' && c.keys === '←→ 달리기 · Z 점프 · 부딪히면 넘어가요' && P.mini().egg.keysT === '조이스틱 · 점프 · 친구에게 부딪혀요' && c.demo, c);
+    const d = P.demo('egg');
+    ok('demo [egg]: 240 frames into a 96x32 context without errors, pixels left', d && !d.err && d.lit > 200, d);
+    // no regressions: a battle after an egg party - the walk is the kit's own (no hot feet), bubbles, the music
+    D.local.battle(['capy', 'cat']); step(160);
+    ok('after an egg party: nobody runs hot in a battle', !P.eggRun(0) && !P.eggRun(1) && G.music === 'battle', [P.eggRun(0), G.music]);
+  }
+
   // ---------------------------------------------------------------- screenshot scenes (#shot=tap|tapgo|taprev|tapcard|
-  // chair|chairstop|chairrev|chaircard[&s=1|2|0]) - to LOOK at
+  // chair|chairstop|chairrev|chaircard|egg|eggpass|eggburst|eggcard[&s=1|2|0]) - to LOOK at
   function setScale(s) {
     const st = $('pg-stage'); st.style.flex = 'none'; st.style.width = Math.round(256 * s + 22) + 'px'; st.style.height = Math.round(224 * s + 22) + 'px';
     window.dispatchEvent(new Event('resize'));
@@ -409,6 +571,15 @@
       party(longNicks(), { plan: ['chair'] }, 31);
       if (name === 'chaircard') step(100);
       else { toPlaying(); P.ghost(3, true); step(60); if (name !== 'chair') { P.stopAt(G.frame + 2); step(name === 'chairrev' ? 400 : 30); } }
+    } else if (/^egg/.test(name)) {
+      party(longNicks(), { plan: ['egg'] }, 31);
+      if (name === 'eggcard') step(100);
+      else {
+        toPlaying(); P.ghost(3, true); toLive(); apart(); P.eggHold(1, G.frame - 250);
+        if (name === 'egg') step(20);
+        else if (name === 'eggpass') { stand(1, 40); stand(0, 55); step(6); }
+        else { P.burstAt(G.frame + 2); step(name === 'eggburst' ? 6 : 30); }
+      }
     }
     if (/^chair/.test(name) && G.mini) info('scene ' + name + ': ' + JSON.stringify({ c: P.chair(), stools: P.stoolsAt(G.frame), xs: G.players.map((p) => p.x + 8), f: G.frame, mloc: P.mloc() }));
     D.G.manual = true; D.step(0);
@@ -421,7 +592,7 @@
     D.tro.ns('party2'); D.tro.away(false);
     const sm = /shot=([a-z]+)/.exec(location.hash);
     if (sm) { await shot(sm[1]); return; }
-    const steps = [machineryTests, stampTests, tapTests, chairTests];
+    const steps = [machineryTests, stampTests, tapTests, chairTests, eggTests];
     for (const f of steps) {
       try { await f(); } catch (e) { fail++; log('PARTY2 FAIL ' + f.name + ' threw: ' + (e && e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : e)); }
     }

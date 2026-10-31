@@ -332,6 +332,12 @@ window.PG = window.PG || {};
   // after the stop, the reveal, the survivor beat, endF, the fast party's stops, the sitting lift (px), a bump's hop (vy)
   const CHAIR = { stops: 8, music: [120, 300], spd: [1.4, 2.0], lo: 28, hi: 228, gap: 18, seat: 6, slack: 8, capF: 240, revealF: 60,
     survF: 60, endF: 30, fast: 3, sit: 4, hop: -2.0 };
+  // 맥반석 계란 돌리기 (party-games-2 6): rounds, the drop, the fuse (f, host RNG, hidden), the juggle, the touch slack (px),
+  // the heat stages (f since landing), the reveal, the survivor beat, endF, the fast party's rounds, a survived round's
+  // coin (px walked), the holder's walk after its juggle (x its walk: a pass stays reachable across the ~0.4 s of two
+  // pictures - owner, 2026-10-30)
+  const EGG = { rounds: 6, dropF: 36, fuse: [210, 420], coolF: 45, slack: 3, steamF: 90, shakeF: 180, glowF: 240, revealF: 72,
+    survF: 60, endF: 30, fast: 3, moveCoinPx: 64, run: 1.2 };
   // each minigame: c its wire code, secs, ar the arena (['p', i] PG.PARTY_ARENAS[i], ['b'] a dry battle arena), fits(n),
   // team (two sides: the card's team line), and the card texts: name; how - the ONE-LINE how-to, which also says how to
   // win (<= 17 syllables: one line at 0.9em in the 1x window's 17.4em, 9.2); rule - the one extra line, hidden on short
@@ -368,6 +374,11 @@ window.PG = window.PG || {};
     chair: { c: 'h', secs: 95, fastSecs: 35, ar: ['p', 2], base: true, noFire: true, cues: false, music: 'chair', fits: (n) => n >= 2, short: '의자', name: '목욕 의자 뺏기',
       how: '음악이 멈추면 앉아요! 못 앉으면 빠져요', rule: '의자는 늘 하나 모자라요 · 빠져도 유령으로 계속 앉아요 · 앉으면 1점, 끝까지 남으면 +2점',
       keys: '←→ 달리기 · 의자에 닿으면 앉아요', keysT: '조이스틱으로 달려서 의자에 닿아요' },
+    // (party-games-2 6: a dry battle arena as 왕관's, kits as the party's 특기 setting, nobody blows; it ends by its last
+    // round, secs only a safety cap)
+    egg: { c: 'e', secs: 70, fastSecs: 35, ar: ['b'], noFire: true, cues: false, fits: (n) => n >= 2, short: '계란', name: '맥반석 계란 돌리기',
+      how: '계란을 부딪혀 넘겨요! 들고 터지면 빠져요', rule: '왕관과 반대예요 · 빠져도 유령으로 계속 해요 · 안 걸리면 1점, 끝까지 남으면 +2점',
+      keys: '←→ 달리기 · Z 점프 · 부딪히면 넘어가요', keysT: '조이스틱 · 점프 · 친구에게 부딪혀요' },
   };
   // (optional per game, polish 5: keys / keysT - the card's own keys line (a 연타 game's "X 연타!"), else PARTY_TX.keys /
   // keysT; party-games 3.1: world: false - a game that draws its own scene over the plain 무대 목욕탕 (the animals parked on
@@ -432,6 +443,7 @@ window.PG = window.PG || {};
     tpWatch: '잘 봐요!', tpLen: '{0}개를 기억해요', tpGo: '따라 해요!', tpWrong1: '틀렸어요!', tpWrong2: '유령으로 계속 해요', tpWrongG: '아깝다!',
     tpLate: '시간 끝!', tpAll1: '모두 틀렸어요!', tpAll2: '이번엔 아무도 안 빠져요', tpEnd: '끝까지 남은 친구 +2점',
     chStop: '그만!', chBump: '쿵!', chBump1: '밀려났어요!', chBump2: '다른 의자로!',
+    egDrop: '{0}한테 떨어졌어요!', egMine1: '내 계란!', egMine2: '친구에게 부딪혀요', egHot: '앗 뜨거!',
     // (파티 트로피, design/party-trophies.md 7.4: only a staked party - 안 걸기 stays as it was, noTro)
     troZero: '트로피 경기: 최종 ', troAll: '모두 {0}개씩 걸고 최종 등수대로 나눠요: ', troPot: '판돈 {0}: 건 사람끼리 최종 등수대로 나눠요',
     troPlay: '끝까지 하면 파티마다 오늘 트로피 보너스 +' + TRO_PLAY + ' (꼴등 빼고 · 하루 ' + DAY_CAP + '개까지)',
@@ -2023,7 +2035,8 @@ window.PG = window.PG || {};
     }
     const ice = perk(p, 'penguin') && onIce(p);
     let walk = WALK * k.walk * (slip ? 1.4 : 1) * wmul * (ice ? PENGUIN_ICE : 1) * (crownHolder(p) ? CROWN_SLOW : 1) // (왕관 뺏기: the holder is slower)
-      * (G.mini && G.mini.id === 'sneak' ? SNEAK.walk : 1); // (살금살금 술래: everyone creeps)
+      * (G.mini && G.mini.id === 'sneak' ? SNEAK.walk : 1) // (살금살금 술래: everyone creeps)
+      * (eggRun(p) ? EGG.run : 1); // (맥반석 계란 돌리기: hot feet - the holder after its juggle, as this page sees it)
     const acc = ice ? PENGUIN_GRIP : 0.5; // the penguin skates: slow to start and to stop on ice
     // ---- 특기 (the move on the JUMP button). An air press (capy / otter / penguin / cat) is looked at BEFORE the jump
     // buffer: one the gate takes sets no buffered jump; one it refuses stays today's 5-frame buffered jump (no jump is
@@ -6908,6 +6921,242 @@ window.PG = window.PG || {};
     if (f >= 160) { const w = frameOf('fx_ghost', 0); if (w) dx.drawImage(w.c, Math.round(bx + 5), 3 + Math.round(Math.sin(f / 6)), 6, 6); }
   }
 
+  // ---- 맥반석 계란 돌리기 (party-games-2 6, hot potato): a dry battle arena (왕관's pick, never the last one used), kits as
+  // the party's 특기 setting, nobody blows. EGG.rounds rounds; each: a hot egg drops (dropF) onto a player the host draws
+  // (present, never a stale seat, not the last round's loser when another is there) and lands at L; its fuse runs to a
+  // hidden burst tick B (on the wire only once the host passed it). Whoever gets it juggles it for coolF (no pass on
+  // before that), then runs EGG.run (hot feet: eggRun). A pass is decided on the RECEIVER's screen (6.5): its page sees
+  // its own body (grown by slack) touch the holder as that page draws it - the host a remote holder's shownAt sample - and
+  // reports [판 i, round, n, giver, view tick - L] in mi, showing the egg on itself at once (predicted); the host takes it
+  // when the giver holds it and the stamp is past the giver's juggle (since = the stamp: a remote receiver's juggle ends
+  // at the same view tick a host-local one's would). At B the host waits for late passes (miniPast: every seat but the
+  // holder past B, or LAG_MAX) - one stamped before B moves the loss to its receiver. Whoever holds it then loses the
+  // round (a living one goes out: 유령); everyone else +1; one living player left: its +2 (ghostSet) and everyone back.
+  // The 판 ends endF after the last reveal. (All apart from the frog's egg bubble - eggCap / ty: 'egg')
+  const eggRounds = () => (PARTY_FAST ? EGG.fast : EGG.rounds);
+  const eggNow = () => tapNow();   // (this screen's view clock: the host's frame, a guest's monotonic view)
+  // the heat stage by the frames since the landing - never by B: 0, 1 steam, 2 shake, 3 the red rim
+  const eggHeat = (a) => (a >= EGG.glowF ? 3 : a >= EGG.shakeF ? 2 : a >= EGG.steamF ? 1 : 0);
+  // a touch on this screen: two 12x14 body boxes, mine grown by slack (a gap of slack px still counts)
+  const eggTouch = (a, b) => Math.abs(a.x - b.x) <= 12 + EGG.slack && Math.abs(a.y - b.y) <= 14 + EGG.slack;
+  // a body this page moves (the host / offline: its local seats; a guest: its own)
+  const eggOwn = (p) => (G.online && G.role === 'guest' ? p.slot === G.localSlot : p.local !== false);
+  // round r: the drop (not onto the last round's loser when another is there), the hidden burst B
+  function eggRound(M, r) {
+    Object.assign(M, { r, loser: -1, bh: -1, C: -1 });
+    eggFall(M, M.last);
+    M.B = M.L + ri(EGG.fuse[0], EGG.fuse[1]);
+  }
+  // the egg (again) falling onto a present player - not 'not' while another is there, never a stale seat while a live one
+  // is: it lands dropF from now, the juggle from its landing; the banner, my own line when it is me
+  function eggFall(M, not) {
+    const live = G.players.filter((p) => !miniStale(p)), pool0 = live.length ? live : G.players.slice();
+    const pool = pool0.some((p) => p.slot !== not) ? pool0.filter((p) => p.slot !== not) : pool0;
+    const h = pool.length ? pool[ri(0, pool.length - 1)] : null;
+    Object.assign(M, { ph: 0, L: G.frame + EGG.dropF, holder: h ? h.slot : -1, from: -1 });
+    M.since = M.L;
+    if (!h) return;
+    showBanner(ptx('egDrop', nameOf(h)), '', EGG.dropF + 30, 'round');
+    if (mineHere(h)) partyMyLine(PARTY_TX.egMine1, PARTY_TX.egMine2, 90);
+  }
+  // host, each playing frame (after every seat's mi): the views every body is past (miniRt), the holder's frames, the
+  // landing, the burst at B and its wait for late passes, the reveal, the survivor's beat, the next round or the end
+  function eggTick(M) {
+    if (M.r < 1) return;
+    miniRt(M);
+    if ((M.ph === 1 || M.ph === 2) && M.holder >= 0) M.heldF[M.holder] = (M.heldF[M.holder] | 0) + 1;
+    if (M.ph === 0 && G.frame >= M.L) M.ph = 1;
+    if (M.ph === 1 && G.frame >= M.B) { M.ph = 2; M.bh = M.holder; }
+    if (M.ph === 2) { if (miniPast(M, M.B, M.B, { [M.holder]: 1 })) eggBurst(M); }
+    else if (M.ph === 3 && G.frame >= M.C + EGG.revealF) {
+      if (G.players.length >= 2 && ghostLiving(M).length === 1 && Object.keys(M.gh || {}).length) { M.surv = ghostSet(M); M.ph = 4; M.C = G.frame; }
+      else eggNext(M);
+    } else if (M.ph === 4 && G.frame >= M.C + EGG.survF) { M.gh = {}; M.surv = -1; eggNext(M); }
+  }
+  function eggNext(M) { if (M.r >= M.n) { M.ph = 5; M.endAt = G.frame + EGG.endF; } else eggRound(M, M.r + 1); }
+  // the verdict (after the wait): whoever holds the egg loses the round - a living one goes out (탈락!, unless it is the
+  // last one living), a 유령 꽝!; everyone else +1
+  function eggBurst(M) {
+    const lo = M.holder, p = G.players.find((q) => q.slot === lo), alone = !ghostIn(M, lo) && ghostLiving(M).length <= 1;
+    for (const q of G.players) if (q.slot !== lo) { M.pts[q.slot] = (M.pts[q.slot] | 0) + 1; wordPop(q.x + 8, headTop(q) - 18, '+1', q.color); }
+    if (p && !ghostIn(M, lo) && !alone) ghostOut(M, lo);
+    else if (p) wordPop(p.x + 8, headTop(p) - 14, PARTY_TX.miss, p.color);
+    M.loser = lo; M.last = lo; M.ph = 3; M.C = G.frame;
+  }
+  // host: a receipt (mi [판 i, round, n, giver, view tick - L]) - taken while the egg is live or the burst waits, when the
+  // giver holds it, the receiver is here and is not the giver, and its stamp (miniStamp) is past the giver's juggle and
+  // before B (one stamped at or after B: the burst came first on its screen). The receiver holds it from its stamp
+  function eggInput(M, slot, mi) {
+    if ((M.ph !== 1 && M.ph !== 2) || nInt(mi[1], 0, 99, -1) !== M.r) return;
+    const giver = nInt(mi[3], -1, MAX_PLAYERS - 1, -1), p = G.players.find((q) => q.slot === slot);
+    if (!p || giver < 0 || giver !== M.holder || slot === giver) return;
+    const t = miniStamp(M, p, M.L + nInt(mi[4], 0, 1e6, 0));
+    if (t < M.since + EGG.coolF || t >= M.B) return;
+    M.from = giver; M.holder = slot; M.since = t;
+    M.log.push([giver, slot, t, G.frame]); if (M.log.length > 24) M.log.shift();
+    wordPop(p.x + 8, headTop(p) - 14, PARTY_TX.egHot, p.color);
+  }
+  // a leaver: its 유령 bit goes; holding the egg (or under its drop) - it falls again onto a present player, the fuse goes
+  // on but never bursts before the new holder's juggle is over (B pushed, hidden again); one living player left by it -
+  // nobody beat anyone: everyone back, no +2
+  function eggDrop(slot, M) {
+    if (M.gh) delete M.gh[slot];
+    if (M.r >= 1 && M.ph <= 2 && M.holder === slot) { eggFall(M, -1); M.B = Math.max(M.B, M.L + EGG.coolF + 30); }
+    if (M.r >= 1 && ghostLiving(M).length === 1 && Object.keys(M.gh || {}).length) M.gh = {};
+  }
+  // the holder this screen shows: my own seat with a live prediction (its receipt at once), else the mirror's; and when
+  // its juggle started here
+  function eggShown(M) {
+    for (const p of G.players) { const L = G.mloc && G.mloc[p.slot]; if (L && L.r === M.r && L.pred && eggOwn(p)) return p.slot; }
+    return M.holder;
+  }
+  function eggSince(M, slot) { const L = G.mloc && G.mloc[slot]; return L && L.r === M.r && L.pred ? L.pred.tick : M.since; }
+  // hot feet (6.1, owner: 1.2x): a body this page moves, holding the egg on this screen with its juggle over in my view
+  // (updatePlayer's walk; the giver keeps it until its mirror shows the pass - a round trip, harmless)
+  function eggRun(p) {
+    const M = G.mini; if (!M || M.id !== 'egg' || !(M.ph === 1 || M.ph === 2) || !G.mloc || !p) return false;
+    return eggShown(M) === p.slot && eggNow() >= eggSince(M, p.slot) + EGG.coolF;
+  }
+  // this screen's frame (once, from the first local seat's hook): the holder it shows - a change is a pass here (its 12 f
+  // arc, item); the mirror's holder moving from MY seat to a friend is my pass (a coin); the tick, faster with the time
+  // since landing (o.n the heat); the burst at my own view of B (egg_boom, the crack); the reveal's first frame
+  function eggFrame(M) {
+    const E = G.mloc.e || (G.mloc.e = {}); if (E.f === G.frame) return E;
+    E.f = G.frame;
+    const vt = eggNow(), sh = eggShown(M);
+    if (E.r !== M.r) Object.assign(E, { r: M.r, h: sh, mh: M.holder, arc: null, bs: -1, bh: -1, B: -1, rv: -1, tk: -1 });
+    if (sh !== E.h) { if (E.h >= 0 && sh >= 0 && M.ph >= 1 && M.ph <= 2) { E.arc = [E.h, sh, G.frame]; localSfx('item'); } E.h = sh; }
+    if (M.holder !== E.mh) { if (E.mh === G.localSlot && M.holder >= 0 && M.ph >= 1 && M.ph <= 3 && G.players.some((p) => p.slot === G.localSlot)) coinAct(); E.mh = M.holder; }
+    if (M.B >= 0 && E.B >= 0 && M.B !== E.B) E.bs = -1;   // (a leaver's drop pushed B)
+    if (M.B >= 0) E.B = M.B;
+    const a = vt - M.L;
+    if ((M.ph === 1 || M.ph === 2) && E.bs < 0 && a >= 0) {
+      const every = Math.round(clamp(30 - a / 12, 8, 30));
+      if (E.tk < 0 || G.frame - E.tk >= every) { E.tk = G.frame; localSfx('egg_tick', { n: clamp(Math.floor(a / 90), 0, 3) }); }
+    }
+    if (E.bs < 0 && M.B >= 0 && vt >= M.B && M.ph >= 1 && M.ph <= 3) {
+      E.bs = G.frame; E.bh = sh; localSfx('egg_boom');
+      const p = G.players.find((q) => q.slot === sh); if (p) burst(p.x + 8, eggHeadY(M, p) + 6, 10, ['#fff1a6', '#ffd23c', '#ffffff'], 1.4, 18);
+    }
+    if (M.ph === 3 && E.rv < 0) E.rv = G.frame;
+    return E;
+  }
+  // this page's seat (6.5): its prediction kept until the mirror shows it - undone on another holder, the round moving
+  // on, or no answer by tick + LAG_MAX + 30 (the host refused it); its walk this round (the walked round's coin at the
+  // reveal); a receipt - the egg live here, not mine, the holder's juggle over in my view, my box grown by slack touching
+  // the holder as this screen draws it (the host: a remote holder's shownAt sample). Returns my latest receipt
+  function eggLocal(M, slot, inp) {
+    const P = G.party, p = G.players.find((q) => q.slot === slot); if (!P || !p || M.r < 1) return null;
+    eggFrame(M);
+    let L = G.mloc[slot]; if (!L || L.r !== M.r) L = G.mloc[slot] = { r: M.r, n: 0, pred: null, giver: -1, tick: -1, walk: 0, px: p.x, rv: false };
+    const vt = Math.round(eggNow()), h = M.holder;
+    if (L.pred && (h === slot || (h >= 0 && h !== L.pred.from) || M.ph >= 3 || vt > L.pred.tick + LAG_MAX + 30)) L.pred = null;
+    if (M.ph === 1 || M.ph === 2) L.walk += Math.abs(p.x - L.px);
+    L.px = p.x;
+    if (M.ph >= 3 && !L.rv) { L.rv = true; if (slot === G.localSlot && M.loser >= 0 && M.loser !== slot && L.walk >= EGG.moveCoinPx) coinAct(); }
+    if (M.ph === 1 && !(M.B >= 0 && vt >= M.B) && !L.pred && h >= 0 && h !== slot && vt >= M.since + EGG.coolF && free(p)) {
+      const hp = G.players.find((q) => q.slot === h), here = !(G.online && G.role === 'guest');
+      const at = hp && here && hp.local === false ? shownAt(hp) || hp : hp;
+      if (at && eggTouch(p, at)) { L.n++; L.giver = h; L.tick = vt; L.pred = { from: h, tick: vt }; }
+    }
+    return L.n > 0 ? [P.i, M.r, L.n, L.giver, Math.max(0, L.tick - M.L)] : null;
+  }
+  // guest: the round, its phase, the holder, since, L, B (the next snapshot's when this one has none yet), the loser, the
+  // 유령 bits, the points, the round count, the last giver; my own line when it drops on me
+  function eggView(mg, mg1, t, g, M) {
+    const r0 = M.r, ph0 = M.ph, h0 = M.holder;
+    M.r = nInt(mg[1], 0, 99, 0); M.ph = nInt(mg[2], 0, 5, 0); M.holder = nInt(mg[3], -1, MAX_PLAYERS - 1, -1);
+    M.since = nInt(mg[4], -1, 1e12, -1); M.L = nInt(mg[5], -1, 1e12, -1); M.B = nInt(mg[6], -1, 1e12, -1);
+    if (M.B < 0 && Array.isArray(mg1) && nInt(mg1[1], 0, 99, -1) === M.r) M.B = nInt(mg1[6], -1, 1e12, -1);
+    M.loser = nInt(mg[7], -1, MAX_PLAYERS - 1, -1);
+    ghostView(M, nInt(mg[8], 0, 15, 0));
+    M.pts = mgSeats(mg[9], 0, 999); M.n = nInt(mg[10], 1, 99, EGG.rounds); M.from = nInt(mg[11], -1, MAX_PLAYERS - 1, -1);
+    M.heldF = M.heldF || {};
+    if (M.seeded && M.r >= 1 && M.ph === 0 && M.holder === G.localSlot && (r0 !== M.r || ph0 !== 0 || h0 !== M.holder)) partyMyLine(PARTY_TX.egMine1, PARTY_TX.egMine2, 90);
+    M.seeded = true;
+    return M;
+  }
+  // the egg's top over an animal's head (a 유령's over its wisp)
+  const eggHeadY = (M, p) => headTop(p) - 14 - (ghostIn(M, p.slot) ? 8 : 0);
+  // the egg at s px: hotter by a (frames since landing) - tinted 0.15 -> 0.5, steam from steamF, a ±1 px shake from
+  // shakeF, a blinking red rim from glowF
+  function eggSpr(x, y, a, s) {
+    const f0 = frameOf('item_egg', 0); if (!f0) return;
+    const st = eggHeat(a), k = Math.round(clamp(0.15 + 0.35 * a / 300, 0.15, 0.5) * 20) / 20;
+    if (st >= 2 && !reducedMotion()) x += (G.frame >> 1) & 1 ? 1 : -1;
+    if (st >= 3 && ((G.frame >> 2) & 1)) { const r = tintOf(f0, '#ff3b3b', 1); for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) ctx.drawImage(r.c, x + dx, y + dy, s, s); }
+    ctx.drawImage(tintOf(f0, '#ff7a3a', k).c, x, y, s, s);
+    if (st >= 1) { ctx.fillStyle = '#ffffff'; for (let q = 0; q < 3; q++) { const u = ((G.frame + q * 9) % 27) / 27; ctx.globalAlpha = 1 - u; ctx.fillRect(Math.round(x + 3 + q * 3), Math.round(y - 1 - u * 8), 1, 1); } ctx.globalAlpha = 1; }
+  }
+  // the egg (in front of the animals): falling onto its holder in the drop, over the holder's head (hopping 2-4 px during
+  // the juggle), the pass's 12 f arc from the giver; at my own view of B the crack (bubble_pop in cream, yolk pixels) on
+  // the holder it showed; at the reveal the yolk dripping over the loser's head for 48 f
+  function eggDraw(M, front) {
+    if (!front || M.r < 1) return;
+    const E = G.mloc.e && G.mloc.e.r === M.r ? G.mloc.e : {}, vt = eggNow();
+    const lo = M.ph >= 3 && E.rv >= 0 && G.frame - E.rv < 48 ? G.players.find((q) => q.slot === M.loser) : null;
+    if (lo) {
+      const t = G.frame - E.rv, cx = Math.round(lo.x + 8), ht = Math.round(headTop(lo));
+      ctx.fillStyle = '#ffd23c'; ctx.fillRect(cx - 4, ht - 1, 8, 3); ctx.fillStyle = '#fff1a6'; ctx.fillRect(cx - 2, ht - 1, 3, 1);
+      ctx.fillStyle = '#ffd23c'; for (let d = 0; d < 4; d++) ctx.fillRect(cx - 5 + d * 3, Math.round(ht + 2 + ((t + d * 5) % 12)), 1, 2);
+    }
+    if (E.bs >= 0) {
+      const t = G.frame - E.bs, q = G.players.find((o) => o.slot === E.bh);
+      if (q && t < 14) {
+        const f = frameOf('bubble_pop', t < 7 ? 0 : 1), cx = Math.round(q.x + 8), cy = Math.round(eggHeadY(M, q) + 6);
+        if (f) ctx.drawImage(tintOf(f, '#fff1d0', 0.6).c, cx - 8, cy - 8, 16, 16);
+        for (let k = 0; k < 8; k++) { ctx.fillStyle = k % 2 ? '#ffd23c' : '#fff1a6'; const a = k * Math.PI / 4; ctx.fillRect(Math.round(cx + Math.cos(a) * (3 + t * 0.6)), Math.round(cy + Math.sin(a) * (3 + t * 0.6)), 1, 1); }
+      }
+      return;
+    }
+    if (M.ph > 2) return;
+    const sh = eggShown(M), p = G.players.find((q) => q.slot === sh); if (!p) return;
+    const hx = p.x + 2, hy = eggHeadY(M, p);
+    let x = hx, y = hy;
+    if (M.ph === 0) { const u = clamp((vt - (M.L - EGG.dropF)) / EGG.dropF, 0, 1); y = dLerp(PF_TOP - 12, hy, u * u); }
+    else {
+      const s0 = eggSince(M, sh); if (vt < s0 + EGG.coolF) y -= 2 + Math.round(Math.abs(Math.sin((vt - s0) * 0.35)) * 2);
+      const arc = E.arc && G.frame - E.arc[2] < 12 && E.arc[1] === sh ? E.arc : null, g = arc ? G.players.find((o) => o.slot === arc[0]) : null;
+      if (g) { const u = (G.frame - arc[2]) / 12; x = dLerp(g.x + 2, hx, u); y = dLerp(eggHeadY(M, g), hy, u) - Math.sin(Math.PI * u) * 12; }
+    }
+    eggSpr(Math.round(x), Math.round(y), Math.max(0, vt - M.L), 12);
+  }
+  // a 유령 see-through (the burst's loser shows its yolk in eggDraw)
+  function eggPose(M, p) { return ghostIn(M, p.slot) ? { ga: GHOST.alpha } : null; }
+  // a seat's 2nd line: an egg and its points in this 판; the holder's panel blinks orange
+  function eggHud(M, p, x) {
+    const f = frameOf('item_egg', 0); if (f) ctx.drawImage(f.c, x + 17, 8, 8, 8);
+    text(String((M.pts && M.pts[p.slot]) | 0), x + 27, 9, '#ffd23c');
+    if ((M.ph === 1 || M.ph === 2) && eggShown(M) === p.slot && ((G.frame >> 3) & 1)) { ctx.strokeStyle = '#ff9a3a'; ctx.lineWidth = 1; ctx.strokeRect(x + 0.5, 0.5, 49, 15); }
+  }
+  // 계란 (6.8): floor tiles and a 2-tile ledge (x 70-86, y 20); a walks right carrying the 8 px egg into b (0-56); at 56
+  // they touch and the egg arcs onto b (56-68), juggles over it (68-110) while c walks on the ledge; 110-168 b stands - the
+  // egg steams (110), shakes (140), blinks red (156); at 168 the burst (a cream splat, yolk pixels); from 170 b fades to
+  // a 유령 with its wisp; 200-236 a new egg falls onto c
+  function eggDemo(dx, f, a, b) {
+    const c = CHAR_IDS.find((q) => q !== a && q !== b) || a;
+    demoTiles(dx, 0, 28, 12, 8); demoTiles(dx, 70, 20, 2, 8);
+    const ax = f < 56 ? dLerp(4, 24, f / 56) : 24, bx = 40, cx = 70 + (f >= 68 && f < 200 ? Math.round(Math.sin((f - 68) / 14)) : 0);
+    demoSpr(dx, a + (f < 56 ? '_walk' : '_idle'), (f / 8) | 0, ax, 12, 16, false);
+    demoSpr(dx, b + '_idle', 0, bx, 12, 16, true, f >= 170 ? dLerp(1, 0.55, (f - 170) / 20) : 1);
+    demoSpr(dx, c + (f >= 68 && f < 200 ? '_walk' : '_idle'), (f / 8) | 0, cx, 4, 16, true);
+    const f0 = frameOf('item_egg', 0);
+    const egg = (x, y, heat) => { if (f0) dx.drawImage(tintOf(f0, '#ff7a3a', Math.round(heat * 20) / 20).c, Math.round(x), Math.round(y), 8, 8); };
+    if (f < 56) egg(ax + 4, 3, 0.15);
+    else if (f < 68) { const u = (f - 56) / 12; egg(dLerp(ax + 4, bx + 4, u), 3 - Math.sin(Math.PI * u) * 6, 0.2); }
+    else if (f < 168) {
+      const hop = f < 110 ? Math.round(Math.abs(Math.sin(f * 0.35)) * 2) : 0, sx = f >= 140 ? ((f >> 1) & 1 ? 1 : -1) : 0, ex = bx + 4 + sx, ey = 3 - hop;
+      if (f >= 156 && ((f >> 2) & 1) && f0) { const r = tintOf(f0, '#ff3b3b', 1); for (const [ox, oy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) dx.drawImage(r.c, ex + ox, ey + oy, 8, 8); }
+      egg(ex, ey, dLerp(0.2, 0.5, (f - 68) / 100));
+      if (f >= 110) { dx.fillStyle = '#ffffff'; for (let q = 0; q < 3; q++) { const u = ((f + q * 9) % 27) / 27; dx.globalAlpha = 1 - u; dx.fillRect(ex + 1 + q * 3, Math.round(ey - 1 - u * 4), 1, 1); } dx.globalAlpha = 1; }
+    } else if (f < 182) {
+      const pf = frameOf('bubble_pop', f < 175 ? 0 : 1); if (pf) dx.drawImage(tintOf(pf, '#fff1d0', 0.6).c, bx, 0, 16, 16);
+      for (let k = 0; k < 8; k++) { dx.fillStyle = k % 2 ? '#ffd23c' : '#fff1a6'; const g = k * Math.PI / 4, d = 3 + (f - 168) * 0.5; dx.fillRect(Math.round(bx + 8 + Math.cos(g) * d), Math.round(7 + Math.sin(g) * d), 1, 1); }
+    }
+    if (f >= 186) { const w = frameOf('fx_ghost', 0); if (w) dx.drawImage(w.c, bx + 5, 3 + Math.round(Math.sin(f / 6)), 6, 6); }
+    if (f >= 200) egg(cx + 4, f < 236 ? dLerp(-8, 0, (f - 200) / 36) : 0, 0.15);
+  }
+
   // ---- the card's animated how-to (polish 3.2.1, MINI_FN[id].demo): each screen draws its own 96x32 loop into
   // #pg-party-demo (never on the wire) from renderScene while the card shows - a pure function of f (P.t % 240), with my
   // animal a (slot 0's offline) and the next seat's b, so a page drawing it late or skipping frames is still right
@@ -7186,6 +7435,33 @@ window.PG = window.PG || {};
       tagY: (M, p) => { const s = M.i >= 1 && chairSeat(M, p) >= 0 ? CHAIR.sit : 0; return ghostIn(M, p.slot) ? headTop(p) - 15 - s : s ? headTop(p) - 5 - s : NaN; },
       hud: chairHud,
       demo: chairDemo,
+    },
+    egg: {
+      // (the battle arena's spawns with startArena's swap by 판, as 왕관)
+      spawns: () => { const pss = LV.players || [], rot = (G.matchNo | 0) % 2 ? [2, 3, 0, 1] : [0, 1, 2, 3]; return G.players.map((p) => pss[rot[p.slot]]); },
+      // (r the round (0 before 시작!), ph 0 the drop, 1 live, 2 the burst's wait, 3 reveal, 4 the survivor's beat, 5 done;
+      // L the landing, B the burst (hidden until the host passed it), holder / since (its juggle's start) / from (the last
+      // giver), bh the holder at B, loser (this round) / last (the last round's), log [[from, to, stamp, f]]; gh / pts /
+      // heldF by seat; rtMax the view ticks every body is past; surv the last survivor; n the rounds)
+      init: () => ({ r: 0, ph: 0, L: -1, B: -1, holder: -1, since: -1, from: -1, bh: -1, loser: -1, last: -1, C: -1, log: [], gh: {}, pts: {}, heldF: {}, rtMax: {}, surv: -1, n: eggRounds() }),
+      start(M) { eggRound(M, 1); },
+      tick: eggTick,
+      local: eggLocal,
+      input: eggInput,
+      // (more points, then fewer frames holding the egg; still equal: a shared place)
+      key: (p, M) => ((M.pts && M.pts[p.slot]) | 0) * 1e5 - ((M.heldF && M.heldF[p.slot]) | 0),
+      // (['e', round, phase, holder, since, L, B (-1 until the host passed it), loser, 유령 bits, [points by seat], rounds,
+      // the last giver])
+      snap: (M) => ['e', M.r, M.ph, M.holder, M.since, M.L, M.B >= 0 && G.frame >= M.B ? M.B : -1, M.loser, ghostBits(M), [0, 1, 2, 3].map((s) => M.pts[s] | 0), M.n, M.from],
+      view: eggView,
+      drop: eggDrop,
+      draw: eggDraw,
+      pose: eggPose,
+      clock: (M) => Math.max(1, M.r | 0) + '/' + (M.n || EGG.rounds),
+      // (the holder's tag over the egg; a 유령's over its wisp)
+      tagY: (M, p) => { const gh = ghostIn(M, p.slot); return M.r >= 1 && M.ph <= 2 && eggShown(M) === p.slot ? headTop(p) - 22 - (gh ? 8 : 0) : gh ? headTop(p) - 15 : NaN; },
+      hud: eggHud,
+      demo: eggDemo,
     },
   };
 
@@ -12106,6 +12382,7 @@ window.PG = window.PG || {};
   // Battle and co-op never read pq / downP / G.drawT)
   const pressQ = [], dbgPq = [[], [], [], []], prevDbg = [0, 1, 2, 3].map(() => ({ jump: false, shoot: false, down: false })), pqLog = [null, null, null, null];
   const VCLOCK = { on: false, t: 0 };
+  const dbgRecv = {};   // (PG.debug.party.recv: a fake remote seat's receipt count - each a new mi)
   let frameT = 0;   // (loop's rAF time: render's G.drawT)
   const pageNow = () => (VCLOCK.on ? VCLOCK.t : typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
   const evT = (e) => { const n = pageNow(), t = e && e.timeStamp; return !VCLOCK.on && t > 0 && Math.abs(t - n) < 10000 ? t : n; };
@@ -14451,7 +14728,7 @@ window.PG = window.PG || {};
   // 'quake' and 'pop' are echoed)
   const NO_ECHO = { jump: 1, shoot: 1, bounce: 1, splash: 1, pause: 1, start: 1,
     flap: 1, slam: 1, dash: 1, slide: 1, djump: 1, hop: 1, b_echo: 1, b_onsen: 1, b_splash: 1, b_icicle: 1, b_yarn: 1, b_egg: 1, dry: 1, reload: 1,
-    tally: 1, rank_up: 1, puff: 1, tap: 1, scratch: 1 };   // (파티: the tally's ticks and my row's rise are each page's own; 펑's puffs, 수도꼭지's notes and 의자's stop too)
+    tally: 1, rank_up: 1, puff: 1, tap: 1, scratch: 1, egg_tick: 1, egg_boom: 1 };   // (파티: the tally's ticks and my row's rise are each page's own; 펑's puffs, 수도꼭지's notes, 의자's stop and 계란's tick and burst too)
   // (파티's card 'a' and result 'r': only pages that said pa in their hi ever get them)
   const PH_CODE = { playing: 'p', countdown: 'c', transition: 't', gameover: 'o', ending: 'e', podium: 'd', dying: 'p', paused: 'p', title: 'p', card: 'a', result: 'r' };
   const PH_NAME = { p: 'playing', c: 'countdown', t: 'transition', o: 'gameover', e: 'ending', d: 'podium', a: 'card', r: 'result' };
@@ -16995,7 +17272,7 @@ window.PG = window.PG || {};
       coin: (n, done, act, shots, playF, place, tie) => coinParty(n, done, act, shots, playF, place, tie),
       waterAt: (f, k) => waterAt(f, PARTY_ARENAS[0] && PARTY_ARENAS[0].rise, k || 1),
       arenas: () => PARTY_ARENAS, dry: () => dryArenas(), mini: () => JSON.parse(JSON.stringify(MINI, (k, v) => (typeof v === 'function' ? undefined : v))),
-      consts: () => ({ PARTY_V, LAG_MAX, GHOST: Object.assign({}, GHOST), TAP: JSON.parse(JSON.stringify(TAP)), CHAIR: JSON.parse(JSON.stringify(CHAIR)), MILK: JSON.parse(JSON.stringify(MILK)), PUFF: Object.assign({}, PUFF), SNEAK: JSON.parse(JSON.stringify(SNEAK)), STAGE_X: JSON.parse(JSON.stringify(STAGE_X)), MINI_OLD,
+      consts: () => ({ PARTY_V, LAG_MAX, GHOST: Object.assign({}, GHOST), TAP: JSON.parse(JSON.stringify(TAP)), CHAIR: JSON.parse(JSON.stringify(CHAIR)), EGG: JSON.parse(JSON.stringify(EGG)), MILK: JSON.parse(JSON.stringify(MILK)), PUFF: Object.assign({}, PUFF), SNEAK: JSON.parse(JSON.stringify(SNEAK)), STAGE_X: JSON.parse(JSON.stringify(STAGE_X)), MINI_OLD,
         PARTY_PTS, PARTY_F, PARTY_FF, PARTY_LAST_X, AWARD_PTS, AWARDS: AWARDS.map((q) => Object.assign({}, q)), ESC_MASH, SOAP: Object.assign({}, SOAP), RAFT: Object.assign({}, RAFT), SURGE_WARN, CROWN2: Object.assign({}, CROWN2), BALL2: Object.assign({}, BALL2), MINI_IDS: MINI_IDS.slice(), MINI_TRAP, MINI_SINK, WATER_SLACK, WATER_LEAD, CROWN_SLOW, CROWN_NOPICK, CROWN_SLACK, pBase: COIN.pBase, pRound: COIN.pRound, pPlace: COIN.pPlace, BALL: Object.assign({}, BALL), BALL_TEAM: BALL_TEAM.slice() }),
       text: () => PARTY_TEXT, tx: () => Object.assign({}, PARTY_TX),
       // this page's view: the phase, the sequencer and the minigame
@@ -17232,6 +17509,32 @@ window.PG = window.PG || {};
         return api.fakeBody(slot, Object.assign({ x, y: chairFloor() - 16, fl: 1, rt: Math.max(0, o && o.rt !== undefined ? o.rt | 0 : tick | 0), mi: [G.party.i, M.i, stool | 0, Math.max(0, (tick | 0) - M.S), (o && o.dx) | 0] }, o && o.at !== undefined ? { at: o.at } : {}));
       },
       chairView: (mg, mg1) => { const M = chairView(mg, mg1 || null, 0, { pa: {} }, { id: 'chair', seeded: false }); return JSON.parse(JSON.stringify({ i: M.i, ph: M.ph, seed: M.seed, Ms: M.Ms, S: M.S, k: M.k, own: M.own, gh: M.gh, pts: M.pts, n: M.n, bump: M.bump, surv: M.surv })); },
+      // (계란) the game's state on this screen; host: a seat holding the egg now (since: its juggle's start - else coolF
+      // ago, over now), the burst tick by hand (hidden until reached); a fake remote seat's receipt from giver at its view
+      // tick tick (its state with its mi through fakeBody - o: {x, y, rt, at}); the heat stage a frames after landing; the
+      // holder this screen shows, whether a body runs hot here; an 계란 row as a guest's eggView reads it (a fresh mirror)
+      egg: () => { const M = G.mini; return M && M.id === 'egg' ? JSON.parse(JSON.stringify({ r: M.r, ph: M.ph, L: M.L, B: M.B, holder: M.holder, since: M.since, from: M.from, bh: M.bh, loser: M.loser, last: M.last, log: M.log, gh: M.gh, pts: M.pts, heldF: M.heldF, rtMax: M.rtMax, surv: M.surv, n: M.n, endAt: M.endAt, C: M.C })) : null; },
+      eggHold(slot, since) {
+        const M = G.mini; if (!M || M.id !== 'egg' || M.r < 1 || M.ph > 2 || !G.players.some((p) => p.slot === slot)) return null;
+        if (M.ph === 0) { M.ph = 1; M.L = Math.min(M.L, G.frame); }
+        M.holder = slot; M.from = -1; M.since = since === undefined ? G.frame - EGG.coolF : +since; return M.holder;
+      },
+      burstAt(t) { const M = G.mini; if (!M || M.id !== 'egg' || M.ph > 2) return null; M.B = +t; return M.B; },
+      recv(slot, giver, tick, o) {
+        const M = G.mini; if (!M || M.id !== 'egg' || !G.party) return null;
+        dbgRecv[slot] = (dbgRecv[slot] | 0) + 1;
+        return api.fakeBody(slot, Object.assign({ rt: Math.max(0, tick | 0), mi: [G.party.i, M.r, dbgRecv[slot], giver | 0, Math.max(0, (tick | 0) - M.L)] }, o || {}));
+      },
+      // (a page's own predicted receipt by hand - a guest's before its host answers: from giver at view tick tick)
+      eggPred(slot, from, tick) {
+        const M = G.mini, p = G.players.find((q) => q.slot === slot); if (!M || M.id !== 'egg' || !p) return null;
+        let L = G.mloc[slot]; if (!L || L.r !== M.r) L = G.mloc[slot] = { r: M.r, n: 0, pred: null, giver: -1, tick: -1, walk: 0, px: p.x, rv: false };
+        L.n++; L.giver = from | 0; L.tick = tick | 0; L.pred = { from: from | 0, tick: tick | 0 }; return Object.assign({}, L.pred);
+      },
+      eggHeat: (a) => eggHeat(+a),
+      eggShown: () => (G.mini && G.mini.id === 'egg' ? eggShown(G.mini) : null),
+      eggRun: (slot) => { const p = G.players.find((q) => q.slot === slot); return p ? eggRun(p) : null; },
+      eggView: (mg, mg1) => { const M = eggView(mg, mg1 || null, 0, { pa: {} }, { id: 'egg', seeded: false }); return JSON.parse(JSON.stringify({ r: M.r, ph: M.ph, holder: M.holder, since: M.since, L: M.L, B: M.B, loser: M.loser, gh: M.gh, pts: M.pts, n: M.n, from: M.from })); },
       result: () => partyResult(), next: () => partyNext(), final: (walk) => partyFinal(!!walk), places: () => (G.mini ? Array.from(miniPlaces().entries()) : []),
       // (unit) a seat's snapshot row (its flags: 512 a 오리 튜브), the game's wire array, the sequencer's g.pa
       prow: (slot) => { const r = snapPlayers().find((q) => q[0] === slot); return r ? r.slice() : null; },

@@ -17,6 +17,7 @@
                      gacha_roll(o.n) gacha_drop(o.n) gacha_pop(o.n) gacha_win(o.n) (v4 뽑기)
                      puff(o.n)                                                    (파티: 펑's puff, local)
                      tap(o.n) scratch                (파티 새 게임 2: 수도꼭지's faucet note 0..3, 의자's stop; local)
+                     egg_tick(o.n) egg_boom          (파티 새 게임 2: 계란's tick 0..3 by its heat, its burst; local)
                        chain: o.n = position in the chain (pitch climbs)
                        boss_hit: optional o.n = soap hits so far (slap pitch creeps up)
                        door: default = panels sliding shut (ends in a wooden clack);
@@ -915,8 +916,8 @@ window.PG = window.PG || {};
     // 1 without; a capsule opening 0..9 semitones up; the fanfare 2 희귀 / 3 전설)
     gacha_roll: [0, 2, 0], gacha_drop: [0, 1, 0], gacha_pop: [0, 9, 0], gacha_win: [2, 3, 2],
     // (파티 새 게임, party-games 9.2: 펑's puff 0..10, the bubble's size in tens of %; party-games-2 10.2: 수도꼭지's
-    // four faucets 0..3)
-    puff: [0, 10, 0], tap: [0, 3, 0] };
+    // four faucets 0..3, 계란's tick 0..3 by its heat)
+    puff: [0, 10, 0], tap: [0, 3, 0], egg_tick: [0, 3, 0] };
   function variant(name, o) {
     const v = VARIANTS[name];
     return Math.max(v[0], Math.min(v[1], (o && o.n) | 0 || v[2]));
@@ -1597,6 +1598,19 @@ window.PG = window.PG || {};
     scratch(t) {
       noise(sfxBus, { t, d: 0.25, v: 0.14, ft: 'bandpass', f: 1800, f2: 300, q: 2.2, a: 0.004, dc: 0.22, s: 0.4, r: 0.04 });
       voice(sfxBus, { w: 'sine', f: 80, f2: 55, t: t + 0.02, d: 0.12, v: 0.2, a: 0.004, dc: 0.1, s: 0.2, r: 0.04 });
+    },
+    // 맥반석 계란 돌리기 (party-games-2 10.2, local): the fuse's tick - a 30 ms woodblock click, 900 Hz + 150 Hz x o.n
+    // (0..3: the egg's heat), each page at its own rate
+    egg_tick(t, o) {
+      const f = 900 + 150 * variant('egg_tick', o);
+      voice(sfxBus, { w: 'triangle', f, f2: f * 0.7, sl: 0.025, t, d: 0.03, v: 0.1, a: 0.001, dc: 0.025, s: 0, r: 0.01 });
+      noise(sfxBus, { t, d: 0.012, v: 0.05, ft: 'bandpass', f: f * 2, q: 3, a: 0.001, dc: 0.01, s: 0, r: 0.008 });
+    },
+    // the egg bursting (local, at each page's own view of the burst): a 60 ms noise burst "퍽" and a 0.3 s falling sizzle
+    egg_boom(t) {
+      noise(sfxBus, { t, d: 0.06, v: 0.2, ft: 'lowpass', f: 1400, f2: 500, q: 0.9, a: 0.002, dc: 0.05, s: 0.2, r: 0.03 });
+      voice(sfxBus, { w: 'sine', f: 140, f2: 70, sl: 0.06, t, d: 0.07, v: 0.16, a: 0.002, dc: 0.06, s: 0.1, r: 0.02 });
+      noise(sfxBus, { t: t + 0.05, d: 0.3, v: 0.05, ft: 'highpass', f: 7000, f2: 2500, q: 0.7, a: 0.01, dc: 0.28, s: 0.3, r: 0.05 });
     },
     // a 0.9 s snare roll (every 35 ms, swelling) ending on a crash
     drumroll(t) {
