@@ -16,6 +16,7 @@
                      coin arm buy equip                                          (v4 shop)
                      gacha_roll(o.n) gacha_drop(o.n) gacha_pop(o.n) gacha_win(o.n) (v4 뽑기)
                      puff(o.n)                                                    (파티: 펑's puff, local)
+                     tap(o.n) scratch                (파티 새 게임 2: 수도꼭지's faucet note 0..3, 의자's stop; local)
                        chain: o.n = position in the chain (pitch climbs)
                        boss_hit: optional o.n = soap hits so far (slap pitch creeps up)
                        door: default = panels sliding shut (ends in a wooden clack);
@@ -32,7 +33,7 @@
                      v4 n-variants; all pops share one slot, so a frame of pops is still one pop), and
                      at most 28 effects ring at once: autofire, glide flaps and 4-player volleys stay bounded.
      music(track)    'title' | 'main' | 'hurry' | 'clear' | 'gameover' | 'ending' |
-                     'boss' | 'final' | 'victory' | 'lobby' | 'battle' | 'podium' | null
+                     'boss' | 'final' | 'victory' | 'lobby' | 'battle' | 'podium' | 'party' | 'chair' | null
                      (clear/gameover/ending/victory/podium play once; the rest loop)
      setMuted(b)     persisted in localStorage 'ppogeul-muted'
    Every call is a silent no-op when audio is unavailable or not yet unlocked, and never throws.
@@ -337,6 +338,24 @@ window.PG = window.PG || {};
     drums: { v: 0.7, bars: rep(PTD, 7).concat([PTF]) },
   };
 
+  // 'chair' — 목욕 의자 뺏기 (C major, 150 bpm, two-beat; design/party-games-2.md 5.7). The musical-chairs tune: a square
+  // lead hopping up and down the chord over an oom-pah triangle bass, off-beat stabs and light kick / snare drums. Each
+  // page cuts it at its own view of each stop and starts it again from bar 1 (game.js chairSound). 4 bars, loops.
+  const CHB = 'R . 5 . R . 5 .';                      // oom-pah
+  const CHC = '. x . x . x . x';
+  const CHD = 'k.h.s.h.k.h.s.h.';
+  const CHAIR = {
+    bpm: 150, swing: 0.15, bars: 4, loop: true,
+    chords: 'C C F G7 C Am Dm7 G7',
+    lead: {
+      w: 'square', v: 0.075,
+      bars: ['E5 G5 C6 G5 E5 G5 C6 .', 'A5 . F5 A5 G5 . D5 F5', 'E5 G5 C6 E6 D6 C6 A5 .', 'F5 A5 G5 F5 D5 . G4 .'],
+    },
+    bass: { v: 0.24, bars: rep(CHB, 4) },
+    comp: { v: 0.02, bars: rep(CHC, 4) },
+    drums: { v: 0.6, bars: [CHD, CHD, CHD, 'k.h.s.h.k.s.s.s.'] },
+  };
+
   // 'battle' — 거품 한판 승부 (A dorian/minor, 176 bpm). Sporty versus tune: a tresillo
   // octave bass, a hooky "da-da . DA" lead with a soft triangle an octave below, and
   // three sections — A riff (Am–D vamp), B climb (F–G–Em–Am…), C 3+3+2 breakdown with a
@@ -520,7 +539,7 @@ window.PG = window.PG || {};
   const DEFS = {
     title: TITLE, main: MAIN, hurry: HURRY, clear: CLEAR, gameover: GAMEOVER, ending: ENDING,
     boss: BOSS, final: FINAL, victory: VICTORY,
-    lobby: LOBBY, battle: BATTLE, podium: PODIUM, party: PARTY,
+    lobby: LOBBY, battle: BATTLE, podium: PODIUM, party: PARTY, chair: CHAIR,
   };
   for (const k of Object.keys(DEFS)) {
     try { SONGS[k] = compile(DEFS[k]); } catch (e) { try { console.warn('[audio] song ' + k + ': ' + e.message); } catch (e2) { /* ignore */ } }
@@ -895,8 +914,9 @@ window.PG = window.PG || {};
     // (v4 뽑기, design/gacha.md 9: the crank 0 one turn / 1 two / 2 the knock alone; a capsule landing 0 with its bounce /
     // 1 without; a capsule opening 0..9 semitones up; the fanfare 2 희귀 / 3 전설)
     gacha_roll: [0, 2, 0], gacha_drop: [0, 1, 0], gacha_pop: [0, 9, 0], gacha_win: [2, 3, 2],
-    // (파티 새 게임, party-games 9.2: 펑's puff 0..10, the bubble's size in tens of %)
-    puff: [0, 10, 0] };
+    // (파티 새 게임, party-games 9.2: 펑's puff 0..10, the bubble's size in tens of %; party-games-2 10.2: 수도꼭지's
+    // four faucets 0..3)
+    puff: [0, 10, 0], tap: [0, 3, 0] };
   function variant(name, o) {
     const v = VARIANTS[name];
     return Math.max(v[0], Math.min(v[1], (o && o.n) | 0 || v[2]));
@@ -1564,6 +1584,19 @@ window.PG = window.PG || {};
     puff(t, o) {
       const f = 500 + 120 * variant('puff', o);
       noise(sfxBus, { t, d: 0.04, v: 0.12, ft: 'bandpass', f, f2: f * 0.8, q: 1.4, a: 0.004, dc: 0.035, s: 0.3, r: 0.03 });
+    },
+    // 수도꼭지 순서 기억하기 (party-games-2 10.2, local): one faucet's note - a 120 ms soft square "똥" with a fast decay,
+    // o.n 0..3 = 위 / 왼쪽 / 오른쪽 / 아래 on a major chord, C5 E5 G5 C6
+    tap(t, o) {
+      const m = [72, 76, 79, 84][variant('tap', o)];
+      voice(sfxBus, { w: 'square', f: mf(m), t, d: 0.12, v: 0.07, a: 0.003, dc: 0.09, s: 0.15, r: 0.04 });
+      voice(sfxBus, { w: 'triangle', f: mf(m - 12), t, d: 0.1, v: 0.1, a: 0.003, dc: 0.08, s: 0.1, r: 0.03 });
+    },
+    // 목욕 의자 뺏기 (local, each page at its own view of the stop): the record stopping - 0.25 s of band-passed noise
+    // sweeping 1.8 kHz -> 300 Hz and a soft 80 Hz thump
+    scratch(t) {
+      noise(sfxBus, { t, d: 0.25, v: 0.14, ft: 'bandpass', f: 1800, f2: 300, q: 2.2, a: 0.004, dc: 0.22, s: 0.4, r: 0.04 });
+      voice(sfxBus, { w: 'sine', f: 80, f2: 55, t: t + 0.02, d: 0.12, v: 0.2, a: 0.004, dc: 0.1, s: 0.2, r: 0.04 });
     },
     // a 0.9 s snare roll (every 35 ms, swelling) ending on a crash
     drumroll(t) {

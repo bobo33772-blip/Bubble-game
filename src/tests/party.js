@@ -783,7 +783,7 @@
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyZ', key: 'z', bubbles: true })); window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyZ', key: 'z', bubbles: true }));
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowDown', key: 'ArrowDown', bubbles: true })); window.dispatchEvent(new KeyboardEvent('keyup', { code: 'ArrowDown', key: 'ArrowDown', bubbles: true }));
     step(1); const kq = P.pq(0);
-    ok('pq: real key presses (X, Z, ↓) reach my seat\'s next frame as shoot / jump / down entries', kq && same(kq.map((q) => q[0]).sort(), ['down', 'jump', 'shoot']), kq);
+    ok('pq: real key presses (X, Z, ↓) reach my seat\'s next frame as shoot / jump / down entries (↓ also a D: party-games-2 3.3)', kq && same(kq.map((q) => q[0]).sort(), ['D', 'down', 'jump', 'shoot']), kq);
     G.menuOpen = true; P.press(0, 'shoot'); step(1); const mq = P.pq(0); G.menuOpen = false; step(1);
     ok('pq: with the menu open my seat gets no presses, and none come back after it closes', mq === null && P.pq(0) === null, mq);
     const d0 = P.drawT(); step(1); const d1 = P.drawT(); step(3); const d2 = P.drawT();
@@ -1572,12 +1572,14 @@
     ok('rules at 10: the trophy lines sit where 트로피는 걸지 않아요 was (after the coin line, before the magazine); 14 lines for 4 players (the new games line before the coin line)', r4.length === 14 && r4[6] === '끝까지 하면 등수대로 비누 코인을 받아요' && r4[7].indexOf('모두 10개씩') === 0 && r4[11].indexOf('거품') >= 0, r4);
     const rf = R({ n: 4, bet: 10, free: [3] });
     ok('rules with a free seat: 판돈 30개 (3명이 10개씩): 건 사람끼리 최종 등수대로 나눠요 and what 안 걸고 참여 pays', has(rf, '판돈 30개 (3명이 10개씩): 건 사람끼리 최종 등수대로 나눠요') && has(rf, '안 걸고 참여: 등수 점수만 받아요 · 1등 +16 · 2등 +8 · 3등 +2 · 4등 -6'), rf);
-    const r0 = R({ n: 4, bet: 0 }), was = base(4).concat(['같은 기록이면 같은 등수 · 동점이면 1등을 더 많이 한 친구가 위예요', '물 차오르기 · 왕관 뺏기 · 거품 축구', '바나나우유 잡기 · 펑! 비눗방울 · 살금살금 술래', '끝까지 하면 등수대로 비누 코인을 받아요', '트로피는 걸지 않아요']);
+    // (party-games-2 3.5: the new games line - 새 게임: and the short names of every game after the first three)
+    const gnL = P.tx().newGames + K.MINI_IDS.slice(K.MINI_OLD).map((id) => P.mini()[id].short).join(' · ');
+    const r0 = R({ n: 4, bet: 0 }), was = base(4).concat(['같은 기록이면 같은 등수 · 동점이면 1등을 더 많이 한 친구가 위예요', '물 차오르기 · 왕관 뺏기 · 거품 축구', gnL, '끝까지 하면 등수대로 비누 코인을 받아요', '트로피는 걸지 않아요']);
     ok('rules at 안 걸기: exactly as before - 트로피는 걸지 않아요, no trophy line (a party at 안 걸기 is no 트로피 경기)', same(r0.slice(0, 8), was) && r0.length === 11 && !r0.some((l) => /최종 등수|파티마다|트로피 경기/.test(l)), r0);
     const q1 = R({ n: 3, bet: 10, q: 1 }), q2 = R({ n: 3, bet: 10, q: 2 });
     ok('rules in practice (q 1 / 2) at 10: 연습 경기라 트로피는 그대로예요 beside the coin line, no other trophy line', [q1, q2].every((r) => has(r, '연습 경기라 트로피는 그대로예요') && !r.some((l) => /최종 등수|파티마다/.test(l))) && /이 브라우저의 탭끼리는/.test(q1[6]) && /같은 기기에서/.test(q2[6]), [q1, q2]);
     const old = R({ n: 3, bet: 10, role: 'guest', pv: 0 });
-    const gnL = '바나나우유 잡기 · 펑! 비눗방울 · 살금살금 술래', new6 = R({ n: 3, bet: 0, role: 'guest', pv: K.PARTY_V - 1 }), new7 = R({ n: 3, bet: 0, role: 'guest', pv: K.PARTY_V });
+    const new6 = R({ n: 3, bet: 0, role: 'guest', pv: K.PARTY_V - 1 }), new7 = R({ n: 3, bet: 0, role: 'guest', pv: K.PARTY_V });
     ok('rules for a guest of an older host (no R.pv): 트로피는 걸지 않아요 (its party holds nothing for it)', has(old, '트로피는 걸지 않아요') && !old.some((l) => /최종 등수|파티마다/.test(l)), old);
     ok('rules: the new games line only from a host that plans them (a guest of a pa ' + (K.PARTY_V - 1) + ' host - or none - has none)', !has(old, gnL) && !has(new6, gnL) && has(new7, gnL) && has(r3, gnL), [old, new6, new7]);
     // the 3-2-1 of the first 판 and its card chip (each page's own stake / q; later 판 unchanged)

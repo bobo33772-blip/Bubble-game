@@ -146,14 +146,42 @@
       ok('pq: both buttons in one frame give two entries, in time order', q2 && q2.length === 2 && q2[0][0] === 'jump' && q2[1][0] === 'shoot' && q2[0][1] === e2.timeStamp && q2[1][1] === e3.timeStamp, q2);
       // (거품 still held: the left thumb pulls the stick down)
       pe(zone, 'pointerdown', cx, cy, 24); const e4 = pe(zone, 'pointermove', cx, cy + 0.8 * R, 24); D.step(1);
-      const q3 = Pq.pq(0), s3 = st();
-      ok('pq: the stick pulled down while 거품 is held - one down entry with the pointermove\'s time, 거품 still held (two thumbs)', q3 && q3.length === 1 && q3[0][0] === 'down' && q3[0][1] === e4.timeStamp && s3.on.down && s3.on.shoot, { q3, on: s3.on });
+      const q3 = Pq.pq(0), s3 = st(), q3d = q3 ? q3.filter((q) => q[0] === 'down') : null, q3D = q3 ? q3.filter((q) => q[0] === 'D') : null;
+      ok('pq: the stick pulled down while 거품 is held - one down entry with the pointermove\'s time (and one D - party-games-2 3.3), 거품 still held (two thumbs)', q3d && q3d.length === 1 && q3d[0][1] === e4.timeStamp && q3D.length === 1 && q3D[0][1] === e4.timeStamp && q3.length === 2 && s3.on.down && s3.on.shoot, { q3, on: s3.on });
       pe(zone, 'pointermove', cx + 2, cy + 0.95 * R, 24); D.step(1);
       const q4 = Pq.pq(0);
       pe(zone, 'pointermove', cx, cy + 0.3 * R, 24); pe(zone, 'pointermove', cx, cy + 0.85 * R, 24); D.step(1);
       const q5 = Pq.pq(0);
       ok('pq: a stick held down pushes no more; released by the hysteresis and pulled again - the next down entry', q4 === null && q5 && q5.length === 1 && q5[0][0] === 'down', { q4, q5 });
       pe(ts, 'pointerup', 0, 0, 23); pd(window, 'pointerup', cx, cy, 24); D.step(4); Pq.pq(0);
+      // ---- party-games-2 3.3: the stick's dominant direction as 'L' / 'R' / 'D' entries (수도꼭지's faucets) - one per
+      // pull with the pointermove's time; a 45° pull one; held, no more; back under STICK_OFF and pulled again, the next
+      const dirs = () => (Pq.pq(0) || []).filter((q) => q[0] === 'L' || q[0] === 'R' || q[0] === 'D'), same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+      pe(zone, 'pointerdown', cx, cy, 31); const eL = pe(zone, 'pointermove', cx - 0.8 * R, cy, 31); D.step(1); const qL = dirs();
+      pe(zone, 'pointermove', cx - 0.95 * R, cy + 0.1 * R, 31); D.step(1); const qL2 = dirs();
+      pe(zone, 'pointermove', cx - 0.1 * R, cy, 31); const eL3 = pe(zone, 'pointermove', cx - 0.7 * R, cy, 31); D.step(1); const qL3 = dirs();
+      ok('stick L: one \'L\' with the pointermove\'s time; held, none more; back under STICK_OFF and pulled again, the next', qL.length === 1 && qL[0][0] === 'L' && qL[0][1] === eL.timeStamp && !qL2.length && qL3.length === 1 && qL3[0][1] === eL3.timeStamp, { qL, qL2, qL3 });
+      pe(zone, 'pointermove', cx, cy, 31); const eR = pe(zone, 'pointermove', cx + 0.8 * R, cy, 31); pe(zone, 'pointermove', cx, cy, 31); const eD = pe(zone, 'pointermove', cx, cy + 0.8 * R, 31); D.step(1); const qRD = dirs();
+      ok('stick R then D (each pull released in between): R, D in time order', qRD.length === 2 && qRD[0][0] === 'R' && qRD[1][0] === 'D' && qRD[0][1] === eR.timeStamp && qRD[1][1] === eD.timeStamp, qRD);
+      pe(zone, 'pointermove', cx, cy, 31); pe(zone, 'pointermove', cx + 0.6 * R, cy + 0.6 * R, 31); D.step(1); const q45 = dirs();
+      ok('stick: a 45° pull gives ONE entry (it reads as ←/→: the zones exclude each other)', q45.length === 1 && q45[0][0] === 'R', q45);
+      pe(zone, 'pointermove', cx, cy, 31); pe(zone, 'pointermove', cx - 0.8 * R, cy, 31); pe(zone, 'pointermove', cx, cy + 0.8 * R, 31); D.step(1); const qLD = dirs();
+      ok('stick: sliding from ← to ↓ without coming back gives L, D (two pulls)', qLD.length === 2 && qLD[0][0] === 'L' && qLD[1][0] === 'D', qLD);
+      pd(window, 'pointerup', cx, cy, 31); D.step(2); Pq.pq(0);
+      ok('stickTap: the zones - down needs ny >= 0.6 and >= 2|nx|, sideways |nx| >= 0.3 and >= |ny|; the dead band keeps the last', Pq.stickTap(0, 0.6) === 'D' && Pq.stickTap(0.3, 0.6) === 'D' && Pq.stickTap(0.31, 0.6, 'L') === 'L' && Pq.stickTap(-0.3, 0) === 'L' && Pq.stickTap(0.5, -0.5) === 'R' && Pq.stickTap(0.1, 0.1, 'R') === '' && Pq.stickTap(0.25, 0.1, 'R') === 'R', [Pq.stickTap(0, 0.6), Pq.stickTap(0.31, 0.6, 'L'), Pq.stickTap(0.25, 0.1, 'R')]);
+      // (while 수도꼭지 plays the stick's origin holds still: an over-pull, then the thumb back on its first touch point,
+      // gives no opposite entry; outside it the origin follows the thumb as before - a fake G.mini only for these moves)
+      const G0 = D.G.mini, ring = () => [$('pg-stick').style.left, $('pg-stick').style.top].join();
+      D.G.mini = { id: 'tap' };
+      pe(zone, 'pointerdown', cx, cy, 32); const r0 = ring(); pe(zone, 'pointermove', cx + 2 * R, cy, 32); const r1 = ring(); pe(zone, 'pointermove', cx, cy, 32);
+      D.G.mini = G0; D.step(1); const qT = dirs(); pd(window, 'pointerup', cx, cy, 32); D.step(1); Pq.pq(0);
+      pe(zone, 'pointerdown', cx, cy, 33); const o0 = ring(); pe(zone, 'pointermove', cx + 2 * R, cy, 33); const o1 = ring(); pe(zone, 'pointermove', cx, cy, 33); D.step(1); const qO = dirs();
+      pd(window, 'pointerup', cx, cy, 33); D.step(2); Pq.pq(0);
+      ok('stick in 수도꼭지: an over-pull then the thumb back on its first point gives R only (the origin held still); outside it the ring follows and the way back reads as L', same(qT.map((q) => q[0]), ['R']) && r0 === r1 && same(qO.map((q) => q[0]), ['R', 'L']) && o0 !== o1, { qT, qO, r0, r1, o0, o1 });
+      // (keyboard: a fresh ←, →, ↓ is an L / R / D - an auto-repeat is not)
+      const kd = (code, rep) => window.dispatchEvent(new KeyboardEvent('keydown', { code, key: code, bubbles: true, repeat: !!rep })), ku = (code) => window.dispatchEvent(new KeyboardEvent('keyup', { code, key: code, bubbles: true }));
+      kd('ArrowLeft'); kd('ArrowLeft', true); ku('ArrowLeft'); kd('ArrowRight'); ku('ArrowRight'); kd('KeyS'); kd('KeyS', true); ku('KeyS'); D.step(1); const qK = dirs();
+      ok('keys: fresh ←, →, S give L, R, D (no repeat; KeyS is a down - the D key is →)', same(qK.map((q) => q[0]), ['L', 'R', 'D']), qK);
     }
     // ---- no double-tap zoom
     const tapEnd = (el) => {
