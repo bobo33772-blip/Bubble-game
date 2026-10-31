@@ -54,6 +54,13 @@
 > `bounce` from its report; `더 미끌미끌!` replaces the clock's own `10초 남았어요!` banner on that frame; the debug hook is
 > `soapy` (물's `soap` is taken). Not built: the trophy hold line (3.8, Should).
 
+> **Review (2026-10-31)**: merged `feat/party-games` again (its run-chrome wall-clock cap; `PARTY_V` stays its 7 + 1 = 8)
+> and read the four games against sections 3-8 and the watch list - the fairness rules (each page's own clock / view-tick
+> stamps / the receiver's and the pushed one's screen), 유령 and the +2, 2-4 players, leavers and stale seats, coins,
+> awards, the wire, the other modes. One fix: a guest's 의자 reveal drew no `?` over the ones standing (`chairDraw` reads
+> `M.sat`, which only the host's close set) - `chairView` now fills `M.sat` from the stop's owners in the reveal (party2).
+> Still not built: the trophy hold line (3.8, Should).
+
 Status: **design**, on `feat/party-games-2` (worktree `bogeul-games2`), stacked on `feat/party-games` (PR #26, open, not
 merged: 바나나우유 잡기 / 펑! 비눗방울 / 살금살금 술래, `PARTY_V` 7, the free draw). It builds on the party as built
 (design/party.md), its polish (design/party-polish.md: the card with its 96x32 demo, the result beats, the last 판 x2, the
