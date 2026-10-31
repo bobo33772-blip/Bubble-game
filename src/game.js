@@ -257,9 +257,9 @@ window.PG = window.PG || {};
   // party - its unpaid stake would count in the pot), 6 왕관's 1st is the one wearing it at time-up (a pa 5 page's card
   // would still teach the longest hold and the gold x2), 7 the new games (design/party-games.md: 바나나우유 잡기, 펑!
   // 비눗방울, 살금살금 술래 - world: false, the body state's mi: a pa 6 page would read their plan codes as 물 and their
-  // wire as noise), 8 the new games 2 (design/party-games-2.md: 수도꼭지 순서 기억하기, 목욕 의자 뺏기 - their plan codes
-  // t h and the chair track: a pa 7 page would read them as 물 and its last track); a seat under it is never ready in a
-  // party room, so it is told to refresh; the board PR takes the next number
+  // wire as noise), 8 the new games 2 (design/party-games-2.md: 수도꼭지 순서 기억하기, 목욕 의자 뺏기, 맥반석 계란 돌리기,
+  // 미끌미끌 비누 씨름 - their plan codes t h e u and the chair track: a pa 7 page would read them as 물 and its last
+  // track); a seat under it is never ready in a party room, so it is told to refresh; the board PR takes the next number
   const PARTY_V = 8;
   // 파티 트로피 (design/party-trophies.md): the PARTY_V of the release that first ranks a staked party (R.pv: a guest of an
   // older host holds nothing for its party); a finished party pays only when its first 시작! -> final standing took this
@@ -397,7 +397,7 @@ window.PG = window.PG || {};
   // beeps and no 10초 남았어요! (its rounds or each page's own clock end it); fastSecs - the debug fast party's length;
   // party-games-2 3.4: music - miniStart's track instead of 'battle' (null: none); base - everyone on KIT_BASE (kitOf);
   // short - the game in the room's new-games line)
-  const MINI_IDS = ['water', 'crown', 'ball', 'milk', 'puff', 'sneak', 'tap', 'chair', 'egg'];
+  const MINI_IDS = ['water', 'crown', 'ball', 'milk', 'puff', 'sneak', 'tap', 'chair', 'egg', 'sumo'];
   const MINI_OLD = 3;   // (the first three: the arena games of party.md / the polish; the room's rules list the rest on a line of their own)
   // (a short no-KO capture in every minigame; prisons sink in 물 0.3 px/f; out once the feet are 3 px under the surface; a
   // guest draws the water at its estimate of the host's NOW, at most WATER_LEAD frames past the newest snapshot - 4.1;
@@ -17896,7 +17896,7 @@ window.PG = window.PG || {};
       // rt, at}); a 씨름 row as a guest's sumoView reads it (a fresh mirror)
       sumo: () => { const M = G.mini; return M && M.id === 'sumo' ? JSON.parse(JSON.stringify({ set: M.set, ph: M.ph, F0: M.F0, C: M.C, endAt0: M.endAt0, wl: M.wl, outs: M.outs, last: M.last, rv: M.rv, tub: M.tub, hits: M.hits, pts: M.pts, platF: M.platF, last10: M.last10, surv: M.surv, keep: M.keep, lv: M.lv, endAt: M.endAt })) : null; },
       deck: () => sumoDeck(),
-      soap: (slot) => { const p = G.players.find((q) => q.slot === slot); return p ? sumoSoap(p) : null; },
+      soapy: (slot) => { const p = G.players.find((q) => q.slot === slot); return p ? sumoSoap(p) : null; },   // (씨름: on the soap now)
       sumoBub(owner, x, y, dir) {
         const M = G.mini, p = G.players.find((q) => q.slot === owner); if (!M || M.id !== 'sumo' || !p) return null;
         const keep = { x: p.x, y: p.y, facing: p.facing }; p.x = +x; p.y = +y + 1; p.facing = dir < 0 ? -1 : 1;

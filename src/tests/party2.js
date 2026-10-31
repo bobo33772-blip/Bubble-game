@@ -52,7 +52,8 @@
     // PARTY_TEXT warms every new string (the names, how / rule / keys lines, short, the PARTY_TX additions)
     const txt = P.text(), tx = P.tx();
     const need = ['수도꼭지 순서 기억하기', MI.tap.how, MI.tap.rule, MI.tap.keys, MI.tap.keysT, tx.ghost1, tx.ghost2, tx.tpGo, tx.tpWatch, tx.tpAll1, tx.tpAll2, tx.tpEnd, tx.newGames.trim(), tx.surv2, tx.survAll, tx.miss, tx.tpLate,
-      '맥반석 계란 돌리기', MI.egg.how, MI.egg.rule, MI.egg.keys, MI.egg.keysT, MI.egg.short, tx.egDrop, tx.egMine1, tx.egMine2, tx.egHot];
+      '맥반석 계란 돌리기', MI.egg.how, MI.egg.rule, MI.egg.keys, MI.egg.keysT, MI.egg.short, tx.egDrop, tx.egMine1, tx.egMine2, tx.egHot,
+      '미끌미끌 비누 씨름', MI.sumo.how, MI.sumo.rule, MI.sumo.keys, MI.sumo.keysT, MI.sumo.short, tx.suFall, tx.suPush, tx.suKeep, tx.suRaft1, tx.suRaft2, tx.suLast1, tx.suLast2];
     ok('PARTY_TEXT holds every new string of the games in play', need.every((s) => txt.indexOf(s.replace('{0}', '')) >= 0), need.filter((s) => txt.indexOf(s.replace('{0}', '')) < 0));
     // music: none for 수도꼭지 (no music at its 시작!); the base kit in 술래 unchanged
     party(['duck', 'cat'], { plan: ['tap'] }); toPlaying(); step(2);
@@ -594,7 +595,7 @@
     const r1 = ramp(0);
     ok('soap: from rest to the top speed in ' + r1[0] + ' f and back to rest in ' + r1[1] + ' f on the 평상 (acc 0.07: 18)', r1[0] === 18 && r1[1] === 18, r1);
     const p0 = pl(0); p0.x = 30 - 8; p0.y = 120; p0.vx = 0; p0.vy = 0; p0.onGround = false;
-    ok('soap: only over the 평상 - a body whose feet are past its edge (over a 탕) is not on it; a raft never', P.soap(0) === false && P.soap(1) === true, [P.soap(0), P.soap(1)]);
+    ok('soap: only over the 평상 - a body whose feet are past its edge (over a 탕) is not on it; a raft never', P.soapy(0) === false && P.soapy(1) === true, [P.soapy(0), P.soapy(1)]);
     // the shot: 2.0 px/f for 60 f, then it pops; never floats
     s = sumoAt(CH4, 82); for (const q of [0, 1, 2, 3]) on(q, 70 + q * 30);
     const id = P.sumoBub(0, 60, 60, 1), bub = () => G.bubbles.find((b) => b.id === id);
@@ -710,7 +711,7 @@
     // no regressions: a battle after a sumo party - bubbles trap again, the normal acc, a raft-free raftMove, the music
     D.local.battle(['duck', 'cat']); step(200);
     const a = pl(0), bb = pl(1); a.invuln = 0; bb.invuln = 0;
-    ok('after a sumo party: no soap, no push bubbles in a battle (the base kit\'s 3.5 px/f line again)', P.soap(0) === false && P.soap(1) === false && G.music === 'battle', [P.soap(0), G.music]);
+    ok('after a sumo party: no soap, no push bubbles in a battle (the base kit\'s 3.5 px/f line again)', P.soapy(0) === false && P.soapy(1) === false && G.music === 'battle', [P.soapy(0), G.music]);
   }
 
   // ---------------------------------------------------------------- screenshot scenes (#shot=tap|tapgo|taprev|tapcard|
