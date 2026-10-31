@@ -422,7 +422,11 @@
     F.on('Game.openLeaderboard', () => { heldAt = PG.Audio._state().held; return undefined; });
     click(b); await sleep(30);
     ok('T5 lb: a tap -> the sound held first, then openLeaderboard', calls('Game.openLeaderboard') === 1 && heldAt === true, [calls('Game.openLeaderboard'), heldAt]);
-    TR.closeRec(); PG.Audio.hold(false);
+    ok('T5 lb: ... still held while the board is in front (no event came back)', PG.Audio._state().held === true && A.state().held === true);
+    // (Toss may send nothing when the board closes: the next tap on the game is the proof it is in front again)
+    window.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'mouse', bubbles: true })); await sleep(30);
+    ok('T5 lb: back from the board, the next tap on the game brings the sound back', PG.Audio._state().held === false && A.state().held === false, PG.Audio._state());
+    TR.closeRec();
     n = calls('Game.setLeaderboardScore');
     await gameOverAt(3000); D.toTitle();
     ok('T5 lb: a lower run -> no call', calls('Game.setLeaderboardScore') === n);
@@ -497,6 +501,11 @@
     ok('T6 sound: hold(false) keeps the M-key mute (gain 0, muted)', PG.Audio._state().muted === true && PG.Audio._state().gain === 0, PG.Audio._state());
     key('KeyM'); await sleep(30);
     ok('T6 sound: ... M again: unmuted', PG.Audio._state().muted === false);
+    // (whether Toss sends show(true) when its overlay closes is UNCONFIRMED: without it, the next tap on the game - in front
+    // again - brings the sound back; the game stays paused for the player)
+    F.fire('show', false); await sleep(30);
+    window.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'mouse', bubbles: true })); await sleep(30);
+    ok('T6 overlay: no show(true) came -> the next tap on the game brings the sound back, still paused', PG.Audio._state().held === false && !A.state().held && G.mode === 'paused', [PG.Audio._state(), G.mode]);
     // game over -> back -> the title; play(false) once there
     G.lives = 1; D.resume(); D.hitPlayer(0); D.step(120); await sleep(60);
     ok('T6 over: the game-over card', MP.state().overlay === 'over', MP.state().overlay);

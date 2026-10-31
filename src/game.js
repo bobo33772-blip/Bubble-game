@@ -10194,9 +10194,10 @@ window.PG = window.PG || {};
   //    screen awake and iOS's edge swipe off (11.3); the overlay of the exit modal pauses and silences (10); one screen
   //    log per overlay change (12)
   // st: 'off' | 'wait' | 'ok' | 'old' | 'err'; hash only while 'ok'; at: the last key request; scr: the last screen
-  // log; back / play: what the bridge was last told; nav: the box kept for 더보기 / X ({0, 0} outside Toss)
+  // log; back / play: what the bridge was last told; nav: the box kept for 더보기 / X ({0, 0} outside Toss); held: the
+  // sound is held for a Toss overlay / the leaderboard (aitHold)
   const AIT = { on: false, br: null, st: 'off', hash: '', at: 0, busy: false, scr: '', back: false, play: false, nav: { w: 0, h: 0 },
-    syncKey: '', exitAt: 0, exitT: 0, lbNf: false, lbFor: null, lbWarned: false, lbT: 0, retryT: 0 };
+    syncKey: '', exitAt: 0, exitT: 0, lbNf: false, lbFor: null, lbWarned: false, lbT: 0, retryT: 0, held: false };
   // (Android back at the bare title: false = no listener there, Toss's own back applies; true = the two-press confirm
   // stays on - the QR test decides, design/toss.md 15.6.5)
   const AIT_ROOT_BACK = false;
@@ -10307,17 +10308,25 @@ window.PG = window.PG || {};
   }
   function aitLbOpen() {
     if (!AIT.on || AIT.lbT) return;
-    Snd.hold(true);                                   // (the board opens over the game: its sound stops first)
+    aitHold(true);                                    // (the board opens over the game: its sound stops first)
     AIT.lbT = 1;
     let p = null; try { p = AIT.br.lb.open(); } catch (e) { p = null; }
-    Promise.resolve(p).then((ok) => { AIT.lbT = 0; if (ok !== true && !document.hidden) Snd.hold(false); }, () => { AIT.lbT = 0; if (!document.hidden) Snd.hold(false); });
+    Promise.resolve(p).then((ok) => { AIT.lbT = 0; if (ok !== true) aitHold(false); }, () => { AIT.lbT = 0; aitHold(false); });
   }
   // ---- the overlay of Toss over the game (the exit modal, the game profile): pause an offline game, silence (10)
   function aitShow(vis) {
     if (stopped) return;
-    if (!vis) { Snd.hold(true); if (!G.manual) pauseGame(); }
-    else if (!document.hidden) Snd.hold(false);
+    if (!vis) { aitHold(true); if (!G.manual) pauseGame(); }
+    else aitHold(false);
   }
+  // the sound held for a Toss overlay / the leaderboard, and back. Whether Toss says when its overlay or the board closes
+  // is UNCONFIRMED (design/toss.md 15.6.4), so a tap or a key on this page - it is in front again - also ends the hold
+  // (aitWake); a hidden page never does (its own return brings the sound back)
+  function aitHold(on) {
+    AIT.held = !!on;
+    if (on) Snd.hold(true); else if (!document.hidden) Snd.hold(false);
+  }
+  function aitWake() { if (AIT.held && !stopped && !document.hidden) aitHold(false); }
   // ---- Android back (11.2) and the game state (11.3): the bridge is told only what changed
   function aitSync() {
     if (!AIT.on || !AIT.br) return;
@@ -10372,9 +10381,10 @@ window.PG = window.PG || {};
     AIT.scr = n;
     try { AIT.br.screen(n); } catch (e) { /* ignore */ }
   }
-  // ---- the Toss-only DOM (setupDOM): the back toast over the title, the warm-up text
+  // ---- the Toss-only DOM (setupDOM): the back toast over the title, the warm-up text; a tap / key ends a hold (aitWake)
   function aitSetupDOM() {
     if (!AIT.on) return;
+    for (const ev of ['pointerdown', 'keydown']) listen(window, ev, aitWake, true);
     if (dom.screen && !$('pg-ait-toast')) { const t = h('p', 'pg-ait-toast'); t.id = 'pg-ait-toast'; t.setAttribute('role', 'status'); t.setAttribute('aria-live', 'polite'); t.hidden = true; dom.screen.appendChild(t); }
     try { for (const q of ['.pg-fw-body', '.pg-fw-sign']) { const fw = document.querySelector('#pg-fontwarm ' + q); if (fw) fw.textContent += ' ' + AIT_TEXT; } } catch (e) { /* ignore */ }
   }
@@ -10382,7 +10392,7 @@ window.PG = window.PG || {};
   function aitDebugApi() {
     return {
       state: () => ({ on: AIT.on, st: AIT.st, hasKey: !!AIT.hash, busy: AIT.busy, who: (() => { const v = sget('ppogeul-ait-who'); return typeof v === 'string' && /^[0-9a-f]{16}$/.test(v); })(),
-        lb: aitLbRead(), lbNf: AIT.lbNf, back: AIT.back, play: AIT.play, scr: AIT.scr, nav: Object.assign({}, AIT.nav), tr: NET.tr, gated: netGated(),
+        lb: aitLbRead(), lbNf: AIT.lbNf, back: AIT.back, play: AIT.play, held: AIT.held, scr: AIT.scr, nav: Object.assign({}, AIT.nav), tr: NET.tr, gated: netGated(),
         sync: AIT.br && typeof AIT.br.sync === 'function' ? AIT.br.sync() : null }),
       key: () => { aitKey(); return AIT.st; },
       lbRun: () => aitLbRun(),
