@@ -206,6 +206,183 @@
     ok('demo [tap]: 240 frames into a 96x32 context without errors, pixels left', d && !d.err && d.lit > 200, d);
   }
 
+  // ---------------------------------------------------------------- 4. 목욕 의자 뺏기 (5)
+  const CHR = () => K.CHAIR;
+  const chNow = () => P.chair();
+  // a body standing on the floor with its feet centre at fx (still: no input moves it)
+  const put = (slot, fx, air) => { const p = pl(slot); p.x = fx - 8; p.y = air ? 180 : 200; p.vx = 0; p.vy = 0; p.onGround = !air; };
+  const toStop = (i) => until(() => G.mode !== 'playing' || (chNow().i === i && chNow().ph === 0), 2400);
+  const own = (j) => (chNow().own || {})[j] || null;
+  function chairTests() {
+    const C = CHR();
+    // the stools: pure, inside lo..hi, every speed in 1.4..2.0 (but at a turn); the freeze spread >= gap, pure, inside
+    let bad = [], spd = [9, 0];
+    for (let seed = 1; seed <= 60; seed++) for (let i = 1; i <= 8; i++) for (let j = 0; j < 3; j++) {
+      for (let dt = 0; dt < 400; dt += 7) {
+        const x = P.chairX(seed, i, j, dt), x1 = P.chairX(seed, i, j, dt + 1), v = Math.abs(x1 - x);
+        if (x < C.lo - 1e-9 || x > C.hi + 1e-9 || x !== P.chairX(seed, i, j, dt)) bad.push([seed, i, j, dt, x]);
+        if (x > C.lo + 3 && x < C.hi - 3 && x1 > C.lo + 3 && x1 < C.hi - 3) { spd[0] = Math.min(spd[0], v); spd[1] = Math.max(spd[1], v); }
+      }
+    }
+    ok('chairX: pure, inside ' + C.lo + '..' + C.hi + ', each stool at its own speed in 1.4..2.0 px/f (' + spd.map((v) => v.toFixed(3)).join('..') + ')', !bad.length && spd[0] >= 1.4 - 1e-9 && spd[1] <= 2.0 + 1e-9 && spd[1] - spd[0] > 0.4, [bad.slice(0, 3), spd]);
+    P.vclock(true, 1000);
+    party(CH4, { plan: ['chair'] }, 41); toPlaying();
+    ok('chair: 4 players - 3 stools; the base kit; the chair track (G.music chair, Snd.cur chair)', chNow().k === 3 && chNow().i === 1 && G.music === 'chair' && P.music() === 'chair' && P.mini().chair.base === true, [chNow(), G.music, P.music()]);
+    let sp = [];
+    for (let s = 1; s <= 200; s++) { G.mini.seed = s; G.mini.S = G.mini.Ms + 37 + s; const xs = P.stoolsAt(G.mini.S + 5), o = xs.slice().sort((a, b) => a - b); if (o[1] - o[0] < C.gap || o[2] - o[1] < C.gap || o[0] < C.lo || o[2] > C.hi || !same(xs, P.stoolsAt(G.mini.S + 99))) sp.push([s, xs]); }
+    ok('freeze: the stools stand still from S, spread at least 18 px apart inside lo..hi (200 seeds)', !sp.length, sp.slice(0, 3));
+    // S: never in g.mg before its tick; then the stop on this screen (the scratch, 그만!) and the music cut here
+    party(CH4, { plan: ['chair'] }, 41); toPlaying();
+    const S0 = chNow().S; let leak = 0, mus = [];
+    for (let f = 0; f < 400 && G.frame < S0 + 2; f++) { if (P.mg()[5] !== -1 && G.frame < S0) leak++; mus.push([G.frame, P.music()]); step(1); }
+    ok('S: drawn 120..300 f after the music started, never in g.mg before the host reached it, then there', S0 - chNow().Ms >= C.music[0] && S0 - chNow().Ms <= C.music[1] && !leak && P.mg()[5] === S0, [S0, chNow().Ms, leak, P.mg()[5]]);
+    const cut = mus.find((q) => q[1] === null);
+    ok('music: this page asks for chair until its own view of S, null from that frame (G.music stays chair); 그만! here', cut && cut[0] === S0 && mus.filter((q) => q[0] < S0).every((q) => q[1] === 'chair') && G.music === 'chair' && P.seen().sf === S0, [cut, P.seen(), G.music]);
+    // a gliding stool cannot be sat on; at S: the seat's edge (6 px sits, 6.1 does not), airborne no
+    party(CH4, { plan: ['chair'] }, 43); toPlaying();
+    const S1 = G.frame + 30; P.stopAt(S1);
+    let glide = 0;
+    for (let f = 0; f < 29; f++) { const x = P.stoolsAt(G.frame + 1)[0]; put(0, x); step(1); if (P.mloc(0) && P.mloc(0).sit >= 0) glide++; }
+    const xs1 = P.stoolsAt(S1);
+    put(0, xs1[0] + 6); put(1, xs1[1] + 6.1); put(2, xs1[2], true); put(3, 4);
+    step(1);
+    ok('sit: none on a gliding stool (a body on it the whole music)', glide === 0, glide);
+    ok('sit: at S feet 6 px from a stool sit (parked, the claim [판 i, stop, stool, tick - S, dx]); 6.1 px and an airborne body do not', G.frame === S1 && P.mloc(0).sit === 0 && same(P.mi(0), [PS().i, 1, 0, 0, 60]) && P.mloc(1).sit === -1 && P.mloc(2).sit === -1 && P.parked(0) && !P.parked(1), [G.frame, S1, P.mloc(0), P.mloc(1), P.mloc(2)]);
+    ok('host: the claim owns the stool (provisional, its stamp S, dx 60)', same(own(0), [0, S1, 60, S1, false]) || (own(0) && own(0)[0] === 0 && own(0)[1] === S1 && own(0)[2] === 60), own(0));
+    step(39); put(1, xs1[1]); step(1);
+    ok('sit: ... and at S + 40 too (a host-local claim final at once: no remote seat to wait for)', P.mloc(1).sit === 1 && own(1)[0] === 1 && own(1)[1] === S1 + 40 && own(1)[4] === true && own(0)[4] === true, [P.mloc(1), own(1)]);
+    // the stamps: a remote claim against a host-local one - the earlier keeps it, either way round; equal - dx, then rotation
+    // (seats 1-3 remote: their states keep coming with views 40 f behind - keep - except the seats named)
+    party(CH4, { plan: ['chair'] }, 45); toPlaying();
+    const S2 = G.frame + 10; P.stopAt(S2);
+    const keep = (...skip) => { for (const s of [1, 2, 3]) if (!skip.includes(s)) P.fakeBody(s, { rt: Math.max(0, G.frame - 40) }); };
+    for (const s of [0, 1, 2, 3]) put(s, 4 + 2 * s);
+    while (G.frame < S2 + 29) { keep(); step(1); }
+    const xs2 = P.stoolsAt(S2); put(0, xs2[0] + 5); keep(); step(1);   // (H sits at S + 30, dx 50)
+    ok('host-local: H sits at S + 30 (provisional: the remote seats\' views are behind it)', P.mloc(0).sit === 0 && own(0)[0] === 0 && own(0)[1] === S2 + 30 && own(0)[2] === 50 && !own(0)[4], own(0));
+    for (let f = 0; f < 5; f++) { keep(); step(1); }
+    P.sit(1, 0, S2 + 20); keep(1); step(1);
+    const b1 = own(0); keep(1); step(1); const m0 = P.mloc(0);
+    ok('bump: a remote claim stamped S + 20 (its own view) arriving at S + 36 takes the stool from H (S + 30); H\'s page un-parks it and hops it off', b1[0] === 1 && b1[1] === S2 + 20 && chNow().bump[0] === 1 && m0.sit === -1 && pl(0).vy < 0 && !pl(0).onGround, [b1, m0, pl(0).vy, chNow().bump]);
+    until(() => { keep(1); return pl(0).onGround; }, 60);
+    put(0, xs2[1]); keep(1); step(1); const h1 = own(1);
+    P.sit(2, 1, G.frame + 1); keep(1, 2); step(1);   // (stamped the frame after H's)
+    ok('refused: a remote claim stamped one frame after the host-local owner\'s changes nothing', h1 && h1[0] === 0 && own(1)[0] === 0 && own(1)[1] === h1[1] && !chNow().bump[0], [h1, own(1)]);
+    for (let f = 0; f < 10; f++) { keep(1, 2); step(1); }
+    const T2 = G.frame; P.sit(3, 2, T2, { dx: 30 }); keep(1, 2, 3); step(1);
+    const e3 = own(2); P.sit(2, 2, T2, { dx: 20 }); keep(1, 2, 3); step(1);
+    ok('equal stamps: the smaller dx keeps it (dx 20 bumps dx 30, both stamped ' + T2 + ')', e3 && e3[0] === 3 && !e3[4] && own(2)[0] === 2 && own(2)[1] === T2 && chNow().bump[3] === 1, [e3, own(2)]);
+    party(CH4, { plan: ['chair'] }, 45); toPlaying();
+    const S3 = G.frame + 10; P.stopAt(S3); for (const s of [1, 2, 3]) P.fakeBody(s, { rt: G.frame });
+    until(() => G.frame >= S3 + 4, 30);
+    P.sit(2, 0, S3 + 3, { dx: 10 }); step(1); P.sit(1, 0, S3 + 3, { dx: 10 }); step(1);
+    ok('equal stamps and dx: the earlier seat in the rotation (stop 1: seat 1 before seat 2)', own(0)[0] === 1 && chNow().bump[2] === 1, [own(0), chNow().bump]);
+    // final: only once every seat that can still claim is past the stamp (or LAG_MAX) - a provisional sitter waited for, a
+    // final one not; a final owner is never bumped; a stale seat is not waited for
+    party(CH4, { plan: ['chair'] }, 47); toPlaying();
+    const S4 = G.frame + 10; P.stopAt(S4); for (const s of [0, 1, 2, 3]) put(s, 4 + 2 * s);
+    for (const s of [1, 2, 3]) P.fakeBody(s, { rt: G.frame });
+    until(() => G.frame >= S4 + 9, 30);
+    const xs4 = P.stoolsAt(S4); put(0, xs4[0]); P.sit(1, 1, S4 + 8); P.fakeBody(2, { rt: S4 + 5 }); P.fakeBody(3, { rt: S4 + 5 }); step(1);   // (H at S + 10; seat 1 at S + 8)
+    ok('provisional: H\'s claim (S + 10) and seat 1\'s (S + 8) wait while seats 2-3 have shown views only up to S + 5', own(0) && own(0)[0] === 0 && !own(0)[4] && own(1) && own(1)[0] === 1 && !own(1)[4], [own(0), own(1), P.rt()]);
+    P.sit(1, 1, S4 + 8); P.fakeBody(2, { rt: S4 + 12 }); P.fakeBody(3, { rt: S4 + 12 }); step(1);
+    const fA = [own(0)[4], own(1)[4]];
+    P.sit(1, 1, S4 + 8); P.fakeBody(2, { rt: S4 + 12 }); P.fakeBody(3, { rt: S4 + 12 }); step(1);
+    ok('final: seat 1\'s claim (S + 8) once seats 2-3 passed it; H\'s (S + 10) waits for seat 1 while it sits provisionally (its view S + 8), then - seat 1 final - not', fA[0] === false && fA[1] === true && own(0)[4] === true, [fA, own(0)]);
+    P.fakeBody(2, { rt: G.frame }); P.sit(3, 0, S4 + 1, { rt: S4 + 1 }); step(1);
+    ok('final: never bumped - an earlier stamp (S + 1) against a final owner (S + 10) is refused', own(0)[0] === 0 && !chNow().bump[0], own(0));
+    // a stale seat: not waited for; a refused claim (feet 9 px off in its state) - nothing; the page side of a refusal
+    party(CH4, { plan: ['chair'] }, 49); toPlaying();
+    const S5 = G.frame + 10; P.stopAt(S5); for (const s of [0, 1, 2, 3]) put(s, 4 + 2 * s);
+    for (const s of [1, 2, 3]) P.fakeBody(s, { rt: G.frame });
+    until(() => G.frame >= S5 + 1, 30);
+    const xs5 = P.stoolsAt(S5); put(0, xs5[0]); P.fakeBody(2, { rt: S5 - 50 }); P.fakeBody(3, { rt: S5 - 50 }); step(1);
+    const f5 = G.frame; let fin5 = -1;
+    for (let f = 0; f < 80 && fin5 < 0; f++) { P.fakeBody(2, { rt: G.frame }); P.fakeBody(3, { rt: G.frame }); step(1); if (own(0)[4]) fin5 = G.frame - f5; }
+    ok('stale: seat 1 sends nothing - it is not waited for once stale (30 f), well before LAG_MAX', fin5 > 0 && fin5 <= K.MILK.staleF + 3, fin5);
+    P.sit(2, 1, G.frame, { x: xs5[1] + 9 }); step(1);
+    ok('refused: a claim whose state has its feet 9 px off the stool (slack 8) is not taken', !own(1), own(1));
+    // (the page side: my claim never shown as mine - my sit is let go when my view passes tick + LAG_MAX + 30, and I sit
+    // again on the same frame with a new tick - a new claim the host takes)
+    pl(3).local = true; put(3, xs5[2]); step(1); const t3 = P.mloc(3).tick;
+    delete G.mini.own[2]; let re3 = -1;
+    for (let f = 0; f < 120 && re3 < 0; f++) { step(1); const L = P.mloc(3); if (L.sit === 2 && L.tick > t3) re3 = G.frame; }
+    ok('let go: a sit my mirror never shows as mine is let go when my view passes tick + LAG_MAX + 30 - then I sit again at once with a new tick, a new claim', t3 > 0 && re3 === t3 + K.LAG_MAX + 31 && own(2) && own(2)[0] === 3 && own(2)[1] === re3, [t3, re3, own(2)]);
+    P.vclock(false);
+    // the close, the reveal, 유령, the survivor; the cap - stopSit: the stop in 5 f, everyone away from the stools until
+    // the frame before it, then the seats in map on their stools (sitting at S)
+    const stopSit = (map) => { const S = G.frame + 5; P.stopAt(S); for (const s of G.players.map((p) => p.slot)) put(s, 4 + 2 * s); step(4); const xs = P.stoolsAt(S); for (const [s, j] of map) put(s, xs[j]); step(1); return S; };
+    P.vclock(true, 1000);
+    party(CH4, { plan: ['chair'] }, 51); toPlaying();
+    stopSit([[0, 0], [1, 1], [2, 2]]);
+    ok('close: every stool final -> the reveal at once (+1 each sitter; the one standing a 유령: 탈락!)', chNow().ph === 2 && same(chNow().pts, { 0: 1, 1: 1, 2: 1 }) && same(chNow().gh, { 3: 1 }) && chNow().standF[3] === C.capF, chNow());
+    ok('reveal: the owners ride in g.mg as [stool, slot, stamp - S, final], the 유령 bits (8), the points', same(P.mg()[6].map((q) => q[3]), [1, 1, 1]) && P.mg()[7] === 8 && same(P.mg()[8], [1, 1, 1, 0]), P.mg());
+    toStop(2); step(1);
+    ok('stop 2: everyone stands up, the music again (chair), 3 stools still (the 유령 counts)', chNow().k === 3 && P.music() === 'chair' && !P.parked(0) && same(chNow().gh, { 3: 1 }), [chNow(), P.music()]);
+    stopSit([[3, 0], [1, 1], [2, 2]]);
+    ok('유령: still in every stop - it takes a stool (+1); the living one left standing goes out', chNow().pts[3] === 1 && same(chNow().gh, { 3: 1, 0: 1 }), chNow());
+    toStop(3); stopSit([[3, 0], [0, 1], [1, 2]]);
+    const pts3 = Object.assign({}, chNow().pts);
+    until(() => chNow().ph === 3, 100);
+    ok('set: one living player left (seat 1) - its +2 after the reveal, the banner', chNow().surv === 1 && chNow().pts[1] === pts3[1] + 2 && G.banner && G.banner.sub === P.tx().surv2, [chNow(), pts3, G.banner]);
+    toStop(4);
+    ok('set: ... then everyone living again at the next stop', same(chNow().gh, {}), chNow().gh);
+    // the cap: nobody sits - the living standing would all go out: nobody does
+    const S6 = G.frame + 5; P.stopAt(S6); for (const s of [0, 1, 2, 3]) put(s, 4 + 2 * s);
+    until(() => chNow().ph === 2, 400);
+    ok('cap: nobody sits - the stop closes at S + 240; all living standing would leave nobody: nobody goes out', G.frame === S6 + C.capF && same(chNow().gh, {}), [G.frame - S6, chNow().gh]);
+    // the key: points, then fewer frames to a seat
+    Object.assign(G.mini, { pts: { 0: 3, 1: 3, 2: 3, 3: 1 }, standF: { 0: 300, 1: 200, 2: 300, 3: 0 } });
+    const pm = new Map(P.places());
+    ok('key: equal points - the fewer frames to a seat places higher; equal both - a shared place', pm.get(1) === 1 && pm.get(0) === 2 && pm.get(2) === 2 && pm.get(3) === 4, P.places());
+    // coins: my stool kept (final) is one action
+    party(CH4, { plan: ['chair'] }, 53); toPlaying(); const bs0 = PS().coins.bshots;
+    stopSit([[0, 0], [1, 1]]); step(1);
+    ok('coins: MY seat\'s stool kept (final) is one action (seat 1\'s is not mine)', PS().coins.bshots === bs0 + 1, [bs0, PS().coins.bshots]);
+    // a leaver holding a claim: its stool free again; one player present per stool then - the close once everyone holds one
+    party(CH4, { plan: ['chair'] }, 55); toPlaying();
+    P.fakeBody(3, { rt: G.frame }); const S7 = stopSit([]);
+    P.sit(3, 0, S7 + 1); step(1);
+    const lv0 = own(0); P.drop(3); step(1);
+    ok('leaver: one leaves holding a claim - its stool is free again', lv0 && lv0[0] === 3 && !own(0), [lv0, own(0)]);
+    const xs7 = P.stoolsAt(S7); put(0, xs7[0]); put(1, xs7[1]); put(2, xs7[2]); step(1);
+    ok('leaver: 3 stools for 3 players now - the stop closes once every present player holds a final one', chNow().ph === 2 && same(chNow().pts, { 0: 1, 1: 1, 2: 1 }) && same(chNow().gh, {}), chNow());
+    toStop(2);
+    ok('leaver: the next stop has one stool fewer (2 for 3)', chNow().k === 2, chNow().k);
+    // two players: one stool - every stop a set: the sitter +1 +2, the other out and back
+    party(['duck', 'cat'], { plan: ['chair'] }, 57); toPlaying();
+    const S8 = stopSit([[1, 0]]);
+    ok('2 players: 1 stool; the sitter +1, the other a 유령', chNow().k === 1 && chNow().pts[1] === 1 && same(chNow().gh, { 0: 1 }), chNow());
+    until(() => chNow().ph === 3, 100); const p2 = chNow().pts[1], mu3 = P.music();
+    toStop(2); step(1);
+    ok('2 players: ... the set ends at once - the sitter +2, everyone back', p2 === 3 && same(chNow().gh, {}), [p2, chNow()]);
+    // the music on the next stop: chair again from its Ms (Snd.cur null in the reveal and the survivor's beat)
+    ok('music: none in the reveal / the survivor\'s beat; chair again at the next stop\'s start, G.music chair all along', mu3 === null && P.music() === 'chair' && G.music === 'chair' && chNow().Ms > S8, [mu3, P.music(), G.music]);
+    P.vclock(false);
+    // the view: S from the next snapshot when this one has none, owners bounded, bump bits, junk dropped
+    const v = P.chairView(['h', 2, 0, 9, 400, -1, [], 0, [1, 0, 0, 0], 8, 3, 0, -1], ['h', 2, 0, 9, 400, 600, [[0, 1, 4, 0]], 0, [], 8, 3, 0, -1]);
+    const v2 = P.chairView(['h', 2, 0, 9, 400, 600, [[0, 1, 4, 1], ['x'], [7, 2, 1, 0], [1, 9, 0, 0]], 4, [], 8, 3, 2, 3]);
+    ok('view: chairView takes S from the next snapshot of the same stop; owners [slot, S + rel, ..., final] within bounds (junk dropped), the 유령 / bump bits', v.S === 600 && same(v.own, {}) && same(v2.own['0'], [1, 604, 0, -1, true]) && Object.keys(v2.own).length <= 2 && same(v2.gh, { 2: 1 }) && same(v2.bump, { 1: 2 }) && v2.surv === 3, [v, v2]);
+    // the fast party: 3 stops under 35 s; the worst honest 판 (nobody ever sits: every stop to its cap) under 95 s
+    for (const fast of [true, false]) {
+      P.fast(fast); party(['duck', 'cat', 'frog'], { plan: ['chair'] }); toPlaying();
+      for (const s of [0, 1, 2]) put(s, 4 + s * 2);
+      const t0 = G.frame, n = chNow().n; until(() => G.mode !== 'playing', 95 * 60 + 60); const len = G.frame - t0;
+      ok((fast ? 'fast party: 3 stops, done in ' : 'worst honest 판 (nobody sits: 8 stops to their caps): ') + (len / 60).toFixed(1) + ' s - under ' + (fast ? 'fastSecs 35' : 'the 95 s cap'), n === (fast ? C.fast : C.stops) && G.mode === 'result' && len < (fast ? 35 : 95) * 60 && PS().left > 0, [n, len, G.mode]);
+    }
+    P.fast(false);
+    // the card
+    party(longNicks(), { plan: ['chair'] }); step(80);
+    const c = P.card();
+    ok('card: 목욕 의자 뺏기 - its how, rule and keys lines as specified', c.name === '목욕 의자 뺏기' && c.how === '음악이 멈추면 앉아요! 못 앉으면 빠져요' && c.rule === '의자는 늘 하나 모자라요 · 빠져도 유령으로 계속 앉아요 · 앉으면 1점, 끝까지 남으면 +2점' && c.keys === '←→ 달리기 · 의자에 닿으면 앉아요' && P.mini().chair.keysT === '조이스틱으로 달려서 의자에 닿아요' && c.demo, c);
+    const d = P.demo('chair');
+    ok('demo [chair]: 240 frames into a 96x32 context without errors, pixels left', d && !d.err && d.lit > 200, d);
+    // no regressions: a battle after a chair party - kits, bubbles, the music
+    D.local.battle(['capy', 'cat']); step(160);
+    const nb = G.bubbles.length; D.press('shoot', true, 0); step(2); D.press('shoot', false, 0); step(2);
+    ok('after a chair party: a battle blows bubbles, the capy\'s kit is back (no base flag left over), battle music', !PS().on && G.bubbles.length > nb && G.music === 'battle', [G.bubbles.length, nb, G.music]);
+  }
+
   // ---------------------------------------------------------------- screenshot scenes (#shot=tap|tapgo|taprev|tapcard|
   // chair|chairstop|chairrev|chaircard[&s=1|2|0]) - to LOOK at
   function setScale(s) {
@@ -228,6 +405,7 @@
       if (name === 'chaircard') step(100);
       else { toPlaying(); P.ghost(3, true); step(60); if (name !== 'chair') { P.stopAt(G.frame + 2); step(name === 'chairrev' ? 400 : 30); } }
     }
+    if (/^chair/.test(name) && G.mini) info('scene ' + name + ': ' + JSON.stringify({ c: P.chair(), stools: P.stoolsAt(G.frame), xs: G.players.map((p) => p.x + 8), f: G.frame, mloc: P.mloc() }));
     D.G.manual = true; D.step(0);
     await sleep(300);
     log('PARTY2 SHOT READY ' + name);
@@ -238,7 +416,7 @@
     D.tro.ns('party2'); D.tro.away(false);
     const sm = /shot=([a-z]+)/.exec(location.hash);
     if (sm) { await shot(sm[1]); return; }
-    const steps = [machineryTests, stampTests, tapTests];
+    const steps = [machineryTests, stampTests, tapTests, chairTests];
     for (const f of steps) {
       try { await f(); } catch (e) { fail++; log('PARTY2 FAIL ' + f.name + ' threw: ' + (e && e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : e)); }
     }

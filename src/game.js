@@ -375,7 +375,7 @@ window.PG = window.PG || {};
   // beeps and no 10초 남았어요! (its rounds or each page's own clock end it); fastSecs - the debug fast party's length;
   // party-games-2 3.4: music - miniStart's track instead of 'battle' (null: none); base - everyone on KIT_BASE (kitOf);
   // short - the game in the room's new-games line)
-  const MINI_IDS = ['water', 'crown', 'ball', 'milk', 'puff', 'sneak', 'tap'];
+  const MINI_IDS = ['water', 'crown', 'ball', 'milk', 'puff', 'sneak', 'tap', 'chair'];
   const MINI_OLD = 3;   // (the first three: the arena games of party.md / the polish; the room's rules list the rest on a line of their own)
   // (a short no-KO capture in every minigame; prisons sink in 물 0.3 px/f; out once the feet are 3 px under the surface; a
   // guest draws the water at its estimate of the host's NOW, at most WATER_LEAD frames past the newest snapshot - 4.1;
@@ -17202,7 +17202,7 @@ window.PG = window.PG || {};
       // (의자) a stool's x - pure; the stools of the stop now at view tick t (this screen's mirror); the stop's tick by
       // hand (host: hidden from the wire until reached); the game's state; its seed by hand; a fake remote seat sitting on
       // a stool at view tick tick (its state at the stool with its mi, through fakeBody - at: its arrival, else now); a
-      // 의자 row as a guest's chairView reads it (a fresh mirror)
+      // 의자 row as a guest's chairView reads it (a fresh mirror); o: {x, dx, rt (its view, else tick), at}
       chairX: (seed, i, j, dt) => chairX(seed, i, j, dt),
       stoolsAt: (t) => { const M = G.mini; return M && M.id === 'chair' ? chairStools(M, +t) : null; },
       stopAt(t) { const M = G.mini; if (!M || M.id !== 'chair' || M.ph !== 0) return null; M.S = +t; return M.S; },
@@ -17211,7 +17211,7 @@ window.PG = window.PG || {};
       sit(slot, stool, tick, o) {
         const M = G.mini, p = G.players.find((q) => q.slot === slot); if (!M || M.id !== 'chair' || !p || !G.party) return null;
         const x = (o && o.x !== undefined ? +o.x : chairStools(M, Math.max(M.S, G.frame))[stool]) - 8;
-        return api.fakeBody(slot, Object.assign({ x, y: chairFloor() - 16, fl: 1, rt: Math.max(0, tick | 0), mi: [G.party.i, M.i, stool | 0, Math.max(0, (tick | 0) - M.S), (o && o.dx) | 0] }, o && o.at !== undefined ? { at: o.at } : {}));
+        return api.fakeBody(slot, Object.assign({ x, y: chairFloor() - 16, fl: 1, rt: Math.max(0, o && o.rt !== undefined ? o.rt | 0 : tick | 0), mi: [G.party.i, M.i, stool | 0, Math.max(0, (tick | 0) - M.S), (o && o.dx) | 0] }, o && o.at !== undefined ? { at: o.at } : {}));
       },
       chairView: (mg, mg1) => { const M = chairView(mg, mg1 || null, 0, { pa: {} }, { id: 'chair', seeded: false }); return JSON.parse(JSON.stringify({ i: M.i, ph: M.ph, seed: M.seed, Ms: M.Ms, S: M.S, k: M.k, own: M.own, gh: M.gh, pts: M.pts, n: M.n, bump: M.bump, surv: M.surv })); },
       result: () => partyResult(), next: () => partyNext(), final: (walk) => partyFinal(!!walk), places: () => (G.mini ? Array.from(miniPlaces().entries()) : []),
