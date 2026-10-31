@@ -26,7 +26,10 @@ const SFX_V8 = ['dry', 'reload']; // (battle: an empty press; the magazine refil
 const SFX_V9 = ['mg_title', 'mg_go', 'mg_finish', 'mg_win', 'tally', 'rank_up', 'drumroll', 'award'];
 // 파티 새 게임 (design/party-games.md §9.2): 펑's puff, o.n 0..10 (local, NO_ECHO)
 const SFX_V10 = ['puff'];
-const SFX_NAMES = SFX_V1.concat(SFX_V2, SFX_V3, SFX_V4, SFX_V5, SFX_V6, SFX_V7, SFX_V8, SFX_V9, SFX_V10);
+// 파티 새 게임 2 (design/party-games-2.md §10.2): 수도꼭지's faucet note o.n 0..3, 의자's record scratch, 계란's tick o.n 0..3
+// and its burst (local, NO_ECHO)
+const SFX_V11 = ['tap', 'scratch', 'egg_tick', 'egg_boom'];
+const SFX_NAMES = SFX_V1.concat(SFX_V2, SFX_V3, SFX_V4, SFX_V5, SFX_V6, SFX_V7, SFX_V8, SFX_V9, SFX_V10, SFX_V11);
 const V5_SOUNDS = [['stake', null], ['tro_fly', 0], ['tro_fly', 1], ['tro_fly', 2], ['tro_fly', 3], ['tro_fly', 4], ['tro_fly', 5], ['tro_up', null], ['tro_down', null], ['promote', null]];
 // every distinct v4 sound as [name, n]: n-variants per the spec, pop n 1..6 per animal (null = no opts)
 const V4_SOUNDS = [['pop', 1], ['pop', 2], ['pop', 3], ['pop', 4], ['pop', 5], ['pop', 6],
@@ -39,8 +42,9 @@ const BACKUP = path.join(__dirname, '..', 'src-v3-backup', 'audio.js');
 const TRACKS_V2 = ['title', 'main', 'hurry', 'clear', 'gameover', 'ending', 'boss', 'final', 'victory'];
 const TRACKS_V3 = ['lobby', 'battle', 'podium'];
 const TRACKS_V9 = ['party']; // (파티 다듬기: between the minigames)
-const TRACKS = TRACKS_V2.concat(TRACKS_V3, TRACKS_V9);
-const LOOPS = ['title', 'main', 'hurry', 'boss', 'final', 'lobby', 'battle', 'party'];
+const TRACKS_V11 = ['chair']; // (파티 새 게임 2: 목욕 의자 뺏기's musical-chairs tune)
+const TRACKS = TRACKS_V2.concat(TRACKS_V3, TRACKS_V9, TRACKS_V11);
+const LOOPS = ['title', 'main', 'hurry', 'boss', 'final', 'lobby', 'battle', 'party', 'chair'];
 const JINGLES = ['clear', 'gameover', 'ending', 'victory', 'podium'];
 
 let failures = 0, passes = 0;
@@ -1005,6 +1009,61 @@ const label = (name, n) => name + (n === null ? '' : '(n=' + n + ')');
   const gsrc = fs.existsSync(path.join(__dirname, '..', 'src', 'game.js')) ? fs.readFileSync(path.join(__dirname, '..', 'src', 'game.js'), 'utf8') : '';
   const ne = /const NO_ECHO = {([^}]*)}/.exec(gsrc);
   ok(!gsrc || (ne && /\bpuff: 1\b/.test(ne[1])), 'puff is in game.js NO_ECHO');
+}
+
+// ---------------------------------------------------------------- 파티 새 게임 2 (party-games-2 10.2)
+// 수도꼭지's tap o.n 0..3: each makes sound, nothing in the past, short (~120 ms), quieter than shoot, four distinct
+// pitches rising C5 E5 G5 C6; 의자's scratch: a band-passed sweep 1800 -> 300 Hz with a low thump, about 0.25 s, no
+// louder than shoot; the chair song: a 4-bar loop at 150 bpm with drums; odd opts safe; both sounds in game.js NO_ECHO
+{
+  const E = makeEnv();
+  const A = E.A;
+  A.unlock();
+  const sh = grab(E, 'shoot'), got = [];
+  for (let n = 0; n <= 3; n++) {
+    const r = grab(E, 'tap', { n }); got.push(r);
+    ok(r.srcs.length > 0 && r.made.every((x) => x.startT == null || x.startT >= E.ctx.currentTime), 'tap(' + n + ') makes sound, nothing in the past');
+    ok(r.span > 0.08 && r.span < 0.25, 'tap(' + n + ') is short (' + r.span.toFixed(2) + ' s)');
+    ok(r.lvl < sh.lvl, 'tap(' + n + ') is quieter than shoot (' + r.lvl.toFixed(3) + ' vs ' + sh.lvl.toFixed(3) + ')');
+  }
+  const pitch = (r) => (r.f0.find((q) => q[0] === 'o:square') || [0, 0])[1], want = [72, 76, 79, 84].map((m) => 440 * Math.pow(2, (m - 69) / 12));
+  ok(got.every((r, n) => Math.abs(pitch(r) - want[n]) < 0.5), 'tap: the four faucets are C5 E5 G5 C6 (' + got.map((r) => pitch(r).toFixed(1)).join(' ') + ')');
+  const sc = grab(E, 'scratch');
+  ok(sc.srcs.length > 0 && sc.span > 0.15 && sc.span < 0.4 && sc.lvl <= sh.lvl + 1e-9, 'scratch is a short sound no louder than shoot (' + sc.span.toFixed(2) + ' s, ' + sc.lvl.toFixed(3) + ')');
+  ok(sc.f0.some((q) => q[0] === 'n:bandpass' && q[1] === 1800 && q[2] === 300) && sc.f0.some((q) => q[0] === 'o:sine' && q[1] === 80), 'scratch: a band-passed sweep 1800 -> 300 Hz and an 80 Hz thump');
+  noThrow(() => { for (const o of [undefined, null, {}, { n: NaN }, { n: -4 }, { n: 1e9 }, 'x', 7]) { A.sfx('tap', o); A.sfx('scratch', o); E.advance(0.3); } }, 'tap / scratch with odd opts');
+  ok(E.errors.length === 0, 'tap / scratch: no invalid Web Audio calls ' + E.errors.slice(0, 3).join(' | '));
+  const C = A._songs.chair;
+  ok(!!C && C.loop && C.loopStart === 0 && C.len === 4 * 16 && C.bpm === 150 && C.ev.flat().filter(Boolean).some((e) => e.c === 'drum'), 'chair: a 4-bar loop at 150 bpm with drums');
+  const gsrc = fs.existsSync(path.join(__dirname, '..', 'src', 'game.js')) ? fs.readFileSync(path.join(__dirname, '..', 'src', 'game.js'), 'utf8') : '';
+  const ne = /const NO_ECHO = {([^}]*)}/.exec(gsrc);
+  ok(!gsrc || (ne && /\btap: 1\b/.test(ne[1]) && /\bscratch: 1\b/.test(ne[1])), 'tap and scratch are in game.js NO_ECHO');
+}
+
+// 계란's egg_tick o.n 0..3: a click of ~30 ms, 900 Hz + 150 Hz x o.n (four distinct pitches), quieter than shoot;
+// egg_boom: a short noise burst and a falling high sizzle, about 0.35 s, no louder than shoot; odd opts safe; both in
+// game.js NO_ECHO
+{
+  const E = makeEnv();
+  const A = E.A;
+  A.unlock();
+  const sh = grab(E, 'shoot'), got = [];
+  for (let n = 0; n <= 3; n++) {
+    const r = grab(E, 'egg_tick', { n }); got.push(r);
+    ok(r.srcs.length > 0 && r.made.every((x) => x.startT == null || x.startT >= E.ctx.currentTime), 'egg_tick(' + n + ') makes sound, nothing in the past');
+    ok(r.span > 0.01 && r.span < 0.12, 'egg_tick(' + n + ') is a click (' + r.span.toFixed(3) + ' s)');
+    ok(r.lvl < sh.lvl, 'egg_tick(' + n + ') is quieter than shoot (' + r.lvl.toFixed(3) + ' vs ' + sh.lvl.toFixed(3) + ')');
+  }
+  const pitch = (r) => (r.f0.find((q) => q[0] === 'o:triangle') || [0, 0])[1];
+  ok(got.every((r, n) => Math.abs(pitch(r) - (900 + 150 * n)) < 1e-6), 'egg_tick: 900 Hz + 150 Hz x o.n (' + got.map(pitch).join(' ') + ')');
+  const bm = grab(E, 'egg_boom');
+  ok(bm.srcs.length > 0 && bm.span > 0.2 && bm.span < 0.5 && bm.lvl <= sh.lvl + 1e-9, 'egg_boom is a short burst no louder than shoot (' + bm.span.toFixed(2) + ' s, ' + bm.lvl.toFixed(3) + ')');
+  ok(bm.f0.some((q) => q[0] === 'n:highpass' && q[1] > q[2]), 'egg_boom: a falling high-passed sizzle');
+  noThrow(() => { for (const o of [undefined, null, {}, { n: NaN }, { n: -4 }, { n: 1e9 }, 'x', 7]) { A.sfx('egg_tick', o); A.sfx('egg_boom', o); E.advance(0.4); } }, 'egg_tick / egg_boom with odd opts');
+  ok(E.errors.length === 0, 'egg_tick / egg_boom: no invalid Web Audio calls ' + E.errors.slice(0, 3).join(' | '));
+  const gsrc = fs.existsSync(path.join(__dirname, '..', 'src', 'game.js')) ? fs.readFileSync(path.join(__dirname, '..', 'src', 'game.js'), 'utf8') : '';
+  const ne = /const NO_ECHO = {([^}]*)}/.exec(gsrc);
+  ok(!gsrc || (ne && /\begg_tick: 1\b/.test(ne[1]) && /\begg_boom: 1\b/.test(ne[1])), 'egg_tick and egg_boom are in game.js NO_ECHO');
 }
 
 // ---------------------------------------------------------------- T. the v1-v3 effects are untouched by v4

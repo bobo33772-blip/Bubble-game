@@ -95,7 +95,10 @@
  * 무대 목욕탕 (key 'stage'): a plain box, every STAGE_X spot standable. 살금살금 복도 (key 'sneak', sneak: { start, it,
  * line }, design/party-games.md 6.6): start and it standable on the floor, start left of it, the line at least 120 px
  * past the start's body and short of the 술래's; nothing solid on rows 21-24 between them but stools 1-2 tiles high
- * with 3 rows of air over them.
+ * with 3 rows of air over them. 비누 평상 (key 'sumo', sumo: { wl, spots, revive }, design/party-games-2.md 7.7): one
+ * 평상 - a solid run on rows 21-24, the same columns on each row - with nothing over it up to row 1; a 탕 on each side,
+ * open from row 21 to the floor (the walls to the 평상); wl between the 평상's top and the floor; every spot (2 / 3 / 4
+ * players, feet centres in px) and revive: a 16 px body standing on the 평상 with 2 rows of air over it.
  */
 'use strict';
 const fs = require('fs');
@@ -182,8 +185,8 @@ const LEVELS = ctx.PG && ctx.PG.LEVELS;
 if (!Array.isArray(LEVELS)) fatal('PG.LEVELS is not an array');
 const ARENAS = ctx.PG && ctx.PG.ARENAS;
 const PARTY_ARENAS = ctx.PG && ctx.PG.PARTY_ARENAS;
-const PARTY_KEYS = ['water', 'ball', 'stage', 'sneak'];   // (파티: 물 차는 대욕장, 거품 축구장, 무대 목욕탕, 살금살금 복도)
-const PARTY_NAMES = ['물 차는 대욕장', '거품 축구장', '무대 목욕탕', '살금살금 복도'];
+const PARTY_KEYS = ['water', 'ball', 'stage', 'sneak', 'sumo'];   // (파티: 물 차는 대욕장, 거품 축구장, 무대 목욕탕, 살금살금 복도, 비누 평상)
+const PARTY_NAMES = ['물 차는 대욕장', '거품 축구장', '무대 목욕탕', '살금살금 복도', '비누 평상'];
 const STAGE_X = { 2: [100, 156], 3: [72, 128, 184], 4: [44, 100, 156, 212] };   // (game.js STAGE_X: world: false feet centres by players)
 const BALL_R = 11; // (game.js BALL.r: the 축구 ball's radius, px)
 const WATER_SLACK = 3, WATER_SECS = 60, CEIL_Y = 24; // (game.js MINI.water / WATER_SLACK; the ceiling's underside)
@@ -228,7 +231,7 @@ function analyse(L, idx, kind) {
   const isBoss = !arena && !party && L.boss !== undefined;
   if (typeof L.name !== 'string' || !L.name.trim()) err('name missing');
   if (!Number.isInteger(L.theme) || L.theme < 0 || L.theme > 4) err('theme must be an integer 0..4');
-  const known = party ? new Set(['key', 'name', 'theme', 'closed', 'map', 'players', 'gather', 'rise', 'goals', 'sides', 'ball', 'sneak'])
+  const known = party ? new Set(['key', 'name', 'theme', 'closed', 'map', 'players', 'gather', 'rise', 'goals', 'sides', 'ball', 'sneak', 'sumo'])
     : arena ? new Set(['name', 'theme', 'map', 'players', 'enemySpawns', 'gather', 'water'])
       : new Set(['name', 'theme', 'map', 'player', 'players', 'enemies', 'gather', 'special', 'boss', 'bossSpawn']);
   for (const k of Object.keys(L)) if (!known.has(k)) warn(`unknown field "${k}"`);
@@ -981,6 +984,41 @@ function analyse(L, idx, kind) {
       res.sneak = `start (${S.start.col},${S.start.row}) x ${sx} · 술래 (${S.it.col},${S.it.row}) x ${ix} · line ${S.line} (${S.line - sx - 16} px to walk) · stools ${stools.map((q) => `cols ${q.c0}-${q.c1} (${q.h} high)`).join(', ') || 'none'}`;
     }
   }
+  // 비누 평상 (design/party-games-2.md 7.7): the 평상 - one solid run on row 21, the same columns solid on rows 22-24 -
+  // nothing over it (rows 1-20 open everywhere), a 탕 on each side open from row 21 to the floor; wl between the 평상's top
+  // and the floor; every spot and revive a body standing on the 평상 (inside its columns) with 2 rows of air over it
+  if (party && L.key === 'sumo') {
+    const S = L.sumo, top = 21, flY = 16 + (ROWS - 1) * TS, topY = 16 + top * TS;
+    const cols = []; for (let c = IN_L; c <= IN_R; c++) if (B(top, c)) cols.push(c);
+    const c0 = cols.length ? cols[0] : -1, c1 = cols.length ? cols[cols.length - 1] : -1;
+    if (!cols.length || cols.length !== c1 - c0 + 1) err('sumo: row 21 needs exactly one solid run (the 평상)');
+    else {
+      if (c0 <= IN_L || c1 >= IN_R) err(`sumo: the 평상 (cols ${c0}-${c1}) must leave a 탕 on each side`);
+      for (let r = top; r <= ROWS - 2; r++) for (let c = IN_L; c <= IN_R; c++) {
+        const in평상 = c >= c0 && c <= c1;
+        if (in평상 && !B(r, c)) err(`sumo: (${c},${r}) is under the 평상 and must be solid`);
+        if (!in평상 && !O(r, c)) err(`sumo: (${c},${r}) is in a 탕 and must be open`);
+      }
+      for (let r = 1; r < top; r++) for (let c = IN_L; c <= IN_R; c++) if (!O(r, c)) { err(`sumo: (${c},${r}) over the 평상 must be open air`); r = top; break; }
+    }
+    if (!S || typeof S !== 'object' || !Number.isFinite(S.wl) || !Number.isFinite(S.revive) || !S.spots || typeof S.spots !== 'object') err('the sumo arena needs sumo: { wl (px), spots: {2: [x x2], 3: [x x3], 4: [x x4]}, revive (px) }');
+    else if (cols.length) {
+      if (!(S.wl > topY && S.wl < flY)) err(`sumo.wl ${S.wl} must be between the 평상's top (${topY}) and the floor (${flY})`);
+      const onIt = (cx, tag) => {
+        if (!Number.isFinite(cx)) { err(`${tag}: not a number`); return; }
+        if (cx - 8 < c0 * TS || cx + 8 > (c1 + 1) * TS) err(`${tag} ${cx}: the 16 px body is not on the 평상 (x ${c0 * TS}-${(c1 + 1) * TS})`);
+        for (let c = Math.floor((cx - 8) / TS); c <= Math.floor((cx + 7) / TS); c++) if (!O(top - 1, c) || !O(top - 2, c)) err(`${tag} ${cx}: no room for the body at col ${c}`);
+      };
+      for (const n of [2, 3, 4]) {
+        const a = S.spots[n];
+        if (!Array.isArray(a) || a.length !== n) { err(`sumo.spots[${n}] must list ${n} feet centres`); continue; }
+        a.forEach((cx, k) => onIt(cx, `sumo.spots[${n}][${k}]`));
+        for (let k = 1; k < a.length; k++) if (!(a[k] - a[k - 1] >= 16)) err(`sumo.spots[${n}]: ${a[k - 1]} and ${a[k]} overlap (16 px apart at least, left to right)`);
+      }
+      onIt(S.revive, 'sumo.revive');
+      res.sumo = `평상 cols ${c0}-${c1} (x ${c0 * TS}-${(c1 + 1) * TS}, top y ${topY}) · 탕 cols ${IN_L}-${c0 - 1} / ${c1 + 1}-${IN_R} · wl ${S.wl} · spots ${[2, 3, 4].map((n) => `${n}: ${(S.spots[n] || []).join('/')}`).join(' · ')} · revive ${S.revive}`;
+    }
+  }
   const tens = '    ' + Array.from({ length: COLS }, (_, c) => (c >= 10 ? String(Math.floor(c / 10)) : ' ')).join('');
   const ones = '    ' + Array.from({ length: COLS }, (_, c) => String(c % 10)).join('');
   res.lines = [tens, ones, ...grid.map((row, r) => `${String(r).padStart(2)}  ${row.join('')}`)];
@@ -1104,6 +1142,7 @@ else {
       if (res.ball) console.log('    goals: ' + res.ball);
       if (res.stage) console.log('    stage: ' + res.stage);
       if (res.sneak) console.log('    sneak: ' + res.sneak);
+      if (res.sumo) console.log('    sumo: ' + res.sumo);
       for (const m of res.N) console.log(`  note:  ${m}`);
       for (const m of res.E) console.log(`  ERROR: ${m}`);
       for (const m of res.W) console.log(`  warn:  ${m}`);

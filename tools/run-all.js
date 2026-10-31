@@ -107,6 +107,9 @@ const LIST = [
   // (the engine stepped frame by frame); its card on a landscape phone (the size it meets there: rotSync covers an upright one)
   V('party', 'test-party.html', 120000, doneZero('PARTY'), { shot: 'runall-party.png' }),
   V('party-fit-568', 'test-party.html#fit&touch=1', 30000, doneZero('PARTY'), { w: 568, h: 320, runner: 'cdp', mobile: true, done: 'PARTY DONE' }),
+  // ---- 파티 새 게임 2 (design/party-games-2.md §14.1): the machinery v2 and the new games - offline, virtual time (the
+  // rotation, the cards' fit, the demos and the HUD over every game stay in party)
+  V('party2', 'test-party2.html', 120000, doneZero('PARTY2'), { shot: 'runall-party2.png' }),
   // ---- v4 shop (design/shop.md 16): 비누 코인 (the battle economy, runs through real clears, the day bonus and soft cap,
   // the pace), the store v2 (the v1 migration, clamps, read-modify-write, buy / wear), the card rows and their fit, the
   // podium's coin line; then (S2) the items in play. check-shop: the catalog against the art, anchors and texts. Its
@@ -223,11 +226,11 @@ const LIST = [
   V('trophies-net', HTTP + 'test-trophies-net.html', 'rt480000', doneZero('TROPHYNET'), { done: 'TROPHYNET DONE', w: 1200, h: 900 }),
   // 파티 online (design/party.md §13.2; 4 bc frames): the old-page gate, the cards on every screen, the water clock, the
   // crown's authority, the podium and the coins, leavers, 파티 한 번 더
-  V('party-net', HTTP + 'test-party-net.html', 'rt780000', doneZero('PARTYNET'), { done: 'PARTYNET DONE', w: 1200, h: 900 }),
+  V('party-net', HTTP + 'test-party-net.html', 'rt900000', doneZero('PARTYNET'), { done: 'PARTYNET DONE', w: 1200, h: 900 }),
   // the new games on a slow link (design/party-games.md §13.2): frame 3 at lat 100 / jit 40 - 바나나우유's RT from each
   // page's own draw and real key events, 펑's same press pattern -> the same score at 8 and at 100 ms, 술래's judge by
   // each runner's own view (never caught stopping in time on its own screen, arrivals by stamp, a guest 술래's turn)
-  V('party-net-lag', HTTP + 'test-party-net.html#lag', 'rt300000', doneZero('PARTYNET'), { done: 'PARTYNET DONE', w: 1200, h: 900 }),
+  V('party-net-lag', HTTP + 'test-party-net.html#lag', 'rt420000', doneZero('PARTYNET'), { done: 'PARTYNET DONE', w: 1200, h: 900 }),
   // v4 shop online (design/shop.md 16.2, pass S4; 3 bc frames): hi.lk / 'eq' / R index 5 in the room only, forged sets,
   // an old-page guest; in game the room's sets frozen and drawn on every page, game-phase R seats 4 long in every
   // snapshot; battle coins = the host-side coinBattle on every page (the guest's clock), a countdown leaver, co-op 탕 /
