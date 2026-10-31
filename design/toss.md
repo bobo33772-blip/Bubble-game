@@ -1116,7 +1116,7 @@ only phones can settle is 20.3.
   `host` as a host name).
 - `PG.debug.ait` gained `order(t)` (the whole `aitOrder`), `partyOn()` and `partySettle(m, walk)` (tests only).
 
-### 20.2 Tests (2026-10-31; `PG_BUILD_TEMP=C:/Temp/bogeul-toss`, port 8792, `--mute-audio`; no full suite)
+### 20.2 Tests (2026-10-31; `PG_BUILD_TEMP=C:/Temp/bogeul-toss`, port 8792, `--mute-audio`; the full suite once, last row)
 | Job | Result |
 |---|---|
 | `check-toss` (`--static` + the build copy) | 127 passed, 0 failed |
@@ -1126,11 +1126,12 @@ only phones can settle is 20.3.
 | `toss-fit-*` (cdp, 41 jobs) | 41 / 41 |
 | party, smoke, check-integration, trophies, check-pages, check-cloud, relay-node, audio-node, net-node, party-net, net-ws, battle-net-ws, ws-deploy, peer-deploy, pwa, cloud, touch-input, touch-play/title-844/932, touch-rec-844, touch-room-844 | all pass |
 | trophies-net | 113 / 1 once (its `party R … R.f = [2]` line read the room before the short seat was listed), 114 / 0 on the rerun: a timing flake in main's test, no Toss code on that path |
+| **the full suite** (after 20.4's fix, same settings) | `RUN-ALL OK: 339/339 jobs passed (1 skipped: ws-workerd)`, no rerun; `toss` 139 / 0 |
 
 `toss/`: `npm ci` ran inside OneDrive without EPERM / EBUSY (npm 11 only warns that the esbuild and protobufjs install
 scripts are not approved; the build does not need them). `npm run build`: `check-toss --dist` 34 / 0 (374 files,
-5.67 MB uncompressed), `ait build`, then `CHECK-TOSS OK: ppodeuk-bath.ait 4657.4 KB, build 83257e6964b1`. The .ait is
-not committed (`toss/.gitignore`). The built `toss/dist` opened in Chrome outside Toss (every SDK call throws there)
+5.67 MB uncompressed), `ait build`, then `CHECK-TOSS OK: ppodeuk-bath.ait 4657.4 KB, build 83257e6964b1`; rebuilt after
+20.4: `CHECK-TOSS OK: ppodeuk-bath.ait 4657.7 KB, build c639e81cff49`. The .ait is not committed (`toss/.gitignore`). The built `toss/dist` opened in Chrome outside Toss (every SDK call throws there)
 shows the title with the bundled fonts and logs no error.
 
 ### 20.3 Open points
@@ -1155,3 +1156,35 @@ shows the title with the bundled fonts and logs no error.
    (자체등급분류사업자), entered in the console's app info, not in the .ait. Its exact fields and image sizes are
    UNCONFIRMED and belong to the rating research, together with the listing (names, icon 600x600, thumbnail 1932x828,
    screenshots).
+
+### 20.4 Review before the PR (2026-10-31)
+A fresh pass over `git diff origin/main...HEAD` for what would get the build rejected or break on a phone:
+- **Google sign-in, Firestore, outside links, `eval`**: none reachable in the Toss bundle. The six cut regions take out
+  every sign-in call, `intent://`, `kakaotalk://`, `window.open` and the one `location.href =`; `check-toss --dist`
+  finds 0 banned patterns and no host outside the allowlist. Left in `pg/game.js`, inert: the cloud code (`firestore`
+  5 times, all behind `CLOUD.on`, which needs a `window.PG_CLOUD` no Toss page has) and risk 4's Google-named strings.
+- **Safe Area**: the 3.9.0 code reads `SafeAreaInsets.get()` from the constants Toss injects and fires `subscribe` on
+  every change, so the rotation `setOrientation` causes arrives as an event (the subscription is made in the same
+  tick as the request). `--sa-*` everywhere, 41 fit jobs.
+- **Header / back**: the nav bar (더보기 / X) is the only bar; the game's title row has no back control, the panels'
+  뒤로 / 닫기 sit in their content. Exit: the X's own modal; Android back at the bare title stays Toss's own until
+  15.6.5 says otherwise (`AIT_ROOT_BACK`).
+- **Only HTTPS / `wss://`**: the relay (`https://` → `wss://`), PeerJS on 443; the bundle's `http://` strings are a
+  comment and the loopback test pattern.
+- **Rooms**: space `t` in `net.js` whenever `PG_AIT` is set, whatever the tag says; PeerJS `ppodeuk-t-`.
+- **Trophies / cloud under `AIT.on`**: the two core guards, party-trophies.md 14's three points, no cloud write.
+- **Storage**: every SDK call capped; the `getItems` / `setItems` shapes match the 3.9.0 types
+  (`Record<string, string | null>` / `Record<string, string>`).
+- **The web build**: its deploy page built from `origin/main` and from this branch differs outside the engine scripts
+  only in the `env()` → `var(--sa-*)` rewrites (the same values) and the `.pg-ait*` CSS, which matches nothing there.
+  The engine's Toss paths are all behind `AIT.on`; the one change for every build is 10's `Snd.hold` on hide and
+  `pagehide` (the sound stops at once; `visibilitychange` visible, which also fires on a back-forward-cache return,
+  brings it back).
+
+Fixed: **the sound could stay off after a Toss overlay or the leaderboard.** `aitShow(false)` and `aitLbOpen` held the
+sound, and only `visibilitychange` visible or `onShow(true)` released it. Whether Toss sends either when its exit
+modal or the board closes is UNCONFIRMED (15.6.4), and opening the board need not hide the page: the game then stayed
+silent with its sound button on. Now `aitHold(on)` keeps `AIT.held`, and `aitWake` (a capture `pointerdown` /
+`keydown` on the page, Toss only) ends the hold: a tap on the game means it is in front again. A hidden page is never
+released that way. `toss.js` T5 / T6 gained three checks (they fail without the fix); `PG.debug.ait.state()` shows
+`held`.
