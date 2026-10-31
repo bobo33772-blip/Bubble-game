@@ -10,7 +10,11 @@
 // the show's lit frames and notes, the go draw once, answers - right, wrong at once, early presses ignored, the window's
 // edge, the minMs clamp -, the close on all reports / a stale seat / the cap, points, 유령, everyone wrong, a 유령
 // scoring, the end's +2, the key, coins, a leaver, the view and its merge, the fast party, the worst honest 판, pips
-// without directions, no music, the card), 목욕 의자 뺏기 (chairTests).
+// without directions, no music, the card), 목욕 의자 뺏기 (chairTests), 맥반석 계란 돌리기 (eggTests: the kits' base flag, the
+// drop - never the last loser, never a stale seat -, B hidden, the heat, receipts on this screen - the slack, the juggle,
+// a remote holder's shownAt sample, remote receipts and since = the stamp -, the prediction and its undos, hot feet, the
+// burst's wait and late passes, points, 유령, the survivor, a leaver, a hidden tab, the key, coins, 2 players, the view,
+// the lengths, the card).
 // Prints "PARTY2 PASS|FAIL <name>", "PARTY2 INFO ..." and "PARTY2 DONE pass=N fail=M".
 (function () {
   'use strict';
@@ -427,6 +431,12 @@
       }
     }
     ok('drop: never onto the last round\'s loser (3 parties x 6 rounds)', !bad.length, bad);
+    // ... and never onto a stale seat (a hidden tab could never pass it on): seats 1 and 2 remote, silent after one state
+    party(['duck', 'cat', 'frog'], { plan: ['egg'] }, 62); toPlaying();
+    P.fakeBody(1, { rt: G.frame }); P.fakeBody(2, { rt: G.frame }); step(K.MILK.staleF + 2);
+    const onto = [];
+    for (let r = 1; r <= 4 && G.mode === 'playing'; r++) { toEggRound(r); toLive(); if (r >= 2) onto.push(egg().holder); P.burstAt(G.frame + 1); until(() => egg().ph >= 3, 80); }
+    ok('drop: never onto a stale seat - with seats 1 and 2 silent every drop is seat 0\'s (' + onto.join(' ') + ')', onto.length >= 3 && onto.every((s) => s === 0), onto);
     // receipts on this screen: the slack (3 px counts, 3.1 does not); the juggle; a pass back after it
     party(CH4, { plan: ['egg'] }, 65); toPlaying(); toLive();
     apart(); P.eggHold(1); stand(1, 40); stand(0, 40 + 12 + 3.1); step(1);
