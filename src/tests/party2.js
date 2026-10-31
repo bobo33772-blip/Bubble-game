@@ -47,7 +47,8 @@
     ok('rules: the new games line is 새 게임: + their short names (' + want + ')', r.includes(want) && !r.some((l) => l.indexOf('바나나우유 잡기 ·') >= 0), r);
     // PARTY_TEXT warms every new string (the names, how / rule / keys lines, short, the PARTY_TX additions)
     const txt = P.text(), tx = P.tx();
-    const need = ['수도꼭지 순서 기억하기', MI.tap.how, MI.tap.rule, MI.tap.keys, MI.tap.keysT, tx.ghost1, tx.ghost2, tx.tpGo, tx.tpWatch, tx.tpAll1, tx.tpAll2, tx.tpEnd, tx.newGames.trim(), tx.surv2, tx.survAll, tx.miss, tx.tpLate];
+    const need = ['수도꼭지 순서 기억하기', MI.tap.how, MI.tap.rule, MI.tap.keys, MI.tap.keysT, tx.ghost1, tx.ghost2, tx.tpGo, tx.tpWatch, tx.tpAll1, tx.tpAll2, tx.tpEnd, tx.newGames.trim(), tx.surv2, tx.survAll, tx.miss, tx.tpLate,
+      '맥반석 계란 돌리기', MI.egg.how, MI.egg.rule, MI.egg.keys, MI.egg.keysT, MI.egg.short, tx.egDrop, tx.egMine1, tx.egMine2, tx.egHot];
     ok('PARTY_TEXT holds every new string of the games in play', need.every((s) => txt.indexOf(s.replace('{0}', '')) >= 0), need.filter((s) => txt.indexOf(s.replace('{0}', '')) < 0));
     // music: none for 수도꼭지 (no music at its 시작!); the base kit in 술래 unchanged
     party(['duck', 'cat'], { plan: ['tap'] }); toPlaying(); step(2);

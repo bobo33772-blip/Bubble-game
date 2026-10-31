@@ -320,7 +320,7 @@ window.PG = window.PG || {};
     sylF: 6, queue: 3, idleF: 60, autoF: 24, tangF: 21, lookF: 90, graceF: 10, freeF: 30, feintF: 8, feintFrom: 3,
     moveTol: 2, vxTol: 0.1, vxF: 12, lagMax: LAG_MAX, drift: 1.2, driftY: 188, hurryF: 180, arr: [3, 2, 1], catch: 1, catchMax: 3,
     progPx: 16, chantN: 3, fast: 2, fastCap: 6, endF: 30 };
-  // the out players of 수도꼭지 / 의자 (party-games-2 3.1): drawn at alpha; the set's survivor (수도꼭지: everyone in at the end)
+  // the out players of 수도꼭지 / 의자 / 계란 (party-games-2 3.1): drawn at alpha; the set's survivor (수도꼭지: everyone in at the end)
   const GHOST = { alpha: 0.55, bonus: 2 };
   // 수도꼭지 순서 기억하기 (party-games-2 4): rounds, the first length (+1 a round), frames a step by round and its dark
   // tail, the intro, the gap before go, the window (winMs + perMs x length, ms), the fastest honest step (ms), the host's
@@ -386,7 +386,7 @@ window.PG = window.PG || {};
   // beeps and no 10초 남았어요! (its rounds or each page's own clock end it); fastSecs - the debug fast party's length;
   // party-games-2 3.4: music - miniStart's track instead of 'battle' (null: none); base - everyone on KIT_BASE (kitOf);
   // short - the game in the room's new-games line)
-  const MINI_IDS = ['water', 'crown', 'ball', 'milk', 'puff', 'sneak', 'tap', 'chair'];
+  const MINI_IDS = ['water', 'crown', 'ball', 'milk', 'puff', 'sneak', 'tap', 'chair', 'egg'];
   const MINI_OLD = 3;   // (the first three: the arena games of party.md / the polish; the room's rules list the rest on a line of their own)
   // (a short no-KO capture in every minigame; prisons sink in 물 0.3 px/f; out once the feet are 3 px under the surface; a
   // guest draws the water at its estimate of the host's NOW, at most WATER_LEAD frames past the newest snapshot - 4.1;
@@ -4773,7 +4773,7 @@ window.PG = window.PG || {};
     if (G.frame >= f0 + LAG_MAX) return true;
     return G.players.every((p) => p.local !== false || (skip && skip[p.slot]) || miniStale(p) || ((M.rtMax && M.rtMax[p.slot]) ?? -1) >= t);
   }
-  // ---- 유령 (party-games-2 3.1): the out players of 수도꼭지 / 의자 - M.gh {slot: 1} only (never p.out: drawPlayer draws
+  // ---- 유령 (party-games-2 3.1): the out players of 수도꼭지 / 의자 / 계란 - M.gh {slot: 1} only (never p.out: drawPlayer draws
   // nothing for it; never p.ghost: co-op's ghost bubble). A 유령 plays every round as before and scores the round's
   // point; it only cannot be the set's survivor. Drawn see-through (its game's pose: ga) with a 김 wisp over its head
   const ghostIn = (M, slot) => !!(M && M.gh && M.gh[slot]);
