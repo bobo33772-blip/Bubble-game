@@ -6432,8 +6432,23 @@ window.PG = window.PG || {};
     if (M.ph !== 0 || M.r < 1 || !(M.A >= 0)) return sh;
     const vt = tapNow(), n = tapLen(M.r);
     while (sh.lit < n && vt >= tapStep(M, sh.lit)) { if (vt < tapStep(M, sh.lit) + tapSp(M.r) - TAP.dark) localSfx('tap', { n: tapSeq(M.seed, sh.lit) }); sh.lit++; }
-    if (sh.go === undefined && vt >= M.G) { sh.go = G.drawT; sh.gf = G.frame; partyMyLine(PARTY_TX.tpGo, '', 50, 'round low'); }
+    if (sh.go === undefined && vt >= M.G) { sh.go = G.drawT; sh.gf = G.frame; partyMyLine(PARTY_TX.tpGo, '', 50, 'round low'); if (TKA) tkaFire(M, sh.go); }
     return sh;
+  }
+  // (tests only, party-games-2 14.2 - PG.debug.party.tapKeys: armed, this screen's own go draw of the next round sets timers
+  // that dispatch REAL key events - the round's list (or a wrong faucet at index wrongAt, then nothing) ms apart from that
+  // draw; rec keeps the draw time and each keydown's timeStamp)
+  let TKA = null, tkaLast = null;
+  function tkaFire(M, go) {
+    const q = TKA; TKA = null;
+    const CODES = ['ArrowUp', 'ArrowLeft', 'ArrowRight', 'ArrowDown'], list = tapList(M.seed, tapLen(M.r));
+    const keys = q.wrongAt >= 0 ? list.slice(0, q.wrongAt).concat([(list[q.wrongAt] + 1) % 4]) : list;
+    q.rec = { go, ts: [], r: M.r, keys };
+    keys.forEach((f, k) => setTimeout(() => {
+      const code = CODES[f], e = new KeyboardEvent('keydown', { code, key: code, bubbles: true });
+      window.dispatchEvent(e); window.dispatchEvent(new KeyboardEvent('keyup', { code, key: code, bubbles: true }));
+      q.rec.ts.push(e.timeStamp);
+    }, q.ms * (k + 1)));
   }
   // this page's seat (4.5): its presses this frame in time order after my go draw - each one faucet; right: the next step
   // (its note, its faucet lit on my screen); wrong: done (the cold water, my line); all right: done in (last press - go)
@@ -17190,6 +17205,9 @@ window.PG = window.PG || {};
       // a local seat's answer: the faucets in list (0 위, 1 왼쪽, 2 오른쪽, 3 아래) as presses msEach apart after this
       // screen's go draw (the first at msEach); a 수도꼭지 row as a guest's tapView reads it (a fresh mirror)
       tapSeq: (seed, k) => tapSeq(seed, k), tapList: (seed, n) => tapList(seed, n | 0),
+      // (party-net) real key events ms apart after this screen's next go draw (wrongAt >= 0: a wrong faucet there); the record
+      tapKeys(ms, wrongAt) { TKA = tkaLast = { ms: Math.max(1, +ms || 300), wrongAt: wrongAt === undefined ? -1 : wrongAt | 0, rec: null }; return true; },
+      tapRec: () => (tkaLast && tkaLast.rec ? JSON.parse(JSON.stringify(tkaLast.rec)) : null),
       tap: () => { const M = G.mini; return M && M.id === 'tap' ? JSON.parse(JSON.stringify({ seed: M.seed, r: M.r, ph: M.ph, A: M.A, G: M.G, C: M.C, rep: M.rep, res: M.res, pts: M.pts, ms: M.ms, gh: M.gh, n: M.n, endAt: M.endAt })) : null; },
       tapSeed(s) { const M = G.mini; if (!M || M.id !== 'tap') return null; M.seed = s | 0; return M.seed; },
       answer(slot, list, msEach) {
