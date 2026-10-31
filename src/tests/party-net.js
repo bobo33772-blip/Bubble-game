@@ -660,13 +660,14 @@
     await until(() => D3.every((f) => me(f).invuln === 0), 4000, 10);   // (START_INV: a blinking body is not pushed)
     await place(H, 50, 160); await place(A, 92, 160, 'right'); await place(B, 170, 160, 'left');
     await sleep(250);
-    const sfx0 = D3.map((f) => f.sfx.length);
+    const sfx0 = D3.map((f) => f.sfx.length), cl0 = N(A).claims.sent;
     await press(A, 'shoot');
     const uFell = await until(() => D3.every((f) => slotP(f, 2).raft && f.P.sumo().pts[1] === 1), 6000, 5);
     const bm = B.P.mloc(2) || {}, um = H.P.remMi(2);
     ok('씨름: A blows at B - B\'s own screen pushes it (one push by A), it slides off: a 오리 튜브 in the right 탕 on every page, A +1 everywhere', uFell && bm.n === 1 && bm.by === 1 && D3.every((f) => f.P.sumo().tub[2] === 1 && slotP(f, 2).x >= 200), [bm, D3.map((f) => [slotP(f, 2).raft, f.P.sumo()])]);
     ok('mi: during 씨름 B\'s body state carries its push report [판 i, set, 1, by A, tick - F0, its bubble id, 0]', um && um.length === 7 && um[0] === PS(H).i && um[1] === 1 && um[2] === 1 && um[3] === 1 && um[4] === bm.tick - H.P.sumo().F0 && um[5] > 0, um);
     ok('씨름: every page heard B\'s push (its own bounce at once, the others from the report / the mirror)', D3.every((f, k) => f.sfx.slice(sfx0[k]).includes('bounce')), D3.map((f, k) => f.sfx.slice(sfx0[k])));
+    ok('씨름: A\'s bubble touching B on A\'s screen sent no capture claim (guestClaim off: no tp, no predicted catch), nobody trapped anywhere', N(A).claims.sent === cl0 && D3.every((f) => f.G.players.every((p) => !p.trap)), [cl0, N(A).claims]);
     await place(A, 67, 160); await press(B, 'left'); await sleep(250);
     await press(B, 'jump'); await sleep(170); await press(B, 'shoot');
     const uBack = await until(() => D3.every((f) => slotP(f, 1).raft && !slotP(f, 2).raft && f.P.sumo().rv[2] === 1 && f.P.sumo().pts[2] === 1), 6000, 5);

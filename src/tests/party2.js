@@ -14,7 +14,13 @@
 // drop - never the last loser, never a stale seat -, B hidden, the heat, receipts on this screen - the slack, the juggle,
 // a remote holder's shownAt sample, remote receipts and since = the stamp -, the prediction and its undos, hot feet, the
 // burst's wait and late passes, points, 유령, the survivor, a leaver, a hidden tab, the key, coins, 2 players, the view,
-// the lengths, the card).
+// the lengths, the card), 미끌미끌 비누 씨름 (sumoTests: 비누 평상 and its fallback, the soap - 18 f to top speed and back,
+// only while a foot is on the 평상 -, the push bubble - 2.0 px/f, 60 f, a wall / the 평상's side pops it, never floats -,
+// a push on a host-local body - vx, the hop, the bubble popped, never a capture, its report, ~40 px of slide, off the edge
+// from 20 px -, a remote report and its stamp's clamp, falls by state and stamp, the raft kept in its 탕 and its hop,
+// credit within 120 f, 역전 once a set, the set's end / survivor / equal stamps / reset, the last 10 s, time-up, a stale
+// seat, the key, coins from blows, a leaver, the view, the fast party, the card and demo, a battle after it).
+//   #only=<section> runs one section (machinery, stamp, tap, chair, egg, sumo); #shot=<scene> draws one scene to look at
 // Prints "PARTY2 PASS|FAIL <name>", "PARTY2 INFO ..." and "PARTY2 DONE pass=N fail=M".
 (function () {
   'use strict';

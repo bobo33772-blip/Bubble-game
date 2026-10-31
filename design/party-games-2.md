@@ -35,6 +35,25 @@
 > a burst. Not built: 14.2.9's "the host carries it toward C while C walks away" (the receiver's-screen pass is checked
 > standing and walking the other way), 씨름, the trophy hold line (3.8).
 
+> **Build 3 (2026-10-31, all four built)**: **씨름** is in `MINI_IDS` (10 games; 9 for 3 players) as section 7 says: 비누
+> 평상 (`PARTY_ARENAS[4]`, `PARTY_KEYS` + `'sumo'`, `fallbackPartyArena('sumo')`, `sumoOf`; validate-levels' branch), the
+> soap in `updatePlayer`'s `acc` (`sumoSoap`), the push bubble in `newShot` (2.0 px/f, 60 f; a wall, the 평상's side or
+> its end pops it - `sumoShotEnd`, the host's world and a guest's predicted copy alike), `trappable` / `guestClaim` off,
+> the push on the pushed body's own page (`sumoLocal` / `sumoInput`, `mi` relative to `F0`), falls stamped by the faller's
+> own view, rafts kept in their 탕 (`raftMove`'s gated clamp), credits, 역전 (`sumoBack`), sets / the survivor / the
+> reset, the last 10 s, time-up's 버텼다!, a stale seat, a leaver, the card, demo, HUD. Every shared-physics branch is
+> gated on `G.mini.id === 'sumo'`; battle / co-op / kits suites green after it (see the PR's test list). Tests: party2.js
+> (`sumoTests`, scenes `#shot=sumo|sumopush|sumoraft|sumocard`, `#only=<section>` to run one section), party.js's
+> every-game loops and its five-arena checks, party-net's smoke and `#lag` 4e (INFO: C's fall stamped at its own view,
+> the host's verdict 26 ticks later). Where the build differs from the text: the soap holds while **any foot** (x + 3 ..
+> x + 13, as `landTile` stands a body) is over the 평상, not the feet centre - with the centre a push past the edge
+> stopped the body standing on the 평상's last column (the normal 0.5 caught it); the 탕 rides as an array by seat in
+> `g.mg` (-1 none, 0 left, 1 right) instead of bits (a non-raft's side would read as left); `hits` counts this set's
+> pushes; after the set's end the survivor's beat (`survF`, pushes off, a fall still makes a raft but credits nobody)
+> comes before the 72 f reset; the demo's animals are 16 px as every demo's (19); the host plays a remote seat's push
+> `bounce` from its report; `더 미끌미끌!` replaces the clock's own `10초 남았어요!` banner on that frame; the debug hook is
+> `soapy` (물's `soap` is taken). Not built: the trophy hold line (3.8, Should).
+
 Status: **design**, on `feat/party-games-2` (worktree `bogeul-games2`), stacked on `feat/party-games` (PR #26, open, not
 merged: 바나나우유 잡기 / 펑! 비눗방울 / 살금살금 술래, `PARTY_V` 7, the free draw). It builds on the party as built
 (design/party.md), its polish (design/party-polish.md: the card with its 96x32 demo, the result beats, the last 판 x2, the
