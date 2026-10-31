@@ -5,11 +5,11 @@
 //   node tools/run-chrome.js http://localhost:8765/test-party-net.html#lag - 1200 900 rt420000 "PARTYNET DONE"
 // (party-games-2 14.2: 수도꼭지, 의자, 계란 and 씨름 smokes after 술래's below - each page's own measured answer, the cold
 // water and a 유령 everywhere; the stools the same on every page, sits kept, the one standing a 유령, the music cut on each
-// page's own view of the stop; a pass decided on the receiver's screen, its juggle from its own stamp, the burst's 유령; a
+// page's own view of the stop, a guest's sit its mirror never shows let go and sat again; a pass decided on the receiver's screen, its juggle from its own stamp, the burst's 유령; a
 // push on the pushed one's screen, its fall a raft everywhere with the pusher credited, a raft's push back = 역전 - and
 // #lag 4b / 4c / 4d / 4e: exact ms from each page's own go draw, a slow link wins nothing in 수도꼭지; a stool C reaches
 // first on its own view is C's, the host provisionally seated is bumped; 계란's pass on the receiver's screen both ways,
-// since = the stamp, a late pass across B that makes C the loser; 씨름 - C dodging the host's bubble on its own screen is
+// since = the stamp, a late pass across B that makes C the loser, the host carrying it toward C while C walks away; 씨름 - C dodging the host's bubble on its own screen is
 // no push anywhere, standing it is pushed everywhere, pushed off its fall is stamped by its own view)
 // Every frame: tro.ns('f' + i), tro.allowBc(true) (bc is practice otherwise), party.fast(true) (every game 12 s, the card
 // and the result beats PARTY_FF). host = slot 0 (꽥꽥이), A = slot 1 (까삐), B = slot 2 (펭펭), C = slot 3 (냥냥).
@@ -55,7 +55,9 @@
 //      cup + m, the podium rows, cups to the gains, the bonus line, the gate; 파티 한 번 더 holds again, gg on / off between
 //      판, B away + cut (forfeit, in the pot), A by the real clock (refused before 105 s -> wait -> refund); too short
 //      (tro.partyMin 1e9: v: 1, refund at once, the short line, the gate open at once); the host's 방으로 in a result beat;
-//      down to one (나가기: 기권승 the pot only / a cut link: void); a staked practice party (연습 경기라 트로피는 그대로예요)
+//      down to one (나가기: 기권승 the pot only / a cut link: void); the 최종 순위 hold line (party-games-2 3.8: 술래 + 의자 +
+//      바나나우유 staked, tro.partyHold on the host - 트로피 정산까지 N초 on every page, counting down, gone at the podium);
+//      a staked practice party (연습 경기라 트로피는 그대로예요)
 // Prints "PARTYNET PASS|FAIL <name>", "PARTYNET INFO ..." and "PARTYNET DONE pass=N fail=M".
 (function () {
   'use strict';
@@ -618,6 +620,24 @@
       return pre.length > 0 && post.length > 0 && nxt.length > 0 && pre.every((q) => q[4] === 'chair') && post.every((q) => q[4] === null) && nxt.every((q) => q[4] === 'chair');
     });
     ok('의자: on each page the chair track plays until its own view of S, none from there (the reveal too), and again from the next stop\'s start', mOk.every(Boolean), mOk);
+    // (review, 5.5: a refused sit, the guest's side) stop 2: A stands where stool 1 will stop and its link goes silent
+    // just before its view of S - it sits on its own screen, but no claim reaches the host, so its mirror never shows it
+    // as the owner (to A's page a refusal): A lets the sit go when its view passes its tick + LAG_MAX + 30 and sits again
+    // at once with a new tick; with the link back that new claim is taken - A owns stool 1 on every page, by its new tick
+    const LAG = H.P.consts().LAG_MAX, cS2 = H.G.frame + 120; H.P.stopAt(cS2);
+    const cXs2 = H.P.stoolsAt(cS2);
+    await place(H, 4, 200); await place(B, 12, 200); await place(A, cXs2[1] - 8, 200);
+    await until(() => N(A).rtHi >= cS2 - 6, 6000, 2); mute(A, true);
+    const aSat = await until(() => (A.P.mloc(1) || {}).sit === 1, 3000, 2), lt1 = (A.P.mloc(1) || {}).tick;
+    let lt2 = -1, lHost = null, lMine = null;
+    const aLet = await until(() => {
+      const L = A.P.mloc(1) || {}; if (!(L.tick > lt1)) return false;
+      lt2 = L.tick; lHost = (H.P.chair().own || {})[1] || null; lMine = (A.P.chair().own || {})[1] || null; return true;
+    }, 6000, 1);
+    mute(A, false);
+    ok('의자 let go (a guest): A sits on its own view of S, its claim never reaching the host - its mirror never shows it as the owner: it lets go when its view passes the tick + LAG_MAX + 30 and sits again at once with a new tick', aSat && aLet && lt1 >= cS2 && lt2 > lt1 + LAG + 30 && lt2 <= lt1 + LAG + 36 && !lHost && !lMine && (A.P.mloc(1) || {}).sit === 1, [cS2, lt1, lt2, lHost, lMine, A.P.mloc(1)]);
+    const aTaken = await until(() => D3.every((f) => { const o = (f.P.chair().own || {})[1]; return o && o[0] === 1 && o[1] === lt2; }), 4000, 5);
+    ok('의자 let go (a guest): ... its link back, the new claim is taken - A owns stool 1 on every page, stamped by its new tick', aTaken, D3.map((f) => (f.P.chair().own || {})[1]));
     const chPod = await until(() => D3.every((f) => PS(f).ph === 'podium'), 60000);
     ok('의자: the 판 ends by its 3 fast stops and the podium shows on every page', chPod, D3.map((f) => [PS(f).ph, f.P.chair() && f.P.chair().i]));
 
@@ -1009,6 +1029,35 @@
     const el = H.P.egg();
     ok('lag 계란: C receives at its view tick T, the host sets B = T + 5 before C\'s report arrives - it passes B, waits, takes the late pass: C loses, a 유령 on every page', cLost && lateB && lateB.hold === 0 && lateB.hf >= lateB.T + 5 && el.log.some((q) => q[0] === 0 && q[1] === 3 && q[2] === lateB.T && q[3] > lateB.T + 5), [lateB, el, F.map((f) => [f.P.egg() && f.P.egg().loser, f.P.ghosts()])]);
     if (lateB) info('lag 계란: C\'s receipt at its view tick ' + lateB.T + ', the host was at ' + lateB.hf + ' (' + (lateB.hf - lateB.T) + ' ticks ahead); the late pass reached it ' + ((el.log.find((q) => q[1] === 3 && q[2] === lateB.T) || [0, 0, 0, 0])[3] - lateB.T) + ' ticks after C\'s tick');
+    // (d) round 2: the host, holding, carries the egg toward C while C walks away on its own view (both start together,
+    // 18 px apart; the host stops 8 px short of where C stops): the host's screen shows them touching at once - C's state
+    // there is still the one from before it walked -, yet nothing passes; only C's screen decides, once its picture of the
+    // host catches up: the receipt stamped by C's own view tick, well after the host's frame of its own touch
+    const eR2 = await until(() => H.P.egg() && H.P.egg().r === 2 && H.P.egg().ph === 1, 15000, 10);
+    H.P.burstAt(H.G.frame + 1500);
+    await place(A, 200, 200); await place(B, 224, 200); await place(H, 40, 200); await place(C, 58, 200);
+    H.P.eggHold(0);
+    await until(() => C.P.egg() && C.P.egg().holder === 0 && N(C).rtHi >= C.P.egg().since + 50, 4000, 5);
+    await sleep(600);
+    const dx0 = [slotP(H, 3).x - slotP(H, 0).x, slotP(C, 3).x - slotP(C, 0).x];
+    let hT = null, cT = null, hGot = null, hOff = false, cOff = false;
+    const dw = setInterval(() => {
+      const hh = slotP(H, 0), hc = slotP(H, 3), ch = slotP(C, 0), cc = slotP(C, 3), e = H.P.egg();
+      if (!hT && hh && hc && Math.abs(hc.x - hh.x) <= 15) hT = { f: H.G.frame, holder: e && e.holder, hx: hh.x, cx: hc.x };
+      if (!cT && ch && cc && Math.abs(cc.x - ch.x) <= 15) cT = { t: N(C).rtHi, hx: ch.x, cx: cc.x };
+      if (!hGot && e && e.holder === 3) hGot = { f: H.G.frame };
+      if (!hOff && hh && hh.x >= 80) { hOff = true; H.D.press('right', false, 0); }
+      if (!cOff && cc && cc.x >= 88) { cOff = true; C.D.press('right', false, 3); }
+    }, 1);
+    H.D.press('right', true, 0); C.D.press('right', true, 3);
+    await until(() => !!hGot, 8000, 2);
+    clearInterval(dw); H.D.press('right', false, 0); C.D.press('right', false, 3);
+    const dL = C.P.mloc(3) || {}, dLog = (H.P.egg().log || []).find((q) => q[0] === 0 && q[1] === 3 && q[2] === dL.tick);
+    ok('lag 계란: the host carries it toward C while C walks away on its own view - the host\'s screen shows the touch at once, no pass there; the pass comes from C\'s screen, stamped by its own view tick when its picture of the host reached it (well after the host\'s own touch frame)',
+      eR2 && dx0[0] > 15 && dx0[1] > 15 && hT && hT.holder === 0 && cT && hGot && dLog && dL.giver === 0 && Math.abs(dL.tick - cT.t) <= 2 && dL.tick >= hT.f + 8 && hGot.f > hT.f,
+      [eR2, dx0, hT, cT, hGot, dL, dLog]);
+    if (hT && cT) info('lag 계란: the host\'s screen showed the touch at its frame ' + hT.f + ', C\'s screen at its view tick ' + cT.t + ' (' + Math.round(cT.t - hT.f) + ' ticks later); the host took the pass at ' + (hGot ? hGot.f : '-'));
+    H.P.burstAt(H.G.frame + 30);
     await until(() => F.every((f) => PS(f).ph === 'podium'), 60000);
 
     // ---- 4e. 씨름 (party-games-2 14.2.10; the 45 s clock, ended by hand): the push is decided on the pushed one's own
@@ -1228,6 +1277,41 @@
     // (back to H, A, B in the room for the sections after this one; C stays in the lobby)
     H.mp.toRoom(); await until(() => N(H).screen === 'room', 4000);
     await join(A); await join(B); await until(() => N(H).roster.length === 3, 4000);
+    for (const f of F) f.T.set({ t: 100 });
+    // ---- the 최종 순위 hold line (party-games-2 3.8): a staked party of the short new games - 술래 + 의자 + 바나나우유
+    // forced, every 판 ended at its 시작! by the host; tro.partyHold on the host stands in for its floor (the fast party
+    // never holds - nor 안 걸기 / practice / a test's partyMin). While it holds the host and every guest show 트로피
+    // 정산까지 N초 under 최종 순위's rows - a guest's N from the host's g.pa.H -, counting down; none in an earlier beat;
+    // gone with the podium
+    H.P.force(['sneak', 'chair', 'milk']);
+    await readyAll(D3); H.mp.start();
+    // (the line as shown: the party overlay up in a result view, the line not hidden - read straight from the DOM)
+    const hTx = (f) => { const ov = doc(f, 'pg-party'), el = doc(f, 'pg-party-hold'); return ov && el && !ov.hidden && ov.dataset.view !== 'card' && !el.hidden ? el.textContent : ''; };
+    let hEarly = null; const hSeen = new Map(D3.map((f) => [f.i, []]));
+    const hw2 = setInterval(() => {
+      for (const f of D3) {
+        const s = PS(f), t = hTx(f);
+        if (t && !(s.ph === 'result' && s.b === 'z')) hEarly = hEarly || [f.i, s.ph, s.b, t];
+        const L = hSeen.get(f.i); if (t && L[L.length - 1] !== t) L.push(t);
+      }
+    }, 4);
+    let hPlan = true;
+    for (let i = 0; i < 3; i++) {
+      hPlan = await until(() => PS(H).ph === 'playing' && PS(H).i === i, 25000) && hPlan && PS(H).mini.id === ['sneak', 'chair', 'milk'][i];
+      if (i === 2) H.T.partyHold(H.G.frame, 3600);   // (a minute: the last 판's beats reach 최종 순위 well inside it)
+      H.P.skip();
+    }
+    const hAll = await until(() => D3.every((f) => PS(f).ph === 'result' && PS(f).b === 'z' && /^트로피 정산까지 \d+초$/.test(hTx(f))), 15000, 5);
+    const hN = (f) => +((/(\d+)초/.exec(hTx(f)) || [])[1] || -1), hNow = D3.map(hN), hostH = PS(H).H;
+    ok('hold line: a staked 술래 + 의자 + 바나나우유 party (every 판 ended at its 시작!) held at 최종 순위 - 트로피 정산까지 N초 under the rows on the host (N from its frames left, rounded up) and on every guest (from g.pa.H, within a second of the host\'s)', hPlan && hAll && TS(H).match && Math.abs(hNow[0] - Math.ceil(hostH / 60)) <= 1 && hNow.every((n) => Math.abs(n - hNow[0]) <= 1) && [A, B].every((g) => PS(g).H > 0), [hPlan, hAll, hNow, hostH, [A, B].map((g) => PS(g).H)]);
+    H.T.partyHold(H.G.frame, 170);   // (the rest of the hold: under 3 s - the count runs down to the podium)
+    const hPod = await until(() => D3.every((f) => PS(f).ph === 'podium'), 10000, 5);
+    clearInterval(hw2); await sleep(100);
+    const tail = D3.map((f) => hSeen.get(f.i).slice(-3));
+    ok('hold line: it counts down on every page (…2초, 1초), then the podium shows everywhere and the line is gone; never in a beat before 최종 순위', hPod && !hEarly && tail.every((L) => L[L.length - 1] === '트로피 정산까지 1초' && L[L.length - 2] === '트로피 정산까지 2초') && D3.every((f) => !hTx(f) && PS(f).H === 0), [hPod, hEarly, tail, D3.map((f) => [hTx(f), PS(f).H])]);
+    H.T.partyHold(null); H.P.force(null);
+    await until(() => D3.every((f) => !TS(f).esc.length), 6000);
+    H.mp.toRoom(); await until(() => D3.every((f) => N(f).screen === 'room'), 6000);
     for (const f of F) f.T.set({ t: 100 });
     // ---- a staked party as practice (this browser's tabs, q 1): nothing held; the rules and the podium say why
     for (const f of D3) f.T.allowBc(false);

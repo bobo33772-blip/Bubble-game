@@ -1610,6 +1610,29 @@
     ok('staked party floor: 최종 순위 held (a skip at 40 f waits, no 눌러서 넘기기 line) until its first 시작! is the floor old, then the podium; no hold: 96 f', held && skN && zAt < h0 + 900 && Math.abs(pAt - h0 - 900) <= 1 && Math.abs(G.frame - z1 - 96) <= 1,
       [held, skN, zAt - h0, pAt - h0, G.frame - z1]);
     D.toTitle();
+    // the hold line (party-games-2 3.8): under 최종 순위's rows while it holds - 트로피 정산까지 N초, N = the frames left
+    // (P.H) rounded up to whole seconds, counting down with the hold; g.pa.H (the guests' copy) only while it holds; no
+    // line in an earlier beat, none without a hold, gone at the podium
+    party(['duck', 'cat', 'frog'], { plan: ['crown'] }); toPlaying(); const k0 = G.frame; D.tro.partyHold(k0, 1200);
+    P.skip();
+    let lineEarly = false;   // (끝!, the winner stage, the tally, 보너스상 - the line never there)
+    until(() => { if (G.mode === 'result' && !beatIs('z') && (P.card().hold || PS().H || P.pa().H !== undefined)) lineEarly = true; return G.mode === 'result' && beatIs('z'); }, 1500);
+    const zk = G.frame, H0 = PS().H, L0 = P.card().hold, pa0 = P.pa().H, row0 = P.card().board.length;
+    const seq = [];
+    for (let f = 0; f < 1000 && G.mode === 'result'; f++) {
+      const c = P.card(), H = PS().H;
+      if (c.hold !== (H > 0 ? '트로피 정산까지 ' + Math.ceil(H / 60) + '초' : '') || P.pa().H !== (H > 0 ? H : undefined)) { seq.push(['bad', G.frame - k0, c.hold, H, P.pa().H]); break; }
+      if (!seq.length || seq[seq.length - 1][1] !== c.hold) seq.push([G.frame - k0, c.hold]);
+      step(1);
+    }
+    const pod = G.mode === 'podium', podHold = PS().H === 0 && !(P.card().shown && P.card().hold);   // (the party overlay gone with it)
+    ok('hold line: none in the beats before; under 최종 순위 (its rows still there) while it holds - 트로피 정산까지 N초 from P.H (frames left, rounded up), g.pa.H the same', !lineEarly && H0 === 1200 - (zk - k0) && L0 === '트로피 정산까지 ' + Math.ceil(H0 / 60) + '초' && pa0 === H0 && row0 === 3, [lineEarly, zk - k0, H0, L0, pa0, row0]);
+    ok('hold line: it counts down a second at a time to 1초, then the podium and no line (no H)', !seq.some((q) => q[0] === 'bad') && seq.length === Math.ceil(H0 / 60) && seq[seq.length - 1][1] === '트로피 정산까지 1초' && pod && podHold && Math.abs(G.frame - k0 - 1200) <= 1, [seq, pod, podHold, G.frame - k0]);
+    D.tro.partyHold(null);
+    party(['duck', 'cat', 'frog'], { plan: ['crown'] }); toPlaying(); P.skip(); let anyLine = false;
+    until(() => { if (P.card().hold || PS().H || P.pa().H !== undefined) anyLine = true; return G.mode === 'podium'; }, 1500);
+    ok('hold line: never without a hold (an offline party - as 안 걸기, practice, the fast party, a test\'s partyMin)', !anyLine && G.mode === 'podium', [anyLine, G.mode]);
+    D.toTitle();
     // the new strings: every syllable warmed (PARTY_TEXT), 7.4 verbatim
     const tx = P.tx(), strs = [tx.troZero, tx.troAll, tx.troPot, tx.troPlay, tx.troLeave, tx.troPrac, tx.toParty, tx.toBattle, tx.countBet, tx.countPrac, tx.chipFree, tx.chipBetA, tx.chipFreeA, tx.short, tx.walkVoid, tx.walkPaid, tx.nextFreeMe, tx.nextFree, tx.waitBet, tx.recRow];
     ok('texts (7.4): the party trophy strings verbatim', tx.troAll === '모두 {0}개씩 걸고 최종 등수대로 나눠요: ' && tx.short === '파티가 너무 빨리 끝나서 트로피는 그대로예요' && tx.walkPaid === '친구가 나가서 일찍 끝났어요 · 기권승' && tx.toParty === '파티로 바뀌었어요: ' && tx.waitBet === ' · 다음 파티도 {0}개씩' && tx.recRow === '배틀·파티' && tx.troPlay === play && tx.troLeave === leave, strs);
@@ -1721,8 +1744,14 @@
     G.party.esc = { 0: 1, 1: 0, 2: 0, 3: 0 };
     toBeat('A'); step(20); await sleep(80);
     measure(label + ' award', cardEl());
+    // (최종 순위 with the trophy hold line under its rows - a staked party's longest view: tro.partyHold stands in)
+    D.tro.partyHold(G.frame, 7300);   // (its widest count: 3 digits - 120초 at 최종 순위)
     toBeat('z', 2000); step(50); await sleep(80);
-    measure(label + ' 최종 순위', cardEl());
+    measure(label + ' 최종 순위 (with the hold line)', cardEl());
+    const hl = $('pg-party-hold'), hr = hl.getBoundingClientRect(), cr = cardEl().getBoundingClientRect();
+    ok(label + ' 최종 순위: the hold line (' + P.card().hold + ') on one line under the rows, inside the card', /^트로피 정산까지 \d+초$/.test(P.card().hold) && lines(hl) === 1 && hl.scrollWidth <= hl.clientWidth + 1 && hr.top >= $('pg-party-board').getBoundingClientRect().bottom - 0.5 && hr.left >= cr.left - 0.5 && hr.right <= cr.right + 0.5 && hr.bottom <= cr.bottom + 0.5,
+      [P.card().hold, lines(hl), hl.scrollWidth, hl.clientWidth, hr.top, hr.bottom, cr.bottom]);
+    D.tro.partyHold(null);
   }
   async function fitTests() {
     if (FIT_ONLY) { await fitAt('this viewport (' + innerWidth + 'x' + innerHeight + ')', true); return; }

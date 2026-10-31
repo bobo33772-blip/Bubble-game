@@ -19,8 +19,10 @@
 // a push on a host-local body - vx, the hop, the bubble popped, never a capture, its report, ~40 px of slide, off the edge
 // from 20 px -, a remote report and its stamp's clamp, falls by state and stamp, the raft kept in its 탕 and its hop,
 // credit within 120 f, 역전 once a set, the set's end / survivor / equal stamps / reset, the last 10 s, time-up, a stale
-// seat, the key, coins from blows, a leaver, the view, the fast party, the card and demo, a battle after it).
-//   #only=<section> runs one section (machinery, stamp, tap, chair, egg, sumo); #shot=<scene> draws one scene to look at
+// seat, the key, coins from blows, a leaver, the view, the fast party, the card and demo, a battle after it), the trophy
+// hold (troTests, 3.8 / 14.1.9: 술래 + 의자 + 바나나우유 at bot speed under tro.partyHold - 최종 순위 waits with 트로피 정산까지
+// N초 counting down from P.H, the skip waits, then the podium); a 유령 as and beside a raft / a blinking animal (machinery).
+//   #only=<section> runs one section (machinery, stamp, tap, chair, egg, sumo, tro); #shot=<scene> draws one scene to look at
 // Prints "PARTY2 PASS|FAIL <name>", "PARTY2 INFO ..." and "PARTY2 DONE pass=N fail=M".
 (function () {
   'use strict';
@@ -79,6 +81,26 @@
     ok('유령: never p.out, never p.ghost (co-op\'s ghost bubble); its seat only in M.gh', !b.out && !b.ghost && same(P.ghosts(), { 1: 1 }) && same(P.mg()[8], 2), [b.out, b.ghost, P.ghosts(), P.mg()[8]]);
     ok('유령: its HUD panel changes (dimmed, the wisp beside its icon)', !same(h0, h1));
     P.ghost(1, false);
+    // (review) a 유령 drawn as and beside a raft / an invuln-blinking animal (계란: its pose is ga only - drawPlayer keeps
+    // the body's own blink and raft ring, which set ctx.globalAlpha / clip themselves): the draw path never throws, the
+    // canvas alpha is 1 after it, the animals on either side (one drawn before it, one after) exactly as without the
+    // 유령, in both blink phases; in the shown phase the 유령 itself see-through (not the solid animal)
+    party(['duck', 'cat', 'frog'], { plan: ['egg'] }); toPlaying(); step(2);
+    const spot = [60, 100, 140], dress = (on) => G.players.forEach((p, k) => { p.x = spot[k]; p.y = 120; p.vx = 0; p.vy = 0; p.raft = on; p.invuln = on ? 90 : 0; });
+    const near = () => [0, 2].map((s) => px(spot[s] - 2, 112, 20, 30)), self = () => px(spot[1], 112, 16, 30);
+    const rows = []; let err = null;
+    for (const ph of [0, 1]) {
+      until(() => ((G.frame >> 2) & 1) === ph, 8);
+      dress(true);
+      try {
+        P.ghost(1, false); step(0); const n0 = near(), m0 = self(), a0 = cv().globalAlpha;
+        P.ghost(1, true); step(0); const n1 = near(), m1 = self(), a1 = cv().globalAlpha;
+        rows.push({ ph, same: same(n0, n1), a0, a1, seeThrough: !same(m0, m1) });
+      } catch (e) { err = String(e && e.stack ? e.stack.split('\n').slice(0, 2).join(' | ') : e); }
+      P.ghost(1, false); dress(false);
+    }
+    ok('유령 as and beside a raft / a blinking animal: no throw, ctx.globalAlpha 1 after the draw, both neighbours drawn exactly as without it (blink hidden and shown)', !err && rows.length === 2 && rows.every((r) => r.same && r.a0 === 1 && r.a1 === 1), [err, rows]);
+    ok('유령 as a raft / a blinking animal: in the shown blink phase it is drawn see-through (its pixels differ from the solid animal)', rows.length === 2 && rows[1].seeThrough, rows);
     // relative ticks: parseBody clamps every mi int to +-1e6 - a tick relative to its anchor survives, an absolute one past 1e6 would not
     const rel = P.parseBody({ k: 5, mi: [0, 1, 2, 1234567 - 1234500, 33] }), abs = P.parseBody({ k: 5, mi: [0, 1, 2, 1234567, 33] });
     ok('mi: a tick sent relative to its anchor (67) survives parseBody; an absolute one past 1e6 is clamped (why mi carries tick - anchor)', rel.mi[3] === 67 && abs.mi[3] === 1e6, [rel.mi, abs.mi]);
@@ -727,6 +749,42 @@
     ok('after a sumo party: no soap, no push bubbles in a battle (the base kit\'s 3.5 px/f line again)', P.soapy(0) === false && P.soapy(1) === false && G.music === 'battle', [P.soapy(0), G.music]);
   }
 
+  // ---------------------------------------------------------------- 7. 파티 트로피 (3.8): the 최종 순위 hold with the new games
+  // (14.1.9) the shortest staked 3-player party - 술래 + 의자 + 바나나우유 at bot speed: every card readied at once, every
+  // 판 ended at its 시작!, every beat skipped from skipMin; tro.partyHold stands in for the online host's floor
+  // (PARTY_TRO_MINF from the first 시작!). 최종 순위 waits for it (the host's skip too) with 트로피 정산까지 N초 under its
+  // rows - N the frames left (P.H, g.pa.H) rounded up -, counting down, then the podium at the floor and no line
+  function troTests() {
+    const MINF = 7200, txt = (H) => '트로피 정산까지 ' + Math.ceil(H / 60) + '초';
+    party(['duck', 'cat', 'frog'], { plan: ['sneak', 'chair', 'milk'] }); toPlaying();
+    const f0 = G.frame; D.tro.partyHold(f0, MINF);
+    let early = false;
+    const skipBeats = (stop) => until(() => { if (G.mode === 'result' && P.beat().b !== 'z' && (P.card().hold || PS().H)) early = true; if (stop()) return true; if (G.mode === 'result' && P.beat().bt >= K.PARTY_F.skipMin) P.skipBeat(); return false; }, 3000);
+    for (let i = 0; i < 3; i++) {
+      if (i) { skipBeats(() => G.mode === 'card'); toPlaying(); }
+      ok('bot speed: 판 ' + (i + 1) + ' is ' + ['sneak', 'chair', 'milk'][i] + ', ended at its 시작!', PS().mini && PS().mini.id === ['sneak', 'chair', 'milk'][i] && G.mode === 'playing', [PS().mini && PS().mini.id, G.mode]);
+      P.skip();
+    }
+    skipBeats(() => G.mode === 'result' && P.beat().b === 'z');
+    const zAt = G.frame, H0 = PS().H, c0 = P.card();
+    info('tro: the bot-speed party reached 최종 순위 ' + (zAt - f0) + ' f after its first 시작! - held ' + H0 + ' f (' + (H0 / 60).toFixed(1) + ' s)');
+    ok('hold: 최종 순위 shows 트로피 정산까지 N초 under its rows (N = the frames left, rounded up; P.H and g.pa.H the frames left); no line in any beat before', !early && H0 === MINF - (zAt - f0) && H0 > 0 && c0.hold === txt(H0) && c0.board.length === 3 && P.pa().H === H0, [early, zAt - f0, H0, c0.hold, P.pa().H]);
+    step(K.PARTY_F.skipMin + 10); const sk = P.skipBeat(); step(1);
+    ok('hold: the host\'s skip waits (still 최종 순위, no 눌러서 넘기기 line, the line on)', G.mode === 'result' && P.beat().b === 'z' && !P.card().skip && P.card().hold === txt(PS().H), [sk, G.mode, P.beat(), P.card().skip, P.card().hold]);
+    const seen = [P.card().hold]; let bad = null;
+    until(() => {
+      if (G.mode !== 'result') return true;
+      const c = P.card(), H = PS().H;
+      if (c.hold !== txt(H) || P.pa().H !== H) bad = bad || [G.frame - f0, c.hold, H, P.pa().H];
+      if (seen[seen.length - 1] !== c.hold) seen.push(c.hold);
+      return false;
+    }, MINF);
+    ok('hold: the line counts down a second at a time to 1초 (from the frames left), then the podium at the floor with no line', !bad && seen.length === Math.ceil((H0 - K.PARTY_F.skipMin - 11) / 60) && seen[seen.length - 1] === txt(1) && G.mode === 'podium' && Math.abs(G.frame - f0 - MINF) <= 1 && PS().H === 0 && !(P.card().shown && P.card().hold),
+      [bad, seen.length, seen.slice(-2), G.mode, G.frame - f0, PS().H]);
+    D.tro.partyHold(null);
+    D.toTitle();
+  }
+
   // ---------------------------------------------------------------- screenshot scenes (#shot=tap|tapgo|taprev|tapcard|
   // chair|chairstop|chairrev|chaircard|egg|eggpass|eggburst|eggcard|sumo|sumopush|sumoraft|sumocard[&s=1|2|0]) - to LOOK at
   function setScale(s) {
@@ -780,7 +838,7 @@
     if (sm) { await shot(sm[1]); return; }
     // (#only=<name>: one section - e.g. #only=sumo while building)
     const om = /only=([a-z]+)/.exec(location.hash);
-    const steps = [machineryTests, stampTests, tapTests, chairTests, eggTests, sumoTests].filter((f) => !om || f.name === om[1] + 'Tests');
+    const steps = [machineryTests, stampTests, tapTests, chairTests, eggTests, sumoTests, troTests].filter((f) => !om || f.name === om[1] + 'Tests');
     for (const f of steps) {
       try { await f(); } catch (e) { fail++; log('PARTY2 FAIL ' + f.name + ' threw: ' + (e && e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : e)); }
     }

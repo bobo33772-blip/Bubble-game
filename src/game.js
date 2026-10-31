@@ -465,6 +465,8 @@ window.PG = window.PG || {};
     short: '파티가 너무 빨리 끝나서 트로피는 그대로예요', walkVoid: '친구가 나가서 일찍 끝났어요 · 트로피는 그대로예요',
     walkPaid: '친구가 나가서 일찍 끝났어요 · 기권승', nextFreeMe: '내 트로피가 모자라서 다음 파티는 안 걸고 해요',
     nextFree: '다음 파티는 안 걸고 하는 친구가 있어요', waitBet: ' · 다음 파티도 {0}개씩', recRow: '배틀·파티',
+    // (party-games-2 3.8: under 최종 순위 while a staked party waits for its trophy floor - N whole seconds, rounded up)
+    troHold: '트로피 정산까지 {0}초',
   };
   const ptx = (k, v) => PARTY_TX[k].replace('{0}', String(v));
   const PARTY_TEXT = MINI_IDS.map((id) => [MINI[id].name, MINI[id].how, MINI[id].rule, MINI[id].keys || '', MINI[id].keysT || '', MINI[id].short || ''].join(' ')).join(' ') + ' ' +
@@ -4692,6 +4694,8 @@ window.PG = window.PG || {};
     if (P.walk) o.W = 1;
     if (G.mini && G.mini.team) { const T = G.mini.team; o.T = [0, 1, 2, 3].map((s) => (T[s] === 0 || T[s] === 1 ? T[s] : -1)); }
     if (G.mode === 'result' && P.b) { o.b = P.b; o.bt = P.bt | 0; o.bk = P.bk | 0; }
+    // (party-games-2 3.8: the frames the 최종 순위 hold has left - only while it holds)
+    if (G.mode === 'result' && P.b === 'z') { const H = troPartyLeft(); if (H > 0) o.H = H; }
     if (G.mode === 'card') { let R = 0; for (const s of Object.keys(P.rdy || {})) R |= 1 << (s | 0); o.R = R; }
     if (partyX() > 1) o.X = partyX();
     if (P.A) o.A = P.A.map((a) => [a[0], a[1], a[2].slice()]);
@@ -4719,6 +4723,7 @@ window.PG = window.PG || {};
     // (the polish, 6.3: the beat, the card's ready seats, x2, the awards and the bonuses - each one read within bounds)
     const ph = PH_NAME[g.ph] || 'playing', b0 = P.b, k0 = P.bk;
     P.b = ph === 'result' && typeof pa.b === 'string' && /^[fwtsaAz]$/.test(pa.b) ? pa.b : ''; P.bt = nInt(pa.bt, 0, 1e4, 0); P.bk = nInt(pa.bk, 0, 2, 0);
+    P.H = P.b === 'z' ? nInt(pa.H, 0, PARTY_TRO_MINF, 0) : 0;   // (the 최종 순위 hold's frames left - an older host sends none)
     P.rdy = {}; const R = nInt(pa.R, 0, 15, 0); for (let s = 0; s < MAX_PLAYERS; s++) if (R & (1 << s)) P.rdy[s] = 1;
     P.X = nInt(pa.X, 1, 9, 1);
     P.A = Array.isArray(pa.A) ? pa.A.slice(0, AWARDS.length).filter((a) => Array.isArray(a) && AWARDS.some((w) => w.c === a[0]) && Array.isArray(a[2]))
@@ -7919,6 +7924,7 @@ window.PG = window.PG || {};
     const card = el.querySelector('.pg-party-card'), splash = view === 'card' && P.t < partyF('splash');
     if (card && card.classList.contains('is-splash') !== splash) card.classList.toggle('is-splash', splash);
     if (view === 'card') partyCardView(P, me); else partyResultView(P, view, me);
+    partyHoldTick();
   }
   // do I count as ready on this screen (a guest: from my own press on, before the host's R says so)
   const partyMeReady = (P, me) => (me >= 0 && !!P.rdy[me]) || (G.online && G.role === 'guest' && NET.partyReady === P.i);
@@ -8099,8 +8105,22 @@ window.PG = window.PG || {};
     const v = h('span', 'pg-party-aw-v', a[1] + PARTY_TX.times); v.appendChild(h('b', '', PARTY_TX.awardPts));
     el.append(who, v);
   }
-  // each frame the overlay shows (syncDOM): the card's splash -> how-to switch and its bar line; a result view's tally
-  // and the host's 눌러서 넘기기 line (from skipMin into a beat; not while a staked party's 최종 순위 waits for its floor)
+  // the 최종 순위 hold (party-games-2 3.8): the frames it has left on this screen - the host's own (offline: a test's
+  // tro.partyHold), a guest's from the host's g.pa.H (an older host sends none: no line); 0 in any other beat
+  function partyHoldF() {
+    const P = G.party; if (!P || G.mode !== 'result' || P.b !== 'z') return 0;
+    return G.online && G.role === 'guest' ? P.H | 0 : troPartyLeft();
+  }
+  // its line under the rows on every page: 트로피 정산까지 N초 (N rounded up), gone with the hold
+  function partyHoldTick() {
+    const el = $('pg-party-hold'); if (!el) return;
+    const f = partyHoldF();
+    if (f > 0) setTxt(el, ptx('troHold', Math.ceil(f / 60)));
+    if (el.hidden === f > 0) el.hidden = !(f > 0);
+  }
+  // each frame the overlay shows (syncDOM): the card's splash -> how-to switch and its bar line; a result view's tally,
+  // the host's 눌러서 넘기기 line (from skipMin into a beat; not while a staked party's 최종 순위 waits for its floor) and
+  // the hold line instead
   function partyLiveTick() {
     const P = G.party; if (!P || shownOverlay !== 'party' || !dom.party) return;
     if (G.mode === 'card') {
@@ -8111,6 +8131,7 @@ window.PG = window.PG || {};
       partyTallyTick(false);
       const sk = $('pg-party-skip'), on = !(G.online && G.role === 'guest') && !!P.b && 'tsaAz'.indexOf(P.b) >= 0 && P.bt >= partyF('skipMin') && !(P.b === 'z' && troPartyWait());
       if (sk && sk.hidden === on) sk.hidden = !on;
+      partyHoldTick();
     }
   }
   // a team game's line on the card: 왼쪽 팀: 방장 · 냥냥 / 오른쪽 팀: 까삐 · 펭펭 (1v1: 왼쪽: 방장 / 오른쪽: 까삐), each half
@@ -8656,12 +8677,14 @@ window.PG = window.PG || {};
   // host: a staked party's 최종 순위 stays up (the skip waits too) until its first 시작! is PARTY_TRO_MINF host frames
   // old - an honest party of the three short new games can finish in 101 s (design/party-games.md 21): it is held, never
   // voided, and the trophy rate stays the shortest battle's. Not in the fast debug party, nor while a test sets the void
-  // floor (tro.partyMin); tro.partyHold(f0, f) holds any party (party.js, offline)
-  function troPartyWait() {
-    const H = TRO.phold; if (H) return G.frame - H.f0 < H.f;
+  // floor (tro.partyMin); tro.partyHold(f0, f) holds any party (party.js, offline). troPartyLeft: the frames it still
+  // waits (0: none) - the hold line's N (party-games-2 3.8, g.pa.H)
+  function troPartyLeft() {
+    const H = TRO.phold; if (H) return Math.max(0, H.f - (G.frame - H.f0));
     const M = TRO.match;
-    return !!M && G.online && G.role === 'host' && M.mid === NET.ms + '.' + NET.gid && TRO.pmin === null && !PARTY_FAST && G.frame - (M.f0 | 0) < PARTY_TRO_MINF;
+    return !!M && G.online && G.role === 'host' && M.mid === NET.ms + '.' + NET.gid && TRO.pmin === null && !PARTY_FAST ? Math.max(0, PARTY_TRO_MINF - (G.frame - (M.f0 | 0))) : 0;
   }
+  function troPartyWait() { return troPartyLeft() > 0; }
   // 한 판 더 after a staked result: every guest has reported its new count for it (견습 and the room chips follow it), and
   // an older guest page (no r.z) can still cover the stake - the host and every guest with 안 걸고 참여 who are short now
   // play the next match without it
@@ -17643,7 +17666,7 @@ window.PG = window.PG || {};
           coins: CO.pa ? { gid: CO.pa.gid, act: CO.pa.act.slice(), pf: CO.pa.pf.slice(), shots: CO.pa.shots, seen: CO.pa.seen, go: CO.pa.go, bshots: CO.bshots } : null,
           pod: CO.pod ? Object.assign({}, CO.pod) : null,
           b: P ? P.b || '' : '', bt: P ? P.bt | 0 : 0, bk: P ? P.bk | 0 : 0, rdy: P && P.rdy ? Object.assign({}, P.rdy) : {}, auto: P ? P.auto | 0 : 0, cl: P ? P.cl | 0 : 0,
-          A: P && P.A ? P.A.map((q) => [q[0], q[1], q[2].slice()]) : null, bonus: P && P.bonus ? Object.assign({}, P.bonus) : {}, x: partyX(), partyReady: NET.partyReady };
+          A: P && P.A ? P.A.map((q) => [q[0], q[1], q[2].slice()]) : null, bonus: P && P.bonus ? Object.assign({}, P.bonus) : {}, x: partyX(), partyReady: NET.partyReady, H: partyHoldF() };
       },
       card() {
         const q = (id) => $(id), vis = (e) => !!e && !e.hidden && getComputedStyle(e).display !== 'none', tx = (id) => (q(id) ? q(id).textContent : '');
@@ -17655,7 +17678,7 @@ window.PG = window.PG || {};
           teams: q('pg-party-team') ? [...q('pg-party-team').querySelectorAll('.pg-party-side')].map((e) => e.textContent) : [],
           mine: q('pg-party-team') && q('pg-party-team').querySelector('.pg-party-mine') ? q('pg-party-team').querySelector('.pg-party-mine').textContent : '',
           ready: q('pg-party-ready') ? [...q('pg-party-ready').children].map((li) => ({ label: li.getAttribute('aria-label'), ok: li.classList.contains('is-ok'), me: li.classList.contains('is-me') })) : [],
-          button: go && vis(go) ? { text: go.textContent, disabled: go.disabled } : null, barText: vis(q('pg-party-bart')) ? tx('pg-party-bart') : '', skip: vis(q('pg-party-skip')),
+          button: go && vis(go) ? { text: go.textContent, disabled: go.disabled } : null, barText: vis(q('pg-party-bart')) ? tx('pg-party-bart') : '', skip: vis(q('pg-party-skip')), hold: vis(q('pg-party-hold')) ? tx('pg-party-hold') : '',
           award: aw && vis(aw) ? { line: aw.querySelector('.pg-party-aw-line') ? aw.querySelector('.pg-party-aw-line').textContent : '', tie: !!aw.querySelector('.pg-party-aw-tie'),
             winners: [...aw.querySelectorAll('.pg-party-aw-p > span')].map((e) => e.textContent), value: aw.querySelector('.pg-party-aw-v') ? aw.querySelector('.pg-party-aw-v').textContent : '' } : null,
           board: q('pg-party-board') && vis(q('pg-party-board')) ? [...q('pg-party-board').children].map((li) => ({ place: li.querySelector('.pg-party-pl').textContent, nick: li.querySelector('.pg-party-nick').textContent,
