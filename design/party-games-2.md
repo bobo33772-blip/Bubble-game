@@ -22,6 +22,19 @@
 > `?` is a canvas glyph over the one standing; no `bath_stool` sprite (`drawStool`, 17). Not built yet: 계란, 씨름, the
 > trophy hold line (3.8, Should).
 
+> **Build 2 (2026-10-31, cut line B reached)**: **계란** is in `MINI_IDS` (9 games; 8 for 3 players) as section 6 says:
+> the drop (never the last loser while another is there, never a stale seat), the hidden `B`, receipts on the receiver's
+> screen (`eggTouch` with `EGG.slack`, the host's `shownAt` for a remote holder, the page's prediction and its three
+> undos), the 45 f juggle, `since` = the stamp, `EGG.run` 1.2 in `updatePlayer`'s walk (`eggRun`, host and guest), the
+> burst's wait (`miniPast`, the holder skipped) and late passes, 유령 / the survivor's +2, a leaver's re-drop (`B` pushed),
+> coins (a pass, a walked round), `egg_tick` / `egg_boom`, the card, demo, HUD. Tests: party2.js (`eggTests`, the scenes
+> `#shot=egg|eggpass|eggburst|eggcard`, the kits' `base` check), party-net's smoke and `#lag` 4d. Where the build differs
+> from the text: the 12 px egg sits 14 px over the head (over a 유령's wisp: 8 px more) and the holder's tag moves 17 px up,
+> not 6 (the tag's bottom sits on its anchor: the egg and its juggle hop need the room); `앗 뜨거!` comes only from the
+> host (echoed) - a local one on the receiver's page would show twice; the `+1` pops go up over everyone who came through
+> a burst. Not built: 14.2.9's "the host carries it toward C while C walks away" (the receiver's-screen pass is checked
+> standing and walking the other way), 씨름, the trophy hold line (3.8).
+
 Status: **design**, on `feat/party-games-2` (worktree `bogeul-games2`), stacked on `feat/party-games` (PR #26, open, not
 merged: 바나나우유 잡기 / 펑! 비눗방울 / 살금살금 술래, `PARTY_V` 7, the free draw). It builds on the party as built
 (design/party.md), its polish (design/party-polish.md: the card with its 96x32 demo, the result beats, the last 판 x2, the

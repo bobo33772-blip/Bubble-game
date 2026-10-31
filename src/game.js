@@ -17532,6 +17532,7 @@ window.PG = window.PG || {};
         L.n++; L.giver = from | 0; L.tick = tick | 0; L.pred = { from: from | 0, tick: tick | 0 }; return Object.assign({}, L.pred);
       },
       eggHeat: (a) => eggHeat(+a),
+      kitBase: (slot) => { const p = G.players.find((q) => q.slot === slot); return p ? kitOf(p) === KIT_BASE : null; },   // (MINI base: 의자 / 술래)
       eggShown: () => (G.mini && G.mini.id === 'egg' ? eggShown(G.mini) : null),
       eggRun: (slot) => { const p = G.players.find((q) => q.slot === slot); return p ? eggRun(p) : null; },
       eggView: (mg, mg1) => { const M = eggView(mg, mg1 || null, 0, { pa: {} }, { id: 'egg', seeded: false }); return JSON.parse(JSON.stringify({ r: M.r, ph: M.ph, holder: M.holder, since: M.since, L: M.L, B: M.B, loser: M.loser, gh: M.gh, pts: M.pts, n: M.n, from: M.from })); },

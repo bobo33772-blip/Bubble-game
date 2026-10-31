@@ -402,6 +402,10 @@
     const E = EG();
     ok('EGG: 6 rounds, drop 36, fuse 210..420, juggle 45, slack 3, heat 90 / 180 / 240, reveal 72, run 1.2', E.rounds === 6 && E.dropF === 36 && same(E.fuse, [210, 420]) && E.coolF === 45 && E.slack === 3 && E.steamF === 90 && E.shakeF === 180 && E.glowF === 240 && E.revealF === 72 && E.run === 1.2, E);
     ok('heat: by the frames since the landing only - 0 / steam at 90 / shake at 180 / the red rim at 240', same([0, 89, 90, 179, 180, 239, 240, 999].map((a) => P.eggHeat(a)), [0, 0, 1, 1, 2, 2, 3, 3]));
+    // (3.4: MINI base - 의자 and 술래 put everyone on KIT_BASE; 계란 keeps each animal's 특기, as 왕관)
+    const kits = (id) => { party(CH4, { plan: [id] }, 60); toPlaying(); return G.players.map((p) => P.kitBase(p.slot)); };
+    const kc = kits('chair'), ks = kits('sneak'), ke = kits('egg');
+    ok('kits: 의자 and 술래 put everyone on the base kit (MINI base); 계란 keeps each animal\'s 특기 (as 왕관)', kc.every((v) => v === true) && ks.every((v) => v === true) && ke.every((v) => v === false), [kc, ks, ke]);
     P.vclock(true, 1000);
     party(CH4, { plan: ['egg'] }, 61); toPlaying();
     const e1 = egg(), MI = P.mini().egg;
