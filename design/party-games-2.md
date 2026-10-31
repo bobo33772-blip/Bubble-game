@@ -61,8 +61,29 @@
 > `M.sat`, which only the host's close set) - `chairView` now fills `M.sat` from the stop's owners in the reveal (party2).
 > Still not built: the trophy hold line (3.8, Should).
 
-Status: **design**, on `feat/party-games-2` (worktree `bogeul-games2`), stacked on `feat/party-games` (PR #26, open, not
-merged: 바나나우유 잡기 / 펑! 비눗방울 / 살금살금 술래, `PARTY_V` 7, the free draw). It builds on the party as built
+> **Follow-up (2026-10-31, the owner's `마저 진행해줘`)**: the **trophy hold line (3.8) is built** as written: `g.pa.H`
+> (host, only while 최종 순위 holds) from `troPartyLeft()` - the frames the hold has left; `troPartyWait` is now
+> `troPartyLeft() > 0`, so the line and the hold cannot disagree, and a test's `tro.partyHold` drives both -; a guest's
+> `P.H` (bounded by `PARTY_TRO_MINF`, 0 outside `z`; an older host sends none: no line); `partyHoldF` / `partyHoldTick`
+> fill `<p id="pg-party-hold">` under the rows with `트로피 정산까지 N초` (`PARTY_TX.troHold`, N = frames / 60 rounded up)
+> on every page. None in 안 걸기, practice, the fast party or under a test's `tro.partyMin` (the hold's own gates). Where
+> it differs from the text: the line is 0.75em bold in the stake chip's duck yellow in the host's skip-line slot (9.3
+> said 0.8em; the skip line never shows while it holds), and it carries `aria-live="off"` (the card is a polite live
+> region - a count changing every second would be read out every second). Fit: 최종 순위 of 4 long nicks with a 3-digit
+> count fits 1x, 2x and 568x320. Tests: party.js (`troTests`: the line from `P.H`, `g.pa.H` the same, a second at a
+> time down to 1초, none in an earlier beat or without a hold, gone at the podium; `fitAt`), party2.js (`troTests`,
+> 14.1.9: 술래 + 의자 + 바나나우유 at bot speed under `tro.partyHold`, the skip waits), party-net §10 (a staked 술래 + 의자 +
+> 바나나우유 party: the line on the host and both guests from `g.pa.H`, counting down, never before 최종 순위, gone with
+> the podium). The review's missing tests are in too: a guest letting go of a sit its mirror never shows (party-net's
+> 의자 smoke - its link silent from just before its view of S: let go at tick + LAG_MAX + 30, sat again at once, that
+> claim taken once the link is back), 14.2.9's "the host carries it toward C while C walks away" (party-net `#lag` 4d),
+> a 유령 as and beside a raft / an invuln-blinking animal (party2 machinery: no throw, alpha 1 after, the neighbours
+> pixel-exact in both blink phases). They found no bug: each passed against the game code as it was (INFO, `#lag`:
+> the host's screen showed the touch 21 ticks before C's screen did; the pass came from C's report).
+
+Status: **built** (all four games and the hold line - the notes above), on `feat/party-games-2` (worktree
+`bogeul-games2`), stacked on `feat/party-games` (PR #26, open, not merged: 바나나우유 잡기 / 펑! 비눗방울 / 살금살금 술래,
+`PARTY_V` 7, the free draw). It builds on the party as built
 (design/party.md), its polish (design/party-polish.md: the card with its 96x32 demo, the result beats, the last 판 x2, the
 보너스상), the first new games (design/party-games.md, all of it: `world: false` and the stage arena, the press queue with
 event times, `G.drawT`, the body state's `mi`, `coinAct`, the 술래 judge under latency - `rtMax` / `lagMax`) and the
@@ -291,7 +312,8 @@ party is past 2 min before its last tally. Still, a hold of half a minute with n
 
 - **Should**: `g.pa.H` (**new**, host): the frames the hold has left, sent only while it holds; the 최종 순위 view shows
   `트로피 정산까지 N초` (`PARTY_TX.troHold`, N rounded up) under the rows, on every page. It replaces 21.6's open point.
-  Fallback: today's silent hold.
+  Fallback: today's silent hold. **Built (2026-10-31)** - see the follow-up note at the top (`troPartyLeft`, `P.H`,
+  `#pg-party-hold`).
 
 ---
 
