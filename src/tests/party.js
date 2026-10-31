@@ -722,7 +722,7 @@
     // (party-games 3.6: the replan draws from what fits 3 and was not played - 왕관 or a new game, never 축구 or 물 again)
     const rp1 = PS().plan;
     ok('leavers: one leaves during the 축구 card (4 -> 3) - that 판 is drawn again (a game for 3 not played yet, no team line), its card starts over, the 3rd fits 3 too and differs',
-      G.mode === 'card' && rp1[0] === 'water' && !rp1.includes('ball') && rp1[1] !== 'water' && rp1[2] !== rp1[1] && rp1[2] !== 'water' && PS().mini.id === rp1[1] && PS().t === 80 && c.name === P.mini()[rp1[1]].name && !c.team && c.round === '2판 / 3판', [rp1, PS().mini.id, PS().t, c]);
+      G.mode === 'card' && rp1[0] === 'water' && !rp1.includes('ball') && rp1[1] !== 'water' && rp1[2] !== rp1[1] && rp1[2] !== 'water' && PS().mini.id === rp1[1] && PS().t === 80 && c.name === P.mini()[rp1[1]].name && (!c.team || rp1[1] === 'sneak') && c.round === '2판 / 3판', [rp1, PS().mini.id, PS().t, c]);   // (술래's card has its order line)
     party(withNicks(['duck', 'cat', 'frog', 'capy']), { plan: ['ball', 'crown'] });
     toPlaying(); kicked(); P.drop(2);
     ok('leavers: one leaves mid-축구 (4 -> 3) - it plays on (the team keeps its member), the 판 after it still fits', G.mode === 'playing' && PS().mini.id === 'ball' && same(PS().mini.team, { 0: 0, 1: 1, 2: 1, 3: 0 }) && G.players.length === 3 && same(PS().plan, ['ball', 'crown']), [G.mode, PS().mini.team, PS().plan]);

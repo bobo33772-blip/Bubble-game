@@ -107,6 +107,9 @@ const LIST = [
   // (the engine stepped frame by frame); its card on a landscape phone (the size it meets there: rotSync covers an upright one)
   V('party', 'test-party.html', 120000, doneZero('PARTY'), { shot: 'runall-party.png' }),
   V('party-fit-568', 'test-party.html#fit&touch=1', 30000, doneZero('PARTY'), { w: 568, h: 320, runner: 'cdp', mobile: true, done: 'PARTY DONE' }),
+  // ---- 파티 새 게임 2 (design/party-games-2.md §14.1): the machinery v2 and the new games - offline, virtual time (the
+  // rotation, the cards' fit, the demos and the HUD over every game stay in party)
+  V('party2', 'test-party2.html', 120000, doneZero('PARTY2'), { shot: 'runall-party2.png' }),
   // ---- v4 shop (design/shop.md 16): 비누 코인 (the battle economy, runs through real clears, the day bonus and soft cap,
   // the pace), the store v2 (the v1 migration, clamps, read-modify-write, buy / wear), the card rows and their fit, the
   // podium's coin line; then (S2) the items in play. check-shop: the catalog against the art, anchors and texts. Its

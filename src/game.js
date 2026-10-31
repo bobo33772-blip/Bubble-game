@@ -375,7 +375,7 @@ window.PG = window.PG || {};
   // beeps and no 10초 남았어요! (its rounds or each page's own clock end it); fastSecs - the debug fast party's length;
   // party-games-2 3.4: music - miniStart's track instead of 'battle' (null: none); base - everyone on KIT_BASE (kitOf);
   // short - the game in the room's new-games line)
-  const MINI_IDS = ['water', 'crown', 'ball', 'milk', 'puff', 'sneak'];
+  const MINI_IDS = ['water', 'crown', 'ball', 'milk', 'puff', 'sneak', 'tap'];
   const MINI_OLD = 3;   // (the first three: the arena games of party.md / the polish; the room's rules list the rest on a line of their own)
   // (a short no-KO capture in every minigame; prisons sink in 물 0.3 px/f; out once the feet are 3 px under the surface; a
   // guest draws the water at its estimate of the host's NOW, at most WATER_LEAD frames past the newest snapshot - 4.1;
@@ -6520,8 +6520,8 @@ window.PG = window.PG || {};
       if (on) { ctx.globalAlpha = 0.5; ctx.fillStyle = '#ffffff'; ctx.fillRect(x + 12, y + 4, 8, 1); ctx.globalAlpha = 1; }
       if (on) {
         // (the stream: 3 px of water from the spout, a splash of drops at its end)
-        ctx.fillStyle = lit[1] ? '#c8f4ff' : '#8fdcff'; ctx.fillRect(cx - 1, y + 28, 3, 12);
-        for (let d = 0; d < 4; d++) ctx.fillRect(Math.round(cx - 4 + d * 3), Math.round(y + 40 - ((G.frame + d * 3) % 5)), 1, 1);
+        ctx.fillStyle = lit[1] ? '#c8f4ff' : '#8fdcff'; ctx.fillRect(x + 22, y + 28, 3, 12);
+        for (let d = 0; d < 4; d++) ctx.fillRect(x + 19 + d * 3, Math.round(y + 40 - ((G.frame + d * 3) % 5)), 1, 1);
       }
       const a = TAP_ARROW[k]; glyph(ctx, GLYPH[a[0]], a[1], a[2], on ? '#ffffff' : '#9fd8d0');
     });
@@ -6591,7 +6591,7 @@ window.PG = window.PG || {};
     POS.forEach(([x, y], k) => {
       demoSpr(dx, 'faucet', k === lit ? 1 : 0, x, y, 8);
       dx.fillStyle = k === lit && bad ? '#ff3b4c' : COL[k]; dx.fillRect(x + 3, y + 1, 2, 1);
-      if (k === lit) { dx.fillStyle = bad ? '#ff3b4c' : tint; dx.fillRect(x + 3, y + 8, 1, 3); }
+      if (k === lit) { dx.fillStyle = bad ? '#ff3b4c' : tint; dx.fillRect(x + 6, y + 8, 1, 3); }
     });
     const arrow = (k, x) => glyph(dx, GLYPH[['up', 'left', 'right', 'down'][k]], x, 3, '#ffffff');
     for (const [k, t] of aAns) if (f >= t && f < t + 12) arrow(k, 10);
@@ -17181,6 +17181,7 @@ window.PG = window.PG || {};
       // headless run); the 유령 of the game now; the stamps' helpers on the game now (host); the stick's press direction
       music: () => (Snd.cur === undefined ? null : Snd.cur),
       ghosts: () => (G.mini && G.mini.gh ? Object.assign({}, G.mini.gh) : {}),
+      ghost(slot, on) { const M = G.mini; if (!M || !M.gh) return null; if (on) M.gh[slot] = 1; else delete M.gh[slot]; return Object.assign({}, M.gh); },
       rt: () => { const M = G.mini; if (!M) return null; miniRt(M); return Object.assign({}, M.rtMax); },
       stamp: (slot, t) => { const M = G.mini, p = G.players.find((q) => q.slot === slot); return M && p ? miniStamp(M, p, +t) : null; },
       past: (t, f0, skip) => (G.mini ? miniPast(G.mini, +t, +f0, skip || {}) : null),
