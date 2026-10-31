@@ -9,7 +9,7 @@
 // C reaches first on its own view is C's, the host provisionally seated is bumped)
 // Every frame: tro.ns('f' + i), tro.allowBc(true) (bc is practice otherwise), party.fast(true) (every game 12 s, the card
 // and the result beats PARTY_FF). host = slot 0 (꽥꽥이), A = slot 1 (까삐), B = slot 2 (펭펭), C = slot 3 (냥냥).
-//   1  the room: hi carries pa: 7 (PARTY_V: the new games); a party room's R says m 'p' and o[7] = the 판 수, its o[0..6] as
+//   1  the room: hi carries pa: 8 (PARTY_V: the new games 2); a party room's R says m 'p' and o[7] = the 판 수, its o[0..6] as
 //      a battle room's; a new page joining never shows 새로고침 필요 (sampled from the join on); a crafted older guest (the
 //      hi of the crown release, pa 6: a page without the three new games) is never ready - its seat says 새로고침 필요 on
 //      the host and on the other guests (R.u), its R.p ready flag is 0, 시작 is off, the room line says why; switched to
@@ -147,7 +147,7 @@
     for (const g of [A, B]) await join(g);
     await until(() => N(H).roster.length === 3 && N(H).party.seats.every((s) => s.slot === 0 || s.hi), 4000);
     const PV = H.P.consts().PARTY_V;
-    ok('hi: every new page says pa: ' + PV + ' (7: the new games - world: false, the body state\'s mi; 6 was 왕관\'s 1st wearing it at time-up, 5 the party trophies; the host records hi and pa)', PV === 7 && N(H).party.seats.filter((s) => s.slot).every((s) => s.hi && s.pa === PV), N(H).party.seats);
+    ok('hi: every new page says pa: ' + PV + ' (8: the new games 2 - 수도꼭지, 의자; 7 the new games - world: false, the body state\'s mi; 6 was 왕관\'s 1st wearing it at time-up, 5 the party trophies; the host records hi and pa)', PV === 8 && N(H).party.seats.filter((s) => s.slot).every((s) => s.hi && s.pa === PV), N(H).party.seats);
     const R0 = N(H).tro.R;
     ok('R: m \'p\', o[7] = 3 (the 판 수), the seats\' ready flags', R0 && R0.m === 'p' && R0.o.length === 8 && R0.o[7] === 3, R0);
     ok('guests read the party room (mode party, 3판)', [A, B].every((g) => N(g).mode === 'party' && N(g).opts.rounds === 3 && N(g).party.u.length === 0), [A, B].map((g) => N(g).party));

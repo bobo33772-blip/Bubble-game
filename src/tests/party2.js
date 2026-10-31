@@ -349,6 +349,11 @@
     ok('leaver: 3 stools for 3 players now - the stop closes once every present player holds a final one', chNow().ph === 2 && same(chNow().pts, { 0: 1, 1: 1, 2: 1 }) && same(chNow().gh, {}), chNow());
     toStop(2);
     ok('leaver: the next stop has one stool fewer (2 for 3)', chNow().k === 2, chNow().k);
+    // a leaver that leaves one living player: the set ends without the +2 - everyone living again
+    party(['duck', 'cat', 'frog'], { plan: ['chair'] }, 56); toPlaying();
+    stopSit([[0, 0], [1, 1]]); toStop(2);
+    const pl0 = Object.assign({}, chNow().pts), gl0 = Object.assign({}, chNow().gh); P.drop(1); step(1);
+    ok('leaver: one leaves and one living player is left (with a 유령) - nobody beat anyone: everyone living again, no +2', same(gl0, { 2: 1 }) && same(chNow().gh, {}) && same(chNow().pts, { 0: pl0[0], 1: pl0[1] }) && chNow().surv === -1, [gl0, chNow()]);
     // two players: one stool - every stop a set: the sitter +1 +2, the other out and back
     party(['duck', 'cat'], { plan: ['chair'] }, 57); toPlaying();
     const S8 = stopSit([[1, 0]]);

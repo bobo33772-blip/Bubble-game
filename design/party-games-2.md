@@ -11,6 +11,17 @@
 >
 > So every default of section 16 stands as written; nothing else in this spec changes.
 
+> **Build 1 (2026-10-31, cut line A reached)**: the shared machinery (3.1-3.7: `PARTY_V` 8, `LAG_MAX` above `SNEAK`, 유령,
+> `miniRt` / `miniStamp` / `miniPast`, the `MINI` flags, the room line, `'L' 'R' 'D'` + `stickTap` and the fixed stick
+> origin in tap, `P.lastAr`, `faucet` / `fx_ghost`, `tap` / `scratch`, the `chair` song), **수도꼭지** and **의자** are in
+> `MINI_IDS` (8 games). Tests: `src/tests/party2.js` (job `party2`: the machinery, both games, scenes `#shot=tap|tapgo|
+> taprev|tapcard|chair|chairstop|chairrev|chaircard`), party-net's two smokes and `#lag` 4b / 4c, touch.js, audio-node,
+> check-integration. Where the build differs from the text: the name tags move up over 수도꼭지's pips and over a 유령's
+> wisp / a sitter (`tagY` - the DOM tag's bottom sits on its anchor and would hide them); the pips sit under the tag; the
+> arrows stand outside each faucet of the cross; 수도꼭지's banners use the `low` class (they would cover the wall); 의자's
+> `?` is a canvas glyph over the one standing; no `bath_stool` sprite (`drawStool`, 17). Not built yet: 계란, 씨름, the
+> trophy hold line (3.8, Should).
+
 Status: **design**, on `feat/party-games-2` (worktree `bogeul-games2`), stacked on `feat/party-games` (PR #26, open, not
 merged: 바나나우유 잡기 / 펑! 비눗방울 / 살금살금 술래, `PARTY_V` 7, the free draw). It builds on the party as built
 (design/party.md), its polish (design/party-polish.md: the card with its 96x32 demo, the result beats, the last 판 x2, the
