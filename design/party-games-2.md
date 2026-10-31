@@ -1,5 +1,16 @@
 # 뽀득뽀득 목욕탕: 파티 새 게임 2 (party games 2, PR D) v1 — design spec
 
+> **Owner decisions (2026-10-30)** - the four questions of section 16, all answered with the recommended option:
+> 1. Out players in 의자 / 계란 / 수도꼭지: **"유령이 돼서 계속 점수 (추천)"** - an out player becomes a 유령 and keeps
+>    playing for points; the set's last one in gets +2; the 판 is won on points; the cards' how lines stay as pitched
+>    (`…빠져요`).
+> 2. Two players: **"4개 모두 2명도 해요 (추천)"** - all four games play with 2 (as with 3 and 4).
+> 3. Scope: **"되는 것부터 올리기 (추천)"** - build in the order 수도꼭지 → 의자 → 계란 → 씨름 and ship what passes the
+>    check; 씨름 may move to the next PR if it cannot be made solid (it touches shared physics).
+> 4. 계란: **"1.2배 빨라져요 (추천)"** - the holder runs 1.2x (`EGG.run`) after its 0.75 s juggle.
+>
+> So every default of section 16 stands as written; nothing else in this spec changes.
+
 Status: **design**, on `feat/party-games-2` (worktree `bogeul-games2`), stacked on `feat/party-games` (PR #26, open, not
 merged: 바나나우유 잡기 / 펑! 비눗방울 / 살금살금 술래, `PARTY_V` 7, the free draw). It builds on the party as built
 (design/party.md), its polish (design/party-polish.md: the card with its 96x32 demo, the result beats, the last 판 x2, the
