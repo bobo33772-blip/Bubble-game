@@ -81,8 +81,9 @@
  * reach it) and keeps the four spawns within tolerance; it prints those tables with every arena.
  *
  * PG.PARTY_ARENAS (파티, design/party.md 5): the minigames' own CLOSED arenas { key, name, theme, closed: true, map,
- * players, gather, rise? | goals?, sides?, ball? }, in this order: 물 차는 대욕장 (key 'water', 물 차오르기), 거품 축구장
- * (key 'ball', 거품 축구). 왕관 뺏기 plays on the dry battle arenas above (not 냉온탕 대결: the capy's hot-tub shield would
+ * players, gather, rise? | goals?, sides?, ball? | sneak? }, in this order: 물 차는 대욕장 (key 'water', 물 차오르기),
+ * 거품 축구장 (key 'ball', 거품 축구), 무대 목욕탕 (key 'stage', the world: false games), 살금살금 복도 (key 'sneak',
+ * 살금살금 술래). 왕관 뺏기 plays on the dry battle arenas above (not 냉온탕 대결: the capy's hot-tub shield would
  * keep the crown).
  *   closed      true: row 0 and row 25 are all '#' - no wrap gap, nothing falls through the floor or wraps (the engine's
  *               normLevel opens a drain only where closed is not set).
@@ -101,6 +102,9 @@
  *               centre 6 px past the line, below the crossbar.
  *   sides       (축구) [[left team x2], [right team x2]] the kickoff spots (mirrored; the left team scores on the right).
  *   ball        (축구) {x, y} px: where the ball drops from at each kickoff (open air, mid-screen).
+ *   sneak       (살금살금 술래, key 'sneak', design/party-games.md 6.6) { start (the runners' cell - all on one x), it (the
+ *               술래's cell), line (px: a runner's body box reaching it has arrived) } - the map's asymmetry is this data;
+ *               the map itself is mirror-exact (one floor, two 목욕 의자 stools to hop).
  * Every party arena is left-right mirror symmetric with no gap exception; tools/validate-levels.js checks the party
  * rules too (closed, mirror, spawns reachable, each rise step drowning exactly one tier; the goal mouths open under a
  * solid bar, the sides standable and mirrored, the ball in open air).
@@ -1423,6 +1427,86 @@ window.PG = window.PG || {};
       goals: [{ c0: 2, c1: 4, r0: 21, r1: 24, line: 40 }, { c0: 27, c1: 29, r0: 21, r1: 24, line: 216 }],
       ball: { x: 128, y: 64 },
       gather: { col: 15, row: 3 },
+    },
+    // ── P3 ── 무대 목욕탕 (the world: false games - 바나나우유 잡기, design/party-games.md 3.1): a closed box, the floor (row
+    //    25) and nothing else; the game draws its own scene over it and the animals stand on fixed spots (STAGE_X in
+    //    game.js: the 4-player ones are these players' cells). Mirror-exact
+    {
+      key: 'stage',
+      name: '무대 목욕탕',
+      theme: 2,
+      closed: true,
+      map: [
+        '################################',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '################################',
+      ],
+      players: [{ col: 5, row: 24 }, { col: 26, row: 24 }, { col: 12, row: 24 }, { col: 19, row: 24 }],
+      gather: { col: 15, row: 3 },
+    },
+    // ── P4 ── 살금살금 복도 (살금살금 술래, design/party-games.md 6.6): one tiled floor and two 목욕 의자 stools 1 tile high,
+    //    2 wide (cols 9-10 and 21-22 - a runner hops them; a jump clears 38 px). The runners start on the left (all at
+    //    one x), the 술래 stands on the right facing the wall; a runner whose body box reaches the line (x 200) has
+    //    arrived. Mirror-exact map; the asymmetry is the sneak data
+    {
+      key: 'sneak',
+      name: '살금살금 복도',
+      theme: 1,
+      closed: true,
+      map: [
+        '################################',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##.......##..........##.......##',
+        '################################',
+      ],
+      players: [{ col: 3, row: 24 }, { col: 27, row: 24 }, { col: 6, row: 24 }, { col: 25, row: 24 }],
+      gather: { col: 15, row: 3 },
+      sneak: { start: { col: 3, row: 24 }, it: { col: 27, row: 24 }, line: 200 },
     },
   ];
 })(window.PG);

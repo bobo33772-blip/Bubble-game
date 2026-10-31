@@ -15,6 +15,7 @@
                      stake tro_fly(o.n) tro_up tro_down promote                  (v4 trophies)
                      coin arm buy equip                                          (v4 shop)
                      gacha_roll(o.n) gacha_drop(o.n) gacha_pop(o.n) gacha_win(o.n) (v4 뽑기)
+                     puff(o.n)                                                    (파티: 펑's puff, local)
                        chain: o.n = position in the chain (pitch climbs)
                        boss_hit: optional o.n = soap hits so far (slap pitch creeps up)
                        door: default = panels sliding shut (ends in a wooden clack);
@@ -893,7 +894,9 @@ window.PG = window.PG || {};
   const VARIANTS = { slide: [1, 3, 1], hop: [1, 2, 1], b_echo: [0, 1, 0], b_yarn: [0, 1, 0], b_egg: [0, 1, 0], tro_fly: [0, 5, 0],
     // (v4 뽑기, design/gacha.md 9: the crank 0 one turn / 1 two / 2 the knock alone; a capsule landing 0 with its bounce /
     // 1 without; a capsule opening 0..9 semitones up; the fanfare 2 희귀 / 3 전설)
-    gacha_roll: [0, 2, 0], gacha_drop: [0, 1, 0], gacha_pop: [0, 9, 0], gacha_win: [2, 3, 2] };
+    gacha_roll: [0, 2, 0], gacha_drop: [0, 1, 0], gacha_pop: [0, 9, 0], gacha_win: [2, 3, 2],
+    // (파티 새 게임, party-games 9.2: 펑's puff 0..10, the bubble's size in tens of %)
+    puff: [0, 10, 0] };
   function variant(name, o) {
     const v = VARIANTS[name];
     return Math.max(v[0], Math.min(v[1], (o && o.n) | 0 || v[2]));
@@ -1555,6 +1558,12 @@ window.PG = window.PG || {};
     rank_up(t) {
       voice(sfxBus, { w: 'sine', f: 600, f2: 1800, sl: 0.22, t, d: 0.25, v: 0.12, a: 0.01, dc: 0.2, s: 0.5, r: 0.04 });
       voice(sfxBus, { w: 'p25', f: 1568, t: t + 0.2, d: 0.16, v: 0.12, a: 0.003, dc: 0.14, s: 0.3, r: 0.06 });
+    },
+    // 펑! 비눗방울 (party-games 9.2, local): one counted puff into my bubble - a 40 ms soft band-passed "푸" (shoot's,
+    // quieter), its centre 500 Hz + 120 Hz a step of o.n 0..10: the pitch rises as the bubble grows
+    puff(t, o) {
+      const f = 500 + 120 * variant('puff', o);
+      noise(sfxBus, { t, d: 0.04, v: 0.12, ft: 'bandpass', f, f2: f * 0.8, q: 1.4, a: 0.004, dc: 0.035, s: 0.3, r: 0.03 });
     },
     // a 0.9 s snare roll (every 35 ms, swelling) ending on a crash
     drumroll(t) {

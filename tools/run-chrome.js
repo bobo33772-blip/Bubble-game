@@ -26,7 +26,8 @@ if (/^rt\d+$/i.test(budget)) {
   if (out !== '-') args.push(`--screenshot=${shotPath}`);
   else args.push('--dump-dom');
   args.push(url);
-  const r = spawnSync(CH, args, { encoding: 'utf8', timeout: 120000, maxBuffer: 64 * 1024 * 1024 });
+  // (the wall-clock cap follows a long virtual budget: arena-gate's 240 s budget still got cut at 120 s on CI's runners)
+  const r = spawnSync(CH, args, { encoding: 'utf8', timeout: Math.max(120000, +budget || 0), maxBuffer: 64 * 1024 * 1024 });
   const lines = (r.stderr || '').split(/\r?\n/).filter((l) => l.includes(':CONSOLE'));
   for (const l of lines) {
     const m = l.match(/:INFO:CONSOLE[^\]]*\]\s*"(.*)", source:/) || l.match(/CONSOLE[^\]]*\]\s*(.*)$/);

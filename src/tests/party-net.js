@@ -1,13 +1,15 @@
 // 파티 online (design/party.md §13.2, design/party-polish.md §10.3): 4 same-origin iframes on PG.Net 'bc', in REAL time.
 //   node tools/serve.js   (background)
-//   node tools/run-chrome.js http://localhost:8765/test-party-net.html - 1200 900 rt420000 "PARTYNET DONE"
+//   node tools/run-chrome.js http://localhost:8765/test-party-net.html - 1200 900 rt780000 "PARTYNET DONE"
+//   the new games on a slow link (design/party-games.md §13.2, frame 3 at lat 100 / jit 40 - lagRun below):
+//   node tools/run-chrome.js http://localhost:8765/test-party-net.html#lag - 1200 900 rt300000 "PARTYNET DONE"
 // Every frame: tro.ns('f' + i), tro.allowBc(true) (bc is practice otherwise), party.fast(true) (every game 12 s, the card
 // and the result beats PARTY_FF). host = slot 0 (꽥꽥이), A = slot 1 (까삐), B = slot 2 (펭펭), C = slot 3 (냥냥).
-//   1  the room: hi carries pa: 6 (PARTY_V); a party room's R says m 'p' and o[7] = the 판 수, its o[0..6] as a battle
-//      room's; a new page joining never shows 새로고침 필요 (sampled from the join on); a crafted older guest (the hi of
-//      the party trophies' page, pa 5: its card would teach 왕관's old rule) is never ready - its seat says 새로고침 필요
-//      on the host and on the other guests (R.u), its R.p ready flag is 0, 시작 is off, the room line says why; switched
-//      to 배틀 it is ready again with no new 준비; mp.guestRoom reads o[7] 5 / missing / junk as 5 / 3 / 3
+//   1  the room: hi carries pa: 7 (PARTY_V: the new games); a party room's R says m 'p' and o[7] = the 판 수, its o[0..6] as
+//      a battle room's; a new page joining never shows 새로고침 필요 (sampled from the join on); a crafted older guest (the
+//      hi of the crown release, pa 6: a page without the three new games) is never ready - its seat says 새로고침 필요 on
+//      the host and on the other guests (R.u), its R.p ready flag is 0, 시작 is off, the room line says why; switched to
+//      배틀 it is ready again with no new 준비; mp.guestRoom reads o[7] 5 / missing / junk as 5 / 3 / 3
 //   2  a 3판 party (물 · 왕관 · 물, forced): the first card shows on the host and every guest, the same round lines, names
 //      and ready rows everywhere (my chip outlined on each page); each guest's 준비 (a jump press) reaches the host as pr
 //      and the ready rows agree everywhere; all ready -> the 3-2-1 on every page well before the auto start; the phases a /
@@ -31,8 +33,13 @@
 //      time-up -> 골든 골 on every page, the next goal ends it; the team places agree (x2: the last 판)
 //   8  파티 한 번 더: a new game id, a new plan, nothing paid twice;  9  a guest leaving during the 2nd card, a 거품 축구
 //      (4 -> 3): that 판 is drawn again on every page (no 축구 for 3), the party finishes with 3, the leaver gets nothing;
-//      no allowBc (q 1): a finished party pays nobody; the host's 방으로 mid-party: everyone in the room, nobody paid; the
-//      host leaving mid-party (staked): the guests in the lobby with 방장이 나갔어요, nobody paid, their holds refunded
+//      no allowBc (q 1): a finished party pays nobody; 바나나우유 잡기 (party-games 4.4, a smoke: each page's own measured
+//      ms reaches the host, the reveal agrees, the 판 ends by its rounds; a guest's body state carries mi only while a
+//      new game plays - none in 물, none at the podium); 살금살금 술래 (a smoke at 8 / 4: the countdown's 이번 술래: 나! on the
+//      first 술래's screen only, its tag 술래 · on every page, a runner walking through the look caught on every page, a
+//      guest 술래's chant reaching the host with T the same everywhere, the 판 ending by its rounds); the host's 방으로
+//      mid-party: everyone in the room, nobody paid; the host leaving mid-party (staked): the guests in the lobby with 방장이
+//      나갔어요, nobody paid, their holds refunded
 //   10 파티 트로피 (design/party-trophies.md 9.5; 안 걸기 above stays unchanged - trophies untouched): a staked 3판 party of
 //      4 - the card chip, nothing held on the first card / 3-2-1, the 3-2-1 says the stake, one hold of 16 at the first
 //      시작! (none at 2판 / 3판), C leaving with 나가기 at the 2판 card (gg + forfeit, its stake in the pot), every count =
@@ -54,6 +61,8 @@
     for (;;) { let v = false; try { v = pred(); } catch (e) { v = false; } if (v) return v; if (performance.now() - t0 > ms) return false; await sleep(stepMs || 20); }
   }
   try { PG.debug.G.manual = true; } catch (e) { /* ignore */ }
+  // (#lag: the new games' fairness run - frame 3 on a slow link; party-games 13.2)
+  const LAG = /lag/.test(location.hash);
   document.body.style.background = '#061518';
 
   // ---------------------------------------------------------------- frames
@@ -61,7 +70,7 @@
   function frame(i) {
     return new Promise((resolve, reject) => {
       const f = document.createElement('iframe');
-      f.src = 'preview.html?net=bc&lat=8&jit=4&drop=0&frame=' + i;
+      f.src = 'preview.html?net=bc&' + (LAG && i === 3 ? 'lat=100&jit=40' : 'lat=8&jit=4') + '&drop=0&frame=' + i;
       f.style.cssText = 'position:fixed;left:' + (i % 2) * 600 + 'px;top:' + (i >> 1) * 450 + 'px;width:600px;height:450px;border:0;background:#0a2327';
       const t = setTimeout(() => reject(new Error('frame ' + i)), 30000);
       f.onload = async () => {
@@ -134,7 +143,7 @@
     for (const g of [A, B]) await join(g);
     await until(() => N(H).roster.length === 3 && N(H).party.seats.every((s) => s.slot === 0 || s.hi), 4000);
     const PV = H.P.consts().PARTY_V;
-    ok('hi: every new page says pa: ' + PV + ' (6: 왕관\'s 1st wears it at time-up; 5 was the party trophies; the host records hi and pa)', PV === 6 && N(H).party.seats.filter((s) => s.slot).every((s) => s.hi && s.pa === PV), N(H).party.seats);
+    ok('hi: every new page says pa: ' + PV + ' (7: the new games - world: false, the body state\'s mi; 6 was 왕관\'s 1st wearing it at time-up, 5 the party trophies; the host records hi and pa)', PV === 7 && N(H).party.seats.filter((s) => s.slot).every((s) => s.hi && s.pa === PV), N(H).party.seats);
     const R0 = N(H).tro.R;
     ok('R: m \'p\', o[7] = 3 (the 판 수), the seats\' ready flags', R0 && R0.m === 'p' && R0.o.length === 8 && R0.o[7] === 3, R0);
     ok('guests read the party room (mode party, 3판)', [A, B].every((g) => N(g).mode === 'party' && N(g).opts.rounds === 3 && N(g).party.u.length === 0), [A, B].map((g) => N(g).party));
@@ -146,8 +155,8 @@
     await until(() => N(H).roster.length === 4 && N(H).party.seats.find((s) => s.slot === 3 && s.hi), 4000);
     await sleep(300); clearInterval(sampler);
     ok('a new page joining never shows 새로고침 필요 (the r.hi gate: not before its hi, not after)', !flicker && N(H).party.seats.find((s) => s.slot === 3).pa === PV, N(H).party.seats);
-    // a crafted older guest: C says hi again with pa 5 (the party trophies' page: its card would teach 왕관's old rule,
-    // the longest hold and the gold x2); a page older still sends a smaller pa or none: the same gate
+    // a crafted older guest: C says hi again with pa 6 (the crown release's page: it lacks the three new games - it would
+    // read their plan codes as 물 and mi as noise); a page older still sends a smaller pa or none: the same gate
     C.mp.ready(true); await until(() => N(H).party.seats.find((s) => s.slot === 3).ready, 3000);
     C.mp.session().send(hostIdOf(C), { t: 'hi', n: NICKS[3], c: CHARS[3], cu: 100, d: N(H).roster[3].d || 'abcdef', z: 1, pa: PV - 1 });
     await until(() => N(H).party.seats.find((s) => s.slot === 3).old, 3000);
@@ -219,6 +228,7 @@
     const worst = Math.max(...diffs.map((d) => Math.abs(d)));
     info('water clock: guest estimate - host frame (ticks): ' + diffs.join(' ') + ' -> at the real 8 px/s that is ' + (worst * 8 / 60).toFixed(2) + ' px');
     ok('water: every guest draws the water at the host\'s clock (within 1 px at the real 8 px/s: <= 7 ticks)', diffs.length >= 24 && worst <= 7, diffs);
+    ok('mi: no guest\'s body state carries mi in a game without local (물): the host\'s last state of each has none', [1, 2, 3].every((s) => H.P.remMi(s) === null), [1, 2, 3].map((s) => H.P.remMi(s)));
     ok('water: ... and its drawn level is the schedule at that frame', [A, B, C].every((g) => { const m = PS(g).mini; return m && Math.abs(m.wl - g.P.waterAt(m.tt, 0.2)) < 0.01; }));
     const sp0 = F.map((f) => f.sfx.filter((n) => n === 'splash').length);
     const t0 = performance.now();
@@ -464,12 +474,13 @@
     C.mp.leave();
     await until(() => N(H).roster.length === 3 && H.G.players.length === 3, 4000);
     const D3 = [H, A, B];
-    const redrawn = await until(() => D3.every((f) => PS(f).ph === 'card' && f.P.card().shown && f.P.card().name === '왕관 뺏기' && !f.P.card().team && f.P.card().round === '2판 / 3판'), 4000);
-    ok('leaver: a guest leaving during the 축구 card (4 -> 3) - that 판 is drawn again on every page (왕관 뺏기, no team line), the party goes on with 3',
-      redrawn && PS(H).on && PS(H).i === 1 && PS(H).plan[1] === 'crown' && !PS(H).plan.includes('ball') && H.G.players.length === 3 && !PS(H).walk, [PS(H).plan, D3.map((f) => f.P.card())]);
+    // (party-games 3.6: the replan draws from the games that fit 3 and were not played - 왕관 or a new game)
+    const redrawn = await until(() => D3.every((f) => PS(f).ph === 'card' && f.P.card().shown && PS(H).plan[1] !== 'ball' && f.P.card().name === H.P.mini()[PS(H).plan[1]].name && !f.P.card().team && f.P.card().round === '2판 / 3판'), 4000);
+    ok('leaver: a guest leaving during the 축구 card (4 -> 3) - that 판 is drawn again on every page (a game for 3 not played yet, no team line), the party goes on with 3',
+      redrawn && PS(H).on && PS(H).i === 1 && PS(H).plan[1] !== 'water' && !PS(H).plan.includes('ball') && H.G.players.length === 3 && !PS(H).walk, [PS(H).plan, D3.map((f) => f.P.card())]);
     // (the leaver's page keeps no party: its lobby's demo world runs its rounds, no water / crown drawn behind the panel)
     ok('leaver: its own page has no party left (G.party / G.mini cleared, the arena list back to the battle one)', !PS(C).on && PS(C).mini === null && PS(C).kind === 'b', [PS(C).on, PS(C).mini, PS(C).kind]);
-    const pod2 = await until(() => D3.every((f) => PS(f).ph === 'podium'), 45000);
+    const pod2 = await until(() => D3.every((f) => PS(f).ph === 'podium'), 70000);   // (a redrawn 바나나우유 plays its 4 fast rounds)
     await sleep(300);
     ok('leaver: the party finishes (podium of 3 on the 3 pages left)', pod2 && D3.every((f) => PS(f).podium.order.length === 3), D3.map((f) => PS(f).ph));
     ok('leaver: the one who left got nothing', coinsOf(C) === ceC, [ceC, coinsOf(C)]);
@@ -488,6 +499,61 @@
     ok('practice: the podium screen-reader line says no coins, and nothing about trophies (a party has none)', D3.every((f) => /연습 경기라 비누 코인은 없어요/.test(doc(f, 'pg-podium-sum').textContent) && !/트로피/.test(doc(f, 'pg-podium-sum').textContent) && doc(f, 'pg-podium-note').textContent.indexOf('트로피') < 0),
       D3.map((f) => doc(f, 'pg-podium-sum').textContent));
     for (const f of D3) f.T.allowBc(true);
+
+    // ---- 바나나우유 잡기 online, a smoke at 8 / 4 ms (design/party-games.md 4.4; the slow-link checks are the #lag run's):
+    // a forced 1-판 party (fast: 4 rounds). Round 1: each page presses 250 ms after its OWN first draw of the milk - the
+    // host takes each seat's own measured ms (its mi, the host's through the same local -> input), the reveal rows agree
+    // on every page; the 판 ends by its rounds, the podium follows
+    H.mp.toRoom(); await until(() => D3.every((f) => N(f).screen === 'room'), 6000);
+    H.P.force(['milk']);
+    await readyAll(D3);
+    H.mp.start();
+    const mk = await until(() => D3.every((f) => PS(f).ph === 'playing' && PS(f).mini && PS(f).mini.id === 'milk'), 15000);
+    ok('바나나우유: the 판 plays on every page (무대 목욕탕, the animals on their stage spots)', mk && D3.every((f) => PS(f).kind === 'p' && f.P.arenas()[PS(f).arena].key === 'stage'), D3.map((f) => [PS(f).ph, PS(f).mini && PS(f).mini.id]));
+    const mkWant = {};
+    await Promise.all(D3.map(async (f) => {
+      if (!(await until(() => { const s = f.P.seen(); return s && s.r === 1 && s.milk !== undefined; }, 8000, 2))) return;
+      const t = f.P.seen().milk; await sleep(250); const tp = f.P.now();
+      f.P.press(N(f).mySlot, 'shoot', tp); mkWant[N(f).mySlot] = Math.round(tp - t);
+    }));
+    const mkRv = await until(() => H.P.milk() && H.P.milk().r === 1 && H.P.milk().ph === 2, 4000, 5);
+    ok('mi: during 바나나우유 each guest\'s body state carries its mi ([판 i, round, ms, flag])', [1, 2].every((s) => { const m = H.P.remMi(s); return m && m.length === 4 && m[0] === PS(H).i && m[1] === 1; }), [1, 2].map((s) => H.P.remMi(s)));
+    const res = mkRv ? H.P.milk().res : null;
+    ok('바나나우유: each seat\'s grab reaches the host with the ms its own page measured (250+ after its own draw)', res && res.length === 3 && res.every((q) => q[2] === 1 && q[1] === mkWant[q[0]] && q[1] >= 250 && q[1] < 1000), [res, mkWant]);
+    const mkAgree = await until(() => D3.every((f) => PS(f).mini && PS(f).mini.r === 1 && PS(f).mini.ph === 2 && JSON.stringify(PS(f).mini.res) === JSON.stringify(res)), 3000, 5);
+    ok('바나나우유: the reveal rows (and points) agree on every page', mkAgree, D3.map((f) => PS(f).mini && [PS(f).mini.r, PS(f).mini.ph, PS(f).mini.res]));
+    const mpod = await until(() => D3.every((f) => PS(f).ph === 'podium'), 45000);
+    ok('바나나우유: the 판 ends by its 4 fast rounds and the podium shows on every page', mpod, D3.map((f) => [PS(f).ph, PS(f).mini && PS(f).mini.r]));
+    const noMi = await until(() => [1, 2].every((s) => H.P.remMi(s) === null), 1500, 10);
+    ok('mi: ... and none once the 판 is over (the podium: the guests\' states leave it out)', noMi, [1, 2].map((s) => H.P.remMi(s)));
+
+    // ---- 살금살금 술래 online, a smoke at 8 / 4 ms (the fast party: 2 rounds - the host, then A; the slow-link checks are
+    // the #lag run's): the countdown's 2 / 1 says 이번 술래: 나! on the first 술래's screen only; the 술래's name tag
+    // (술래 · 방장) on every page; B walking on through the host's look is caught on every page (a prison owned by the
+    // 술래); A's chant (a guest 술래, its mi) reaches the host and T is the same on every page; the 판 ends by its rounds
+    H.mp.toRoom(); await until(() => D3.every((f) => N(f).screen === 'room'), 6000);
+    H.P.force(['sneak']);
+    await readyAll(D3);
+    const cnt = new Map(D3.map((f) => [f.i, new Set()]));
+    const cWatch = setInterval(() => { for (const f of D3) { const b = bnr(f); if (/^[21] \/ /.test(b)) cnt.get(f.i).add(b.split(' / ')[1]); } }, 8);
+    H.mp.start();
+    const snOn = await until(() => D3.every((f) => PS(f).ph === 'playing' && f.P.sneak() && f.P.sneak().r === 1), 15000);
+    clearInterval(cWatch);
+    ok('술래: the countdown\'s 2 / 1 says 이번 술래: 나! on the first 술래\'s screen (the host) only, the 판 line on the others', snOn && JSON.stringify([...cnt.get(0)]) === JSON.stringify(['이번 술래: 나!']) && [1, 2].every((i) => cnt.get(i).size >= 1 && !cnt.get(i).has('이번 술래: 나!')), D3.map((f) => [...cnt.get(f.i)]));
+    const tagOn = await until(() => D3.every((f) => [...f.w.document.querySelectorAll('.pg-tag-t')].some((e) => e.textContent === '술래 · ' + NICKS[0])), 2000, 10);
+    ok('술래: the 술래\'s name tag says 술래 · 방장 on every page', tagOn, D3.map((f) => [...f.w.document.querySelectorAll('.pg-tag-t')].map((e) => e.textContent)));
+    const SNH = () => H.P.sneak() || {};
+    await place(B, 96, 200); B.D.press('right', true, 2);
+    for (let k = 0; k < 16 && SNH().syl < 6; k++) { H.P.press(0, 'shoot'); await sleep(110); }
+    await until(() => SNH().T >= 0 && H.G.frame > SNH().T + 30, 3000, 5); B.D.press('right', false, 2);
+    const bCaught = await until(() => D3.every((f) => { const p = slotP(f, 2); return p && p.trap && f.G.bubbles.some((b) => b.kind === 'player' && b.owner === 0); }), 3000, 5);
+    ok('술래: B walking on through the host\'s look is caught - a prison owned by the 술래 on every page; +1 for the 술래', bCaught && (SNH().pts || {})[0] === 1, [SNH(), D3.map((f) => !!(slotP(f, 2) && slotP(f, 2).trap))]);
+    const sn2 = await until(() => D3.every((f) => f.P.sneak() && f.P.sneak().r === 2 && f.P.sneak().ph === 0 && f.P.sneak().it === 1), 12000, 5);
+    for (let k = 0; k < 16 && SNH().syl < 6; k++) { A.P.press(1, 'shoot'); await sleep(110); }
+    const snT = await until(() => SNH().T >= 0 && SNH().syl >= 6 && D3.every((f) => f.P.sneak().T === SNH().T), 4000, 5);
+    ok('술래: round 2 - A (a guest 술래) chants: its mi reaches the host, T is the same on every page', sn2 && snT, D3.map((f) => f.P.sneak()));
+    const snPod = await until(() => D3.every((f) => PS(f).ph === 'podium'), 30000);
+    ok('술래: the 판 ends by its 2 fast rounds and the podium shows on every page', snPod, D3.map((f) => PS(f).ph));
 
     // ---- 10. 파티 트로피: a staked party (design/party-trophies.md 9.5)
     await stakedTests(F);
@@ -522,6 +588,205 @@
     ok('host left mid-party (staked): the guests are refunded (host_left), the host forfeits its own hold', [A, B].every((g, k) => TS(g).t === tr5[k + 1] && !TS(g).esc.length) && TS(H).t === tr5[0] - 16 && !TS(H).esc.length, [tr5, D3.map((f) => TS(f).t)]);
     ok('host left mid-party: no page keeps the party (the host\'s own, the guests\' mirrors)', D3.every((f) => !PS(f).on && PS(f).mini === null), D3.map((f) => [PS(f).on, PS(f).mini && PS(f).mini.id]));
     ok('no page error in any frame', F.every((f) => !f.errors.length), F.map((f) => f.errors));
+  }
+  // ---------------------------------------------------------------- #lag (party-games 13.2): the new games on a slow link
+  // frame 3 (C, 냥냥) at lat 100 / jit 40, the others at 8 / 4; fast party (바나나우유 4 rounds, 펑 a 12 s window)
+  //   2  바나나우유: the host's own player, A and C press 250 ms after their OWN first draw of the milk - a real keydown
+  //      dispatched by a timer the page set at that draw (pressAfterDraw): each page's RT is exactly round(the event's
+  //      timeStamp - its recorded draw time), on its page and at the host, and lies in 250..300 (a timer runs late, never
+  //      early); round 2 C at 200, A at 320 - C places above A despite its lag; round 3 B presses on the decoy - the
+  //      물벼락 on every page; the events and the reveal rows agree everywhere; the 판 ends by its rounds
+  //   3  펑: A and C run the same press pattern from their own 시작! (puffs >= 80 ms apart as real X presses, ↓ at the
+  //      tremble, then at the flash, then puff until it pops) well before their window ends: the same score, bubbles and
+  //      pops; the host places by the done reports (A and C share the 1st); every page hears both pops once
+  //   4  술래 (real lengths, the order H A B C): round 1 - C walks on its own view and lets go 4 ticks after its own
+  //      탕! (right, left, right): never caught over 3 looks; walking on through the 4th it is caught - a prison owned by
+  //      the 술래 on every page; round 2 - A (a guest) chants: its mi reaches the host, T the same on every page; round
+  //      3 - A and C at the line's edge press on their OWN view ticks R + 12 / R: C's earlier stamp orders it first
+  //      though its state reached the host later; round 4 - C the 술래; the 판 ends by its rounds. INFO: each guest's
+  //      playout delay at each round's start and end
+  //   5  the snapshots stay under 3400 bytes
+  async function lagRun() {
+    const F = [await frame(0), await frame(1), await frame(2), await frame(3)];
+    const [H, A, B, C] = F;
+    code = await H.mp.host({ mode: 'party', nick: NICKS[0], char: CHARS[0], rounds: 3, rapid: true, perks: true });
+    for (const g of [A, B, C]) await join(g);
+    const in4 = await until(() => N(H).roster.length === 4 && N(H).party.seats.every((s) => s.slot === 0 || s.hi), 8000);
+    ok('lag: four pages in one party room (frame 3 on a 100 ms +-40 link)', in4, N(H).party.seats);
+    const rtt = C.mp.state().stats || {};
+    info('lag: frame 3 link stats ' + JSON.stringify(rtt).slice(0, 200));
+
+    // ---- 2. 바나나우유
+    H.P.force(['milk']);
+    for (const f of [H, A, C]) f.P.pressAfterDraw(250, 'milk');
+    B.P.pressAfterDraw(100, 'decoy');
+    await readyAll(F);
+    H.mp.start();
+    const on = await until(() => F.every((f) => PS(f).ph === 'playing' && PS(f).mini && PS(f).mini.id === 'milk'), 15000);
+    ok('lag 바나나우유: the 판 plays on every page', on, F.map((f) => [PS(f).ph, PS(f).mini && PS(f).mini.id]));
+    const evAgree = (r) => F.every((f) => JSON.stringify(f.P.milkEv()) === JSON.stringify(H.P.milkEv())) && H.P.milk().r === r;
+    const rowsAt = async (r) => {
+      const rv = await until(() => H.P.milk() && H.P.milk().r === r && H.P.milk().ph === 2, 8000, 5);
+      const res = rv ? H.P.milk().res : null;
+      const agree = rv && await until(() => F.every((f) => PS(f).mini && PS(f).mini.r === r && PS(f).mini.ph === 2 && JSON.stringify(PS(f).mini.res) === JSON.stringify(res)), 3000, 5);
+      return { res, ev: agree && evAgree(r), agree };
+    };
+    // round 1 (a warm-up: each page's first key press unlocks its audio - heavy, and the four frames share one main
+    // thread, so the next page's timer runs ~0.5 s late: 699 / 1186 ms seen) and round 2: H, A and C at 250 ms after
+    // their own draws (B: no press - 느려요); the plumbing exact in both, the range in round 2
+    const recsOf = (r) => [H, A, C].map((f) => ({ s: N(f).mySlot, rec: f.P.padRec(), rep: (f.P.mloc(N(f).mySlot) || {}).rep, r }));
+    // (a timer that fired past maxMs under load - round 1's warm-up - is a 느려요 on its page and at the host: the plumbing
+    // still exact)
+    const exact = (q, res) => q.rec && q.rep && q.rec.r === q.r && (Math.round(q.rec.ts - q.rec.draw) > 1500 ? q.rep[1] === 4 && res.some((x) => x[0] === q.s && x[2] === 4)
+      : q.rep[0] === Math.round(q.rec.ts - q.rec.draw) && res.some((x) => x[0] === q.s && x[2] === 1 && x[1] === q.rep[0]));
+    const r1 = await rowsAt(1), recs1 = recsOf(1);
+    for (const f of [H, A, C]) f.P.pressAfterDraw(250, 'milk');
+    const r2 = await rowsAt(2), recs2 = recsOf(2);
+    info('lag 바나나우유 rounds 1 / 2: ' + recs1.concat(recs2).map((q) => 'r' + q.r + ' slot ' + q.s + ' rt ' + (q.rec ? (q.rec.ts - q.rec.draw).toFixed(1) : '-') + ' -> ' + JSON.stringify(q.rep)).join(' | '));
+    ok('lag 바나나우유: each page\'s RT is exactly round(its key event\'s timeStamp - its own recorded draw of the milk), on its page and at the host - rounds 1 and 2 (the plumbing: evT and the rAF time)',
+      r1.res && r2.res && recs1.every((q) => exact(q, r1.res)) && recs2.every((q) => exact(q, r2.res)), [recs1, r1.res, recs2, r2.res]);
+    ok('lag 바나나우유: ... and lies in 250..300 ms on every page, frame 3 on its slow link too (a timer runs late, never early; round 2)', recs2.every((q) => q.rep && q.rep[0] >= 250 && q.rep[0] <= 300), recs2.map((q) => q.rep));
+    ok('lag 바나나우유: rounds 1 and 2 - the events and the reveal rows agree on every page (B, no press: 느려요)', r1.ev && r1.agree && r2.ev && r2.agree && [r1, r2].every((q) => q.res.find((x) => x[0] === 2)[2] === 4), [r1, r2, F.map((f) => f.P.milkEv())]);
+    // round 3: C (the slow link) at 200, A at 320 - C places above A; B's press on the decoy - its 물벼락 on every page
+    C.P.pressAfterDraw(200, 'milk'); A.P.pressAfterDraw(320, 'milk');
+    const r3 = await rowsAt(3), q3 = (s) => (r3.res || []).find((x) => x[0] === s) || [s, 0, 0, 0], recB = B.P.padRec();
+    info('lag 바나나우유 round 3: ' + JSON.stringify(r3.res));
+    ok('lag 바나나우유: round 3 - C (100 ms link) pressing 200 ms after its own draw places above A at 320 ms (3 vs 2 points)', q3(3)[2] === 1 && q3(1)[2] === 1 && q3(3)[1] < q3(1)[1] && q3(3)[3] === 3 && q3(1)[3] === 2 && r3.ev && r3.agree, [r3.res, r3.ev, r3.agree]);
+    const wet = F.every((f) => { const fx = (f.P.mloc() || {}).fx; return fx && fx[2] && fx[2].r === 3; });
+    ok('lag 바나나우유: round 3 - B\'s press 100 ms after its own draw of the decoy is a 반칙 (-1), the 물벼락 on every page', recB && recB.r === 3 && q3(2)[2] === 2 && q3(2)[3] === -1 && wet && r3.agree,
+      [recB, r3.res, F.map((f) => (f.P.mloc() || {}).fx)]);
+    const pod = await until(() => F.every((f) => PS(f).ph === 'podium'), 45000);
+    ok('lag 바나나우유: the 판 ends by its 4 fast rounds and the podium shows on every page', pod, F.map((f) => [PS(f).ph, PS(f).mini && PS(f).mini.r]));
+
+    // ---- 3. 펑
+    H.mp.toRoom(); await until(() => F.every((f) => N(f).screen === 'room'), 6000);
+    H.P.force(['puff']);
+    await readyAll(F);
+    const pop0 = F.map((f) => f.sfx.filter((n) => n === 'pop').length);
+    // (a list whose first three pop sizes are small - 40..55 % - so the pattern fits well inside the 12 s window, and
+    // bubble 2 surely pops before 만점)
+    let seedP = 1; while (![0, 1, 2].every((k) => { const L = H.P.puffL(seedP, k); return L >= 40 && L <= 55; })) seedP++;
+    H.mp.start();
+    await until(() => PS(H).ph === 'card' && H.P.puff(), 6000, 5); H.P.puffSeed(seedP);
+    const pf = await until(() => F.every((f) => PS(f).ph === 'playing' && PS(f).mini && PS(f).mini.id === 'puff'), 15000);
+    ok('lag 펑: the 판 plays on every page (a 12 s window: the host\'s, in g.mg)', pf && F.every((f) => f.P.puff() && f.P.puff().win === 12000), F.map((f) => [PS(f).ph, f.P.puff() && f.P.puff().win]));
+    const script = async (f) => {
+      const s = N(f).mySlot, seat = () => f.P.puffSeat(s), w = f.w;
+      if (!(await until(() => f.P.puffT0() !== null, 8000, 2))) return { err: 'no window' };
+      const t0 = f.P.puffT0(), seed = f.P.puff().seed;
+      const key = (code, k) => { w.dispatchEvent(new w.KeyboardEvent('keydown', { code, key: k, bubbles: true })); w.dispatchEvent(new w.KeyboardEvent('keyup', { code, key: k, bubbles: true })); };
+      for (const want of [1, 3, 9]) {   // (↓ at the tremble, then at the flash; 9: never - puff until it pops)
+        for (let k = 0; k < 40; k++) {
+          const S = seat(); if (want < 9 && f.P.puffWarn(S.s10, f.P.puffL(seed, S.n)) >= want) break;
+          key('KeyX', 'x');
+          await until(() => seat().s10 !== S.s10 || seat().n !== S.n, 1000, 2); await sleep(80);
+          if (seat().n !== S.n) break;
+        }
+        if (want < 9) { const n0 = seat().n; key('ArrowDown', 'ArrowDown'); await until(() => seat().n !== n0, 1000, 2); }
+        await until(() => seat().st === 0, 2500, 5);
+      }
+      return { t: f.P.now() - t0, seat: seat() };
+    };
+    const [sa, sc] = await Promise.all([script(A), script(C)]);
+    info('lag 펑: A ' + JSON.stringify(sa) + ' | C ' + JSON.stringify(sc));
+    ok('lag 펑: A and C each finished the pattern inside their own window, 2 s before its end', sa.t > 0 && sc.t > 0 && sa.t < 10000 && sc.t < 10000, [sa, sc]);
+    ok('lag 펑: the same press pattern from each one\'s own 시작! gives the same score, bubbles and pops at 8 ms and at 100 ms (two kept, one popped)', sa.seat && sc.seat && sa.seat.score === sc.seat.score && sa.seat.n === 3 && sc.seat.n === 3 && sa.seat.pops === 1 && sc.seat.pops === 1 && sa.seat.score > 0, [sa, sc]);
+    const done = await until(() => F.every((f) => PS(f).ph === 'result'), 20000);
+    await sleep(200);
+    const rows = PS(H).mini && PS(H).mini.rows;
+    ok('lag 펑: the host\'s rows of A and C are their own pages\' (score, bubbles, pops), done', done && rows && rows[1] && rows[3] && rows[1][0] === sa.seat.score && rows[3][0] === sc.seat.score && rows[1][2] === 3 && rows[3][3] === 1 && rows[1][4] === 3 && rows[3][4] === 3, rows);
+    ok('lag 펑: the host places by the done reports - A and C share the 1st, the host and B below', PS(H).last[1] === 1 && PS(H).last[3] === 1 && PS(H).last[0] > 1 && PS(H).last[2] > 1, PS(H).last);
+    const pops = F.map((f, k) => f.sfx.filter((n) => n === 'pop').length - pop0[k]);
+    ok('lag 펑: every page heard both pops once (its own at once, a friend\'s when its row\'s pops rose)', pops.every((n) => n === 2), pops);
+    await until(() => F.every((f) => PS(f).ph === 'podium'), 20000);
+
+    // ---- 4. 술래 (real lengths: 4 rounds, the 술래 order H A B C)
+    H.mp.toRoom(); await until(() => F.every((f) => N(f).screen === 'room'), 6000);
+    for (const f of F) f.P.fast(false);
+    H.P.force(['sneak']);
+    await readyAll(F);
+    H.mp.start();
+    await readyCard(F);
+    const sOn = await until(() => F.every((f) => PS(f).ph === 'playing' && f.P.sneak() && f.P.sneak().r === 1), 20000);
+    ok('lag 술래: the 판 plays on every page (살금살금 복도), the host the 1st 술래', sOn && F.every((f) => f.P.arenas()[PS(f).arena].key === 'sneak' && f.P.sneak().it === 0), F.map((f) => [PS(f).ph, f.P.sneak()]));
+    // (INFO: each guest's playout delay at each round's start and end - the drift that moves a stamp, 6.4)
+    const dl = []; let dr = '';
+    const dWatch = setInterval(() => { const m = H.P.sneak(); if (!m) return; const k = m.r + ':' + m.ph; if (k !== dr) { dr = k; dl.push(k + ' ' + [A, B, C].map((f) => (N(f).delay === null ? '-' : N(f).delay.toFixed(1))).join('/')); } }, 20);
+    const SNk = (f) => f.P.sneak() || {};
+    // a 술래 chants: a press about every 7 f (a syllable each 6 f) until the host lit 욕 - then 탕! 21 f later
+    const chant = async (f) => { const s = N(f).mySlot; for (let k = 0; k < 16 && SNk(H).syl < 6; k++) { f.P.press(s, 'shoot'); await sleep(110); } };
+    // C (100 ms +-40) runs on its own view: it walks once its screen shows the 3rd syllable and lets go 4 ticks after
+    // its own view's 탕! (it has stopped by T+6) - right, left, right; the 4th time it walks on 40 ticks into the look
+    const cRun = { phase: 'idle', looks: 0, T: -1, log: [] };
+    C.mp.tap(() => {
+      const m = SNk(C), now = N(C).rtHi, s = C.P.sneakSyl(), slot = 3;
+      if (m.r !== 1 || m.ph !== 0) return;
+      if (cRun.phase === 'idle' && cRun.looks < 4 && s >= 3 && s < 7) { cRun.dir = cRun.looks % 2 ? 'left' : 'right'; C.D.press(cRun.dir, true, slot); cRun.phase = 'walk'; }
+      else if (cRun.phase === 'walk' && m.T >= 0 && m.T !== cRun.T && now >= m.T + (cRun.looks === 3 ? 40 : 4)) { C.D.press(cRun.dir, false, slot); cRun.phase = 'stop'; cRun.T = m.T; cRun.log.push([m.T, now, Math.round(slotP(C, 3).x)]); cRun.looks++; }
+      else if (cRun.phase === 'stop' && now >= cRun.T + 90) cRun.phase = 'idle';
+    });
+    await place(C, 96, 200);
+    // (the host's turn when C was caught - only the 4th may catch it)
+    const trapT = [], cSeen = new Set();
+    const tWatch = setInterval(() => {
+      const p = slotP(H, 3); if (p && p.trap && !trapT.includes(SNk(H).T)) trapT.push(SNk(H).T);
+      for (const f of F) { const q = slotP(f, 3); if (q && q.trap && f.G.bubbles.some((b) => b.kind === 'player' && b.owner === 0)) cSeen.add(f.i); }
+    }, 5);
+    for (let k = 0; k < 4; k++) {
+      await until(() => SNk(H).syl === 0 && SNk(H).ph === 0 && SNk(H).r === 1, 6000, 5);
+      await chant(H);
+      await until(() => SNk(H).syl === 7, 3000, 5);
+      await until(() => SNk(H).syl !== 7, 3000, 5);
+    }
+    const caught = await until(() => cRun.looks === 4 && cSeen.size === 4, 4000, 5);
+    ok('lag 술래: C (100 ms link) letting go 4 ticks after its own view\'s 탕! is never caught over 3 looks (it walked right, left, right)', cRun.log.length === 4 && trapT.length === 1 && trapT[0] === cRun.log[3][0], [cRun.log, trapT]);
+    ok('lag 술래: ... walking on through the 4th look it is caught - a prison owned by the 술래 on every page', caught && (SNk(H).catches || {})[0] === 1, [cRun.log, SNk(H).catches, [...cSeen]]);
+    C.mp.tap(null);
+    info('lag 술래 C\'s looks [T, its view when it let go, x]: ' + JSON.stringify(cRun.log));
+    // round 2: A (a guest) is the 술래 - its presses reach the host as mi; T is the same on every page
+    const sr2 = await until(() => F.every((f) => SNk(f).r === 2 && SNk(f).ph === 0 && SNk(f).it === 1), 20000, 5);
+    await sleep(300);
+    const s0 = SNk(H).syl;
+    await chant(A);
+    const tSame = await until(() => SNk(H).T >= 0 && SNk(H).syl >= 6 && F.every((f) => SNk(f).T === SNk(H).T), 4000, 5);
+    ok('lag 술래: round 2 - a guest 술래\'s chant (its mi) reaches the host and T is the same on every page', sr2 && s0 === 0 && tSame, [s0, F.map((f) => [SNk(f).r, SNk(f).it, SNk(f).T, SNk(f).syl])]);
+    // (end it: once the look is over the runners H, B and C walk to the line)
+    await until(() => SNk(H).syl === 0, 4000, 5);
+    const T2 = SNk(H).T; await until(() => F.every((f) => (f === H ? f.G.frame : N(f).rtHi) >= T2 + 96), 4000, 5);
+    for (const f of [H, B, C]) await place(f, 186, 200);
+    // (each guest's own x while round 2 still runs on its page - the swap then puts it back on a spot)
+    await sleep(150); for (const f of [H, B, C]) f.D.press('right', true, N(f).mySlot);
+    const mx = { 2: 0, 3: 0 };
+    for (let k = 0; k < 40; k++) { for (const f of [B, C]) { const m = SNk(f); if (m.r === 2 && m.ph === 0) mx[f.i] = Math.max(mx[f.i], me(f).x); } await sleep(10); }
+    const xs = [B, C].map((f) => Math.round(mx[f.i] * 10) / 10);
+    for (const f of [H, B, C]) f.D.press('right', false, N(f).mySlot);
+    ok('lag 술래: a guest freezes its own animal the frame its own body reaches the line (right still held 0.4 s: B and C - on the slow link - go no further than 188..191 while round 2 runs on its screen, never walking on into the 술래 while the host\'s list is on its way)', xs.every((x) => x >= 188 && x < 191), xs);
+    // round 3: B the 술래 - A and C at the line's edge, each pressing on its OWN view tick: C at R, A at R + 12
+    const sr3 = await until(() => F.every((f) => SNk(f).r === 3 && SNk(f).ph === 0 && SNk(f).it === 2), 20000, 5);
+    await place(A, 186, 200); await place(C, 186, 200); await sleep(200);
+    const R = H.G.frame + 60, went = {};
+    for (const [f, at] of [[A, R + 12], [C, R]]) f.mp.tap(() => { if (!went[f.i] && N(f).renderTick >= at) { went[f.i] = N(f).renderTick; f.D.press('right', true, N(f).mySlot); } });
+    const two = await until(() => (SNk(H).arr || []).length >= 2, 6000, 5);
+    for (const f of [A, C]) { f.mp.tap(null); f.D.press('right', false, N(f).mySlot); }
+    const arr = SNk(H).arr || [];
+    info('lag 술래 round 3: pressed at view ticks ' + JSON.stringify(went) + ' (R ' + R + '), arrivals ' + JSON.stringify(arr));
+    const arrAgree = await until(() => F.every((f) => JSON.stringify((SNk(f).arr || []).map((a) => a[0])) === JSON.stringify(arr.map((a) => a[0]))), 3000, 5);
+    ok('lag 술래: round 3 - A and C reach the line with stamps ~12 f apart, C (the slow link) first: C is ordered first though its state reached the host later; the order agrees on every page',
+      sr3 && two && arr[0][0] === 3 && arr[1][0] === 1 && arr[1][1] - arr[0][1] >= 6 && arr[1][1] - arr[0][1] <= 18 && arrAgree, [arr, went, arrAgree]);
+    // round 4: C (the slow link) is the 술래 - the others walk to the line, the 판 ends by its rounds
+    const sr4 = await until(() => F.every((f) => SNk(f).r === 4 && SNk(f).ph === 0 && SNk(f).it === 3), 20000, 5);
+    for (const f of [H, A, B]) await place(f, 186, 200);
+    await sleep(150); for (const f of [H, A, B]) f.D.press('right', true, N(f).mySlot); await sleep(400); for (const f of [H, A, B]) f.D.press('right', false, N(f).mySlot);
+    const sEnd = await until(() => F.every((f) => PS(f).ph === 'result' || PS(f).ph === 'podium'), 20000, 10);
+    ok('lag 술래: rounds 2-4 with each guest as the 술래, the 판 ends by its 4th round on every page (not the 80 s cap)', sr4 && sEnd && PS(H).last && Object.keys(PS(H).last).length === 4, [sr4, sEnd, F.map((f) => PS(f).ph)]);
+    clearInterval(dWatch); clearInterval(tWatch);
+    info('lag 술래 playout delay (A/B/C ticks) at each round:phase: ' + dl.join(' | '));
+    await until(() => F.every((f) => PS(f).ph === 'podium'), 30000);
+    for (const f of F) f.P.fast(true);
+
+    // ---- 5. the snapshot budget
+    ok('lag: snapshots under 3400 bytes throughout', N(H).snap.max > 0 && N(H).snap.max <= 3400, N(H).snap);
+    ok('lag: no page error in any frame', F.every((f) => !f.errors.length), F.map((f) => f.errors));
   }
   // ---------------------------------------------------------------- 10. 파티 트로피 (design/party-trophies.md 9.5): a party
   // at a stake is a 트로피 경기 - one hold at the first 시작!, settled by the final standing (troPartyTable); party.fast
@@ -701,5 +966,5 @@
   }
   // (A's own animal on its page)
   const G1 = (f) => me(f);
-  main().catch((e) => { fail++; log('PARTYNET FAIL main threw: ' + (e && e.stack ? e.stack.split('\n').slice(0, 4).join(' | ') : e)); }).then(() => log('PARTYNET DONE pass=' + pass + ' fail=' + fail));
+  (LAG ? lagRun() : main()).catch((e) => { fail++; log('PARTYNET FAIL ' + (LAG ? 'lagRun' : 'main') + ' threw: ' + (e && e.stack ? e.stack.split('\n').slice(0, 4).join(' | ') : e)); }).then(() => log('PARTYNET DONE pass=' + pass + ' fail=' + fail));
 })();
