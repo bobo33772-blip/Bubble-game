@@ -1,0 +1,1160 @@
+# 뽀득뽀득 목욕탕: 파티 새 게임 2 (party games 2, PR D) v1 — design spec
+
+Status: **design**, on `feat/party-games-2` (worktree `bogeul-games2`), stacked on `feat/party-games` (PR #26, open, not
+merged: 바나나우유 잡기 / 펑! 비눗방울 / 살금살금 술래, `PARTY_V` 7, the free draw). It builds on the party as built
+(design/party.md), its polish (design/party-polish.md: the card with its 96x32 demo, the result beats, the last 판 x2, the
+보너스상), the first new games (design/party-games.md, all of it: `world: false` and the stage arena, the press queue with
+event times, `G.drawT`, the body state's `mi`, `coinAct`, the 술래 judge under latency - `rtMax` / `lagMax`) and the
+party trophies (design/party-trophies.md 14: staked parties, `PARTY_TRO_MINF`, `troPartyWait`). Code is referenced by
+function name, never by line number. Every function named here exists today unless it is marked **new**.
+
+After PR #26 the owner asked again `미니 게임 또 추천해줘` and picked **all four** of the recommendations (2026-10-30).
+This spec keeps the four pitches as chosen and refines the details:
+
+> **Owner picks (2026-10-30; the pitches are the owner's, the details below are this spec's):**
+> 1. **목욕 의자 뺏기** (추천) - 음악이 멈추면 목욕 의자에 앉아요. 의자가 사람 수보다 하나 적어서 못 앉은 사람이 빠져요.
+>    끝까지 남으면 1등. (scramble elimination)
+> 2. **맥반석 계란 돌리기** (추천) - 뜨거운 계란을 부딪혀서 친구에게 넘겨요. 터질 때 들고 있으면 빠져요. 왕관과 반대로 안
+>    들고 있어야 이겨요. (hot potato)
+> 3. **미끌미끌 비누 씨름** - 비누칠한 평상 위에서 비눗방울로 서로 밀어내요. 탕에 빠지면 탈락, 마지막까지 남으면 1등.
+>    (ring-out / knockback)
+> 4. **수도꼭지 순서 기억하기** - 켜지는 수도꼭지 순서를 기억해서 똑같이 눌러요. 점점 길어지고, 틀리면 빠져요. (memory)
+>
+> One refinement touches the pitches' words and is flagged for the owner (section 16, question 1): in the three
+> elimination games an out player does not watch - it becomes a **유령** and keeps playing for points, and "끝까지
+> 남으면 1등" becomes "끝까지 남으면 +2점" (the 판's 1등 is the most points). 비누 씨름's out players ride 물's 오리 튜브.
+
+---
+
+## 0. Decisions in one table
+
+| Question | Decision |
+|---|---|
+| The four games | **수도꼭지 순서 기억하기** (`tap`: watch, then repeat a growing sequence of four faucets), **목욕 의자 뺏기** (`chair`: stools glide while the music plays; it stops, everyone scrambles; one stool short), **맥반석 계란 돌리기** (`egg`: bump the hot egg onto a friend before it bursts), **미끌미끌 비누 씨름** (`sumo`: push friends off a soapy 평상 with slow bubbles). All four genre-level, our own rules (section 17). |
+| Build order and cut lines | Cheapest and most robust first: **tap → chair → egg → sumo**. Machinery, tap and chair are **Must** (cut line A: two games ship, the rotation runs with 8); egg is **Should** (cut line B: 9); sumo is **Could** (section 13). |
+| Where they play | `tap`: `world: false` on **무대 목욕탕** (`PG.PARTY_ARENAS[2]`, as 바나나우유 / 펑). `chair`: the same stage arena **with bodies** (a world game on a flat floor, everyone on the base kit). `egg`: a dry battle arena, as 왕관 (platforms to chase over). `sumo`: a new closed arena **비누 평상** (`PG.PARTY_ARENAS[4]`, key `'sumo'`): a 144 px 평상 over two 탕. |
+| Out players (the "nobody idle" rule) | **유령** in tap / chair / egg: an out player is drawn see-through and **keeps playing every round** - it still repeats the faucets, races for stools, carries and passes the egg - and still scores the round's point; it only cannot take the survivor's bonus. In sumo an out player rides an **오리 튜브** (물's raft, reused) and keeps blowing bubbles; pushing a friend in brings it back once a set (**역전**, as in 물). Nobody waits more than one round (about 6 s) for anything. |
+| Scoring | Shared shape: **a point per round you come through** (tap: a correct sequence; chair: a stool; egg: not holding at the burst; sumo: a friend you pushed in) **+2 for the set's last one in** (tap: the ones in at the end). Places by points, then a measured tie-break (ms or frames), so shared places are rare. Points to the party unchanged: 4 / 2 / 1 / 0, x2 on the last 판. |
+| Sets | chair / egg / sumo play **sets**: when one player is left in, it gets +2 (`살아남았다!`) and everyone comes back for the next set. tap is one ladder (the sequence grows). Every game has a fixed number of rounds (sumo a fixed clock), so its length does not depend on how the sets go. |
+| Fairness rule | As in party-games: **each page measures its own part on its own clock** (tap: its presses against its own draw of `따라 해요!`); **contests are stamped in view ticks** (chair: who sat first - the 술래 judge: the stamp is the view tick the sitter's own screen showed, `rtMax` monotonic, `LAG_MAX` 60, a claim final once every other body is past it); **contact is decided on the screen of the one it happens to** (egg: the receiver; sumo: the one pushed) - so the host's zero latency never wins a stool, a pass or a dodge (sections 4.5, 5.5, 6.5, 7.5). |
+| Inputs | Only what exists, plus three press kinds: **new** `'L'` / `'R'` / `'D'` entries in the press queue (a fresh ← / → / ↓ key, the stick's **dominant-direction edge**, one entry per pull) for tap. chair / egg / sumo use the normal body controls; tap uses 점프 (or 거품, or ↑) for the top faucet and ← ↓ → for the others. |
+| Music | chair: **new** track `chair` that every page cuts **at its own view of the stop** (a direct `Snd.music`, so the snapshot's `mu` never fights it) with a **new** `scratch`. tap: no music (the faucets' notes are the music). egg / sumo: `battle` as every 판 (sumo `hurry` for its last 10 s). |
+| Network | Host-authoritative over the existing transports, **no new message type**: each game's `g.mg` (at most ~110 bytes), self-reported parts in the body state's `mi` (at most 7 ints). **`PARTY_V` 8**: a pa 7 page in a party room is never ready (`새로고침 필요`). |
+| Rotation | Unchanged free draw (`partyPlan`): **10 games** for 2 / 4 players, **9** for 3 (no 축구). None of the four is excluded at any player count. |
+| Coins / awards | `coinAct` per action (a correct sequence, a stool, a pass or a survived round, a push that landed). None of the four makes prisons, so they feed only **최다 1등상**; a party of new games skips 최다 가두기상 / 최다 탈출상 by the existing top-0 rule. |
+| Trophies | `troPartyWait`'s 2-min floor is game-blind and keeps working. The shortest theoretical staked party gets shorter (section 3.8), so the hold can reach ~37 s: **new** line `트로피 정산까지 N초` while it holds (Should). |
+| Sprites / sound | **New** sprites `faucet` (16x16, 2 frames), `bath_stool` (16x12, 2 frames), `fx_ghost` (8x8). **New** sfx `tap` (o.n 0-3), `scratch`, `egg_tick` (o.n 0-3), `egg_boom`; **new** song `chair`. Everything else reused. |
+
+---
+
+## 1. Why: each game against "다 비슷해요"
+
+| Game | Its verb | Why it is not "the same game again" | Why it is not bland |
+|---|---|---|---|
+| 수도꼭지 순서 기억하기 | **remember** | The memory game party-games 16 left out. Nobody moves, nothing is timed against a friend: you watch, then you repeat | Each round is one longer; a wrong faucet sprays cold water over you in front of everyone; your friends' progress pips fill while yours still stall |
+| 목욕 의자 뺏기 | **scramble** | The only game where the whole room waits on a sound; the stools move, not the floor | Shrieks at the stop, two animals landing on one stool (`쿵! 밀려났어요`), one stool short every time, the survivor's `살아남았다!` |
+| 맥반석 계란 돌리기 | **get rid of it** | The inverse of 왕관: the thing everyone runs **from** | A ticking egg that steams, shakes and glows with no clock to read; the last-second bump; the yolk burst |
+| 미끌미끌 비누 씨름 | **push** | The first game where bubbles move friends instead of trapping them; standing on soap | One push slides you ~40 px; the edge is always close; the 오리 튜브 hops up and pushes back for 역전 |
+
+Across the ten every 판 has its own verb: 물 escape, 왕관 hold, 축구 push-a-ball, 바나나우유 snap, 펑 gamble, 술래 freeze,
+수도꼭지 remember, 의자 scramble, 계란 get rid of, 씨름 push-a-friend.
+
+---
+
+## 2. Ground truth from the code (what this builds on)
+
+| Thing | Code today | Consequence |
+|---|---|---|
+| The contract | `MINI[id]` (`c secs fastSecs ar fits team world noFire cues name how rule keys keysT`) and `MINI_FN[id]` (`spawns init start tick key snap view drop draw hud`, optional `local input clock pose frozen tagY hold held win over demo`); `miniLoad` / `miniStart` / `miniTick(ins)` / `miniOver` (time-up unless `over`, or `M.endAt`) / `miniPlaces` (`rankBy` on `key`) | Each new game is a `MINI` entry, its hooks and its texts. Three flags join the table (3.4): `music`, `base`, `short`. |
+| Self-reports | `miniTick` runs `F.local(M, slot, inp)` for each local seat and takes a remote seat's `rem.st.mi` (this gid, `mi[0] === P.i`), then `F.input` when it changed (`M.miK`); a guest's `guestSelf` sets `NET.mi`, `guestSend` carries it; `parseBody` bounds 8 ints | tap, chair, egg and sumo all report through `mi`. No new message. |
+| Stamps | 술래: `hostBodyIn` stamps `s.at = G.frame`; `sneakJudge` reads `rem.buf`, `rt = max(rtMax, d.rt, d.at - SNEAK.lagMax)`; `NET.rtHi` is a guest's monotonic view clock; `miniStale` (no state for `MILK.staleF` 30 f) | chair / egg / sumo reuse the clamp and the monotonic clock through two **new** shared helpers (3.2); `SNEAK.lagMax` becomes the shared `LAG_MAX` 60. |
+| Press queue | `pressQ` / `pressPush(act, t)` with event times: 점프 / 거품 where `latch` is set, `'down'` from a fresh ↓ and the stick's down edge (`stickMove(cx, cy, t)`); `readInputs` hands `pq` (sorted, <= 8) to each seat; `stickDir` (`STICK_ON` 0.3 / `STICK_OFF` 0.2), `stickDown` (`STICK_DN_ON` 0.6, `ny >= 2 abs(nx)`) | tap needs ← / → / ↓ as presses: **new** `'L' 'R' 'D'` entries (3.3). |
+| Bodies | A guest moves its own animal (`guestSelf` → `updatePlayer`); the host takes it over only with a new epoch (`bumpEp`, `placePlayer`; `takeOver` copies x / y / vx / vy and the raft flag); the host draws a remote body `PEER_DELAY` (6) ticks behind its newest state (`hostDisplayIn`), a guest draws the host's world `SNAP_DELAY` (8, adaptive to `BUF_MAXD` 24) behind | Contact between two bodies has two views; section 6.5 picks the receiver's. A push must be applied by the page that moves the body (7.5). |
+| Kits | `kitOf` gives `KIT_BASE` to a raft and in a 술래 판; `updatePlayer` reads `kitOf(p).walk` and `acc` 0.5 | chair and sumo set `base: true`; sumo changes `acc` (soap) in one gated branch. |
+| Rafts | 물 v2: `waterOut` → `p.raft`, `raftMove` (rides `G.mini.wl`, hops `RAFT.hop` -3.0, shoots the plain bubble), flag 512 on the wire, `drawPlayer`'s raft branch (`duck_ring`), `trappable` / `canTouch` false for a raft, 역전 by `placePlayer` on a revive spot | sumo's out players are these rafts on a constant `M.wl`. |
+| Drawing | `drawPosed` swaps a game's `pose` fields for `drawPlayer`; `tagAnchor` reads `tagY`; `drawHUDParty` reads `clock`; `drawPartyDemo` calls `demo(dx, P.t % 240, a, b)`; `localSfx` / `localWord` keep a page's own sounds and pops off the wire | 유령 is a pose (see-through + `fx_ghost`), 3.1. |
+| Music | `setMusic(t)` sets `G.music` (it rides in the snapshot as `mu`, index into `MUSICS`) and calls `Snd.music`; a guest's `applyView` calls `setMusic(mu)` when `mu !== G.music`; `Snd.music(name)` restarts a track from bar 1 only when another (or none) was playing | chair keeps `G.music = 'chair'` for the whole 판 and cuts the sound itself per page (5.7). |
+| Rotation | `partyPlan(n, rounds, from)`: one shuffled bag of `MINI_IDS` that fit n, never twice in a row; a replan leaves out what was played | Ten ids in `MINI_IDS`; nothing else changes. |
+| Trophies | `troPartyWait` holds 최종 순위 until the first 시작! is `PARTY_TRO_MINF` (7200) host frames old; `troPartyReal` counts actions through `CO.bshots` | Checked in 3.8. |
+| Wire | `SNAP_LIMIT` 3400 (party-net asserts it), `SNAP_EVERY` 3, `BODY_EVERY` 2 | Sizes in 8.3. |
+
+---
+
+## 3. Shared machinery (built once, with the first game)
+
+### 3.1 유령: out players who keep playing, and sets
+
+```js
+  // M.gh {slot: 1} - this game's out players (tap / chair / egg). A 유령 plays every round as before; it scores the
+  // round's point; it cannot be the set's survivor. ghostOut(M, slot) puts a living player out (탈락! word pop, the
+  // 'ghost' sfx, my own line 유령이 됐어요!); ghostSet(M) - one living player left: it gets GHOST.bonus (+2, popup, the
+  // banner '{0} 살아남았다!' / '모두 다시 살아나요', 'extend'), M.gh = {} after the beat; nobody left in (everyone
+  // still in failed the same round): nobody goes out that round
+```
+
+- **Who is "in" a round**: every present player, living or 유령. A round's loser(s) (tap: a wrong or late sequence; chair:
+  the one left standing; egg: the holder at the burst) score 0 that round; everybody else +1.
+- **Out**: a living loser becomes a 유령 - **unless every living player lost that round** (then nobody goes out:
+  `tpAll`, or in chair two who both never sat; the classic "if everyone fails, nobody is out").
+- **Set end** (chair, egg): exactly one living player left → `ghostSet`: +2, then everyone is living again. With 2 players
+  every round is a set. tap is one ladder: no revival; the players still in after its last round get +2 each.
+- **Drawn** (`pose` returns **new** field `ga`: `drawPosed` sets `ctx.globalAlpha = ga` around `drawPlayer`): a 유령 at
+  `GHOST.alpha` 0.55, a small `fx_ghost` (8x8, a white 김 wisp with two eyes) bobbing 2 px over its head; its HUD panel at
+  0.55 alpha with `fx_ghost` beside the icon. Bodies, epochs and the wire never see `ga`.
+- **Wire**: `M.gh` as a bit per seat in each game's `g.mg`; a guest's mirror plays `ghostOut`'s local parts (my line) when
+  its own bit appears.
+- sumo's out players are rafts (7.2), not 유령: falling in the 탕 makes a raft, as in 물.
+
+Why not plain elimination with spectators: with 4 players the first one out would watch 20-30 s of a 45 s 판, the owner's
+"everyone stays active" rule. Why not revival by sitting / passing: a 유령 who comes back by winning a round makes every
+round equal and the elimination meaningless (considered, 17).
+
+### 3.2 Stamps: `miniRt` and `miniPast`
+
+```js
+  const LAG_MAX = 60;   // (SNEAK.lagMax reads it) a remote seat's view tick is never taken as older than its state's
+                        // arrival minus this (a stalled view cannot claim the past)
+  // miniRt(M): each playing frame, before the game's tick, M.rtMax[slot] = max(M.rtMax[slot], st.rt, st.at - LAG_MAX)
+  //   for each remote seat's latest state of this gid (host-local seats: G.frame) - the view tick each body is past
+  // miniStamp(M, p, t): a self-reported view tick t of seat p, clamped into [its state's at - LAG_MAX, G.frame]
+  // miniPast(M, t, f0, skip): true once every present, non-stale seat not in skip has rtMax >= t (host-local: always),
+  //   or G.frame >= f0 + LAG_MAX (f0: the frame the host first saw the claim)
+```
+
+- These are 술래's rules (party-games 6.4) without the buffer walk: chair, egg and sumo need **one stamped moment per
+  claim**, which the claimant's own page reports in `mi` (frame-exact, its own `NET.rtHi` - monotonic - at that frame), not
+  a trajectory. 술래 keeps `sneakJudge` as built; its `lagMax` reads `LAG_MAX`.
+- A claim is **provisional** until `miniPast`: at 100 ms + 40 ms jitter a remote seat's states arrive 20-45 f after their
+  view tick, so a claim is final 20-45 f (at most 60) after the host saw it.
+
+### 3.3 Press queue: `'L'`, `'R'`, `'D'`
+
+```js
+  // (tap, 4.3) onKeyDown: a fresh ←/A, →/D, ↓/S also pushes 'L' / 'R' / 'D' (beside today's 'down')
+  // stickMove: STICK.td = stickTap(nx, ny, STICK.td) - 'D' when ny >= STICK_DN_ON && ny >= 2 abs(nx); 'L' / 'R' when
+  //   abs(nx) >= STICK_ON && abs(nx) >= abs(ny); '' when the knob is back under STICK_OFF (abs(nx) and ny); in between
+  //   the last one holds. A change to a new non-empty td pushes it with the event's time
+```
+
+- The two zones exclude each other (horizontal needs `abs(nx) >= abs(ny)`, down needs `ny >= 2 abs(nx)`), so **one pull
+  gives one entry**, a 45° pull too (the gap between the zones is a dead band). Sliding from ← to ↓ without coming back
+  gives `'L'`, `'D'` (two pulls).
+- Only tap reads them; `pq`'s other readers ignore unknown kinds. Today's `'down'` entry (펑) is unchanged.
+
+### 3.4 `MINI` additions
+
+| Flag | Meaning | Who |
+|---|---|---|
+| `music` | `miniStart`'s track instead of `'battle'` (`null`: none) | tap `null`, chair `'chair'` |
+| `base` | everyone on `KIT_BASE` (`kitOf`'s 술래 test becomes `miniFlag('base')`; 술래 sets it) | chair, sumo, 술래 |
+| `short` | the room's new-games line (3.5) | all seven new games |
+
+`MINI_IDS = ['water', 'crown', 'ball', 'milk', 'puff', 'sneak', 'tap', 'chair', 'egg', 'sumo']` (`MINI_OLD` 3 unchanged). The
+battle-arena pick for egg avoids the last one as 왕관's does (`P.crownAr` becomes `P.lastAr`, shared by both).
+
+### 3.5 Rotation with ten games
+
+`partyPlan` is unchanged (owner, party-games: draw freely). With all four built:
+
+| Players | Games that fit | 3판 | 5판 |
+|---|---|---|---|
+| 2 or 4 | 10 | 3 distinct of 10 | 5 distinct of 10 |
+| 3 | 9 (no 축구) | 3 distinct of 9 | 5 distinct of 9 |
+
+- A 3판 party draws at least one of these four with probability 1 - C(6,3)/C(10,3) = 83% (2 / 4 players); each single game
+  shows up in 30% of 3판 parties. The old favourites come round less often (risk 11).
+- At cut line A the bag has 8 (3 players: 7), at B 9 (8).
+- No player-count exclusion: all four play with 2, 3 and 4 (question 2).
+- The room's rules line of the new games (`partyRules`' `gn`, only from a host at this `PARTY_V`) is built from `short`:
+  `새 게임: 바나나우유 · 펑! · 술래 · 수도꼭지 · 의자 · 계란 · 씨름` (one line at the 1x room width, wraps once at 320 px).
+
+### 3.6 Coins
+
+`coinAct()` on my own page, from my own measurement or my mirror, never for another seat:
+
+| Game | One action |
+|---|---|
+| tap | a correct sequence (mine, judged on my page) |
+| chair | a stool I keep (my claim final in the mirror) |
+| egg | a pass I made (the mirror's holder moves from me), or a round I came through having walked `EGG.moveCoinPx` 64 px |
+| sumo | a push that landed (the mirror's `hits[me]` rises), or a set I survived |
+
+The per-판 rule (2 actions), the party's 5 and the 60 s played gate are unchanged; an idle player earns 0.
+
+### 3.7 Places, ties, awards
+
+Every key is "points first, then a measured tie-break" through `rankBy` (4 / 2 / 1 / 0, x2 on the last 판). The keys sit in
+each game's section. The award counters stay the sequencer's: `wins` from every game; `caps` / `esc` only where prisons
+exist (물, 왕관, 축구, 술래) - none of the four makes prisons, so a party of new games skips those two awards (top-0).
+
+### 3.8 Party trophies: the 2-min floor with the new games
+
+`troPartyWait` is game-blind (it counts host frames from the first 시작!) and `troPartyReal` counts `coinAct`: nothing
+breaks. What moves is the shortest honest party (party-trophies 14.5's table, with the new minimum lengths):
+
+| Game | Shortest honest | How |
+|---|---|---|
+| 수도꼭지 | 1686 f | 6 rounds: intro 36 + the show (90 / 120 / 120 / 144 / 140 / 160) + 12 + every page's fastest valid answer (`TAP.minMs` 80 ms a step: 18-48 f) + reveal 66; endF 30 |
+| 목욕 의자 뺏기 | 1630 f | 8 stops x (music 120 + all claims final ~20 + reveal 60) + endF 30 |
+| 맥반석 계란 돌리기 | 1938 f | 6 rounds x (drop 36 + fuse 210 + reveal 72) + endF 30 |
+| 미끌미끌 비누 씨름 | 2700 f | its 45 s clock |
+| (술래 / 바나나우유 / 펑) | 753 / 1562 / 2701 f | as 14.5 |
+
+Shortest staked 3-player party: 술래 + 의자 + 바나나우유 = 3945 f; with the natural beats 5913 f (98.6 s), the host
+skipping every beat 5007 f (83 s). The hold on 최종 순위 becomes at most **2193 f (37 s)** (all skipped) / 1287 f (21 s)
+(natural), up from 1122 / 216. Those are bot-speed numbers: at a human pace 수도꼭지 is ~41 s and 의자 ~48 s, and such a
+party is past 2 min before its last tally. Still, a hold of half a minute with nothing said would read as a hang:
+
+- **Should**: `g.pa.H` (**new**, host): the frames the hold has left, sent only while it holds; the 최종 순위 view shows
+  `트로피 정산까지 N초` (`PARTY_TX.troHold`, N rounded up) under the rows, on every page. It replaces 21.6's open point.
+  Fallback: today's silent hold.
+
+---
+
+## 4. 수도꼭지 순서 기억하기 (`tap`, memory) — Must, built first
+
+`MINI.tap = { c: 't', secs: 75, fastSecs: 35, ar: ['p', 2], world: false, noFire: true, cues: false, music: null, fits: (n) => n >= 2, short: '수도꼭지', ... }`
+
+### 4.1 Rules
+
+- **The wall**: four faucets in a cross on the back wall - **위** red, **왼쪽** blue, **오른쪽** green, **아래** yellow. Each
+  has its own note.
+- **6 rounds**; round r shows **r + 2** faucets (3, 4, 5, 6, 7, 8). The sequence only grows: round r shows the first r + 2
+  of one list, `tapSeq(seed, k)` (a pure 32-bit hash, never three of the same faucet in a row; `seed` from the host at the
+  card, as 펑's). The 판 ends 30 f after the last round's bonus beat (`M.endAt`); `secs` 75 is a safety cap.
+- **A round** (host frames; `A` its arm tick):
+  1. **Intro** `TAP.intro` 36 f: banner `잘 봐요!` / `3개를 기억해요` (class `round`), three dots.
+  2. **Show**: step k is lit from `A + 36 + k sp` for `sp - 8` frames, `sp` = 30 (rounds 1-2), 24 (3-4), 20 (5-6). A lit
+     faucet pours, its handle glows, its note plays (each page at its own view of that frame).
+  3. **Go** at `G = A + 36 + L sp + 12`: each page, at its own first draw of `G`, shows `따라 해요!` and starts **its own
+     window** of `1500 + 700 L` ms (L 3: 3.6 s; L 8: 7.1 s), on `pageNow()`.
+  4. **Input**: each fresh press after my go draw is one faucet (점프 / 거품 / ↑ = 위, `'L'` / `'R'` / `'D'`). Right: the
+     next step (that faucet pours on my screen, its note). **Wrong: I am done** - the faucet sprays cold water over me
+     (`lg_2` tipping, cold drops, `scald_splash`, as 바나나우유's 물벼락). All L right: **done**, my time = the last press's
+     event time minus my go draw time, in ms. Window over first: **time out**. Presses before my go draw count for
+     nothing (no penalty - watching is the whole job).
+  5. **Close** (host): every present seat reported (or stale, `miniStale`), or `G + window + TAP.slackF` 90 f. A missing
+     report is a time out.
+  6. **Reveal** `TAP.revealF` 66 f: a green ✓ or red ✗ (canvas) over each animal, the time of each correct one in canvas
+     digits (`2.41`, seconds) at y 172; the fastest correct one hops with stars (no extra point). Newly out: `탈락!`.
+- **Points**: a correct sequence **+1** (유령 too); wrong / time out 0. A living player who was wrong or late becomes a
+  유령 - unless **every** living player failed that round (`모두 틀렸어요!` / `이번엔 아무도 안 빠져요`, nobody out).
+- **The end**: after round 6's reveal, everyone still living gets **+2** (`{0} 살아남았다!` for one, `모두 살아남았다!`
+  for several; `TAP.bonusF` 60 f), then the 판 ends.
+- Length: ~41 s at a human pace (answers ~0.6 s + 0.4 s a step); the worst honest case (every window waited out + 90 f)
+  67 s, under the 75 s cap. Fast party: 3 rounds (worst 30.1 s, under `fastSecs` 35).
+
+### 4.2 Out players
+
+A 유령 sees the same show, answers the same way and scores +1 for each correct sequence. Being out costs only the end's
++2: an early mistake is never the end of the 판 (6 rounds of +1 are still there).
+
+### 4.3 Controls
+
+- Phone: 점프 (or 거품) = 위; the stick pulled ←, ↓, → = 왼쪽, 아래, 오른쪽 - one pull, one press (3.3); let go between
+  presses. Keyboard: ↑ / Z / X = 위; ←, ↓, →.
+- Card keys: `keys` `↑ ← ↓ → 로 눌러요 (Z·X도 ↑)`, `keysT` `점프는 위 · 조이스틱은 ← ↓ →`.
+
+### 4.4 Players
+
+2, 3 or 4, the same rules; the animals stand on `STAGE_X[n]` in slot order under the wall. With 2 it is a straight duel;
+both can finish in (both +2, the tie-break decides).
+
+### 4.5 The host's judging and the online fairness argument
+
+**Each page judges its own answer; both ends of the time are on that page's clock** (바나나우유's model, party-games 4.4).
+
+- **The show is pure**: `tapSeq(seed, k)`, `A` and `sp` give every lit frame; `g.mg` carries the seed (at the card) and
+  `A` (when it starts: it is the host's now). A page draws step k when its own view clock (host: `G.frame`; guest: its
+  monotonic `NET.rtHi`) reaches it, so latency moves *when* a guest sees the show, never *what* it sees.
+- **Once drawn, it stays drawn** (`tapSeen`, as `milkSeen`): the first draw of `G` stores `G.drawT` in `G.mloc`; a guest's
+  view clock stepping back never starts a second window.
+- **My answer**: `local` runs every playing frame over `inp.pq` in time order; `mi = [판 i, r, steps, flag, ms]` (flag 0 in
+  progress - steps so far -, 1 correct, 2 wrong, 3 time out), latest wins and is keyed by its round, so a dropped state
+  loses nothing. The host's own seat goes through the same `local` → `input`.
+- **The host** (`input`): keeps the latest steps for display and the first final flag per seat and round, clamped: a
+  correct one under `TAP.minMs` 80 ms a step is wrong (no hand does 8 faucets in 0.6 s), over its window a time out.
+- **Latency and jitter** change only when I see the show and when the host hears my answer; the close waits for the
+  slowest report (bounded by `slackF`; a stale seat is not waited for). A faster link wins nothing.
+- **The host's own seat**: measured exactly as a guest's (its own draw, its own presses). No edge.
+- **No copying through the game**: friends' progress is drawn as **pips** (how many steps they have), never which faucet
+  they pressed; friends' notes are not played. (Friends in one room can still look at each other's phones.)
+- **Cheating bounds**: a modified page can report any answer within the clamps, and can read the seed early - the same
+  list the show gives a few seconds later. Same trust as every body state. Accepted for 4 friends.
+
+### 4.6 Places, ties, coins, awards
+
+- `key = pts * 1e5 - msSum` (my ms on each correct round, the round's window on a wrong / late one). Equal points and equal
+  ms share a place (in practice never).
+- Coins: each correct sequence (`coinAct` on my page).
+- Awards: only 최다 1등상.
+
+### 4.7 Screen, HUD, sprites, sounds
+
+- **The wall** (`draw(M, false)`): a tiled back panel (x 72-184, y 52-148, the theme's tile tint at 0.3), the four `faucet`
+  sprites at 2x (32 px) in a cross centred on (128, 100) - 위 (128, 66), 왼쪽 (92, 100), 오른쪽 (164, 100), 아래 (128,
+  134) - each with its handle coloured by a 6x3 canvas cap (`#ff6b6b`, `#4fa3f0`, `#3cc464`, `#ffd23c`). Lit: frame 1
+  (the open valve), a 3 px pouring stream (canvas, `#8fdcff`) to a splash at the panel's foot, the handle 1 px brighter.
+  During the input each page lights its **own** presses only.
+- **Arrows** under the faucets (canvas, 5x5, the stick's directions; 위 also shows a tiny button disc) so the mapping is on
+  screen.
+- **The animals** (`pose`): idle; the jump frame for 6 f on each of my presses; on a mistake `die` frame 0, shivering, the
+  `lg_2` at 2x tipping over (as 바나나우유); a 유령 at `ga` 0.55 with `fx_ghost`.
+- **Progress pips** over each animal's tag (canvas, 2x2 per step, grey → its colour), my own from `G.mloc` (at once),
+  friends' from their `g.mg` row (a little late). The tag anchor stays the head (`tagY` not needed).
+- **HUD**: centre `clock` `3/6`; line 2 a `faucet` icon (8 px) and my points.
+- **Sounds**: **new** `tap` (o.n 0-3: four notes of a major chord, a 120 ms soft square "똥"; local, `NO_ECHO`) - each lit
+  step on my screen and each of my presses; `scald_splash` on my mistake (local) and on a friend's when its row says so;
+  `countdown` at each reveal (local); `extend` at the end's +2 (echoed). No music.
+
+### 4.8 Card and demo
+
+- Name `수도꼭지 순서 기억하기`; how `순서대로 똑같이 눌러요! 틀리면 빠져요` (16 syllables); rule `점점 길어져요 · 빠져도
+  유령으로 계속 해요 · 맞히면 1점, 끝까지 남으면 +2점`.
+- **Demo** (`tapDemo`, 240 f, pure in `f`): floor tiles at y 28; four 8x8 faucets (the `faucet` sprite at half) in a cross
+  at 위 (44, 1), 왼쪽 (34, 9), 오른쪽 (54, 9), 아래 (44, 17); `a` (8 px) at x 14, `b` at x 76, feet at y 28.
+  - 0-90: the faucets light in turn: 위 (0-24), 오른쪽 (30-54), 아래 (60-84) - a 1x3 blue stream under each.
+  - 96-150: `a` answers: a white arrow pixel-glyph flashes under it - ↑ at 100, → at 116, ↓ at 132 - each lighting the
+    same faucet in `a`'s colour; 140: a green 3x3 check and a star burst over `a`.
+  - 150-200: `b` answers ↑ at 154, then ← at 170 - the 왼쪽 faucet flashes red; 172: blue drops fall on `b`, it shivers.
+  - 184-240: `b` fades to 0.55 with a 3x3 white wisp over it (a 유령), and keeps standing there.
+  - Read together: watch the order, press the same; wrong → splash, ghost.
+
+### 4.9 State and wire
+
+```js
+  // G.mini (host): seed, r, ph (0 show / input, 2 reveal, 3 the end's bonus), A, G (the go tick), C (the close tick), rep
+  //   {slot: [steps, flag, ms]}, res [[slot, steps, flag, ms]] (the last reveal), pts {slot}, ms {slot}, gh {slot}, n
+  // G.mloc[slot] (each page, its own seats): r, go (my go draw time), step, flag, ms; G.mloc.sh: the show's first draws
+  // g.mg = ['t', r, ph, seed, A, G, C, [[slot, steps, flag, ms]] (input: steps / flag, ms 0; reveal: all), gh bits,
+  //         [pts by seat], n]
+  // mi   = [판 i, r, steps, flag, ms]
+```
+
+About 110 bytes at 4 players.
+
+---
+
+## 5. 목욕 의자 뺏기 (`chair`, scramble) — Must, built second
+
+`MINI.chair = { c: 'h', secs: 95, fastSecs: 35, ar: ['p', 2], base: true, noFire: true, cues: false, music: 'chair', fits: (n) => n >= 2, short: '의자', ... }`
+(a world game on the stage arena: bodies walk and jump on its flat floor; spawns `stageSpots(n)`).
+
+### 5.1 Rules
+
+- **8 stops** (`CHAIR.stops`). The 판 ends 30 f after the last stop's reveal (and its survivor beat, if any); `secs` 95 is
+  a safety cap.
+- **Stools**: one fewer than the players present - **3 for 4, 2 for 3, 1 for 2** (유령 count as players: 3.1).
+- **A stop** (host frames; `Ms` its music start):
+  1. **Music** for `ri(120, 300)` f (2-5 s, host RNG; the stop tick `S` never reaches the wire before the host's clock
+     does). The stools **glide** along the floor, each back and forth at its own speed (1.4-2.0 px/f: faster than a walk,
+     1.25, so nobody can shadow one) - a pure function `chairX(seed, stop, j, t - Ms)` (5.5). Touching a gliding stool
+     does nothing. Everyone walks and hops freely.
+  2. **The stop** at `S`: on each page **at its own view of `S`** the music cuts with a record scratch, the stools freeze
+     (at `chairX(..., S - Ms)`, then spread to at least `CHAIR.gap` 18 px apart - pure too), they flash, and the banner
+     `그만!` (class `hurry`) shows.
+  3. **Sit**: a body standing on the floor whose feet centre is within `CHAIR.seat` ±6 px of a free stool's centre **sits**
+     - automatically, no button. It is parked on the stool (`frozen`) and drawn sitting 4 px up. One stool per body.
+  4. **Two on one stool**: the earlier stamp keeps it (5.5); the later one is **bumped** - `쿵!` word pop, it hops off
+     (`vy` -2.0) and may run to another free stool. My own line when it is me: `밀려났어요!` / `다른 의자로!`.
+  5. **Close**: every stool has a final owner (exactly one player left standing), or `S + CHAIR.capF` 240 f.
+  6. **Reveal** `CHAIR.revealF` 60 f: the sitters bounce on their stools with `+1` popups; the one standing: `탈락!` (a
+     living player: it becomes a 유령) or `꽝!` (a 유령). One living player left → the survivor beat (`CHAIR.survF` 60 f,
+     +2, everyone living again).
+  7. Next stop: everyone stands up where they are; the music starts again from bar 1; the stools glide again.
+- **Points**: a stool **+1** (유령 too), the set's survivor **+2**.
+- **At the cap**: everyone still standing scored 0; the living among them go out - unless that would leave nobody living
+  (then nobody does).
+- Length: ~48 s at a human pace (music avg 3.5 s + scramble ~1.2 s + reveal 1 s, about two set ends); worst honest
+  (music 300 + cap 240 + reveal + survivor every stop) 88.5 s, under 95. Fast party: 3 stops (worst 33.5 s).
+
+### 5.2 Out players
+
+A 유령 races for the stools like everybody: the count includes it, and a stool it takes is one the living do not get. When
+the one left standing is a 유령, nobody goes out that stop (the living all sat) and the set goes on. So a 유령 is never
+idle, keeps scoring +1 a stool, and its speed shapes the set.
+
+### 5.3 Controls
+
+- Phone: the stick runs ←→, 점프 hops (for fun: the floor is flat). Keyboard ←→, ↑ / Z. Sitting is touching.
+- Card keys: `keys` `←→ 달리기 · 의자에 닿으면 앉아요`, `keysT` `조이스틱으로 달려서 의자에 닿아요`.
+- Everyone has the base kit (`base: true`: no 특기, the same walk) - speed is the same for every animal.
+
+### 5.4 Players
+
+2 players: one stool, every stop a race and a set (the sitter +1 +2). 3 players: two stools. 4 players: three. A leaver: the
+next stop has one stool fewer; in the current one its claim (if any) is dropped and its stool is free again.
+
+### 5.5 The host's judging and the online fairness argument
+
+**Who sat first is decided by stamps in view ticks** - the time each body's own screen showed, as 술래's arrivals.
+
+- **The stools are pure**: `chairX(seed, i, j, dt) = lo + tri((ph_j + v_j dt) / (hi - lo)) (hi - lo)`, `v_j` 1.4-2.0 and
+  `ph_j` from a 32-bit hash of (seed, i, j), `lo` 28 / `hi` 228, `tri` the 0-1-0 ping-pong; the freeze spread is a pure
+  sweep. `g.mg` carries the seed (card), `Ms` (the host's now when it starts) and `S` (only once the host passed it - a
+  guest has it before its view gets there, from this snapshot or the next: `chairView` merges `mg` and `mg1` as
+  `milkView` does). Every page draws exactly the same stools at the same view tick.
+- **The stop on each page**: the music cut, the freeze and the sitting rule switch on at the page's own first draw of `S`
+  (`chairSeen`: `G.drawT` stored once, the view clock monotonic - `NET.rtHi` on a guest).
+- **My sit** (`local`, each page for its own seats): after my draw of `S`, my body standing, feet on a stool that is free
+  **in my mirror** → I park myself at once (a guest freezes itself, as 술래's arrival) and report
+  `mi = [판 i, stop, stool, tick, dx]` - `tick` my view tick that frame (host: `G.frame`), `dx` my feet's distance from the
+  stool centre x10.
+- **The host** (`input`): a claim is taken when its stop matches, the stool exists, the seat's latest state (host-local:
+  its body) has its feet within `CHAIR.slack` 8 px of that stool and on the floor, and the seat holds no final stool.
+  Its stamp: `miniStamp(M, p, max(tick, S))`. Against the stool's current owner:
+  - none → the claimant owns it (**provisional**);
+  - the owner's stamp is later (or equal with a larger `dx`, or equal `dx` and later in the rotation `(slot - stop) mod 4`)
+    → the owner is **bumped** (its claim cleared, `M.bump[slot] = stop`), the claimant owns it;
+  - otherwise the claim is refused.
+  A claim becomes **final** at `miniPast(M, stamp, f0, seated)`: every other body still standing has shown a view past
+  the stamp (or `LAG_MAX` passed) - nobody can still turn up with an earlier one.
+- **A bump on the bumped page**: a page whose own stool shows another owner whose claim is final or earlier than mine
+  un-parks itself and hops off (its own body: no epoch). A later provisional owner on my stool means the host has not seen
+  my state yet: I stay; it will be bumped.
+- **Latency and jitter** change when a page sees the stop and when it learns about friends' claims - never its stamp. A
+  guest that sat 30 view ticks after its `S` beats a host that sat 31 frames after its `S`. The price is the bump: the host
+  (or a guest) may sit on a stool and be moved off 20-45 f later by a friend whose earlier stamp had not arrived yet. It
+  happens only when two bodies reach one stool within the link's delay - the close contests - and it goes to whoever was
+  first in their own view.
+- **The host's own body**: its stamp is `G.frame`, its view, the same measure as a guest's `rt`; its claims are
+  provisional like everyone's. Zero latency buys it the news of friends' claims a little sooner, not the stool.
+- **What is not equal**: a guest whose playout delay grows during a scramble gets a few view ticks of physics more per host
+  tick (party-games 6.4's drift: typically 2-5 ticks, rarely). A guest learns of the host's claims on time and of other
+  guests' a few ticks late (peer streams). Both small next to a human reaction.
+- **Cheating bounds**: a modified page could report an earlier `tick` - not before `S`, not before its state's arrival
+  minus `LAG_MAX`, and only for a stool its body actually stands at. Same trust as every body state.
+
+### 5.6 Places, ties, coins, awards
+
+- `key = pts * 1e5 - standF` (`standF`: on each stop my final stamp minus `S`, `capF` when I did not sit). Equal points and
+  equal frames share a place (rare: 8 stops of continuous times).
+- Coins: each stool I keep (my claim final in my mirror).
+- Awards: only 최다 1등상.
+
+### 5.7 Screen, HUD, sprites, music, sounds
+
+- **The room** (`draw(M, false)`): a row of wall hooks with towels (canvas) and, during the music, `♪` note pixels drifting
+  up from a radio on a shelf (x 120, y 60; canvas, 12x8). After the stop the radio shows a red pause bar.
+- **Stools**: **new** `bath_stool` (16x12; frame 0 the pink plastic stool, frame 1 squashed 1 px under a sitter), feet on
+  the floor (y 216). Gliding ones have 2 motion pixels behind them; frozen ones flash white 3 times over 12 f at the stop;
+  a provisional owner's stool has a dashed outline in its colour, a final one a solid rim.
+- **The animals** (`pose`): sitting (4 px up on the stool, facing the room's centre); a 유령 at 0.55 with `fx_ghost`; the
+  one left standing at the reveal shows a `?` word pop.
+- **HUD**: centre `clock` `3/8`; line 2 a `bath_stool` icon (8 px) and my points; 유령 panels at 0.55.
+- **Music**: **new** song `chair` (audio.js `CHAIR`, loop, 4 bars, ~150 bpm: a bouncy two-beat bath-house tune, square
+  lead, triangle bass, light drums; `MUSICS` index 14). `miniStart` sets `G.music = 'chair'` for the whole 판 (so `mu`
+  stays `chair` on the wire and `applyView` never fights the cuts). Each page, each frame (`chairSound`), asks
+  `Snd.music(inMusic ? 'chair' : null)` **directly** - `inMusic` from its own view clock (`Ms <= view < S`): the cut lands
+  exactly at its own draw of `S`, and the tune restarts from bar 1 at the next `Ms`. (`Snd.music` with the playing name
+  is a no-op, so the per-frame call costs nothing.) At 끝! `setMusic(null)` as every 판.
+- **Sounds**: **new** `scratch` (the cut: a 0.25 s noise sweep 1.8 kHz → 300 Hz, a soft thump; local, at each page's own
+  `S`); `item` on my sit (local), `pop` when a friend's claim appears in my mirror (local); `bounce` on a bump (local);
+  `ghost` when someone goes out and `extend` at the survivor's +2 (echoed from the host); `countdown` at each reveal
+  (local).
+
+Audio output latency differs per device (Bluetooth ~200 ms): **the stop is the frozen, flashing stools on screen**; the
+sound follows it. Stamps are measured from the draw, so a player who waits for the sound only gives away time.
+
+### 5.8 Card and demo
+
+- Name `목욕 의자 뺏기`; how `음악이 멈추면 앉아요! 못 앉으면 빠져요` (16 syllables); rule `의자는 늘 하나 모자라요 ·
+  빠져도 유령으로 계속 앉아요 · 앉으면 1점, 끝까지 남으면 +2점`.
+- **Demo** (`chairDemo`, 240 f): floor tiles at y 28; two stools (8x6, the sprite at half) gliding - stool 1
+  `x = 14 + 30 tri(f / 50)`, stool 2 `x = 70 - 34 tri(f / 38)` - while 2x2 white `♪` pixels rise over the three animals
+  (8 px: `a`, `b`, and `c` as 술래's demo derives it) walking slowly at x ~28 / 48 / 66, until 110.
+  - 110: the notes stop, a red 1x4 "!" over the centre, the stools freeze and flash.
+  - 112-140: `a` and `c` dash to the stools and sit (drawn 2 px up); `b` stands with a 3x5 `?`.
+  - 150-190: `b` fades to 0.55 with a 3x3 wisp (a 유령).
+  - 200-240: the notes again, the stools glide, all three (the ghost too) walk.
+  - Read together: music → walk, it stops → sit, one short → that one is a ghost.
+
+### 5.9 State and wire
+
+```js
+  // G.mini (host): seed, i (the stop), ph (0 music / scramble, 2 reveal, 3 survivor, 4 done), Ms, S (hidden until passed),
+  //   k (stools), own {stool: [slot, stamp, dx, f0, final]}, bump {slot: stop}, sat {slot: stamp}, gh, pts, standF, rtMax, n
+  // G.mloc[slot]: i, sit (stool or -1), tick, sh (the stop's first draw time)
+  // g.mg = ['h', i, ph, seed, Ms, S, [[stool, slot, stamp - S, final]], gh bits, [pts by seat], n, k, bump bits, surv]
+  // mi   = [판 i, stop, stool, tick, dx]
+```
+
+About 95 bytes at 4 players.
+
+---
+
+## 6. 맥반석 계란 돌리기 (`egg`, hot potato) — Should, built third
+
+`MINI.egg = { c: 'e', secs: 70, fastSecs: 35, ar: ['b'], noFire: true, cues: false, fits: (n) => n >= 2, short: '계란', ... }`
+(a dry battle arena, not the last one used; kits as the party's 특기 setting, as 왕관; nobody blows bubbles).
+
+### 6.1 Rules
+
+- **6 rounds** (`EGG.rounds`). The 판 ends 30 f after the last round's reveal; `secs` 70 is a safety cap.
+- **A round**:
+  1. **Drop** `EGG.dropF` 36 f: a hot 맥반석 계란 falls from the ceiling onto a player drawn by the host (any present one,
+     not the last round's loser when another is there). Banner `냥냥한테 떨어졌어요!` (class `round`); my own line
+     `내 계란!` / `친구에게 부딪혀요` when it is me.
+  2. **Live**: the fuse is `ri(210, 420)` f (3.5-7 s) from the landing - **hidden** (the burst tick `B` never reaches the
+     wire before the host's clock). The holder carries the egg over its head.
+  3. **Pass**: the holder's body **bumps** a friend → the egg jumps to the friend (a 12 f arc), `앗 뜨거!`. Whoever just got
+     it juggles it for `EGG.coolF` 45 f and cannot pass it on before that (no ping-pong). Anyone may hold it: living or 유령.
+  4. **Heat** (no clock to read): from `EGG.steamF` 90 f after landing the egg steams, from 180 it shakes ±1 px, from 240 it
+     glows red; the tick sound speeds up with the time since landing. None of this depends on `B`.
+  5. **Burst** at `B`: `펑!` on the egg. Whoever holds it then **loses the round** (a yolk splash over it: `탈락!` if living -
+     it becomes a 유령 -, `꽝!` if a 유령). Everyone else **+1**.
+  6. **Reveal** `EGG.revealF` 72 f (+ the survivor beat `survF` 60 f when one living player is left: +2, everyone back).
+- **Points**: a round not lost **+1**, the set's survivor **+2**.
+- Length: ~48 s at a human pace; worst honest (fuse 420 + the burst wait 60 + survivor every round) 65 s. Fast party: 3
+  rounds (worst 33 s).
+
+### 6.2 Out players
+
+A 유령 is in every round: it can be handed the egg and must get rid of it like everyone (holding at the burst costs it the
+round's point, not a life). The living would rather pass to a living friend - a burst on a 유령 puts nobody out - so 유령
+are both targets and hunters. Nobody watches.
+
+### 6.3 Controls
+
+- Phone: the stick runs, 점프 jumps (and the animal's 특기 on 점프, as in 왕관). Keyboard ←→, ↑ / Z. Passing is touching.
+- Card keys: `keys` `←→ 달리기 · Z 점프 · 부딪히면 넘어가요`, `keysT` `조이스틱 · 점프 · 친구에게 부딪혀요`.
+
+### 6.4 Players
+
+2 players: a chase of two, every round a set. 3 / 4: free for all. A leaver holding the egg: it drops again (36 f) onto a
+present player; the round's fuse goes on.
+
+### 6.5 The host's judging and the online fairness argument
+
+**A pass is decided on the receiver's own screen** - the one it happens to, as a dodge in battle counts on the victim's
+screen (`lagTrapCheck`).
+
+- **The touch**: each page checks the bodies it moves (host: its local seats; guest: itself): when I am not the holder in my
+  mirror, the holder's juggle is over in my view (`since + coolF <= my view tick`), and my body box grown by `EGG.slack`
+  3 px overlaps **the holder as my screen draws it** (a guest: the host's world at its view and other guests' peer
+  streams, exactly what it shows; the host: a remote holder's `hostDisplayIn` sample, `PEER_DELAY` behind - what the host
+  shows) → **I received it**: my page shows the egg on me at once (predicted) and reports `mi = [판 i, r, n, giver, tick]`
+  (`n` my receipts this round, `tick` my view tick).
+- **The host** (`input`): takes a receipt when its round is live, `giver` is the current holder, its stamp
+  `miniStamp(M, p, tick)` is past the giver's `since + coolF`, and the receiver is present and not the giver. Then the
+  holder is the receiver, `since = G.frame` (every page sees the juggle end at the same view tick `since + coolF`).
+  Refused → the receiver's page drops its prediction when its mirror shows another holder.
+- **The burst**: at `B` the host notes the holder `bh` and waits until every present remote seat's `rtMax` is past `B`, or
+  `B + LAG_MAX` (`miniPast`). A receipt that arrives meanwhile with a stamp **before `B`**, from `bh`, past its juggle, is a
+  **last-second pass**: the receiver loses the round. One stamped at or after `B` is ignored. Each page draws the burst at
+  its own view of `B` as a crack and a steam puff on its mirror's holder; the yolk splash goes on the loser at the reveal,
+  so a late pass never shows a burst on the wrong animal.
+- **Why the receiver's view**: two bodies, two pictures. In a host-guest pair the host sees the guest about one-way +
+  `PEER_DELAY` behind; the guest sees the host about one-way + its playout delay (8-24) behind. Judged on the receiver's
+  screen, **each receiver dodges exactly the holder it sees**, and each holder must reach where its target is on the
+  target's screen - about the same lead for everybody (12-14 ticks at 100 ms each way: one-way plus `PEER_DELAY` 6 for a
+  host receiver, one-way plus the playout delay 8 for a guest one; the 3 px slack makes a near touch count).
+  The host gets no zero-latency edge either way: as a holder it chases guests' images like any holder, as a receiver it
+  dodges the guests' images like any receiver. (Judging on the holder's screen gives the edge to whoever sees stalest
+  images; judging all bodies at one view tick puts the whole link on the host - section 17.)
+- **Ties and order**: two receipts from one holder close together are taken in the order the host gets them; the 45 f
+  juggle is longer than a normal link's delay, so a chain cannot fork. The host-local receiver's report is never late, so
+  the rare double contact goes **against** the host (receiving is bad).
+- **A hidden tab** cannot receive (its page does not run): an idle friend's animal is a wall the egg cannot reach. A hidden
+  holder keeps the egg and loses the round.
+- **Cheating bounds**: a modified page could never report a receipt. Same trust as every body state (a page could also walk
+  through walls). Accepted for 4 friends.
+
+### 6.6 Places, ties, coins, awards
+
+- `key = pts * 1e5 - heldF` (frames I held the egg over the 판, the juggle included). Shared places are rare.
+- Coins: a pass I made (my mirror's holder moves from me to a friend), or a round I came through having walked 64 px.
+- Awards: only 최다 1등상.
+
+### 6.7 Screen, HUD, sprites, sounds
+
+- **The egg**: `item_egg` at 12 px over the holder's head (its tag moves 6 px up: `tagY`); heat by `tintOf(item_egg,
+  '#ff7a3a', 0.15 → 0.5)` with the time since landing; steam (3 white pixels rising, canvas) from 90 f; ±1 px shake from
+  180; a red 1 px rim blinking from 240. The juggle: the egg hops 2-4 px over the receiver's paws for 45 f. A pass draws a
+  12 f arc from giver to receiver (each page from its mirror's change, or at once for my own prediction).
+- **The burst**: at my view of `B`: `bubble_pop` frames tinted cream with 8 yolk pixels (`#ffd23c`, `#fff1a6`) and a
+  steam puff; at the reveal the loser gets the yolk over its head for 48 f (drops, as 물벼락's).
+- **The animals**: a 유령 at 0.55 with `fx_ghost`; the holder's HUD panel blinks orange.
+- **HUD**: centre `clock` `2/6`; line 2 an `item_egg` icon (8 px) and my points.
+- **Sounds**: **new** `egg_tick` (o.n 0-3: a woodblock click, higher with o.n; each page at its own rate - every 30 f, down
+  to every 8 f by the time since landing; local), **new** `egg_boom` (a cartoon "퍽" - a short noise burst with a falling
+  sizzle; local at each page's own `B`); `item` on a pass in my mirror and on my own receipt (local); `ghost` / `extend`
+  (echoed). Music `battle`.
+
+### 6.8 Card and demo
+
+- Name `맥반석 계란 돌리기`; how `계란을 부딪혀 넘겨요! 들고 터지면 빠져요` (17 syllables); rule `왕관과 반대예요 · 빠져도
+  유령으로 계속 해요 · 안 걸리면 1점, 끝까지 남으면 +2점`.
+- **Demo** (`eggDemo`, 240 f): floor tiles at y 28 and a 2-tile ledge at x 70-86, y 20; `a` (16 px) walks right carrying
+  the egg (8 px) from x 4 into `b` at x 40 (0-56).
+  - 56: they touch; 56-68 the egg arcs onto `b`; 68-110 it juggles over `b`; `c` (the derived third) walks on the ledge.
+  - 110-168: `b` stands; the egg steams (from 110), shakes (from 140), blinks red (from 156).
+  - 168: the burst - a cream splat and yolk pixels; 170-230: `b` fades to 0.55 with a wisp (a 유령).
+  - 200-236: a new egg falls from the top onto `c` (8 px).
+  - Read together: bump to pass; it bursts on whoever holds it; that one is a ghost.
+
+### 6.9 State and wire
+
+```js
+  // G.mini (host): r, ph (0 drop, 1 live, 2 the burst wait, 3 reveal, 4 survivor, 5 done), h0 (the drop's holder), L (the
+  //   landing tick), B (hidden until passed), holder, since, from (the last giver), bh, loser, log [[from, to, stamp, f]],
+  //   gh, pts, heldF, n
+  // G.mloc[slot]: r, n (my receipts), pred {from, tick} (my predicted receipt), lastHolder
+  // g.mg = ['e', r, ph, holder, since, L, B, loser, gh bits, [pts by seat], n, from]
+  // mi   = [판 i, r, n, giver, tick]
+```
+
+About 65 bytes.
+
+---
+
+## 7. 미끌미끌 비누 씨름 (`sumo`, ring-out) — Could, built last
+
+`MINI.sumo = { c: 'u', secs: 45, ar: ['p', 4], base: true, fits: (n) => n >= 2, short: '씨름', ... }` (a world game; bubbles
+on - they push instead of trapping; the normal clock cues; music `battle`, `hurry` for the last 10 s).
+
+### 7.1 Rules
+
+- **The 평상**: a raised wooden platform 144 px wide (x 56-200) over two 탕 (x 16-56 and 200-240). Its top is soaped: on it
+  everyone slides - `SUMO.acc` 0.07 instead of `acc` 0.5, so starting and stopping take ~18 frames; top speed the base walk.
+- **Bubbles push**: each player blows the base kit's bubble from the 거품 button (the magazine and cooldown as in battle),
+  but slower - `SUMO.shotV` 2.0 px/f for `SUMO.shotF` 60 f (120 px), then it pops (no floating bubbles). A bubble that
+  touches a body **pushes** it: `vx = ±SUMO.push` 2.4 the bubble's way and a small hop (`vy` -1.3); on soap one push slides
+  ~40 px. A bubble pushes one body once; nobody is ever trapped. Jumping over a bubble dodges it (37 f of air).
+- **Ring-out**: feet under the 탕's surface (`wl` 196) + 3 px → **풍덩!**: that player rides an **오리 튜브** in that 탕 (7.2).
+- **Credit**: the last friend whose bubble pushed me within `SUMO.creditF` 120 f before I fell gets **+1** (`밀어냈다!`). A
+  fall nobody pushed (walked off, slid off on my own) credits nobody.
+- **Sets**: when at most one player is left on the 평상, 60 f later the survivor gets **+2**; then a 72 f reset - everyone
+  back on the 평상's spots (`placePlayer`: a new epoch), rafts gone, bubbles gone - and the next set.
+- **The last 10 s**: banner `더 미끌미끌!` / `10초 남았어요` (class `hurry`), music `hurry`: the soap gets slipperier
+  (`acc2` 0.045) and pushes stronger (`push2` 3.0) - sets end.
+- **Time-up** (45 s): everyone still on the 평상 in the unfinished set gets **+1** (`버텼다!`).
+- **Points**: a credited push-out +1, the set's survivor +2, still standing at time-up +1.
+
+### 7.2 Out players: 오리 튜브 and 역전
+
+- A fallen player is a raft exactly as in 물 v2 (`p.raft`, `raftMove` on `M.wl` 196, `RAFT.walk` 0.75 in its 탕, a hop of
+  `RAFT.hop` -3.0, the plain bubble through the magazine). Its 탕 is 40 px wide; the 평상's side stops its bubbles, so it
+  must **hop and blow** to reach the 평상 top (from the hop's top, y ~164, a bubble flies at the standers' height).
+- A raft's bubble pushes like any. **역전**: if the friend it pushed falls in within `creditF`, the raft gets the +1 and
+  **comes back** onto the 평상's centre (`placePlayer`, `SUMO.revInv` 90 f blinking: not pushable), once per raft per set.
+  `역전!` / `다시 올라왔어요!` (existing texts).
+
+### 7.3 Controls
+
+- Phone: the stick slides ←→, 점프 hops, 거품 blows. A raft: ←→ in its 탕, 점프 hops, 거품 blows. Keyboard ←→, Z, X.
+- Card keys: `keys` `X 비눗방울 · Z 점프 · ←→ 미끌미끌`, `keysT` `거품으로 밀기 · 점프로 피하기`.
+- Everyone has the base kit (`base: true`): no 특기 (a capy slam or a penguin slide would decide every set).
+
+### 7.4 Players
+
+Spots (feet centres) on the 평상: 2 players x 96 / 160, 3 players 80 / 128 / 176, 4 players 76 / 108 / 148 / 180. With 2 every
+fall ends the set (a quick 1v1; no raft time). A leaver: its body is gone, the set checks again. A **stale** seat (no state
+for `SUMO.staleF` 120 f: a hidden tab) falls in - a page that does not run cannot be pushed, and a statue on the 평상 would
+never let a set end.
+
+### 7.5 The host's judging and the online fairness argument
+
+**A push is decided by the page that moves the body pushed** - its own screen, its own physics.
+
+- **The push**: each page checks the bodies it moves (host: local seats; guest: itself, in `guestSelf` beside
+  `guestBounce`) against the bubbles **as it draws them** (a guest: the host's world at its view; the host: its world now).
+  A touch → the push is applied to that body at once (no snap, no epoch), the bubble is hidden on that page, and
+  `mi = [판 i, set, hitN, by, tick, bid1, bid2]` tells the host (my push count, the last pusher, my view tick then, the last
+  two bubble ids). The host pops those bubbles and keeps `last[slot] = [by, stamp]`.
+- **The fall**: the host judges it from body states, as 물 does: host-local bodies each frame; a remote seat from its latest
+  state of its epoch (`feet > wl + 3`), stamped `max(rt, at - LAG_MAX)`. The guest freezes its own input for at most 30 f
+  under the surface while the verdict comes (물's `가라앉는 중`); the host makes it a raft (`bumpEp`; `takeOver` copies the
+  raft flag). Credit: `last[slot]` if `stamp - its stamp <= creditF`.
+- **Order of falls**: by stamp, so two falls close together end the set in view-tick order; equal stamps → nobody gets the
+  survivor's +2 that set.
+- **Why the pushed one's view**: it can only dodge what it sees; a push it did not see on its screen never moves it.
+  Every page sees a friend's bubble late by the same kind of delay, so nobody's dodge is easier.
+- **The host's own edge, and its fix (Should)**: a guest's bubble is born in the host's world when its `'shot'` message
+  arrives - one-way (~6-9 ticks at 100 ms) after the guest blew it - while the host's own bubble is born at once. A
+  host-local body therefore sees guests' bubbles a little late but also a little *behind* where they were aimed. **Split
+  the link**: `hostShot` advances a guest's sumo bubble by half its one-way estimate, `ad = clamp(round((at - rt -
+  SNAP_DELAY) / 4), 0, SUMO.back 6)` steps (`at - rt` from that seat's latest state). Neither the shooter nor the host
+  bears the whole delay. Fallback: no advance (guests' bubbles ~one-way late in the host's world; ~10-18 px at 2 px/f).
+- **Cheating bounds**: a modified page could ignore pushes. Same trust as every body state.
+
+### 7.6 Places, ties, coins, awards
+
+- `key = pts * 1e5 + platF` (frames I stood on the 평상 over the 판, capped 99999: the longer on, the better).
+- Coins: a push that landed (the mirror's `hits[me]` rises), or a set I survived.
+- Awards: only 최다 1등상 (pushes are not prisons).
+
+### 7.7 Arena, screen, HUD, sprites, sounds
+
+**비누 평상** (`PG.PARTY_ARENAS[4]`, key `'sumo'`, theme 3): closed, 32x26, rows 21-24 solid at cols 7-24 (the 평상, top y
+184), the floor row 25, the two 탕 open at cols 2-6 and 25-29 rows 21-24; nothing else. Mirror-exact.
+
+```js
+      sumo: { wl: 196, spots: { 2: [96, 160], 3: [80, 128, 176], 4: [76, 108, 148, 180] }, revive: 128 },   // feet centres (px)
+```
+
+`loadPartyArenas` keeps it (**new** `sumoOf`: `wl` between the 평상's top and the floor, spots on the 평상), else
+`fallbackPartyArena('sumo')`.
+
+- Drawn: the 평상's wooden boards (the tiles in `#c98c4c` with `#8a5428` seams, canvas over them), white soap suds dots on
+  its top that shiver under a sliding body (cosmetic, `G.parts`), the 탕 water as 물's layer at the constant `wl`
+  (`#3fbfe0` 0.45, the light surface line), steam wisps.
+- Bubbles: the `bubble` sprite in the shooter's tint; a push: a `bubble_pop` and 4 suds pixels at the contact.
+- HUD: the clock (normal, with its cues); line 2 a `bubble` icon and my points; raft seats at 0.7 (today's raft rule).
+- Sounds: `bounce` on a push (the pushed page, local; others from the mirror's `hits`), `b_splash` + `splash` on a fall
+  (echoed), `revive` on 역전 (echoed), `extend` on the survivor's +2 (echoed), `hurry` at the last 10 s.
+
+### 7.8 Card and demo
+
+- Name `미끌미끌 비누 씨름`; how `비눗방울로 밀어내요! 탕에 빠지면 탈락` (16 syllables); rule `빠지면 오리 튜브로 밀어서
+  역전! · 밀어 빠뜨리면 1점, 끝까지 남으면 +2점`.
+- **Demo** (`sumoDemo`, 240 f): the 평상 as tiles at x 16-80, y 24 (top), water at x 0-16 and 80-96 from y 26 (blue at
+  0.45, a light line); `a` (8 px) at x 24, `b` at x 56, on the 평상.
+  - 20: `a` blows a bubble (6 px) right; 20-44 it flies to `b`.
+  - 44: `b` is pushed - it slides right with 2 suds pixels (44-70) and off the edge at 72; 72-84 it falls, a splash.
+  - 90-150: `b` bobs on a `duck_ring` at x 84; 150 it hops and blows a bubble left; 150-176 the bubble reaches `a`.
+  - 176-200: `a` slides left and falls off at x 12 (a splash); 204: `b` pops back onto the 평상 with stars (역전).
+  - Read together: bubbles push, a fall makes a duck ring, pushing back brings you back.
+
+### 7.9 State and wire
+
+```js
+  // G.mini (host): set, ph (0 live, 1 the set's end, 2 reset), endAt0 (the set's end tick), outs [[slot, stamp]], last
+  //   {slot: [by, stamp]}, rv {slot: 1} (came back this set), hits {slot}, pts, platF, wl, last10
+  // G.mloc[slot]: set, hitN, used (bubble ids that pushed me), by, tick
+  // g.mg = ['u', set, ph, [pts by seat], [hits by seat], rv bits, last10, wl, surv]
+  // mi   = [판 i, set, hitN, by, tick, bid1, bid2]
+  // (bubbles in U as in battle: at most 3 a player)
+```
+
+About 45 bytes, plus the bubbles in `U` (~30 bytes each, at most 12).
+
+---
+
+## 8. Network
+
+### 8.1 Gate: `PARTY_V` 8
+
+`PARTY_V` 7 → **8** (this page plays 수도꼭지, 의자, 계란, 씨름; the `'L' 'R' 'D'` entries are local only). A pa 7 page in a
+party room is never ready and shows `새로고침 필요` (the existing `seatReady` / `seatOld` / `R.u`). An older page would read
+`t h e u` as 물 (`partyView` falls back) and `mu` 14 as its last track. party-net's crafted older guest sends `pa: 7`. The
+old games' wire is byte-identical; `PARTY_TRO_V` stays 5. (If the board PR or another lands first, `PARTY_V` is main's
+value + 1 at build time.)
+
+### 8.2 Who decides what
+
+| Thing | Who | On the wire |
+|---|---|---|
+| The plan | host | `g.pa.L` (codes `w c b m f s t h e u`) |
+| 수도꼭지: the sequence, the show, the close | host (a seed, the arm tick) | `g.mg` |
+| 수도꼭지: my answer and its time | **my page** (my go draw, my presses) | `mi` |
+| 의자: the stools, the stop | host (a seed, `Ms`, `S` revealed at its tick) | `g.mg` |
+| 의자: my sit and its view tick | **my page** (my body on my screen) | `mi` |
+| 의자: who keeps which stool | host, by stamp | `g.mg` |
+| 계란: the drop, the fuse, the burst | host (RNG; `B` revealed at its tick) | `g.mg` |
+| 계란: "the holder touched me" | **the receiver's page** | `mi` |
+| 계란: the holder, the loser | host (giver check, juggle, late passes) | `g.mg` |
+| 씨름: a push | **the pushed body's page** | `mi` |
+| 씨름: falls, credits, rafts, 역전, sets | host (body states, stamps) | `P` rows (raft flag), `g.mg` |
+| 유령, points, survivors | host | `g.mg` |
+| My coins | each player for itself | none |
+
+### 8.3 Snapshot fields and sizes
+
+| Field | Size | Note |
+|---|---|---|
+| `g.mg` 수도꼭지 | ~110 B | seed, ticks, a row per seat |
+| `g.mg` 의자 | ~95 B | seed, `Ms` / `S`, at most 3 stools |
+| `g.mg` 계란 | ~65 B | |
+| `g.mg` 씨름 | ~45 B | + bubbles in `U` (~30 B each, at most 12) |
+| `g.pa.H` | ~8 B | only while the trophy hold runs (3.8) |
+| body state `mi` | 16-30 B | per guest, every 2 frames, only while playing a game with `local` |
+
+A party snapshot is about 1.0-1.3 KB at 4 players (씨름 with every bubble out ~1.7 KB): under `SNAP_LIMIT` 3400 (party-net
+asserts it every run). `mi` is at most 7 ints (`parseBody` keeps 8).
+
+### 8.4 Guest hooks
+
+- `guestSelf`: the game's `local` as today (`NET.mi`); `miniParked` for chair's own sit (its `frozen` reads the local sit
+  for my own body, as 술래's line); sumo: **new** push check over the view's bubbles (beside `guestBounce`) and the
+  가라앉는 중 freeze under `wl`.
+- `applyView`: a new `g.pa.i` resets `G.mloc`, `NET.mi`, `NET.rtHi` (as today).
+- `partyView` / `miniView`: the four new `view`s mirror their `g.mg` (bounded by `nInt` as every view); `tapView` /
+  `chairView` merge `mg1`'s events (an event at tick e with `a.k < e <= rt` is only in the next snapshot).
+- Sounds that are each page's own (`tap`, `scratch`, `egg_tick`, `egg_boom`, sit / pass / push sounds) are played with
+  `localSfx` from each page's own draws and mirror; the host plays them with `NET.rec` off.
+
+### 8.5 Other modes
+
+Battle and co-op never see any of this: every new branch checks `G.mini` and its `MINI` flags (`kitOf`'s `base`,
+`updatePlayer`'s soap `acc`, `fire`'s sumo shot, `trappable` in sumo, `hostShot`'s advance, `guestSelf`'s push), the
+`'L' 'R' 'D'` entries are read only by tap. `battle-net`, `mp-net`, `trophies-net`, `kits*` and `touch` must stay green.
+
+---
+
+## 9. UI
+
+### 9.1 Korean texts (verbatim; all warmed through `PARTY_TEXT`, which now also maps `short`)
+
+| Where | Text |
+|---|---|
+| 수도꼭지: name / how / rule | `수도꼭지 순서 기억하기` / `순서대로 똑같이 눌러요! 틀리면 빠져요` / `점점 길어져요 · 빠져도 유령으로 계속 해요 · 맞히면 1점, 끝까지 남으면 +2점` |
+| 수도꼭지: keys / keysT / short | `↑ ← ↓ → 로 눌러요 (Z·X도 ↑)` / `점프는 위 · 조이스틱은 ← ↓ →` / `수도꼭지` |
+| 의자: name / how / rule | `목욕 의자 뺏기` / `음악이 멈추면 앉아요! 못 앉으면 빠져요` / `의자는 늘 하나 모자라요 · 빠져도 유령으로 계속 앉아요 · 앉으면 1점, 끝까지 남으면 +2점` |
+| 의자: keys / keysT / short | `←→ 달리기 · 의자에 닿으면 앉아요` / `조이스틱으로 달려서 의자에 닿아요` / `의자` |
+| 계란: name / how / rule | `맥반석 계란 돌리기` / `계란을 부딪혀 넘겨요! 들고 터지면 빠져요` / `왕관과 반대예요 · 빠져도 유령으로 계속 해요 · 안 걸리면 1점, 끝까지 남으면 +2점` |
+| 계란: keys / keysT / short | `←→ 달리기 · Z 점프 · 부딪히면 넘어가요` / `조이스틱 · 점프 · 친구에게 부딪혀요` / `계란` |
+| 씨름: name / how / rule | `미끌미끌 비누 씨름` / `비눗방울로 밀어내요! 탕에 빠지면 탈락` / `빠지면 오리 튜브로 밀어서 역전! · 밀어 빠뜨리면 1점, 끝까지 남으면 +2점` |
+| 씨름: keys / keysT / short | `X 비눗방울 · Z 점프 · ←→ 미끌미끌` / `거품으로 밀기 · 점프로 피하기` / `씨름` |
+| `short` of the first new games | 바나나우유 `바나나우유`, 펑 `펑!`, 술래 `술래` |
+
+`PARTY_TX` additions (`{0}` filled at run time):
+
+| Key | Text | Where |
+|---|---|---|
+| `ghost1` / `ghost2` | `유령이 됐어요!` / `계속 하면 점수를 모아요` | my own line when I go out (수도꼭지, 의자, 계란) |
+| `miss` | `꽝!` | word pop over a 유령 that lost a round |
+| `surv1` / `surv2` | `{0} 살아남았다!` / `모두 다시 살아나요` | a set's end (의자, 계란, 씨름; 수도꼭지's end with one left, sub `tpEnd`) |
+| `survAll` | `모두 살아남았다!` | 수도꼭지's end with several left |
+| `newGames` | `새 게임: ` | the room's rules line prefix (3.5) |
+| `tpWatch` / `tpLen` | `잘 봐요!` / `{0}개를 기억해요` | each round's intro banner |
+| `tpGo` | `따라 해요!` | the go banner |
+| `tpWrong1` / `tpWrong2` / `tpWrongG` | `틀렸어요!` / `유령으로 계속 해요` / `아깝다!` | my own line on a mistake (living: 1 / 2; a 유령: `tpWrongG` / `tpWrong2`) |
+| `tpLate` | `시간 끝!` | word pop on a time out |
+| `tpAll1` / `tpAll2` | `모두 틀렸어요!` / `이번엔 아무도 안 빠져요` | every living player failed |
+| `tpEnd` | `끝까지 남은 친구 +2점` | the end banner's sub |
+| `chStop` | `그만!` | the stop banner |
+| `chBump` / `chBump1` / `chBump2` | `쿵!` / `밀려났어요!` / `다른 의자로!` | a bump: word pop / my own line |
+| `egDrop` | `{0}한테 떨어졌어요!` | the drop banner |
+| `egMine1` / `egMine2` | `내 계란!` / `친구에게 부딪혀요` | my own line when it drops on me |
+| `egHot` | `앗 뜨거!` | word pop on a receipt |
+| `suFall` / `suPush` / `suKeep` | `풍덩!` / `밀어냈다!` / `버텼다!` | word pops (a fall, the credited pusher, standing at time-up) |
+| `suRaft1` / `suRaft2` | `풍덩!` / `오리 튜브로 밀어서 역전!` | my own line when I fall in |
+| `suLast1` / `suLast2` | `더 미끌미끌!` / `10초 남았어요` | the last 10 s banner |
+| `troHold` | `트로피 정산까지 {0}초` | the 최종 순위 view while the hold runs (3.8, Should) |
+
+Reused: `out` `탈락!`, `revive` `역전!`, `reviveMe` `다시 올라왔어요!`, `pfPop` `펑!`. The how lines are one line each (16 /
+16 / 17 / 16 syllables, <= 17). No string uses the retired v1 title's syllables (`final-e2e2`). The canvas font draws
+only digits and `- x ! : . + / ?` (the `?` is a 3x5 glyph drawn by hand): times `2.41`, `+1`, `3/8`.
+
+### 9.2 DOM
+
+No new element. The card's keys line reads `keys` / `keysT`; the demo canvas, the banners, the word pops and the 최종 순위
+view exist. The hold line (Should) is one `<p id="pg-party-hold">` in the tally view, hidden unless `P.H > 0`.
+
+### 9.3 Fit
+
+| View | 1x window (17.4em of content, no rule line) | 568x320 phone (21.4em x 20.3em, rule line shown) |
+|---|---|---|
+| The four cards | round, name (the longest, `수도꼭지 순서 기억하기`, ~9.6em x 1.6 = 15.4em: one line; the splash at 2.6em wraps to two, as `바나나우유 잡기` does), demo, how (<= 17 syllables), keys (<= ~19em at 0.8em), ready row, button, bar | + the rule line (two lines at 0.82em: the longest, 의자's, ~42 characters) and the touch keys (the longest new one, 의자's, ~16em - shorter than 펑's) |
+| Room rules | the new-games line one row | the line wraps once at 320 px; the room panel scrolls (its ready row is sticky) |
+| 최종 순위 + hold line | the rows + one 0.8em line | the same |
+
+The fit tests check each card at 1x, 2x and 568x320 with 4 players and 12-syllable nicks (`scrollHeight <= clientHeight`).
+
+### 9.4 HUD
+
+- 수도꼭지 `3/6` · faucet + points. 의자 `3/8` · stool + points. 계란 `2/6` · egg + points (the holder's panel blinks). 씨름
+  the clock · bubble + points (raft panels 0.7). 유령 panels at 0.55 with `fx_ghost`. No magazine pips where `noFire`.
+
+---
+
+## 10. Sprites and sound
+
+### 10.1 Sprites (sprites.js house style: palette strings, characters face right, a comment saying what each pixel is)
+
+| Sprite | Size | What |
+|---|---|---|
+| **new** `faucet` | 16x16, 2 frames | a chrome 수도꼭지 (W / a shading, k outline) from the wall: frame 0 shut, frame 1 the valve turned with a c drip at the spout. The handle cap is left W for a canvas colour cap. `REQUIRED` + `SPR_SIZE` |
+| **new** `bath_stool` | 16x12, 2 frames | a pink plastic 목욕 의자 (p body, P top shine, q legs and rim, k outline, a w highlight); frame 1 squashed 1 px (a sitter) |
+| **new** `fx_ghost` | 8x8, 1 frame | a small 김 유령: a w puff with a W wavy tail and two k eyes (over a 유령's head, the HUD) |
+| Reused | | `item_egg` (the egg, tinted), `bubble_pop` (the burst, cream), `lg_2` (the 바가지), `water_cold_top` (drops), `bubble` (pushes), `duck_ring` (rafts), the animals' `idle walk jump fall shoot die` |
+
+### 10.2 Sound (`audio.js`, in the `SFX` table's style; levels at or under the v1 ones)
+
+| Name | Sound | Echo |
+|---|---|---|
+| **new** `tap` (o.n 0..3) | a 120 ms soft square "똥", C5 / E5 / G5 / C6 (위 / 왼쪽 / 오른쪽 / 아래), a fast decay | local (`NO_ECHO`) |
+| **new** `scratch` | 0.25 s: band-passed noise sweeping 1.8 kHz → 300 Hz + a soft 80 Hz thump (the record stopping) | local (`NO_ECHO`) |
+| **new** `egg_tick` (o.n 0..3) | a 30 ms woodblock click, 900 Hz + 150 Hz x o.n | local (`NO_ECHO`) |
+| **new** `egg_boom` | a 60 ms noise burst "퍽" with a 0.3 s falling sizzle (high-passed noise) | local (`NO_ECHO`) |
+| **new** song `chair` | loop, 4 bars, ~150 bpm, two-beat: square lead, triangle bass, `k . s .` drums; in `DEFS`, `MUSICS` 14 | the track rides as `mu`; the per-stop cuts are each page's own |
+
+Reused: `item`, `pop`, `bounce`, `countdown`, `scald_splash`, `b_splash`, `splash`, `ghost`, `extend`, `revive`, `hurry`.
+
+---
+
+## 11. Constants (top constants block, next to `MILK` / `PUFF` / `SNEAK`)
+
+```js
+  const PARTY_V = 8;
+  const LAG_MAX = 60;   // a remote seat's view tick is never older than its state's arrival minus this (SNEAK.lagMax reads it)
+  // the out players of 수도꼭지 / 의자 / 계란 (3.1): drawn at alpha; the set's survivor (수도꼭지: everyone in at the end)
+  const GHOST = { alpha: 0.55, bonus: 2 };
+  // 수도꼭지 순서 기억하기 (4): rounds, the first length (+1 a round), frames a step by round and its dark tail, the intro,
+  // the gap before go, the window (winMs + perMs x length, ms), the fastest honest step (ms), the host's slack past a
+  // window (f), the reveal, my splash, the end's bonus beat, endF, the fast party's rounds
+  const TAP = { rounds: 6, len0: 3, sp: [30, 30, 24, 24, 20, 20], dark: 8, intro: 36, goGap: 12, winMs: 1500, perMs: 700, minMs: 80,
+    slackF: 90, revealF: 66, splashF: 48, bonusF: 60, endF: 30, fast: 3 };
+  // 목욕 의자 뺏기 (5): stops, the music (f, host RNG), the stools' speeds (px/f) and their floor span (feet centres), the
+  // spread at the stop (px), the seat (feet within px of the centre), the host's check (px), the close cap after the
+  // stop, the reveal, the survivor beat, endF, the fast party's stops, the sitting lift (px)
+  const CHAIR = { stops: 8, music: [120, 300], spd: [1.4, 2.0], lo: 28, hi: 228, gap: 18, seat: 6, slack: 8, capF: 240, revealF: 60,
+    survF: 60, endF: 30, fast: 3, sit: 4 };
+  // 맥반석 계란 돌리기 (6): rounds, the drop, the fuse (f, host RNG, hidden), the juggle, the touch slack (px), the heat
+  // stages (f since landing), the reveal, the survivor beat, endF, the fast party's rounds, a survived round's coin (px)
+  const EGG = { rounds: 6, dropF: 36, fuse: [210, 420], coolF: 45, slack: 3, steamF: 90, shakeF: 180, glowF: 240, revealF: 72,
+    survF: 60, endF: 30, fast: 3, moveCoinPx: 64 };
+  // 미끌미끌 비누 씨름 (7): the soap's acc (the last 10 s: acc2), the push bubble (px/f, f), the push (vx, the last 10 s
+  // push2) and its hop, the credit window, a set's end after at most one is left, the survivor beat, the reset, 역전's
+  // blink, a stale seat falls in after (f), the most a guest's bubble is advanced (f), the last stretch (s)
+  const SUMO = { acc: 0.07, acc2: 0.045, shotV: 2.0, shotF: 60, push: 2.4, push2: 3.0, hop: -1.3, creditF: 120, early: 60, survF: 60,
+    resetF: 72, revInv: 90, staleF: 120, back: 6, lastS: 10 };
+  // MINI: tap 75 s, chair 95 s, egg 70 s (safety caps: they end by their last round), sumo 45 s (its clock); fastSecs 35
+  // for tap / chair / egg; MINI_IDS + 'tap', 'chair', 'egg', 'sumo'
+```
+
+Tuning knobs after the friends' next play: `TAP.sp` / `perMs` (how hard to remember, how much time), `CHAIR.music` /
+`spd` (how long the wait, how hard to be near a stool), `EGG.fuse` / `coolF` / `slack` (how hectic, how easy a pass),
+`SUMO.acc` / `push` / `shotV` (how slippery, how strong, how dodgeable), `GHOST.bonus` (how much the survivor matters).
+
+---
+
+## 12. Code placement
+
+| File | What |
+|---|---|
+| `game.js`, top constants | `PARTY_V` 8, `LAG_MAX`, `GHOST`, `TAP`, `CHAIR`, `EGG`, `SUMO`; `MINI.tap / chair / egg / sumo` (with `music`, `base`, `short`, `keys`, `keysT`), `short` on milk / puff / sneak, `MINI_IDS`; `PARTY_TX` additions; `PARTY_TEXT` adds `short`. |
+| `game.js`, input layer | `onKeyDown` pushes `'L' 'R' 'D'`; `stickTap` and `STICK.td` in `stickMove` (reset in `stickReset`). |
+| `game.js`, world | `kitOf` reads `miniFlag('base')`; `updatePlayer`'s `acc` for sumo's soap (gated `G.mini.id === 'sumo'` and on the 평상); `fire` / `newShot` the sumo shot (speed, life, no float); `trappable` false in sumo; the push check for host-local bodies (in the sumo tick) and in `guestSelf` (own body); `hostShot`'s sumo advance (Should); `drawPosed` applies `ga`. |
+| `game.js`, party section | `miniRt` / `miniStamp` / `miniPast`; `ghostOut` / `ghostSet` / `ghostBits`; `miniStart` reads `music`; `P.crownAr` → `P.lastAr`; `partyRules`' line from `short`; `troPartyWait`'s `P.H` and the hold line (Should). |
+| `game.js`, the games (after 술래's section) | 수도꼭지: `tapSeq`, `tapPlan`, `tapRound`, `tapTick`, `tapSeen`, `tapLocal`, `tapInput`, `tapClose`, `tapView`, `tapDraw`, `tapPose`, `tapHud`, `tapDemo`. 의자: `chairX`, `chairStools`, `chairStop`, `chairSeen`, `chairLocal`, `chairInput`, `chairTick` (final, close, cap), `chairClose`, `chairFrozen`, `chairSound`, `chairView`, `chairDraw`, `chairPose`, `chairHud`, `chairDemo`. 계란: `eggRound`, `eggDrop`, `eggSeen` (the holder as this screen draws it), `eggLocal`, `eggInput`, `eggTick` (the burst wait, late passes), `eggClose`, `eggView`, `eggDraw`, `eggPose`, `eggHud`, `eggDemo`. 씨름: `sumoSpawns`, `sumoTick` (falls, credits, 역전, sets, the last 10 s, time-up), `sumoPush` (a body's own page), `sumoLocal`, `sumoInput`, `sumoFall`, `sumoSet`, `sumoView`, `sumoDraw`, `sumoHud`, `sumoDemo`; the four `MINI_FN` entries. |
+| `game.js`, render / HUD | `drawHUDParty`'s 유령 panel and icon; the 수도꼭지 progress pips and reveal marks; egg's `tagY`. |
+| `game.js`, debug | `PG.debug.party`: `tap()`, `tapSeq(seed, k)`, `answer(slot, list, msEach)`, `chair()`, `chairX(seed, i, j, dt)`, `stoolsAt(t)`, `stopAt(t)`, `sit(slot, stool, tick)`, `egg()`, `burstAt(t)`, `recv(slot, giver, tick)`, `sumo()`, `pushMe(slot, dir)`, `fall(slot)`, `ghosts()`, `remMi(slot, mi)` (a fake remote seat's mi and state, extended with `at` / `rt`); `consts()` + `TAP CHAIR EGG SUMO GHOST LAG_MAX`; `state().mini` + each game's fields. |
+| `levels.js` | `PG.PARTY_ARENAS[4]` 비누 평상 (`'sumo'`, its `sumo` field). Engine: `PARTY_KEYS` + `'sumo'`, `fallbackPartyArena('sumo')`, `sumoOf`. |
+| `sprites.js` | `faucet`, `bath_stool`, `fx_ghost` (~60 lines). |
+| `audio.js` | `tap`, `scratch`, `egg_tick`, `egg_boom` (~50 lines); `CHAIR` song (~40 lines); `VARIANTS` for the o.n ones. |
+| `page.html` | `#pg-party-hold` (Should). |
+| `tools/validate-levels.js` | `PARTY_KEYS` / `PARTY_NAMES` + 비누 평상: closed, mirror-exact, the 평상 (rows 21-24, cols 7-24) with nothing over it up to row 1, each 탕 open from row 21 to the floor, `wl` between the 평상's top and the floor, every spot on the 평상 standable, `revive` over it. |
+
+---
+
+## 13. Build order, cut lines, effort
+
+Each step leaves the party playable; each game is added to `MINI_IDS` only when its tests pass.
+
+1. **Must - shared machinery v2**: `PARTY_V` 8, `MINI` flags (`music`, `base`, `short`), the room line, `'L' 'R' 'D'` +
+   `stickTap`, 유령 (`ghostOut` / `ghostSet`, `ga`, `fx_ghost`, the HUD), `LAG_MAX` + `miniRt` / `miniStamp` / `miniPast`,
+   `P.lastAr`, the debug hooks, the rotation tests for ten ids.
+2. **Must - 수도꼭지**: the wall, the seed, the show, `따라 해요!` per page, the judge, the close, the reveal, 유령, the end's
+   +2, `faucet`, `tap`, demo, wire; its tests. (Cheapest and most robust: `world: false`, 바나나우유's per-page model.)
+3. **Must - 의자 뺏기**: the gliding stools, the hidden stop, the per-page cut (`chair`, `scratch`), sits by stamp,
+   provisional / final, bumps, the cap, sets, `bath_stool`, demo, wire; its tests and both games' online checks.
+
+   **— cut line A: two new games ship here (the rotation runs with 8 / 7) —**
+
+4. **Should - 맥반석 계란 돌리기**: drops, the hidden fuse and heat, receipts on the receiver's screen, the juggle, the burst
+   wait and late passes, sets, `egg_tick` / `egg_boom`, demo, wire; its tests.
+
+   **— cut line B: three (9 / 8) —**
+
+5. **Could - 미끌미끌 비누 씨름**: the arena (+ validator), soap, push bubbles decided by the pushed page, falls by stamp,
+   credits, rafts and 역전, sets, the last 10 s, time-up, demo, wire; its tests.
+6. **Could / Should polish**: the trophy hold line (3.8, Should), 의자's frame-exact guest tick (fallback: the state's
+   `rt` that first shows the sit), 씨름's split-link advance (fallback: none), 의자's provisional / final outlines.
+
+**Effort**: about **3,300-3,800 changed lines**: `game.js` ~1,900 (machinery ~250, 수도꼭지 ~330, 의자 ~470, 계란 ~400, 씨름
+~450), `levels.js` ~45, `validate-levels.js` ~45, `sprites.js` ~60, `audio.js` ~90, `page.html` ~5, tests ~1,300 (party ~750,
+party-net ~450 incl. the `#lag` sections, touch ~40, check-integration / audio-node small). For scale: PR #26 (three games)
+was planned at 2,900-3,400 in three passes. So: **four lean build passes** (1: steps 1-2, 2: step 3 + the online
+checks of both, 3: step 4, 4: steps 5-6 if time allows), **one check, one full suite run** (`node tools/run-all.js`, every
+Chrome run with `--mute-audio`). Plan for the cut line A games and treat 씨름 as the bonus (question 3).
+
+---
+
+## 14. Tests
+
+### 14.1 `src/tests/party.js` (virtual time, stepped; `vclock` sets press and draw times exactly)
+
+If the four sections push `party` past its 120 s budget (it ran 43 s after PR #26), they move to **new** `party2.js` with its
+own job (`party2`, `test-party2.html`, 120000); `party` keeps the machinery, rotation, flow and fit.
+
+1. **Machinery**: `'L' 'R' 'D'` from keys (fresh only); `stickTap`: cardinal pulls one entry each, a 45° pull **one** entry,
+   a held pull none, ← then ↓ without the middle `'L'`, `'D'`; `music` (tap none, chair `chair`); `base` gives `KIT_BASE` in
+   chair / sumo / 술래 (술래 unchanged); 유령: `ghostOut` / `ghostSet` (+2, revive), nobody out when every living one lost,
+   `ga` drawn and never on the wire, the HUD panel; `miniRt` monotonic and clamped by `LAG_MAX`, `miniStamp` bounds,
+   `miniPast` by `rtMax` and by `LAG_MAX`; `P.lastAr` (crown and egg never repeat an arena); the room line from `short`;
+   `PARTY_TEXT` holds every new string; 술래's tests still green (`LAG_MAX`).
+2. **Rotation** (generic over `MINI_IDS`, as rewritten in PR #26): over 300 seeds for 2 / 3 / 4 players and 3 / 5 판 every
+   game that fits shows up (10 / 9), never twice in a row, 3판 / 5판 distinct; with `MINI_IDS` cut at A and B the same.
+3. **수도꼭지**: `tapSeq` pure, 0-3, never three alike; lengths 3-8 and `sp` by round; the show's lit frames; the go draw
+   once (a view clock stepping back keeps one window); answers on `vclock`: right, a wrong second press (done at once, the
+   splash), presses before go ignored, a time out at exactly `1500 + 700 L`, the clamp (`minMs` 80 x L), the ms; the close on
+   all reports, on a stale seat, at the cap (missing = time out); points, 유령, everyone wrong → nobody out, a 유령 scoring;
+   the end's +2 for one / several; the key's ms; coins per correct sequence; a leaver mid-round; `tapView` bounds and the
+   `mg1` merge; the fast party (3 rounds, under `fastSecs`); the worst honest 판 under 75 s; friends' pips without
+   directions.
+4. **의자 뺏기**: `chairX` pure, inside `lo..hi`, every speed in 1.4-2.0; the freeze spread (>= 18 px, pure, inside); `S` never
+   in `g.mg` before its tick; stools n - 1 (유령 counted); a gliding stool cannot be sat on; a sit at `S`, at `S + 40`; the
+   seat edge (6 / 6.1 px), airborne no; a host-local and a remote claim (`remMi`) on one stool: the earlier stamp keeps it
+   either way round, the later one bumped (its page un-parks and hops), equal stamps by `dx` then the rotation; a claim final
+   only once every standing remote seat is past it (or `LAG_MAX`); a stale seat not waited for; a refused claim (feet 9 px
+   off in its state); the close when every stool is final, at the cap (living standers out, unless all); points, 유령, the
+   survivor's +2 and revive, 2 players (every stop a set); the music cut on each page's own `S` (`Snd._state().track`
+   null from that frame, `chair` again at the next `Ms`, `G.music` stays `chair`); the key; coins per kept stool; a leaver
+   holding a claim; 8 stops then the end; worst honest under 95 s; fast 3 stops.
+5. **맥반석 계란 돌리기**: the drop (never the last loser when another is there); `B` hidden; heat stages from the landing
+   only; a receipt on the receiver's screen: overlap with the 3 px slack (3 / 3.1 px), during the juggle refused, from a
+   non-holder refused, the host's view of a remote holder is its `hostDisplayIn` sample; the receiver's prediction and its
+   undo; the burst wait: a remote receipt stamped `B - 5` arriving at `B + 20` makes the receiver the loser, one stamped `B`
+   ignored, the wait ends by `rtMax` or `LAG_MAX`; points, 유령 holding at the burst (no one out), the survivor's +2; a
+   leaver holding (re-drop); a hidden-tab holder loses; the key (`heldF`); coins (a pass, a walked round); 6 rounds then
+   the end; fast 3.
+6. **미끌미끌 비누 씨름**: the arena loads (and its fallback); soap: from rest to top speed and back ~18 f on the 평상, normal
+   off it; the sumo shot (2.0 px/f, 60 f, pops, never floats, never traps); a push on a host-local body (vx, hop, once per
+   bubble), on a guest's own body through `guestSelf` with a view bubble (and its `mi`, the host popping it); a fall at
+   `wl + 3`, by stamp for a remote state; the raft (its 탕, its hop, its bubble over the 평상 edge from the hop's top);
+   credit within 120 f (121 none), no credit for a lone fall; 역전 once a set; set end 60 f after one left (equal stamps:
+   no survivor), the reset; the last 10 s (acc2, push2, banner, music); time-up +1; a stale seat falls in after 120 f; the
+   advance `ad` bounds (Should); the key (`platF`); coins; a leaver.
+7. **Demos**: each new `demo` draws 240 frames into a 96x32 context without errors and leaves pixels.
+8. **Fit**: each new card at 1x (no rule line; how and keys one line each), 2x and the 568x320 phone (`#fit`, touch keys line,
+   rule line): `scrollHeight <= clientHeight`; the room line at 320; the 최종 순위 view with the hold line.
+9. **Trophies**: `tro.partyHold` with a forced plan of 술래 + 의자 + 바나나우유 at bot speed: the 최종 순위 waits for the
+   floor and the hold line counts down (`P.H`), then the podium.
+10. **No regressions**: a battle and a co-op round after a party: kits, bubbles that trap, normal `acc`, the music.
+
+### 14.2 `src/tests/party-net.js` (4 bc frames, real time)
+
+**Plain run** (every frame 8 / 4 ms; forced plans, the fast party):
+
+1. Adjust: the crafted older guest sends `pa: 7`; the forced plans include `t h e u`.
+2. 수도꼭지 smoke: each page answers its own (scripted real key events after its own go draw); B answers wrong in round 2 -
+   the splash and its 유령 on every page; rows and points agree everywhere; the 판 ends by its rounds.
+3. 의자 smoke: the stools are identical on every page at the same view tick (`stoolsAt` hashes); `S` is the same; A walks
+   onto a stool and keeps it; the one left standing is a 유령 on every page; the music track is null on each page after its
+   own `S` and `chair` again after the next `Ms`.
+4. 계란 smoke: A carries the egg into B: B receives it (B's screen decides), every page shows B as the holder; the burst's
+   loser is a 유령 everywhere.
+5. 씨름 smoke: A's bubble pushes B on B's screen, B slides; B falls: a raft on every page, A credited; B's raft pushes A in:
+   역전 on every page.
+6. Snapshots under 3400 bytes throughout; `mi` only during the new games.
+
+**`#lag` run** (`party-net-lag`, frame 3 = C at lat 100 / jit 40, the others 8 / 4; `rt` budget raised by the new sections):
+
+7. 수도꼭지: H, A and C answer the same list with real key events 300 ms apart from their **own** go draw: each page's
+   reported ms equals its own event time minus its own go draw (the plumbing, exact); C's ms within 30 of A's though its
+   link is slow; with C scripted 200 ms a step and A 320, C places above A.
+8. 의자: a stool placed (debug `stopAt` + a forced seed) so that C's body reaches it **10 view ticks before** H's own body:
+   C keeps it on every page although its state reaches the host later; H, provisionally seated, is bumped (its page shows
+   `밀려났어요!`); a claim stays provisional until C's `rtMax` is past it. INFO: the bump's delay in frames.
+9. 계란: C carries the egg into the host's animal: the pass happens when the host's screen shows C touching (the receiver's
+   view), not when C's does (logged lead in ticks, INFO); the host carries it toward C while C walks away on its own view:
+   no pass until C's screen shows the touch; A carries the egg into C so that C's screen shows the touch at its view tick
+   `B - 5`: C is the loser on every page although C's report reaches the host after `B` (the burst wait).
+10. 씨름: the host blows at C; C jumps over the bubble **on its own screen**: no push anywhere; C stands still: pushed, and
+    the push shows on every page; C pushed off: its fall stamped by its own view, the credit to the host.
+11. INFO: each guest's playout delay at each game's start and end; snapshots under 3400 bytes.
+
+### 14.3 Other tests and jobs
+
+- `src/tests/touch.js`: `'L' / 'R' / 'D'` from the stick's dominant edge with the pointermove's time; one entry per pull; a
+  45° pull gives one; a pull held gives no more; back under `STICK_OFF` and a new pull gives the next; keyboard ←→↓ fresh
+  only (no auto-repeat).
+- `tools/validate-levels.js`: 비누 평상 (section 12).
+- `tools/check-integration.js`: every new literal sprite name the engine draws exists with its size (`faucet` 16x16 x2,
+  `bath_stool` 16x12 x2, `fx_ghost` 8x8; reused `item_egg` 16x16, `bubble_pop`, `lg_2` 8x8, `duck_ring` 16x8, `bubble`).
+- `tools/audio-node-test.js`: `tap` o.n 0..3 (four distinct pitches), `scratch`, `egg_tick` 0..3, `egg_boom` - no NaN, short,
+  under the sfx level, in `NO_ECHO`; the `chair` song compiles, loops, its bars have the right length.
+- `check-pages` / `final-e2e2`: the warm-up text, the retired syllables; `ux-roomrow` (and `-320`): the new-games line fits.
+- `run-all.js`: `party` (or `party` + `party2`), `party-fit-568`, `party-net`, `party-net-lag` (budgets raised for the new
+  sections). One full suite run at the end, `--mute-audio`.
+
+---
+
+## 15. Risks
+
+1. **The 유령 rule changes the pitch's win condition** ("끝까지 남으면 1등" → "+2점", the 판 won by points). It is what keeps
+   out players busy; if the friends find it muddy, `GHOST.bonus` can grow (3-4) or the owner can choose plain elimination
+   (question 1).
+2. **의자: position luck.** Where you stand when it stops matters, as in the real game. The stools glide faster than a walk
+   so nobody camps one; `CHAIR.spd` / `music` are the knobs. A sit that gets bumped 0.3-0.7 s later can feel like a take-
+   back; it happens only in close contests, with a clear `쿵! 밀려났어요`.
+3. **의자: audio latency** (Bluetooth ~200 ms). The stop is the frozen stools on screen; the sound follows it; the demo
+   shows both together (the stools freeze as the notes stop).
+4. **계란: "I touched them!"** Judged on the receiver's screen, a holder has to reach 12-14 ticks (at 100 ms) past the
+   image it sees; the 3 px slack covers a near touch. `EGG.slack` is the knob. The holder sees the egg leave a round trip
+   later (no prediction on the giver's side - it could be wrong).
+5. **계란: rare double contacts** go in the host's arrival order (never in the host's favour: its own receipts are never
+   late). A hidden tab cannot receive (an idle friend is a wall).
+6. **씨름 touches shared physics** (`updatePlayer`'s `acc`, the shot, `trappable`, `guestSelf`'s push, `hostShot`): every
+   branch is behind `G.mini.id === 'sumo'`; battle / co-op / kits tests must stay green. It is the last game for that reason.
+7. **씨름's pushes are self-applied**: a modified page could ignore them. Same trust as bodies.
+8. **수도꼭지 on a stick**: a sloppy diagonal is a dead band (no press) rather than two; a player who never lets the stick go
+   back gets no second press - the arrows on the wall and `let go` in the keys line teach it; touch.js covers it.
+9. **수도꼭지 copying** in one room (friends see each other's phones): not preventable; friends' pips never show directions.
+10. **Hidden or stalled tabs**: 수도꼭지 time-outs, 의자 stands (and goes out), 계란 cannot receive / loses holding, 씨름 falls
+    in after 2 s. Nobody waits for it (`miniStale`, `LAG_MAX`).
+11. **Rotation dilution**: with ten games a favourite (물, 펑) shows up in ~30% of 3판 parties. The owner's free draw stands.
+12. **The trophy hold** can reach ~37 s in a theoretical bot-speed staked party; the hold line says why (Should).
+13. **Size of the PR**: the largest party PR yet (~3,500 lines); the cut lines are real - 씨름 is the bonus.
+14. **party.js budget**: four more games in virtual time; the `party2` split is ready.
+
+---
+
+## 16. Open questions for the owner (each with the default this spec uses)
+
+1. **Out players in 의자 / 계란 / 수도꼭지**: they become **유령** and keep playing for points; the last one in gets +2 and
+   the 판 is won on points. **Default: 유령 + points** (nobody waits, comebacks possible). Alternative: plain elimination -
+   out players watch, "끝까지 남으면 1등" as pitched (the first one out waits 20-30 s).
+2. **All four with 2 players** (의자: one stool; 계란: a chase of two; 씨름: one fall ends the set; 수도꼭지: a duel). **Default: on**
+   (as 술래). Alternative: leave 계란 out for 2 (a chase of two is the thinnest).
+3. **Scope**: build in the order 수도꼭지 → 의자 → 계란 → 씨름 and ship what passes the check in this PR; if the build runs
+   long, 씨름 comes in the next PR. **Default: as written** (cut lines A / B). Alternative: all four or nothing.
+
+Everything else (round counts, timings, speeds, slack, the scoring numbers) is a tuning knob (section 11), not a question.
+
+---
+
+## 17. Considered and left out
+
+- **계란 by throwing** (a host-simulated arc judged like 술래's look - fair by construction): not the pitch (`부딪혀서`), and a
+  guest's throw reaches the others a link late, so it needs a 0.5 s wind-up to be dodgeable. Kept as the fallback if bumping
+  feels bad.
+- **계란: judging the pass on the holder's screen** (favour the tagger): whoever sees the stalest images tags from farthest
+  away. **Judging both bodies at one view tick** (the 술래 stamp for contact): every guest sees the host exactly in view
+  ticks while the host sees guests 20-45 ticks late, so the whole link lands on the host (it would chase images half a
+  second old). The receiver's screen gives everyone the same lead.
+- **의자: stools that pop up at random spots at the stop** (instant sits for whoever stands there, nothing to watch during
+  the music) and **fixed visible stools** (everyone camps one). **A ↓ press to sit**: on a phone the stick cannot run and
+  pull down at once. **Revival by sitting** (a 유령 that sits comes back): then every stop is the same race and the
+  elimination means nothing.
+- **Pure elimination with spectators**: the "everyone stays active" rule (question 1 keeps it open).
+- **씨름: a shrinking 평상** (map changes need a sync path nothing has - polish 4.1.6); **body-to-body pushes** (two pages own
+  the two bodies: nobody can apply the push to the other without a snap); **trapping bubbles** (that is 가두기, not 씨름);
+  **kits** (a capy slam or a penguin slide would decide every set).
+- **수도꼭지: a speed bonus** (+1 for the fastest) - speed is the tie-break only, so the rule line stays short; **거꾸로
+  rounds** (a second rule to read); **showing friends' presses** (copying); **one long ladder until one is left** (variable
+  length against the cap).
+- **New awards** (최다 생존상, 최다 밀어내기상): the three awards are fixed polish; the new games feed 최다 1등상.
+- None of the four copies a specific minigame: they are genre-level ideas (Simon-style memory, musical chairs, hot potato,
+  ring-out sumo) with our own rules, names, art and sounds.
+
+---
+
+## 18. Checked against the code (while writing)
+
+| Found in the code | Consequence | Where |
+|---|---|---|
+| `applyView` calls `setMusic(mu)` whenever the snapshot's `mu` differs from `G.music` | a per-stop `setMusic(null)` on the host would reach guests one snapshot late and fight a local cut | 5.7: `G.music` stays `chair`; each page cuts with `Snd.music` at its own `S` |
+| `Snd.music(name)` restarts only when another (or no) track plays | a per-frame call with the same name is free; `music(null)` then `music('chair')` starts at bar 1 | 5.7 |
+| `stickDir` and `stickDown` can both be on at (0.3, 0.6) | one diagonal pull could give a left / right and a down | 3.3: `stickTap`'s exclusive zones |
+| `hostDisplayIn` draws a remote body `PEER_DELAY` behind; a guest draws the host's world `SNAP_DELAY`+ behind | contact has two pictures; view-tick judging puts the whole link on the host | 6.5: the receiver's screen |
+| `takeOver` copies x / y / vx / vy and the raft flag on a new epoch | a host-applied push would snap a guest back; a raft hand-over works as in 물 | 7.5: pushes on the pushed page; falls → rafts by epoch |
+| `trappable` is false for a raft; `raftMove` reads `G.mini.wl` | sumo's rafts work with a constant `wl`; sumo also turns trapping off for everyone | 7.2 |
+| `kitOf` already special-cases 술래 | `base` generalises it | 3.4 |
+| `sneakJudge` clamps `rt` by `at - SNEAK.lagMax` and keeps `rtMax` | chair / egg / sumo use the same clamp with one stamped claim each | 3.2 |
+| `troPartyWait` counts host frames only; `troPartyReal` counts `CO.bshots` | nothing breaks; the hold grows | 3.8 |
+| `MINI_OLD` 3 and `partyRules`' `gn` list every later game by name | seven long names would take three room rows at 320 px | 3.5: `short` |
+| `PARTY_ARENAS` indexes 0-3 load through `loadPartyArenas`, `viewKindOf`, `loadView` | index 4 needs only its key, fallback and validator branch | 7.7, 12 |
+| the canvas font has digits and `- x ! : . + /` | `?` needs a hand-drawn glyph; Korean only in DOM (banners, word pops, my lines) | 9.1 |
