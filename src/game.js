@@ -1361,14 +1361,15 @@ window.PG = window.PG || {};
   }
   // ---- party arenas (PG.PARTY_ARENAS, design/party.md 5): closed maps with their minigame's own fields, in the order
   // PARTY_KEYS (MINI[id].ar names the index); a missing or broken entry gets a built-in closed one of its key (the water
-  // tiers / the field with its crossbars / the plain stage), like fallbackArena
-  const PARTY_KEYS = ['water', 'ball', 'stage', 'sneak'];
+  // tiers / the field with its crossbars / the plain stage / the corridor / the 평상 over its two 탕), like fallbackArena
+  const PARTY_KEYS = ['water', 'ball', 'stage', 'sneak', 'sumo'];
   function fallbackPartyArena(key) {
-    const map = [], ball = key === 'ball', stage = key === 'stage', sneak = key === 'sneak';
+    const map = [], ball = key === 'ball', stage = key === 'stage', sneak = key === 'sneak', sumo = key === 'sumo';
     for (let r = 0; r < ROWS; r++) {
       let s = '##' + '.'.repeat(28) + '##';
       if (r === 0 || r === ROWS - 1) s = '#'.repeat(COLS);
       if (stage) { map.push(s); continue; }
+      if (sumo) { if (r >= 21 && r <= 24) s = '##.....' + '#'.repeat(18) + '.....##'; map.push(s); continue; }
       if (sneak) { if (r === ROWS - 2) s = '##.......##..........##.......##'; map.push(s); continue; }
       if (ball) { if (r === 20) s = '######' + '.'.repeat(20) + '######'; map.push(s); continue; }
       if (r === 21) s = '##....######........######....##';
@@ -1388,6 +1389,12 @@ window.PG = window.PG || {};
       return { key: 'sneak', name: '살금살금 복도', theme: 1, closed: true, map, gather: { col: 15, row: 3 },
         players: [{ col: 3, row: 24 }, { col: 27, row: 24 }, { col: 6, row: 24 }, { col: 25, row: 24 }],
         sneak: { start: { col: 3, row: 24 }, it: { col: 27, row: 24 }, line: 200 } };
+    }
+    // (비누 평상, party-games-2 7.7: the 평상 rows 21-24 at cols 7-24 over two 탕; the water's line, the spots, 역전's x)
+    if (sumo) {
+      return { key: 'sumo', name: '비누 평상', theme: 3, closed: true, map, gather: { col: 15, row: 3 },
+        players: [{ col: 9, row: 20 }, { col: 22, row: 20 }, { col: 13, row: 20 }, { col: 18, row: 20 }],
+        sumo: { wl: 196, spots: { 2: [96, 160], 3: [80, 128, 176], 4: [76, 108, 148, 180] }, revive: 128 } };
     }
     if (ball) {
       return { key: 'ball', name: '거품 축구장', theme: 0, closed: true, map, gather: { col: 15, row: 3 },
@@ -1437,6 +1444,19 @@ window.PG = window.PG || {};
     if (!start || !it || !isFinite(line) || start.col >= it.col) return null;
     return { start, it, line: clamp(line, start.col * TS + 16, it.col * TS - 4) };
   }
+  // 씨름's field as the engine runs it (party-games-2 7.7), null when unusable: wl (the 탕's surface) over the floor, the
+  // spots (feet centres, by players 2 / 3 / 4, that many each) and revive inside the walls
+  function sumoOf(S) {
+    if (!S || typeof S !== 'object' || !S.spots || typeof S.spots !== 'object') return null;
+    const wl = +S.wl, rv = +S.revive, spots = {};
+    if (!isFinite(wl) || !isFinite(rv)) return null;
+    for (const n of [2, 3, 4]) {
+      const a = S.spots[n];
+      if (!Array.isArray(a) || a.length !== n || !a.every((x) => isFinite(+x))) return null;
+      spots[n] = a.map((x) => clamp(+x, WALL_L + 8, WALL_R - 8));
+    }
+    return { wl: clamp(wl, CEIL_Y + 8, PF_BOT - TS - 2), spots, revive: clamp(rv, WALL_L + 8, WALL_R - 8) };
+  }
   let PARTY_ARENAS = [];
   function loadPartyArenas() {
     const src = Array.isArray(PG.PARTY_ARENAS) ? PG.PARTY_ARENAS.slice() : [];
@@ -1445,9 +1465,9 @@ window.PG = window.PG || {};
       // (each index's own game - past the known ones, an entry's own key)
       const key = PARTY_KEYS[i] || (A && PARTY_KEYS.includes(A.key) ? A.key : 'water');
       let base = A && typeof A === 'object' && Array.isArray(A.map) && (!PARTY_KEYS[i] || A.key === key) ? A : fallbackPartyArena(key);
-      if ((key === 'water' && !riseOf(base.rise)) || (key === 'ball' && !soccerOf(base)) || (key === 'sneak' && !sneakOf(base.sneak))) base = fallbackPartyArena(key);
+      if ((key === 'water' && !riseOf(base.rise)) || (key === 'ball' && !soccerOf(base)) || (key === 'sneak' && !sneakOf(base.sneak)) || (key === 'sumo' && !sumoOf(base.sumo))) base = fallbackPartyArena(key);
       const mk1 = (B) => Object.assign(normLevel(Object.assign({}, B, { arena: true, closed: true, enemies: [], boss: null, special: undefined }), i),
-        { key, closed: true }, key === 'ball' ? soccerOf(B) : key === 'water' ? { rise: riseOf(B.rise) } : key === 'sneak' ? { sneak: sneakOf(B.sneak) } : {});
+        { key, closed: true }, key === 'ball' ? soccerOf(B) : key === 'water' ? { rise: riseOf(B.rise) } : key === 'sneak' ? { sneak: sneakOf(B.sneak) } : key === 'sumo' ? { sumo: sumoOf(B.sumo) } : {});
       try { return mk1(base); } catch (e) { return mk1(fallbackPartyArena(key)); }
     });
   }
