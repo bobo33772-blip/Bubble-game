@@ -9,6 +9,10 @@
 //   gg   guest -> guest (the victim drawn from its own body stream): as gh
 //   hg   host -> guest (the guest drawn from its interpolated stream on the host): as gh
 //   old  an older guest page (no lc in its states, no 'tp'): its shot still catches a host player standing still
+//   slow guest -> host on a slow phone (its shot and claim reach the host 0.4 s later still): the claim names a tick
+//        ~0.8 s back - caught (the old 0.5 s reach refused every such catch of the host: "방장이 덜 갇혀", 2026-11-05)
+//   tr   a trade: the host blows at A, A blows back 0.2 s later - after the host's catch in host time, before A's screen
+//        can show it -> both caught (the old rule refused a blow that arrived from a prisoner: the host always won)
 //   cap  (perks on, a duck guest tapping for 3 s, the magazine off on both pages: the backstop alone) at most 3 of its
 //        bubbles out in all (in flight + floating) on the host, every press past 3 popped its oldest there (no refusal,
 //        never a 'dry' on the guest), the guest's own screen back to <= 3 once the pops have arrived
@@ -172,6 +176,35 @@
       }
       sess.setState = ss; sess.send = sd;
       ok('old: an older guest page\'s shot still catches a host player standing still (2/2)', r.length === 2 && r.every(Boolean), r);
+    }
+    // ---- a slow phone: A's shot and claim reach the host 0.4 s later than its link alone - the host standing still
+    if (!ONLY.length || ONLY.includes('slow')) {
+      const sess = A.mp.session(), sd = sess.send, sent0 = N(A).claims.sent, why0 = JSON.stringify(N(H).claims.why);
+      sess.send = function (to, m) { if (m && (m.t === 'shot' || m.t === 'tp')) { const self = this, a = arguments; setTimeout(() => sd.apply(self, a), 400); return; } return sd.apply(this, arguments); };
+      const r = [];
+      for (let k = 0; k < 3; k++) {
+        if (!(await place(R.F, H, [130, 60, 205], [-1, 1, -1]))) { log('BNET INFO slow: place failed'); continue; }
+        press(A, 'shoot', true); await sleep(50); press(A, 'shoot', false);
+        r.push(!!(await until(() => trappedBy(H, slotOf(H), slotOf(A)), 2500)));
+      }
+      sess.send = sd;
+      ok('slow: guest -> host with 0.4 s more on the way: every catch on the shooter\'s screen holds (3/3)', r.length === 3 && r.every(Boolean), { r, claims: N(A).claims.sent - sent0, why0, why: N(H).claims.why });
+    }
+    // ---- a trade: the host blows first, A blows back before its screen can show its own catch
+    if (!ONLY.length || ONLY.includes('tr')) {
+      const r = [], tr0 = N(H).claims.trades | 0;
+      for (let k = 0; k < 3; k++) {
+        if (!(await place(R.F, H, [130, 60, 205], [-1, 1, -1]))) { log('BNET INFO tr: place failed'); continue; }
+        press(H, 'shoot', true); setTimeout(() => press(H, 'shoot', false), 50);
+        await sleep(200);
+        const aFirst = trappedBy(A, slotOf(A), slotOf(H)); // (A's own screen: not caught yet when it blows)
+        press(A, 'shoot', true); await sleep(50); press(A, 'shoot', false);
+        const a = !!(await until(() => trappedBy(H, slotOf(A), slotOf(H)), 2000));
+        const h = !!(await until(() => trappedBy(H, slotOf(H), slotOf(A)), 2000));
+        r.push({ a, h, aFirst });
+      }
+      ok('tr: the host blows at A, A blows back 0.2 s later (its screen not showing its catch yet) -> both caught (3/3)', r.length === 3 && r.every((x) => x.a && x.h && !x.aFirst), r);
+      ok('tr: those were trades on the host (a caught guest\'s earlier blow blown)', (N(H).claims.trades | 0) - tr0 >= 3, { trades: (N(H).claims.trades | 0) - tr0 });
     }
     ok('lag room: no page errors', R.F.every((f) => !f.errors.length), R.F.map((f) => f.errors));
   }

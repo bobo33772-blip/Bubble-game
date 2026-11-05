@@ -3980,8 +3980,13 @@ window.PG = window.PG || {};
     return cap > 0 && inFlight(p.slot) >= cap;
   }
   // the host's world, frame by frame: where each player was (a guest's claim names the snapshot tick it drew from)
-  const REWIND = 30, CLAIM_TOL = 2, CLAIM_WAIT = 12;
-  function notePos(pl) { const h = pl.ph || (pl.ph = []); h.push([G.frame, pl.x, pl.y]); if (h.length > REWIND + 8) h.shift(); }
+  // (REWIND: 물 차오르기's stale-state wait, waterBody. CLAIM_BACK: how far back a guest's claim - or a shot it blew
+  // before its screen showed its own trap - may reach, counted from when it ARRIVED here: the round trip + that guest's
+  // view delay (up to BUF_MAXD 24 f). 0.5 s from the check refused every catch of the host on a laggy link (2 x 200 ms:
+  // guest > host 0 of 21 while host > guest 14 of 14 - the user, 2026-11-05: "방장이 덜 갇혀"); 1 s from the arrival
+  // covers 2 x 250 ms + the longest playout delay)
+  const REWIND = 30, CLAIM_BACK = 60, CLAIM_TOL = 2, CLAIM_WAIT = 12;
+  function notePos(pl) { const h = pl.ph || (pl.ph = []); h.push([G.frame, pl.x, pl.y]); if (h.length > CLAIM_BACK + CLAIM_WAIT + 8) h.shift(); }
   // battle: where each capture-phase bubble was, tick by tick (for lagTrapCheck). The path outlives the bubble for a
   // moment (G.shotLog): a victim's screen runs behind the host, so it may still show a shot that, in host time, has
   // since been popped, has caught an enemy or has left the screen; `spentAt` is when it stopped being a free shot
@@ -4029,14 +4034,17 @@ window.PG = window.PG || {};
   // a guest's own bubble touched a rival on ITS screen (guestClaim: the shot n, volley index i, at age a; the rival as
   // drawn at x, y from tick k - w 0: the host world's snapshot tick, w 1: that rival's own body stream). The host checks
   // it against its own records a frame or so later: that bubble's path at age a (not used up before then), the rival's
-  // recorded body at that tick (within 6 px of the claim, no more than REWIND = 0.5 s of that body's own time back:
-  // 2 x a 120 ms link + the view's playout delay) - they touch (CLAIM_TOL px of slack) -> the catch, else nothing (the
-  // guest's predicted catch lets go: the host's bubble flies on)
+  // recorded body at that tick (within 6 px of the claim, no more than CLAIM_BACK = 1 s of that body's own time back
+  // from when the claim arrived - at: the world frame, vk: that rival's newest stream tick then - so a laggy link or the
+  // wait for its shot / its bubble's age never runs a fair claim out of time) - they touch (CLAIM_TOL px of slack) ->
+  // the catch, else nothing (the guest's predicted catch lets go: the host's bubble flies on)
   function hostClaim(pl, m) {
     if (G.gameMode !== 'battle' || G.mode !== 'playing') return;
     const c = { pl, gid: NET.gid, n: nInt(m.n, 0, 1e9, 0), i: nInt(m.i, 0, 2, 0), a: nInt(m.a, -1, SHOT_MAX, -1), s: nInt(m.s, -1, 3, -1), e: nInt(m.e, -1, 1e9, -1),
-      x: nNum(m.x, WALL_L - 4, WALL_R - 12, NaN), y: nNum(m.y, PF_TOP - 24, PF_BOT, NaN), k: nNum(m.k, 0, 1e12, -1), w: m.w === 1 ? 1 : 0, until: G.frame + CLAIM_WAIT };
+      x: nNum(m.x, WALL_L - 4, WALL_R - 12, NaN), y: nNum(m.y, PF_TOP - 24, PF_BOT, NaN), k: nNum(m.k, 0, 1e12, -1), w: m.w === 1 ? 1 : 0, until: G.frame + CLAIM_WAIT, at: G.frame, vk: -1 };
     if (!c.n || c.a < 0 || c.s < 0 || c.s === pl.slot || c.e < 0 || c.k < 0 || Number.isNaN(c.x) || Number.isNaN(c.y)) return;
+    const v = G.players.find((q) => q.slot === c.s), vr = v && !v.local && NET.remote.get(v.id);
+    if (vr && vr.st) c.vk = vr.st.k;
     NET.claims = (NET.claims || []).filter((q) => q.gid === NET.gid);
     if (NET.claims.filter((q) => q.pl === pl).length < 8) NET.claims.push(c);
   }
@@ -4063,7 +4071,7 @@ window.PG = window.PG || {};
     const h = b.hist, last = h[h.length - 1], e = h.find((q) => q[3] === c.a) || (last && b.state !== 'shot' && c.a - last[3] === 1 ? last : null);
     if (!e) { c.wr = 'young' + (h.length ? h[h.length - 1][3] - c.a : ''); return h.length && h[h.length - 1][3] < c.a && b.state === 'shot' && !b.dead ? 'wait' : 'age'; }
     if ((b.spentAt !== undefined && e[0] >= b.spentAt) || (h.drop && c.a > KIT.otter.shot.drop.rivalAge)) return 'spent';
-    const at = c.w ? streamAt(v, c.k) : worldAt(v, c.k);
+    const at = c.w ? streamAt(v, c.k, c.vk) : worldAt(v, c.k, c.at);
     if (!at) return 'rewind';
     if (Math.abs(at.x - c.x) > 6 || Math.abs(at.y - c.y) > 6) return 'where';
     if (!rivalTouch(h.sc, e[1], e[2], at.x, at.y, CLAIM_TOL)) return 'miss';
@@ -4083,12 +4091,13 @@ window.PG = window.PG || {};
     }
     return null;
   }
-  function worldAt(v, k) {
-    if (!(G.frame - k <= REWIND) || !v.ph) return null;
+  // (now: the world frame / the rival's newest stream tick the reach is counted from - a claim's arrival)
+  function worldAt(v, k, now) {
+    if (!((now === undefined ? G.frame : now) - k <= CLAIM_BACK) || !v.ph) return null;
     return interpAt(v.ph, k, (e) => e[0], (e) => ({ x: e[1], y: e[2] }));
   }
-  function streamAt(v, k) {
-    const rem = !v.local && NET.remote.get(v.id); if (!rem || !rem.st || !(rem.st.k - k <= REWIND)) return null;
+  function streamAt(v, k, now) {
+    const rem = !v.local && NET.remote.get(v.id); if (!rem || !rem.st || !((now >= 0 ? now : rem.st.k) - k <= CLAIM_BACK)) return null;
     const L = rem.buf.list.filter((q) => q.d.ep === v.ep);
     return interpAt(L, k, (q) => q.k, (q) => q.d);
   }
@@ -4102,7 +4111,9 @@ window.PG = window.PG || {};
     b.kind = 'player'; b.victim = v; b.state = 'float'; b.age = 0; b.trapT = 0; b.vx *= 0.3; b.vy = -0.3; b.big = false; b.grace = TRAP_GRACE; b.hist = null;
     b.ty = 'line'; b.drop = false; b.r = 8; b.rP = 8;
     b.x = clamp((b.x + v.x) / 2, WALL_L, WALL_R - 16); b.y = clamp(Math.min(b.y, v.y), CEIL_Y, PF_BOT - 16);
-    v.trap = { b, t: 0, prog: 0, mash: 0, by: b.owner };
+    // (at / ep0 / x0, y0: when, in which epoch and where it was caught - a guest's blow from before its screen showed
+    // this, hostShot's trade)
+    v.trap = { b, t: 0, prog: 0, mash: 0, by: b.owner, at: G.frame, ep0: v.ep, x0: v.x, y0: v.y };
     v.vx = 0; v.vy = 0; v.shootAnim = 0; v.jumpBuf = 0; v.shootBuf = 0; v.water = 0; v.onGround = false;
     clearMoves(v); bumpEp(v);
     burst(b.x + 8, b.y + 8, 10, [SLOT_COLS[b.owner] || '#ffffff', '#ffffff', '#c8f4ff'], 1.3, 14);
@@ -14551,8 +14562,20 @@ window.PG = window.PG || {};
       ins[pl.slot] = inp;
     }
   }
+  // A trade (battle): a guest's blow that arrives after the host caught it still blows when it left that guest before
+  // its screen could show the catch - k, the host tick its view showed at the blow, is before the catch's frame, in the
+  // epoch just before it, within CLAIM_BACK, near where it was caught (an older guest page sends no k: refused as
+  // before). The host's own blows always had this (it learns of its catch only when a claim lands); without it, two
+  // players blowing at each other on a laggy link always went the host's way (the user, 2026-11-05: "방장이 덜 갇혀")
+  function tradeOf(pl, m) {
+    const tr = pl.trap, k = nNum(m.k, 0, 1e12, -1);
+    if (G.gameMode !== 'battle' || !tr || tr.at === undefined || !alive(pl) || k < 0) return null;
+    if (nInt(m.ep, -1, 1e9, -1) !== tr.ep0 || !(k < tr.at) || tr.at - k > CLAIM_BACK || G.frame - tr.at > CLAIM_BACK) return null;
+    return tr;
+  }
   function hostShot(pl, m) {
-    if (G.mode !== 'playing' || !free(pl) || pl.stunT > 0 || nInt(m.ep, -1, 1e9, -1) !== pl.ep) return;
+    const tr = tradeOf(pl, m);
+    if (G.mode !== 'playing' || (!free(pl) && !tr) || pl.stunT > 0 || (!tr && nInt(m.ep, -1, 1e9, -1) !== pl.ep)) return;
     if (G.party && miniFlag('noFire')) return; // (파티: a 'shot' that arrives anyway in a game nobody blows in - a modified page)
     const rem = NET.remote.get(pl.id); if (!rem) return;
     const t = G.frame;
@@ -14560,14 +14583,17 @@ window.PG = window.PG || {};
     if (rem.shots.length >= 3) return; // (a frog fires every 10 frames: 3 in 24 is plenty)
     if (!ammoTake(pl, AMMO_SLACK)) { NET.amNo = (NET.amNo | 0) + 1; return; } // (AMMO: nothing left - its copy gives up)
     rem.shots.push(t);
-    let x = nNum(m.x, WALL_L - 4, WALL_R - 12, pl.x), y = nNum(m.y, PF_TOP - 16, PF_BOT, pl.y);
-    if (Math.abs(x - pl.x) > 32 || Math.abs(y - pl.y) > 32) { x = pl.x; y = pl.y; }
-    const sx = pl.x, sy = pl.y;
+    // (a trade: judged from where it was caught - its body now sits in the prison)
+    const ox = tr ? tr.x0 : pl.x, oy = tr ? tr.y0 : pl.y;
+    let x = nNum(m.x, WALL_L - 4, WALL_R - 12, ox), y = nNum(m.y, PF_TOP - 16, PF_BOT, oy);
+    if (Math.abs(x - ox) > 32 || Math.abs(y - oy) > 32) { x = ox; y = oy; }
+    const sx = pl.x, sy = pl.y, sf = pl.facing, sa = pl.shootAnim;
     pl.x = x; pl.y = y; pl.facing = m.f < 0 ? -1 : 1;
     // (a:1 - the guest's cat was airborne: the base bubble; the host's onGround for it may be a frame stale. Only a kit
     // with an air shot reads it)
     const b = fire(pl, m.a === 1);
     pl.x = sx; pl.y = sy;
+    if (tr) { pl.facing = sf; pl.shootAnim = sa; NET.trades = (NET.trades | 0) + 1; } // (the prison keeps its look)
     if (b) b.sid = nInt(m.n, 0, 1e9, 0);
   }
   function hostDie(pl, m) {
@@ -15233,7 +15259,8 @@ window.PG = window.PG || {};
     if (!NET.sess) return;
     if (G.gameMode === 'battle') p.invuln = 0; // (as on the host: blowing a bubble ends my blink)
     const n = ++NET.shotN, specs = newShot(p, air);
-    const m = { t: 'shot', n, x: r1(p.x), y: r1(p.y), f: p.facing < 0 ? -1 : 1, ep: p.ep };
+    // (k: the host tick my view shows - a blow I made before my screen showed my own catch still counts, tradeOf)
+    const m = { t: 'shot', n, x: r1(p.x), y: r1(p.y), f: p.facing < 0 ? -1 : 1, ep: p.ep, k: Math.max(0, Math.round(NET.rt || 0)) };
     if (air && kitOf(p).airShot) m.a = 1; // (my cat is airborne: the host blows the base bubble, as I do)
     NET.sess.send(NET.hostId, m);
     if (specs[0].ty === 'egg') eggCap(NET.pred, p.slot, specs[0].cap);
@@ -15830,7 +15857,7 @@ window.PG = window.PG || {};
       tro: { q: NET.role === 'host' && NET.screen !== 'game' ? troPractice() : NET.q, ms: NET.ms, bet: NET.opts.bet | 0, stake: stakeNow(), R: NET.role === 'host' && NET.R ? JSON.parse(JSON.stringify(NET.R)) : null },
       selfId: NET.selfId, mySlot: NET.role === 'host' ? 0 : NET.slots.get(NET.selfId), ctl: NET.ctl,
       stats, snap: { count: NET.snapN, bytes: NET.snapBytes, max: NET.snapMax, trims: NET.snapTrim, refused: NET.snapFail },
-      claims: { sent: NET.claimsSent | 0, refused: NET.claimNo | 0, why: Object.assign({}, NET.claimWhy || {}) },
+      claims: { sent: NET.claimsSent | 0, refused: NET.claimNo | 0, why: Object.assign({}, NET.claimWhy || {}), trades: NET.trades | 0 }, // (trades: a caught guest's earlier blow, tradeOf)
       drops: { sent: NET.drops | 0, seen: NET.dropSeen | 0 }, // (내려가기: my own as a guest; others' shown as dust here)
       renderTick: NET.rt, rtHi: NET.rtHi || 0, delay: NET.buf ? bufDelay(NET.buf, SNAP_DELAY) : null, newestTick: NET.buf ? NET.buf.last : -1, viewFrames: NET.viewFrames, starvedFrames: NET.starveFrames, evQ: NET.evQ.length, pred: NET.pred.length, games: NET.games.slice(),
       predSplit: NET.predSplit | 0, predGiveUp: NET.predGiveUp | 0, // (v4: predictions handed to the host row by the 6 px rule / given up)
