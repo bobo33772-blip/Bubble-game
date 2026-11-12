@@ -3387,6 +3387,57 @@ window.PG = window.PG || {};
     kyYYk
     ...k.
   `)];
+  // 파티 새 게임 2 (design/party-games-2.md 10.1): a small 김 유령 (8x8) - a w puff with two k eyes and a W wavy tail;
+  // game.js draws it bobbing over a 유령's head and beside its HUD icon
+  SPR.fx_ghost = [A(`
+    ..wwww..
+    .wwwwww.
+    .wkwwkw.
+    .wwwwww.
+    .wwwwww.
+    .wWwwWw.
+    .W.WW.W.
+    ........
+  `)];
+  // 수도꼭지 순서 기억하기's faucet (16x16, on the wall): a chrome pipe from the wall plate on the left (W with an a
+  // shade and a w glint, k outline) to a spout curving down on the right, the stem and the handle on top - its cap (rows
+  // 2-3, cols 6-9) left W for game.js's colour cap; frame 0 shut, frame 1 the valve turned (the handle leans) with a c
+  // drip under the spout
+  SPR.faucet = [A(`
+    ................
+    .....kkkkkk.....
+    .....kWWWWk.....
+    .....kWWWWk.....
+    ......kaak......
+    ......kWak......
+    .kkkkkkWWkkkkk..
+    kaWWWWWWWWWWWWk.
+    kaWwwWWWWWWWWWk.
+    kaaaaaaaaaWWWak.
+    .kkkkkkkkkWWak..
+    ..........kWak..
+    ..........kWak..
+    ..........kaak..
+    ...........kk...
+    ................
+  `), A(`
+    ................
+    ....kkkkkkk.....
+    ....kWWWWWk.....
+    .....kWWWWk.....
+    ......kaak......
+    ......kWak......
+    .kkkkkkWWkkkkk..
+    kaWWWWWWWWWWWWk.
+    kaWwwWWWWWWWWWk.
+    kaaaaaaaaaWWWak.
+    .kkkkkkkkkWWak..
+    ..........kWak..
+    ..........kWak..
+    ..........kaak..
+    ...........cc...
+    ...........cc...
+  `)];
   // the small capsule (8x8): the 상점's "뽑기" price line and its button
   SPR.ic_cap = [A(`
     ..kkkk..

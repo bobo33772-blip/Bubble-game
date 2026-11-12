@@ -46,6 +46,8 @@ Object.assign(SIZE, { coin: [8, 8], shop: [8, 8], lock: [8, 8] });
 Object.assign(SIZE, { gacha: [20, 28], gacha_h: [7, 7], cap: [6, 6], cap_t: [6, 3], cap_b: [6, 3], fx_duck: [5, 4] });
 // 파티 물 차오르기 (design/party-polish.md 8.1): the 오리 튜브 ring, 16x8 (2)
 SIZE.duck_ring = [16, 8];
+// 파티 새 게임 2 (design/party-games-2.md 10.1): 수도꼭지's faucet (16x16, 2) and a 유령's 김 wisp, 8x8 (1)
+SIZE.fx_ghost = [8, 8];
 const sizeOf = (n) => SIZE[n] || (/^boss_|^portrait_/.test(n) ? [32, 32] : /^tile_|^life_/.test(n) ? [8, 8] : [16, 16]);
 ENEMY.forEach((t) => { need[t + '_walk'] = 2; need[t + '_angry'] = 2; need[t + '_trapped'] = 2; need[t + '_dead'] = 1; });
 ITEMS.forEach((t) => { need['item_' + t] = 1; });
@@ -69,6 +71,7 @@ need.trophy = 2; for (let i = 0; i < 7; i++) need['lg_' + i] = 1;
 Object.assign(need, { coin: 2, shop: 1, lock: 1 });
 Object.assign(need, { gacha: 1, gacha_h: 4, cap: 4, cap_t: 4, cap_b: 1, fx_duck: 2 });
 need.duck_ring = 2;
+need.faucet = 2; need.fx_ghost = 1;
 // names the engine builds from an animal id: "<char> + '_x'" suffixes and "'x_' + <char>" / prefix-argument forms
 const builtSuffix = new Set([...game.matchAll(/\b(?:c|char|\w+\.char)\s*\+\s*'(_[a-z_]+)'/g)].map((m) => m[1]));
 const builtPrefix = new Set([...game.matchAll(/'([a-z]+_)'\s*\+\s*(?:c\b|\w+\.char\b|\w+\.sel\b)/g), ...game.matchAll(/(?:portraitCanvas|drawArt)\([^,()]+,\s*(?:[^,()]+,\s*)?'([a-z]+_)'/g)].map((m) => m[1]));
