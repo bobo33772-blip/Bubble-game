@@ -722,7 +722,7 @@
     // (party-games 3.6: the replan draws from what fits 3 and was not played - 왕관 or a new game, never 축구 or 물 again)
     const rp1 = PS().plan;
     ok('leavers: one leaves during the 축구 card (4 -> 3) - that 판 is drawn again (a game for 3 not played yet, no team line), its card starts over, the 3rd fits 3 too and differs',
-      G.mode === 'card' && rp1[0] === 'water' && !rp1.includes('ball') && rp1[1] !== 'water' && rp1[2] !== rp1[1] && rp1[2] !== 'water' && PS().mini.id === rp1[1] && PS().t === 80 && c.name === P.mini()[rp1[1]].name && !c.team && c.round === '2판 / 3판', [rp1, PS().mini.id, PS().t, c]);
+      G.mode === 'card' && rp1[0] === 'water' && !rp1.includes('ball') && rp1[1] !== 'water' && rp1[2] !== rp1[1] && rp1[2] !== 'water' && PS().mini.id === rp1[1] && PS().t === 80 && c.name === P.mini()[rp1[1]].name && (!c.team || rp1[1] === 'sneak') && c.round === '2판 / 3판', [rp1, PS().mini.id, PS().t, c]);   // (술래's card has its order line)
     party(withNicks(['duck', 'cat', 'frog', 'capy']), { plan: ['ball', 'crown'] });
     toPlaying(); kicked(); P.drop(2);
     ok('leavers: one leaves mid-축구 (4 -> 3) - it plays on (the team keeps its member), the 판 after it still fits', G.mode === 'playing' && PS().mini.id === 'ball' && same(PS().mini.team, { 0: 0, 1: 1, 2: 1, 3: 0 }) && G.players.length === 3 && same(PS().plan, ['ball', 'crown']), [G.mode, PS().mini.team, PS().plan]);
@@ -783,7 +783,7 @@
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyZ', key: 'z', bubbles: true })); window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyZ', key: 'z', bubbles: true }));
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowDown', key: 'ArrowDown', bubbles: true })); window.dispatchEvent(new KeyboardEvent('keyup', { code: 'ArrowDown', key: 'ArrowDown', bubbles: true }));
     step(1); const kq = P.pq(0);
-    ok('pq: real key presses (X, Z, ↓) reach my seat\'s next frame as shoot / jump / down entries', kq && same(kq.map((q) => q[0]).sort(), ['down', 'jump', 'shoot']), kq);
+    ok('pq: real key presses (X, Z, ↓) reach my seat\'s next frame as shoot / jump / down entries (↓ also a D: party-games-2 3.3)', kq && same(kq.map((q) => q[0]).sort(), ['D', 'down', 'jump', 'shoot']), kq);
     G.menuOpen = true; P.press(0, 'shoot'); step(1); const mq = P.pq(0); G.menuOpen = false; step(1);
     ok('pq: with the menu open my seat gets no presses, and none come back after it closes', mq === null && P.pq(0) === null, mq);
     const d0 = P.drawT(); step(1); const d1 = P.drawT(); step(3); const d2 = P.drawT();
@@ -1572,12 +1572,14 @@
     ok('rules at 10: the trophy lines sit where 트로피는 걸지 않아요 was (after the coin line, before the magazine); 14 lines for 4 players (the new games line before the coin line)', r4.length === 14 && r4[6] === '끝까지 하면 등수대로 비누 코인을 받아요' && r4[7].indexOf('모두 10개씩') === 0 && r4[11].indexOf('거품') >= 0, r4);
     const rf = R({ n: 4, bet: 10, free: [3] });
     ok('rules with a free seat: 판돈 30개 (3명이 10개씩): 건 사람끼리 최종 등수대로 나눠요 and what 안 걸고 참여 pays', has(rf, '판돈 30개 (3명이 10개씩): 건 사람끼리 최종 등수대로 나눠요') && has(rf, '안 걸고 참여: 등수 점수만 받아요 · 1등 +16 · 2등 +8 · 3등 +2 · 4등 -6'), rf);
-    const r0 = R({ n: 4, bet: 0 }), was = base(4).concat(['같은 기록이면 같은 등수 · 동점이면 1등을 더 많이 한 친구가 위예요', '물 차오르기 · 왕관 뺏기 · 거품 축구', '바나나우유 잡기 · 펑! 비눗방울 · 살금살금 술래', '끝까지 하면 등수대로 비누 코인을 받아요', '트로피는 걸지 않아요']);
+    // (party-games-2 3.5: the new games line - 새 게임: and the short names of every game after the first three)
+    const gnL = P.tx().newGames + K.MINI_IDS.slice(K.MINI_OLD).map((id) => P.mini()[id].short).join(' · ');
+    const r0 = R({ n: 4, bet: 0 }), was = base(4).concat(['같은 기록이면 같은 등수 · 동점이면 1등을 더 많이 한 친구가 위예요', '물 차오르기 · 왕관 뺏기 · 거품 축구', gnL, '끝까지 하면 등수대로 비누 코인을 받아요', '트로피는 걸지 않아요']);
     ok('rules at 안 걸기: exactly as before - 트로피는 걸지 않아요, no trophy line (a party at 안 걸기 is no 트로피 경기)', same(r0.slice(0, 8), was) && r0.length === 11 && !r0.some((l) => /최종 등수|파티마다|트로피 경기/.test(l)), r0);
     const q1 = R({ n: 3, bet: 10, q: 1 }), q2 = R({ n: 3, bet: 10, q: 2 });
     ok('rules in practice (q 1 / 2) at 10: 연습 경기라 트로피는 그대로예요 beside the coin line, no other trophy line', [q1, q2].every((r) => has(r, '연습 경기라 트로피는 그대로예요') && !r.some((l) => /최종 등수|파티마다/.test(l))) && /이 브라우저의 탭끼리는/.test(q1[6]) && /같은 기기에서/.test(q2[6]), [q1, q2]);
     const old = R({ n: 3, bet: 10, role: 'guest', pv: 0 });
-    const gnL = '바나나우유 잡기 · 펑! 비눗방울 · 살금살금 술래', new6 = R({ n: 3, bet: 0, role: 'guest', pv: K.PARTY_V - 1 }), new7 = R({ n: 3, bet: 0, role: 'guest', pv: K.PARTY_V });
+    const new6 = R({ n: 3, bet: 0, role: 'guest', pv: K.PARTY_V - 1 }), new7 = R({ n: 3, bet: 0, role: 'guest', pv: K.PARTY_V });
     ok('rules for a guest of an older host (no R.pv): 트로피는 걸지 않아요 (its party holds nothing for it)', has(old, '트로피는 걸지 않아요') && !old.some((l) => /최종 등수|파티마다/.test(l)), old);
     ok('rules: the new games line only from a host that plans them (a guest of a pa ' + (K.PARTY_V - 1) + ' host - or none - has none)', !has(old, gnL) && !has(new6, gnL) && has(new7, gnL) && has(r3, gnL), [old, new6, new7]);
     // the 3-2-1 of the first 판 and its card chip (each page's own stake / q; later 판 unchanged)
@@ -1607,6 +1609,29 @@
     party(['duck', 'cat', 'frog'], { plan: ['crown'] }); toPlaying(); P.skip(); toBeat('z', 1500); const z1 = G.frame; step(40); const skN = P.card().skip; until(() => G.mode === 'podium', 400);
     ok('staked party floor: 최종 순위 held (a skip at 40 f waits, no 눌러서 넘기기 line) until its first 시작! is the floor old, then the podium; no hold: 96 f', held && skN && zAt < h0 + 900 && Math.abs(pAt - h0 - 900) <= 1 && Math.abs(G.frame - z1 - 96) <= 1,
       [held, skN, zAt - h0, pAt - h0, G.frame - z1]);
+    D.toTitle();
+    // the hold line (party-games-2 3.8): under 최종 순위's rows while it holds - 트로피 정산까지 N초, N = the frames left
+    // (P.H) rounded up to whole seconds, counting down with the hold; g.pa.H (the guests' copy) only while it holds; no
+    // line in an earlier beat, none without a hold, gone at the podium
+    party(['duck', 'cat', 'frog'], { plan: ['crown'] }); toPlaying(); const k0 = G.frame; D.tro.partyHold(k0, 1200);
+    P.skip();
+    let lineEarly = false;   // (끝!, the winner stage, the tally, 보너스상 - the line never there)
+    until(() => { if (G.mode === 'result' && !beatIs('z') && (P.card().hold || PS().H || P.pa().H !== undefined)) lineEarly = true; return G.mode === 'result' && beatIs('z'); }, 1500);
+    const zk = G.frame, H0 = PS().H, L0 = P.card().hold, pa0 = P.pa().H, row0 = P.card().board.length;
+    const seq = [];
+    for (let f = 0; f < 1000 && G.mode === 'result'; f++) {
+      const c = P.card(), H = PS().H;
+      if (c.hold !== (H > 0 ? '트로피 정산까지 ' + Math.ceil(H / 60) + '초' : '') || P.pa().H !== (H > 0 ? H : undefined)) { seq.push(['bad', G.frame - k0, c.hold, H, P.pa().H]); break; }
+      if (!seq.length || seq[seq.length - 1][1] !== c.hold) seq.push([G.frame - k0, c.hold]);
+      step(1);
+    }
+    const pod = G.mode === 'podium', podHold = PS().H === 0 && !(P.card().shown && P.card().hold);   // (the party overlay gone with it)
+    ok('hold line: none in the beats before; under 최종 순위 (its rows still there) while it holds - 트로피 정산까지 N초 from P.H (frames left, rounded up), g.pa.H the same', !lineEarly && H0 === 1200 - (zk - k0) && L0 === '트로피 정산까지 ' + Math.ceil(H0 / 60) + '초' && pa0 === H0 && row0 === 3, [lineEarly, zk - k0, H0, L0, pa0, row0]);
+    ok('hold line: it counts down a second at a time to 1초, then the podium and no line (no H)', !seq.some((q) => q[0] === 'bad') && seq.length === Math.ceil(H0 / 60) && seq[seq.length - 1][1] === '트로피 정산까지 1초' && pod && podHold && Math.abs(G.frame - k0 - 1200) <= 1, [seq, pod, podHold, G.frame - k0]);
+    D.tro.partyHold(null);
+    party(['duck', 'cat', 'frog'], { plan: ['crown'] }); toPlaying(); P.skip(); let anyLine = false;
+    until(() => { if (P.card().hold || PS().H || P.pa().H !== undefined) anyLine = true; return G.mode === 'podium'; }, 1500);
+    ok('hold line: never without a hold (an offline party - as 안 걸기, practice, the fast party, a test\'s partyMin)', !anyLine && G.mode === 'podium', [anyLine, G.mode]);
     D.toTitle();
     // the new strings: every syllable warmed (PARTY_TEXT), 7.4 verbatim
     const tx = P.tx(), strs = [tx.troZero, tx.troAll, tx.troPot, tx.troPlay, tx.troLeave, tx.troPrac, tx.toParty, tx.toBattle, tx.countBet, tx.countPrac, tx.chipFree, tx.chipBetA, tx.chipFreeA, tx.short, tx.walkVoid, tx.walkPaid, tx.nextFreeMe, tx.nextFree, tx.waitBet, tx.recRow];
@@ -1719,8 +1744,14 @@
     G.party.esc = { 0: 1, 1: 0, 2: 0, 3: 0 };
     toBeat('A'); step(20); await sleep(80);
     measure(label + ' award', cardEl());
+    // (최종 순위 with the trophy hold line under its rows - a staked party's longest view: tro.partyHold stands in)
+    D.tro.partyHold(G.frame, 7300);   // (its widest count: 3 digits - 120초 at 최종 순위)
     toBeat('z', 2000); step(50); await sleep(80);
-    measure(label + ' 최종 순위', cardEl());
+    measure(label + ' 최종 순위 (with the hold line)', cardEl());
+    const hl = $('pg-party-hold'), hr = hl.getBoundingClientRect(), cr = cardEl().getBoundingClientRect();
+    ok(label + ' 최종 순위: the hold line (' + P.card().hold + ') on one line under the rows, inside the card', /^트로피 정산까지 \d+초$/.test(P.card().hold) && lines(hl) === 1 && hl.scrollWidth <= hl.clientWidth + 1 && hr.top >= $('pg-party-board').getBoundingClientRect().bottom - 0.5 && hr.left >= cr.left - 0.5 && hr.right <= cr.right + 0.5 && hr.bottom <= cr.bottom + 0.5,
+      [P.card().hold, lines(hl), hl.scrollWidth, hl.clientWidth, hr.top, hr.bottom, cr.bottom]);
+    D.tro.partyHold(null);
   }
   async function fitTests() {
     if (FIT_ONLY) { await fitAt('this viewport (' + innerWidth + 'x' + innerHeight + ')', true); return; }
@@ -1732,20 +1763,20 @@
   // ---------------------------------------------------------------- 12. the arenas (5.3)
   function arenaTests() {
     const ok1 = P.reload(PG.PARTY_ARENAS);
-    ok('arenas: PG.PARTY_ARENAS loads (물 차는 대욕장 with its rise, 거품 축구장 with its goals / sides / ball, 무대 목욕탕 a plain box, 살금살금 복도 with its stools and sneak spots - all closed)', ok1.length === 4 && ok1[3].key === 'sneak' && ok1[3].closed && same(ok1[3].sneak, { start: { col: 3, row: 24 }, it: { col: 27, row: 24 }, line: 200 }) && ok1[3].low === '##.......##..........##.......##' && ok1[2].key === 'stage' && ok1[2].closed && !ok1[2].rise && !ok1[2].goals && ok1[2].bar === '##............................##' && ok1[0].key === 'water' && ok1[0].closed && ok1[0].rise && ok1[0].gapX === 128
+    ok('arenas: PG.PARTY_ARENAS loads (물 차는 대욕장 with its rise, 거품 축구장 with its goals / sides / ball, 무대 목욕탕 a plain box, 살금살금 복도 with its stools and sneak spots, 비누 평상 with its 평상 and sumo field - all closed)', ok1.length === 5 && ok1[4].key === 'sumo' && ok1[4].closed && ok1[4].deck === '##.....##################.....##' && ok1[4].sumo.wl === 196 && ok1[3].key === 'sneak' && ok1[3].closed && same(ok1[3].sneak, { start: { col: 3, row: 24 }, it: { col: 27, row: 24 }, line: 200 }) && ok1[3].low === '##.......##..........##.......##' && ok1[2].key === 'stage' && ok1[2].closed && !ok1[2].rise && !ok1[2].goals && ok1[2].bar === '##............................##' && ok1[0].key === 'water' && ok1[0].closed && ok1[0].rise && ok1[0].gapX === 128
       && ok1[1].key === 'ball' && ok1[1].closed && ok1[1].goals.length === 2 && ok1[1].sides.length === 2 && ok1[1].ball.x === 128 && /^#{32}$/.test(ok1[1].floor) && ok1[1].bar === '######....................######', ok1);
     const open = P.arenas()[0].map.slice(); open[25] = '##############...###############';
     const r = P.reload([{ key: 'water', name: 'x', theme: 1, map: open, players: [{ col: 4, row: 24 }], rise: { y0: 222, warn: 2, steps: [[5, 9, 206]], surges: [['junk']], flood: 'x' } }]);
     ok('arenas: normLevel keeps a closed map closed (a gap in its floor is closed again, no drain opened); a broken surge / flood is left out', /^#{32}$/.test(r[0].floor) && /^#{32}$/.test(r[0].ceil) && r[0].gapX === 128 && r[0].rise.surges.length === 0 && r[0].rise.flood === null, r[0]);
     const b = P.reload([null, { key: 'water', map: 'junk' }, { key: 'water', name: 'y', map: open }, { key: 'water', name: 'y', map: open }, { key: 'water', name: 'y', map: open }]);
-    ok('arenas: a broken entry (or one without its rise schedule / its goals, or another key) gets the built-in closed arena of its index\'s game (with the v2 schedule; the stage a plain box)', b.length === 5 && b[2].key === 'stage' && b[2].name === '무대 목욕탕' && b[2].floor === '#'.repeat(32) && b[2].bar === '##............................##' && b[3].key === 'sneak' && b[3].name === '살금살금 복도' && b[3].sneak.line === 200 && [0, 4].every((k) => b[k].key === 'water' && b[k].closed && b[k].rise && b[k].rise.steps.length === 5 && b[k].rise.flood && b[k].rise.surges.length === 2 && /^#{32}$/.test(b[k].floor))
+    ok('arenas: a broken entry (or one without its rise schedule / its goals, or another key) gets the built-in closed arena of its index\'s game (with the v2 schedule; the stage a plain box)', b.length === 5 && b[2].key === 'stage' && b[2].name === '무대 목욕탕' && b[2].floor === '#'.repeat(32) && b[2].bar === '##............................##' && b[3].key === 'sneak' && b[3].name === '살금살금 복도' && b[3].sneak.line === 200 && b[4].key === 'sumo' && b[4].name === '비누 평상' && b[4].sumo.revive === 128 && [0].every((k) => b[k].key === 'water' && b[k].closed && b[k].rise && b[k].rise.steps.length === 5 && b[k].rise.flood && b[k].rise.surges.length === 2 && /^#{32}$/.test(b[k].floor))
       && b[1].key === 'ball' && b[1].closed && b[1].goals.length === 2 && b[1].bar === '######....................######', b.map((A) => [A.name, A.key, !!A.rise, !!A.goals]));
     const ns = P.reload([PG.PARTY_ARENAS[0], PG.PARTY_ARENAS[1]]);
-    ok('arenas: a missing 무대 목욕탕 gets the built-in plain box (and a missing 살금살금 복도 its built-in corridor)', ns.length === 4 && ns[2].key === 'stage' && ns[2].closed && ns[2].floor === '#'.repeat(32) && ns[3].key === 'sneak' && ns[3].low === '##.......##..........##.......##' && ns[3].sneak.start.col === 3, [ns[2], ns[3]]);
+    ok('arenas: a missing 무대 목욕탕 gets the built-in plain box (and a missing 살금살금 복도 / 비누 평상 its built-in corridor / 평상)', ns.length === 5 && ns[4].key === 'sumo' && ns[4].deck === '##.....##################.....##' && ns[2].key === 'stage' && ns[2].closed && ns[2].floor === '#'.repeat(32) && ns[3].key === 'sneak' && ns[3].low === '##.......##..........##.......##' && ns[3].sneak.start.col === 3, [ns[2], ns[3]]);
     const nk = P.reload([PG.PARTY_ARENAS[0], PG.PARTY_ARENAS[1], PG.PARTY_ARENAS[2], Object.assign({}, PG.PARTY_ARENAS[3], { sneak: { start: { col: 20, row: 24 }, it: { col: 5, row: 24 }, line: 'x' } })]);
     ok('arenas: a 살금살금 복도 with unusable sneak spots (the start right of the 술래, no line) gets the built-in one', nk[3].key === 'sneak' && same(nk[3].sneak, { start: { col: 3, row: 24 }, it: { col: 27, row: 24 }, line: 200 }), nk[3].sneak);
     const nb = P.reload([PG.PARTY_ARENAS[0], { key: 'ball', name: 'z', theme: 0, map: PG.PARTY_ARENAS[1].map, goals: 'junk', sides: PG.PARTY_ARENAS[1].sides, ball: { x: 128, y: 64 } }]);
-    ok('arenas: a 거품 축구장 without usable goals gets the built-in field (its crossbars, goals, sides, ball)', nb.length === 4 && nb[1].key === 'ball' && nb[1].name === '거품 축구장' && nb[1].goals[0].line === 40 && nb[1].sides[1][0].col === 20, nb[1]);
+    ok('arenas: a 거품 축구장 without usable goals gets the built-in field (its crossbars, goals, sides, ball)', nb.length === 5 && nb[1].key === 'ball' && nb[1].name === '거품 축구장' && nb[1].goals[0].line === 40 && nb[1].sides[1][0].col === 20, nb[1]);
   }
 
   // ---------------------------------------------------------------- screenshot scenes (#shot=card|water|crown|ball|ballcard|win|tally|award|podium[&s=1|2])

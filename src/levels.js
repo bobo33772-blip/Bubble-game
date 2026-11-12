@@ -83,8 +83,8 @@
  * PG.PARTY_ARENAS (파티, design/party.md 5): the minigames' own CLOSED arenas { key, name, theme, closed: true, map,
  * players, gather, rise? | goals?, sides?, ball? | sneak? }, in this order: 물 차는 대욕장 (key 'water', 물 차오르기),
  * 거품 축구장 (key 'ball', 거품 축구), 무대 목욕탕 (key 'stage', the world: false games), 살금살금 복도 (key 'sneak',
- * 살금살금 술래). 왕관 뺏기 plays on the dry battle arenas above (not 냉온탕 대결: the capy's hot-tub shield would
- * keep the crown).
+ * 살금살금 술래), 비누 평상 (key 'sumo', 미끌미끌 비누 씨름). 왕관 뺏기 plays on the dry battle arenas above (not 냉온탕
+ * 대결: the capy's hot-tub shield would keep the crown).
  *   closed      true: row 0 and row 25 are all '#' - no wrap gap, nothing falls through the floor or wraps (the engine's
  *               normLevel opens a drain only where closed is not set).
  *   map         same cell format; dry (the rising water is a full-width layer of the minigame, not tile water).
@@ -105,6 +105,9 @@
  *   sneak       (살금살금 술래, key 'sneak', design/party-games.md 6.6) { start (the runners' cell - all on one x), it (the
  *               술래's cell), line (px: a runner's body box reaching it has arrived) } - the map's asymmetry is this data;
  *               the map itself is mirror-exact (one floor, two 목욕 의자 stools to hop).
+ *   sumo        (미끌미끌 비누 씨름, key 'sumo', design/party-games-2.md 7.7) { wl (the 탕's surface y, px: between the 평상's
+ *               top and the floor), spots { 2: [x x2], 3: [x x3], 4: [x x4] } (feet centres on the 평상 by players), revive
+ *               (역전's feet centre x, over the 평상) }.
  * Every party arena is left-right mirror symmetric with no gap exception; tools/validate-levels.js checks the party
  * rules too (closed, mirror, spawns reachable, each rise step drowning exactly one tier; the goal mouths open under a
  * solid bar, the sides standable and mirrored, the ball in open air).
@@ -1507,6 +1510,47 @@ window.PG = window.PG || {};
       players: [{ col: 3, row: 24 }, { col: 27, row: 24 }, { col: 6, row: 24 }, { col: 25, row: 24 }],
       gather: { col: 15, row: 3 },
       sneak: { start: { col: 3, row: 24 }, it: { col: 27, row: 24 }, line: 200 },
+    },
+    // ── P5 ── 비누 평상 (미끌미끌 비누 씨름, design/party-games-2.md 7.7): a raised wooden 평상 144 px wide (rows 21-24,
+    //    cols 7-24: x 56-200, top y 184) over two 탕 (cols 2-6 / 25-29, open from row 21 to the floor) - nothing else. The
+    //    탕 water is a layer of the minigame at the constant wl (196: under the 평상's top, over the floor), spots are the
+    //    feet centres on the 평상 by the number of players, revive the 역전 spot (its centre). Mirror-exact
+    {
+      key: 'sumo',
+      name: '비누 평상',
+      theme: 3,
+      closed: true,
+      map: [
+        '################################',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##............................##',
+        '##.....##################.....##',
+        '##.....##################.....##',
+        '##.....##################.....##',
+        '##.....##################.....##',
+        '################################',
+      ],
+      players: [{ col: 9, row: 20 }, { col: 22, row: 20 }, { col: 13, row: 20 }, { col: 18, row: 20 }],
+      gather: { col: 15, row: 3 },
+      sumo: { wl: 196, spots: { 2: [96, 160], 3: [80, 128, 176], 4: [76, 108, 148, 180] }, revive: 128 },   // feet centres (px)
     },
   ];
 })(window.PG);
