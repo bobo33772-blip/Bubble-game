@@ -29,6 +29,15 @@
 // the standalone page - a "미리보기 #n" badge, its own save slot (every localStorage key + "@pr<n>": it never reads,
 // migrates or overwrites the real records), no manifest link and no service worker (nothing installs), no Firebase
 // config, noindex; only index.html + the icons, no itch zip. dist/ and the C:/Temp outputs are the same as without it
+// 앱인토스 (design/toss.md 2): node build.js --toss (or PG_TOSS=1; toss/'s `npm run pg`) writes the Toss variant of the
+// deploy page into the Vite project toss/ - toss/index.html (no service worker, manifest, CDNs, Firebase, Google
+// sign-in or TURN list; the relay line with the Toss space 't', TOSS_RELAY below; one module entry, /src/main.js, which
+// bundles the SDK, PeerJS and the fonts and boots src/ait.js) and the five engine files as toss/public/pg/*.js
+// (game.js without its <ait-cut> regions) - and NOTHING outside toss/ and the
+// C:/Temp outputs: no dist/, no deploy/ (nor its C:/Temp copy), no itch zip, no .firebaserc (it never reads
+// firebase.config.json, so a deploy written by it would lack the cloud). Every build, with or without the flag, also
+// writes for the tests: C:/Temp/bogeul/toss/ (the same index.html + pg/*.js), toss-fx/ (that page booting src/ait.js
+// over the fake SDK: tests/toss-net.js's frames), ait.js, toss-fake.js, test-toss.html (+ toss-test-driver.js)
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -37,6 +46,10 @@ const root = __dirname;
 const TMP = process.env.PG_BUILD_TEMP || 'C:/Temp/bogeul';
 const PREVIEW = process.env.PG_PREVIEW || '';
 if (PREVIEW && !/^[1-9]\d{0,6}$/.test(PREVIEW)) throw new Error('PG_PREVIEW must be a PR number, not ' + JSON.stringify(PREVIEW));
+// (a flag as well as the variable: PowerShell has no `VAR=x cmd`)
+const TOSS = process.argv.includes('--toss') || process.env.PG_TOSS === '1';
+if (TOSS && PREVIEW) throw new Error('--toss and PG_PREVIEW do not mix');
+const tossRules = require('./tools/toss-rules');
 const src = path.join(root, 'src');
 const ORDER = ['sprites.js', 'levels.js', 'audio.js', 'net.js', 'game.js'];
 const PEERJS = 'https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js';
@@ -79,8 +92,15 @@ if (/<link\b[^>]*\brel=["']?manifest|serviceWorker\s*\.\s*register|<meta\s+name=
 // ... and has nothing of the cloud trophies but their hidden markup and inert code: no SDK, no config, no sign-in path -
 // not even the word (game.js only reads the deploy page's window.PG_CLOUD and names no SDK, host or URL itself)
 if (/firebase|PG_CLOUD\s*=|\/__\/auth/i.test(out)) throw new Error('the artifact page must not contain anything of Firebase (game.js / page.html must not name it; the SDK lives in build.js)');
-fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
-fs.writeFileSync(path.join(root, 'dist', 'ppogeul-bath.html'), out);
+// ... and nothing of the 앱인토스 build: page.html's .pg-ait CSS and game.js's window.PG_AIT reads are in every build,
+// so the check is structural - no pg-ait class on <html>, no PG_AIT assignment, no SDK name, no ait.js script
+const NO_TOSS = [/<html\b[^>]*\bpg-ait\b/i, /PG_AIT\s*=(?!=)/, /@apps-in-toss/, /<script\b[^>]*\bsrc\s*=\s*["']?[^"'\s>]*ait\.js\b/i];
+const tossIn = (html) => NO_TOSS.find((re) => re.test(html));
+if (tossIn(out)) throw new Error('the artifact page must have nothing of the 앱인토스 build: ' + tossIn(out));
+if (!TOSS) {
+  fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'dist', 'ppogeul-bath.html'), out);
+}
 
 // ---- standalone deploy page: page.html opens with head-type elements (title, links, metas, styles); they move
 // into <head>, the rest is the body.
@@ -134,7 +154,7 @@ const fbAlt = (f) => `https://cdn.jsdelivr.net/npm/firebase@${FIREBASE_V}/${f}`;
 // the config (tools/fb-config.js: lenient - the console's snippet pasted as it is works too - and checked: a bad file
 // stops the build with a message in Korean and English). PG_FIREBASE_CONFIG=<file> reads another file (tools only)
 const { fbCheck, readFirebaseConfig } = require('./tools/fb-config');
-const fbConf = PREVIEW ? null : readFirebaseConfig(process.env.PG_FIREBASE_CONFIG || path.join(root, 'firebase.config.json'));
+const fbConf = PREVIEW || TOSS ? null : readFirebaseConfig(process.env.PG_FIREBASE_CONFIG || path.join(root, 'firebase.config.json'));
 // relay servers for online play (optional bogeul/turn.config.json, never committed: CI writes it from the repo secret
 // TURN_CONFIG). Two devices that cannot reach each other directly (phone data, different home networks) connect through a
 // TURN server; PeerJS's own free relays did not answer (2026-10-21). The file is the provider's ICE server list as given
@@ -217,6 +237,16 @@ const RELAY = readRelayUrl();
 const relayTag = (u) => (u ? `<script id="pg-relay">window.PG_RELAY={url:${JSON.stringify(u).replace(/</g, '\\u003c')}};</script>\n` : '');
 // (the tag as previewOf / pack-itch / the checks find it)
 const RELAY_TAG_RE = /<script id="pg-relay">window\.PG_RELAY=\{url:"[^"<]*"(?:,space:"[wpt]")?\};<\/script>\n/g;
+// 앱인토스 (design/toss.md 2.5): the Toss page's rooms go through the same relay Worker, in its space 't' (the Worker lets
+// only the two Toss origins in there: cloudflare/wrangler.toml ORIGINS; net.js asks for 't' itself under PG_AIT too),
+// so a Toss room code never opens a web room. Its URL as the deploy's (PG_RELAY_URL / relay.config.json), else the
+// owner's Worker below - not a secret, and the Toss build runs on the owner's PC, not in CI. PG_RELAY_URL=none: none
+// (run-all's build; the Toss page then only has PeerJS - a warning). No TURN list in Toss: turn.config.json stays the
+// deploy's; the relay needs no WebRTC, and PeerJS behind it uses its own default ICE servers
+const TOSS_RELAY = 'https://ppodeuk-relay.ppodeuk.workers.dev';
+if (!RELAY_RE.test(TOSS_RELAY)) throw new Error('TOSS_RELAY is not a relay URL');
+const tossRelay = process.env.PG_RELAY_URL === 'none' ? null : RELAY || TOSS_RELAY;
+const tossRelayTag = (u) => (u ? relayTag(u).replace('};</script>', ',space:"t"};</script>') : '');
 // hosts that serve many people's pages from one origin (itch.io's games, its old CDN, Newgrounds' uploads): a page there
 // - or in any frame - never signs in, since every page of that origin could read the stored session (game.js clHere;
 // the itch zip is also marked `away` by tools/pack-itch.js). Never add these to Firebase's authorized domains
@@ -306,6 +336,7 @@ const cloudTags = (deploy.match(/window\.PG_CLOUD=/g) || []).length;
 if (fbConf ? cloudTags !== 1 || !FIREBASE_SDK.every(([f, sri]) => deploy.includes(sri) && deploy.includes(fbUrl(f)) && deploy.includes(fbAlt(f)))
   : cloudTags !== 0 || /firebase/i.test(deploy)) throw new Error('the deploy page must carry the cloud config exactly when firebase.config.json exists');
 if (fbConf ? !FIREBASE_SDK.every(([f]) => sw.includes(JSON.stringify(fbUrl(f))) && sw.includes(JSON.stringify(fbAlt(f)))) : /firebase-[a-z]+-compat\.js/.test(sw)) throw new Error('sw.js must list the SDK files exactly when firebase.config.json exists');
+if (tossIn(deploy)) throw new Error('the deploy page must have nothing of the 앱인토스 build: ' + tossIn(deploy));
 // the relay: one window.PG_RELAY line exactly when the build has a relay URL (none: not a trace); never in the artifact
 // (net.js / game.js are inlined there with their comments: they only READ window.PG_RELAY and name no Worker host)
 if ((deploy.match(/<script id="pg-relay">/g) || []).length !== (RELAY ? 1 : 0) || (deploy.match(RELAY_TAG_RE) || []).length !== (RELAY ? 1 : 0) ||
@@ -340,10 +371,76 @@ function previewOf(html, n) {
 const outFiles = PREVIEW ? [['index.html', previewOf(deploy)], ...icons.map((i) => [i.src, i.buf])] : deployFiles;
 if (PREVIEW) fs.rmSync(path.join(root, 'deploy'), { recursive: true, force: true });   // (no manifest, sw.js or zip left from before)
 // written into deploy/ and copied for the http tests (tools/pwa-check.js serves C:/Temp/bogeul/deploy/ - workers
-// need http, not file://; a preview is not copied)
-for (const dir of PREVIEW ? [path.join(root, 'deploy')] : [path.join(root, 'deploy'), path.join(TMP, 'deploy')]) {
+// need http, not file://; a preview is not copied). (--toss: neither - its deploy page in memory has no cloud config)
+for (const dir of TOSS ? [] : PREVIEW ? [path.join(root, 'deploy')] : [path.join(root, 'deploy'), path.join(TMP, 'deploy')]) {
   for (const [f, data] of outFiles) { const p = path.join(dir, ...f.split('/')); fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, data); }
 }
+
+// ---- 앱인토스 (design/toss.md 2.1): the deploy page's parts again, without everything a Toss mini-app may not have
+// (the head's preconnects and Google Fonts link - the fonts come from npm -, the CSS comments: two of them describe the
+// Google button). The page skeleton's top / bottom insets read the Toss Safe Area (page.html's --sa-* variables)
+const RESET_SA = RESET.replace('env(safe-area-inset-top,0px)', 'var(--sa-t)').replace('env(safe-area-inset-bottom,0px)', 'var(--sa-b)');
+if (RESET_SA === RESET || /env\(/.test(RESET_SA)) throw new Error('toss build: RESET lost its env() insets - update RESET_SA');
+const tswap = (h, from, to, what) => { if (!h.includes(from)) throw new Error('toss build: ' + what + ' lacks ' + from.slice(0, 60)); return h.replace(from, () => to); };
+let tossHead = headRest;
+for (const l of ['<link rel="preconnect" href="https://fonts.googleapis.com">', '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>']) tossHead = tswap(tossHead, l, '', 'the head');
+tossHead = tossHead.replace(/<link id="pg-fontcss"[^>]*>/, '');
+if (!/<link id="pg-fontcss"/.test(headRest) || /pg-fontcss/.test(tossHead)) throw new Error('toss build: the head\'s #pg-fontcss link was not removed');
+tossHead = tossHead.replace(/<style\b([^>]*)>([\s\S]*?)<\/style>/gi, (m, a, css) => {
+  if (/(["'])[^"'\n]*\/\*[^"'\n]*\1/.test(css)) throw new Error('toss build: a "/*" inside a CSS string - the comment strip would break it');
+  return `<style${a}>${css.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\n[ \t]*(?=\n)/g, '')}</style>`;
+}).replace(/^\s+/, '').replace(/\n{2,}/g, '\n');
+// the body without the inline engine (the module entry loads the pg/ files) and with the hidden cloud button's label
+// empty (game.js writes it only with the cloud on): the Toss DOM names no Google sign-in, not even hidden
+const tossBody = tswap(splitHead(page.replace('<!--SCRIPTS-->', '')).body.trim(), '<button id="pg-cloud-btn" class="pg-btn pg-ghost pg-cloud-btn" type="button" hidden>구글로 로그인</button>',
+  '<button id="pg-cloud-btn" class="pg-btn pg-ghost pg-cloud-btn" type="button" hidden></button>', 'the body');
+const TOSS_ENTRY = '<script type="module" src="/src/main.js"></script>';
+// (relay: the Toss relay URL, or null - the test pages, whose frames name a loopback relay with ?relay= when they need one)
+const tossOf = (build, entry, relay = tossRelay) => `<!doctype html>
+<html lang="ko" class="pg-sa pg-ait">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>${titleText}</title>
+<meta name="description" content="${attr(DESCRIPTION)}">
+<meta name="pg-build" content="${build}">
+${tossRelayTag(relay)}<style>${RESET_SA}</style>
+${tossHead}
+${entry === undefined ? TOSS_ENTRY : entry}
+</head>
+<body>
+${tossBody}
+</body>
+</html>
+`;
+// the engine files the Toss page loads (public/pg/: Vite copies them as they are): the text the deploy inlines, game.js
+// without its cut regions (design/toss.md 2.2)
+const tossPg = ORDER.map((f) => {
+  const code = fs.readFileSync(path.join(src, f), 'utf8');
+  if (f !== 'game.js') { if (/<\/?ait-cut>/.test(code)) throw new Error(`toss build: ${f} has ait-cut markers (only game.js may)`); return [f, code]; }
+  const c = tossRules.aitCut(code, 'src/game.js');
+  if (c.n !== tossRules.CUTS) throw new Error(`toss build: src/game.js has ${c.n} ait-cut regions, design/toss.md 2.2 lists ${tossRules.CUTS} - update both`);
+  return [f, c.code];
+});
+const tossHash = crypto.createHash('sha256').update(tossOf('-')).update('\0');
+for (const [f, code] of tossPg) tossHash.update(f + '\0').update(code).update('\0');
+const TOSS_BUILD = tossHash.digest('hex').slice(0, 12);
+const tossPage = tossOf(TOSS_BUILD);
+{
+  const srcs = tossPage.match(/<script\b[^>]*\bsrc\s*=/gi) || [], mods = tossPage.match(/<script\b[^>]*type="module"[^>]*>/gi) || [];
+  if (srcs.length !== 1 || mods.length !== 1 || !tossPage.includes(TOSS_ENTRY)) throw new Error('toss build: the page must load exactly one module script, /src/main.js');
+  const bad = [/serviceWorker/, /rel=["']?manifest/i, /PG_CLOUD/, /firebase/i, /fonts\.googleapis/, /fonts\.gstatic/, /cdnjs/, /peerjs\.min\.js/, /location\.replace/, /구글/, /Google/].find((re) => re.test(tossPage));
+  if (bad) throw new Error('toss build: the page must not contain ' + bad);
+  for (const [f, code] of tossPg) { const h = tossRules.scan(code, false); if (h.length) throw new Error(`toss build: pg/${f} contains ${h[0].name}: ...${h[0].around}...`); }
+  // the relay line: exactly one, space 't', when the Toss build has a relay; never a TURN list (PG_PEER_OPTIONS)
+  const rl = tossPage.match(RELAY_TAG_RE) || [];
+  if (rl.length !== (tossRelay ? 1 : 0) || (tossRelay && rl[0] !== tossRelayTag(tossRelay)) || /PG_PEER_OPTIONS/.test(tossPage)) throw new Error('toss build: the page must carry window.PG_RELAY (space t) exactly when it has a relay, and never PG_PEER_OPTIONS');
+  if (!tossRelay && TOSS) console.warn('WARNING toss: 중계 서버 없음 (PG_RELAY_URL=none) - 다른 네트워크의 친구와는 연결이 안 될 수 있어요 / no relay in the Toss build');
+}
+// written: toss/ (--toss only) and the C:/Temp copy (always, byte-equal) the tests read
+const putAll = (dir, files) => { for (const [f, data] of files) { const p = path.join(dir, ...f.split('/')); fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, data); } };
+if (TOSS) { putAll(path.join(root, 'toss'), [['index.html', tossPage]]); putAll(path.join(root, 'toss', 'public', 'pg'), tossPg); }
+putAll(path.join(TMP, 'toss'), [['index.html', tossPage], ...tossPg.map(([f, c]) => ['pg/' + f, c])]);
 
 // Mimic the artifact skeleton so the local preview behaves like the published page.
 const wrap = (body, head) => `<!doctype html><html><head><meta charset="utf-8">
@@ -377,7 +474,7 @@ for (const [dir, html] of [['deploy-cloud', deployOf('cloud-test', FAKE_FB, FAKE
   }
 }
 // Firebase Hosting (bogeul/firebase.json): the project id goes into .firebaserc while it still has the placeholder
-if (fbConf && !process.env.PG_FIREBASE_CONFIG) {
+if (fbConf && !TOSS && !process.env.PG_FIREBASE_CONFIG) {
   const rc = path.join(root, '.firebaserc');
   try { const t = fs.readFileSync(rc, 'utf8'); if (t.includes('YOUR-PROJECT-ID')) fs.writeFileSync(rc, t.replace('YOUR-PROJECT-ID', fbConf.cfg.projectId)); } catch (e) { /* no firebase folder: nothing to fill in */ }
 }
@@ -390,14 +487,38 @@ const HOOK = '<script>(function(){var c=window.console;if(!c||c.__pgHook)return;
   '["error","warn"].forEach(function(k){var f=c[k];c[k]=function(){try{c.log("CONSOLE-"+k.toUpperCase()+" "+Array.prototype.map.call(arguments,function(a){return a&&a.stack?a.stack:String(a);}).join(" "));}catch(e){}return f.apply(c,arguments);};});})();</script>';
 const testsDir = path.join(src, 'tests');
 if (fs.existsSync(testsDir)) {
-  for (const f of fs.readdirSync(testsDir).filter((n) => n.endsWith('.js'))) {
+  // (toss.js / toss-fake.js: test-toss.html below is their page - the Toss shape over a fake SDK, not the artifact)
+  for (const f of fs.readdirSync(testsDir).filter((n) => n.endsWith('.js') && n !== 'toss.js' && n !== 'toss-fake.js')) {
     const drv = fs.readFileSync(path.join(testsDir, f), 'utf8');
     if (/<\/script/i.test(drv)) console.warn(`WARNING tests/${f} contains a literal "</script" - its test page will break`);
     fs.writeFileSync(path.join(T, `test-${f.replace(/\.js$/, '')}.html`), wrap(`${out}\n<script>\n${drv}\n</script>`, HOOK));
   }
 }
+// ---- the 앱인토스 test pages (design/toss.md 15): src/ait.js and the fake SDK beside the C:/Temp copy of the Toss page;
+//   test-toss.html  the Toss page shape with the console hook, the fake SDK and src/ait.js inline in its head and a
+//                   boot line that loads toss/pg/*.js and then src/tests/toss.js (toss-test-driver.js) - file://, virtual time
+//   toss-fx/        the Toss page with its module entry replaced by ../ait.js, ../toss-fake.js and the boot line (the
+//                   frames of src/tests/toss-net.js, over http: ?net=bc&k=<the frame's game key>)
+const SC = '<' + 'script', SE = '</' + 'script>';
+const aitSrc = fs.readFileSync(path.join(src, 'ait.js'), 'utf8');
+if (/<\/script/i.test(aitSrc)) throw new Error('src/ait.js contains a literal "</script"');
+if (/@apps-in-toss|\bimport\s*[\s{*'"]|\bexport\s/.test(aitSrc.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, ''))) throw new Error('src/ait.js must stay a plain script (no import / export, no SDK name)');
+const fakeFile = path.join(src, 'tests', 'toss-fake.js'), tossDrv = path.join(src, 'tests', 'toss.js');
+const pgList = (pre) => JSON.stringify(ORDER.map((f) => pre + f));
+fs.writeFileSync(path.join(T, 'ait.js'), aitSrc);
+if (fs.existsSync(fakeFile)) {
+  const fake = fs.readFileSync(fakeFile, 'utf8');
+  fs.writeFileSync(path.join(T, 'toss-fake.js'), fake);
+  putAll(path.join(T, 'toss-fx'), [['index.html', tossOf('toss-fx', `${SC} src="../ait.js">${SE}\n${SC} src="../toss-fake.js">${SE}\n${SC}>PGFake.start(${pgList('../toss/pg/')});${SE}`, null)]]);
+  if (fs.existsSync(tossDrv)) {
+    fs.writeFileSync(path.join(T, 'toss-test-driver.js'), fs.readFileSync(tossDrv, 'utf8'));
+    fs.writeFileSync(path.join(T, 'test-toss.html'), tossOf('toss-test', `${HOOK}\n${SC}>\n${fake}\n${SE}\n${SC}>\n${aitSrc}\n${SE}\n${SC}>PGFake.start(${pgList('toss/pg/').replace(/\]$/, ',"toss-test-driver.js"]')});${SE}`, null));
+  }
+}
 const kb = (f) => (fs.statSync(f).size / 1024).toFixed(1);
-console.log(`built dist/ppogeul-bath.html (${kb(path.join(root, 'dist', 'ppogeul-bath.html'))} KB), deploy/index.html (${kb(path.join(root, 'deploy', 'index.html'))} KB, build ${BUILD}, ${fbConf ? 'Firebase: ' + fbConf.cfg.projectId : 'no Firebase'}, ${RELAY ? 'relay: ' + RELAY : 'no relay'}; + manifest, sw.js, ${icons.length} icons) and ${T}/preview.html`);
+const tossLine = `${TOSS ? 'toss/' : T + '/toss/'}: index.html + pg/*.js (build ${TOSS_BUILD}, relay: ${tossRelay ? tossRelay + ' space t' : 'none'})`;
+if (TOSS) { console.log(`built ${tossLine} - nothing else (no dist/, deploy/, itch zip or .firebaserc)`); process.exit(0); }
+console.log(`built dist/ppogeul-bath.html (${kb(path.join(root, 'dist', 'ppogeul-bath.html'))} KB), deploy/index.html (${kb(path.join(root, 'deploy', 'index.html'))} KB, build ${BUILD}, ${fbConf ? 'Firebase: ' + fbConf.cfg.projectId : 'no Firebase'}, ${RELAY ? 'relay: ' + RELAY : 'no relay'}; + manifest, sw.js, ${icons.length} icons) and ${T}/preview.html; ${tossLine}`);
 // the itch.io upload, always in step with deploy/ (tools/pack-itch.js: index.html at the zip root, the rest beside it)
 if (PREVIEW) { console.log(`PREVIEW #${PREVIEW}: deploy/ holds the preview page (save keys +${PV_KEY(PREVIEW)}, no manifest / service worker / Firebase, no itch zip)`); process.exit(0); }
 const itch = require('./tools/pack-itch').pack(path.join(root, 'deploy', 'ppodeuk-bath-itch.zip'));

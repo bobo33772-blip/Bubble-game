@@ -93,8 +93,10 @@
    A Cloudflare Worker with one Durable Object per room code forwards JSON text frames between a room's host page and
    its guests (cloudflare/: no game logic, nothing stored). build.js gives the deploy page window.PG_RELAY ({url} -
    the relay Worker's address; a PR preview adds space 'p', Toss 't'; the artifact never has it), so transports().ws
-   is true there; a test page may name a LOOPBACK relay with ?relay=ws://localhost:<port>/ws (tools/ws-relay.js), any
-   other ?relay= is ignored. One socket per page: wss://<relay>/r/<space>/<code>?v=1&role=h|g. The relay's first frame
+   is true there. The 앱인토스 page (window.PG_AIT set before this file) always uses space 't', whatever its tag says:
+   its rooms are friendly matches between game keys and never meet the web's (design/toss.md 2.5). A test page may
+   name a LOOPBACK relay with ?relay=ws://localhost:<port>/ws (tools/ws-relay.js), any other ?relay= is ignored. One
+   socket per page: wss://<relay>/r/<space>/<code>?v=1&role=h|g. The relay's first frame
    {k:'hi', v:1, id, h, tok?} issues my seat id (id) and names the host (h); then {k:'s', q, d} (a state), {k:'r', t, d}
    (a reliable envelope to t = an id or '*'), {k:'m', l:[ids]} (host only: the admitted guests), {k:'bye'}; the relay
    stamps what it forwards with its sender f, says {k:'gone', f, why:'left'|'lost'} and lets a stranger (a guest not
@@ -110,7 +112,8 @@
    ---- 'peer' : PeerJS WebRTC, the STANDALONE deploy build only ---------------------------------------------
    build.js adds PeerJS 1.5.4 (cdnjs, exact version) to deploy/index.html only, so window.Peer exists there
    and transports().peer is true; the artifact page never loads it. The host registers the peer id
-   'ppodeuk-' + code ('unavailable-id' = code taken: a generated code is re-rolled); guests take a random id
+   'ppodeuk-' + code ('ppodeuk-t-' + code in the 앱인토스 build, which bundles PeerJS: its rooms never meet the web's)
+   ('unavailable-id' = code taken: a generated code is re-rolled); guests take a random id
    and connect to it with ONE reliable, ordered DataConnection carrying JSON. Star topology: the host relays
    guests' states and messages to the other guests. Optional host/join option {peerOptions} is passed to
    new Peer(...) (custom signalling server / ICE config); the PeerJS defaults are used otherwise. (game.js hands it
@@ -164,7 +167,11 @@ window.PG = window.PG || {};
   const RELAY_URL_RE = /^(https:\/\/[a-z0-9.-]+\.[a-z]{2,}|http:\/\/(?:localhost|127\.0\.0\.1|\[::1\]))(:\d{1,5})?((?:\/[A-Za-z0-9._~-]+)*)\/?$/i;
   // a test page's ?relay=: ws:// or wss:// to a loopback host only (a link must never send a room to a stranger's server)
   const RELAY_Q_RE = /^(wss?:\/\/(?:localhost|127\.0\.0\.1|\[::1\]))(:\d{1,5})?((?:\/[A-Za-z0-9._~-]+)*)\/?$/i;
-  const PEER_PREFIX = 'ppodeuk-';
+  // (the 앱인토스 build - its page sets window.PG_AIT before this file - has its own id space, design/toss.md 3: its
+  // rooms are friendly matches between game keys, the web's have trophy stakes and Google accounts; they never meet.
+  // The relay's twin is the space 't': relayInfo)
+  const AIT = !!W.PG_AIT;
+  const PEER_PREFIX = AIT ? 'ppodeuk-t-' : 'ppodeuk-';
   const BC_PREFIX = 'ppodeuk-v3-';
   const ROOM_PREFIX = 'g-';
   const TERMINAL = ['revoked', 'not_granted', 'capability_disabled', 'capability_removed', 'transform_error'];
@@ -336,13 +343,14 @@ window.PG = window.PG || {};
   }
 
   // ------------------------------------------------------------------ the relay ('ws', design/relay.md 4.2 / 4.6)
-  // where this page's relay is: {base: 'wss://host[:port][/path]', space} or null. A test page's loopback ?relay= first,
+  // where this page's relay is: {base: 'wss://<host>[:port][/path]', space} or null. A test page's loopback ?relay= first,
   // else window.PG_RELAY (build.js: {url, space?}; this file only ever reads it), else none
   function relayInfo() {
     let r = null;
     try { r = W.PG_RELAY; } catch (e) { r = null; }
     const plain = !!r && typeof r === 'object' && !Array.isArray(r);
-    const space = plain && r.space !== undefined ? r.space : 'w';
+    // (앱인토스: always 't' - a Toss room code never opens a web room, and the Worker lets only the Toss origins in there)
+    const space = AIT ? 't' : plain && r.space !== undefined ? r.space : 'w';
     if (!WS_SPACES.includes(space)) return null;
     const q = fromQuery().relay;
     if (q) return { base: q, space };
@@ -1684,6 +1692,9 @@ window.PG = window.PG || {};
     fromQuery, profileName, TEXT,
     roomDead: () => roomDead,
     relay,
+    // (tests: the 'peer' host id of a room code; the relay space this page's rooms live in, null without a relay)
+    peerId: (code) => PEER_PREFIX + String(code || ''),
+    relaySpace: () => { const i = relayInfo(); return i ? i.space : null; },
     MAX_PLAYERS, STATE_MAX, MSG_MAX,
     _sessions: () => Array.from(live, (c) => c.api),
     _relayReset() { relayMem.state = 'ok'; relayMem.until = 0; },

@@ -706,7 +706,7 @@ function testBuild() {
   fs.rmSync(B, { recursive: true, force: true });
   fs.mkdirSync(path.join(SRCD, 'tools'), { recursive: true });
   fs.copyFileSync(path.join(ROOT, 'build.js'), path.join(SRCD, 'build.js'));
-  for (const f of ['pack-itch.js', 'fb-config.js']) fs.copyFileSync(path.join(ROOT, 'tools', f), path.join(SRCD, 'tools', f));
+  for (const f of ['pack-itch.js', 'fb-config.js', 'toss-rules.js']) fs.copyFileSync(path.join(ROOT, 'tools', f), path.join(SRCD, 'tools', f));
   fs.cpSync(path.join(ROOT, 'src'), path.join(SRCD, 'src'), { recursive: true, filter: (p) => path.basename(p) !== 'tests' });
   const build = (env) => {
     const e = Object.assign({}, process.env, { PG_BUILD_TEMP: TMP }, env || {});
