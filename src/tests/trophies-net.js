@@ -478,6 +478,8 @@
     // R and the room in a staked party room: B short of 10 readies without it
     B.T.set({ t: 7, best: 7, bl: 0 }); await sleep(200);
     await readyAll(P3);
+    // (R is the host's last broadcast room state: under load it can trail canStart by a frame or two)
+    await until(() => N(H).tro.R && same(N(H).tro.R.f, [2]), 3000);
     const Rp = N(H).tro.R;
     ok('party R: m \'p\', o[4] = 10, pv = ' + PV + ', R.f = [2] (the short seat plays without the stake)', Rp && Rp.m === 'p' && Rp.o[4] === 10 && Rp.pv === PV && same(Rp.f, [2]) && N(A).party.pv === PV, [Rp, N(A).party.pv]);
     const bets = doc(H, 'pg-room-opts').querySelector('.pg-bets'), betBtns = bets ? [...bets.querySelectorAll('button')] : [];

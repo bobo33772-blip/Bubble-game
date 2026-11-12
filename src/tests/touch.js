@@ -132,6 +132,29 @@
       fire();
       ok(how + ' lets the stick go', held && st().id === null && !st().on.right, st());
     }
+    // ---- the press queue (design/party-games.md 3.3 / 13.3): each fresh touch press with its event's time; the stick's
+    // down edge is a 'down' entry with the pointermove's time (held down: no more; released by the hysteresis and pulled
+    // again: the next)
+    {
+      const Pq = D.party, pe = (el, type, x, y, id) => { const e = new PointerEvent(type, { pointerId: id, pointerType: 'touch', clientX: x, clientY: y, bubbles: true, cancelable: true, isPrimary: false, width: 20, height: 20 }); el.dispatchEvent(e); return e; };
+      D.step(2); Pq.pq(0);
+      const e1 = pe(ts, 'pointerdown', 0, 0, 21); pe(ts, 'pointerup', 0, 0, 21); D.step(1);
+      const q1 = Pq.pq(0);
+      ok('pq: a pointerdown on 거품 queues one shoot press with its event time', q1 && q1.length === 1 && q1[0][0] === 'shoot' && Math.abs(q1[0][1] - e1.timeStamp) < 0.001, { q1, t: e1.timeStamp });
+      const e2 = pe(tj, 'pointerdown', 0, 0, 22), e3 = pe(ts, 'pointerdown', 0, 0, 23); D.step(1);
+      const q2 = Pq.pq(0); pe(tj, 'pointerup', 0, 0, 22);
+      ok('pq: both buttons in one frame give two entries, in time order', q2 && q2.length === 2 && q2[0][0] === 'jump' && q2[1][0] === 'shoot' && q2[0][1] === e2.timeStamp && q2[1][1] === e3.timeStamp, q2);
+      // (거품 still held: the left thumb pulls the stick down)
+      pe(zone, 'pointerdown', cx, cy, 24); const e4 = pe(zone, 'pointermove', cx, cy + 0.8 * R, 24); D.step(1);
+      const q3 = Pq.pq(0), s3 = st();
+      ok('pq: the stick pulled down while 거품 is held - one down entry with the pointermove\'s time, 거품 still held (two thumbs)', q3 && q3.length === 1 && q3[0][0] === 'down' && q3[0][1] === e4.timeStamp && s3.on.down && s3.on.shoot, { q3, on: s3.on });
+      pe(zone, 'pointermove', cx + 2, cy + 0.95 * R, 24); D.step(1);
+      const q4 = Pq.pq(0);
+      pe(zone, 'pointermove', cx, cy + 0.3 * R, 24); pe(zone, 'pointermove', cx, cy + 0.85 * R, 24); D.step(1);
+      const q5 = Pq.pq(0);
+      ok('pq: a stick held down pushes no more; released by the hysteresis and pulled again - the next down entry', q4 === null && q5 && q5.length === 1 && q5[0][0] === 'down', { q4, q5 });
+      pe(ts, 'pointerup', 0, 0, 23); pd(window, 'pointerup', cx, cy, 24); D.step(4); Pq.pq(0);
+    }
     // ---- no double-tap zoom
     const tapEnd = (el) => {
       let ev;
