@@ -3830,9 +3830,23 @@ window.PG = window.PG || {};
     if (pl.koT > 0) { if (--pl.koT <= 0) respawnBattle(pl); return; }
     if (pl.trap) { updateTrapped(pl, inp); return; }
     if (pl.dead) { if (G.gameMode === 'coop') updateFallen(pl); return; } // (solo: the 'dying' screen runs it)
-    if (!pl.local) { if (pl.invuln > 0) pl.invuln--; if (pl.stunT > 0) pl.stunT--; if (pl.shield > 0) pl.shield--; return; }
+    if (!pl.local) { if (pl.invuln > 0) pl.invuln--; if (pl.stunT > 0) pl.stunT--; if (pl.shield > 0) pl.shield--; handoverFall(pl); return; }
     if (pl.stunT > 0) { pl.stunT--; updatePlayer(pl, NO_INPUT); return; }
     updatePlayer(pl, inp);
+  }
+  // A remote animal between two control epochs (released from a bubble: the release hop vy -1.6 in the air; any bump
+  // that leaves it airborne) is its page's to move only once that page's first state of the new epoch arrives - a round
+  // trip later. Until then this world used to hold it still in the air, drawn in the jump frame: 0.4-0.7 s after every
+  // release at a phone's link, on the host's screen and (through the snapshots) on every other guest's ("점프하는
+  // 모습으로 고정된다", the owner's 4-player feedback, 2026-11-18). It falls here by plain physics (no input, no move,
+  // no sound) as it does on its own page from the same spot; the owner's states take over when they come (hostInputs)
+  function handoverFall(pl) {
+    if (!G.online || pl.raft || G.mode !== 'playing') return;
+    const rem = NET.remote.get(pl.id), st = rem && rem.st;
+    if (st && st.ep === pl.ep) return;
+    const wi = waterIdx(pl.x + 8, pl.y + 15);
+    if (wi >= 0) { floatBody(pl, wi, !pl.water); pl.water = WATER[wi]; } else { physBody(pl); pl.water = 0; }
+    NET.handF = (NET.handF | 0) + 1; // (for the tests: frames a remote body fell here)
   }
   function hitTest(p) {
     for (const e of G.enemies) {
