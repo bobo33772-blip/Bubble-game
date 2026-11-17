@@ -1,0 +1,22 @@
+{
+  "name": "ppodeuk-bath-toss",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "pg": "node ../build.js --toss",
+    "dev": "npm run pg && vite",
+    "build": "npm run pg && vite build && node ../tools/check-toss.js --dist dist && ait build && node ../tools/check-toss.js --ait ppodeuk-bath.ait",
+    "deploy": "ait deploy"
+  },
+  "dependencies": {
+    "@apps-in-toss/web-framework": "3.9.0",
+    "peerjs": "1.5.4",
+    "@fontsource/black-han-sans": "5.3.0",
+    "@fontsource/gowun-dodum": "5.3.0"
+  },
+  "devDependencies": {
+    "vite": "6.3.5",
+    "@apps-in-toss/devtools": "3.9.0"
+  }
+}

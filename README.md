@@ -112,6 +112,7 @@ flowchart LR
 - 전체 테스트: `node tools/run-all.js` (헤드리스 크롬으로 240여 개 테스트를 돌려요)
 - 구글 로그인 저장 · 친구 기능 설정: [FIREBASE-SETUP.md](FIREBASE-SETUP.md) · 보안 규칙: [firebase/firestore.rules](firebase/firestore.rules)
 - 온라인 방: Cloudflare 중계 서버(`cloudflare/`)를 거쳐요. 설정: [CLOUDFLARE-SETUP.md](CLOUDFLARE-SETUP.md) (Worker 주소는 GitHub 변수 `RELAY_URL`). 없으면 예전처럼 PeerJS 직접 연결
+- **앱인토스 (토스 미니앱)**: `toss/` 폴더에서 `npm ci` 한 번, 그다음 `npm run build` → `toss/ppodeuk-bath.ait` (콘솔의 앱 번들에 올려 토스앱 테스트 QR로 열어요). 토스판은 구글 로그인 · Firebase 없이 토스 게임 키로 온라인을 열고 (같은 중계 서버의 토스 전용 방), 배틀 · 파티는 트로피가 오가지 않는 친선 경기예요. 설계와 주인 할 일: [design/toss.md](design/toss.md)
 
 ## 📁 폴더 안내
 
@@ -123,6 +124,7 @@ flowchart LR
 | `src/audio.js` · `src/net.js` | 효과음 · 음악 / 온라인 연결 (중계 서버, PeerJS, Claude 방) |
 | `src/page.html` | 화면 틀과 메뉴 |
 | `cloudflare/` | 온라인 중계 서버 (방마다 메시지를 전달하는 Worker) |
+| `src/ait.js` · `toss/` | 앱인토스판만: 토스 SDK 다리 (저장 · 가로 화면 · 안전 영역 · 게임 키) / .ait를 만드는 Vite 프로젝트 |
 | `src/tests/` · `tools/` | 자동 테스트와 점검 도구 |
 | `design/` | 기능별 설계 문서 (트로피, 상점, 뽑기, 친구, 동물별 꾸미기 등) |
 | `firebase/` | Firestore 보안 규칙 |
