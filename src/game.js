@@ -4090,8 +4090,13 @@ window.PG = window.PG || {};
     return cap > 0 && inFlight(p.slot) >= cap;
   }
   // the host's world, frame by frame: where each player was (a guest's claim names the snapshot tick it drew from)
-  const REWIND = 30, CLAIM_TOL = 2, CLAIM_WAIT = 12;
-  function notePos(pl) { const h = pl.ph || (pl.ph = []); h.push([G.frame, pl.x, pl.y]); if (h.length > REWIND + 8) h.shift(); }
+  // CLAIM_BACK: how far back a claim's tick may be. A host-world tick (w 0: the host's own animal, drawn from the
+  // snapshots) is a whole round trip + the snapshot playout behind the host's now - a guest's own stream tick (w 1)
+  // only the claim's one-way trip + the peer playout behind its latest state. At 0.5 s for both, a phone link of ~200 ms
+  // each way (the relay through HKG / NRT) refused every catch ON THE HOST ('rewind') while guests caught each other:
+  // the host was nearly uncatchable (the owner's 4-player feedback, 2026-11-18). LAG_MAX (1 s), the party's own bound
+  const REWIND = 30, CLAIM_BACK = LAG_MAX, CLAIM_TOL = 2, CLAIM_WAIT = 12;
+  function notePos(pl) { const h = pl.ph || (pl.ph = []); h.push([G.frame, pl.x, pl.y]); if (h.length > CLAIM_BACK + 8) h.shift(); }
   // battle: where each capture-phase bubble was, tick by tick (for lagTrapCheck). The path outlives the bubble for a
   // moment (G.shotLog): a victim's screen runs behind the host, so it may still show a shot that, in host time, has
   // since been popped, has caught an enemy or has left the screen; `spentAt` is when it stopped being a free shot
@@ -4139,8 +4144,8 @@ window.PG = window.PG || {};
   // a guest's own bubble touched a rival on ITS screen (guestClaim: the shot n, volley index i, at age a; the rival as
   // drawn at x, y from tick k - w 0: the host world's snapshot tick, w 1: that rival's own body stream). The host checks
   // it against its own records a frame or so later: that bubble's path at age a (not used up before then), the rival's
-  // recorded body at that tick (within 6 px of the claim, no more than REWIND = 0.5 s of that body's own time back:
-  // 2 x a 120 ms link + the view's playout delay) - they touch (CLAIM_TOL px of slack) -> the catch, else nothing (the
+  // recorded body at that tick (within 6 px of the claim, no more than CLAIM_BACK = 1 s of that body's own time back:
+  // 2 x a 250 ms link + the view's playout delay) - they touch (CLAIM_TOL px of slack) -> the catch, else nothing (the
   // guest's predicted catch lets go: the host's bubble flies on)
   function hostClaim(pl, m) {
     if (G.gameMode !== 'battle' || G.mode !== 'playing') return;
@@ -4194,11 +4199,11 @@ window.PG = window.PG || {};
     return null;
   }
   function worldAt(v, k) {
-    if (!(G.frame - k <= REWIND) || !v.ph) return null;
+    if (!(G.frame - k <= CLAIM_BACK) || !v.ph) return null;
     return interpAt(v.ph, k, (e) => e[0], (e) => ({ x: e[1], y: e[2] }));
   }
   function streamAt(v, k) {
-    const rem = !v.local && NET.remote.get(v.id); if (!rem || !rem.st || !(rem.st.k - k <= REWIND)) return null;
+    const rem = !v.local && NET.remote.get(v.id); if (!rem || !rem.st || !(rem.st.k - k <= CLAIM_BACK)) return null;
     const L = rem.buf.list.filter((q) => q.d.ep === v.ep);
     return interpAt(L, k, (q) => q.k, (q) => q.d);
   }
@@ -13801,7 +13806,7 @@ window.PG = window.PG || {};
   function drawBubble(b) {
     const kc = bubbleChar(b);
     if (kc) { drawKitBubble(b, kc); return; }
-    let name, fi = 0, dx = 0, white = 0, alpha, scale = 0, tint = null, tintA = 0.35, ring = null;
+    let name, fi = 0, dx = 0, white = 0, alpha, scale = 0, tint = null, tintA = 0.35, ring = null, twin;
     if (b.state === 'pop') { name = 'bubble_pop'; fi = b.popT < 5 ? 0 : 1; }
     else if (b.kind === 'trapped' && b.enemy) {
       name = b.enemy.type + (b.soaked ? '_trapped_soaked' : '_trapped'); fi = (b.age / 14) | 0;
@@ -13811,6 +13816,9 @@ window.PG = window.PG || {};
       // battle: an opponent curled up in a bubble tinted with the trapper's colour (shakes as it breaks free)
       const v = b.victim, t = v.trap;
       name = v.char + '_trapped'; fi = (b.age / 14) | 0;
+      // (a twin keeps its seat's colour in the bubble too: before, a pink cat caught turned into the first cat's
+      // white-and-orange and back again - "같은 동물 픽하면 게임하다가 동물이 이상해진다", the owner, 2026-11-18)
+      if (v.twin) twin = v.slot;
       tint = SLOT_COLS[b.owner] || null; tintA = 0.3; ring = tint; // (+ a 2 px ring in the trapper's colour, distinction §2.9)
       if (t && ptrapMax() - t.prog < ptrapMax() / 4) { dx = Math.round(Math.sin(G.frame * 0.9) * 1.4); if ((G.frame >> 2) & 1) white = 0.45; }
     } else if (b.kind === 'stamp') { name = 'stamp_bubble'; fi = (b.age / 12) | 0; }
@@ -13824,6 +13832,7 @@ window.PG = window.PG || {};
       if (b.age > life && ((G.frame >> 2) & 1)) alpha = 0.35;
     }
     const o = { white, alpha };
+    if (twin !== undefined) o.twin = twin;
     if (tint) { o.tint = tint; o.tintA = tintA; }
     if (b.squish > 0) o.sq = 0.18 * (b.squish / 8);
     else if (scale) o.scale = scale;

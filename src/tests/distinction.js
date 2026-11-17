@@ -214,6 +214,19 @@
       const nat = D.twinPixels('life_duck', 0, 0), tw = D.twinPixels('life_duck', 0, 2);
       if (hashOf(nat) === hashOf(tw)) return 'the twin icon is not recoloured';
     });
+    // (the owner's 4-player feedback, 2026-11-18: "같은 동물 픽하면 게임하다가 동물이 이상해진다" - a caught twin was drawn
+    // in the FIRST copy's colours inside its bubble, then flipped back on its release)
+    t('2 four ducks: a caught twin keeps its seat\'s ramp in the bubble (never the first duck\'s yellow)', () => {
+      battle(D4, 0); calm();
+      const v = G.players.find((p) => p.slot === 2);
+      if (!D.party.catch(2, 1)) return 'slot 3 not caught';
+      const b = G.bubbles.find((q) => q.kind === 'player' && q.victim === v); if (!b) return 'no prison bubble';
+      const grab = () => { render(); return hashOf(cx.getImageData(Math.round(b.x) - 2, Math.round(b.y) - 2, 20, 20)); };
+      const tw = grab(); v.twin = false; const nat = grab(); v.twin = true;
+      if (tw === nat) return 'the caught twin is drawn in the natural colours';
+      const a = D.twinPixels('duck_trapped', 0, 0), c = D.twinPixels('duck_trapped', 0, 2);
+      if (hashOf(a) === hashOf(c)) return 'the twin\'s trapped frame is not recoloured';
+    });
     t('2 the twin keys swap only the body ramp: beak / eye / ink pixels keep their colours', () => {
       for (const c of ['duck', 'capy', 'otter', 'penguin', 'cat', 'frog']) {
         const a = D.twinPixels(c + '_idle', 0, 0), b = D.twinPixels(c + '_idle', 0, 3);
@@ -244,7 +257,7 @@
       try {
         D.twinReset();
         for (const c of Object.keys(KEYS)) {
-          for (const n of ['idle', 'walk', 'jump', 'fall', 'shoot', 'die', 'glide', 'slam', 'dash', 'slide', 'flip'].map((a) => c + '_' + a).concat(['life_' + c, 'portrait_' + c])) {
+          for (const n of ['idle', 'walk', 'jump', 'fall', 'shoot', 'die', 'trapped', 'glide', 'slam', 'dash', 'slide', 'flip'].map((a) => c + '_' + a).concat(['life_' + c, 'portrait_' + c])) {
             for (let i = 0; SPS[n] && i < SPS[n].length; i++) list.push([c, n, i]);
           }
         }
