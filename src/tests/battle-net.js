@@ -158,6 +158,31 @@
     if (res.gg) ok('gg: guest -> guest (peer stream): touched on the shooter\'s screen -> caught', all('gg', (r) => r.shooterSaw && r.caught), res.gg);
     if (res.hg) ok('hg: host -> guest (its interpolated stream): touched on the host\'s screen -> caught', all('hg', (r) => r.shooterSaw && r.caught), res.hg);
     metric('claims', R.F.map((f) => N(f).claims));
+    // ---- rel: a guest mashing out of a prison hops and lands on the host's screen at once - it never hangs in the air in
+    // the jump frame until its page's first state of the new epoch arrives (game.js handoverFall; before: 0.4-0.7 s
+    // after every release at a phone's link, "점프하는 모습으로 고정된다" - the owner's 4-player feedback, 2026-11-18)
+    if (!ONLY.length || ONLY.includes('rel')) {
+      const r = [];
+      for (let k = 0; k < 2; k++) {
+        if (!(await place(R.F, H, [60, 130, 205], [1, -1, -1]))) continue;
+        const sa = slotOf(A);
+        if (!H.D.party.catch(sa, slotOf(H))) continue;
+        await until(() => P(A, sa) && P(A, sa).trap, 2000);
+        let watching = false, run = 0, worst = 0, frames = 0, prev = null;
+        H.mp.tap(() => {
+          const p = P(H, sa); if (!p) return;
+          if (!watching) { if (p.trap) return; watching = true; }
+          if (frames++ > 60) return;
+          const still = prev !== null && Math.abs(prev - p.y) < 0.05, air = !p.onGround && p.vy < 0;
+          run = air && still ? run + 1 : 0; worst = Math.max(worst, run); prev = p.y;
+        });
+        const t0 = now();
+        while (now() - t0 < 6000 && P(H, sa).trap) { press(A, 'jump', true); await sleep(40); press(A, 'jump', false); await sleep(40); }
+        await sleep(1300); H.mp.tap(null);
+        r.push({ freed: !P(H, sa).trap, worst, frames });
+      }
+      ok('rel: a guest mashed out of a prison never hangs in the air on the host\'s screen (no 10+ frames in the jump frame without moving)', r.length === 2 && r.every((q) => q.freed && q.worst < 10 && q.frames > 30), r);
+    }
     // ---- an older guest page: no lc in its states, no 'tp' messages -> the host judges its shot as before
     if (!ONLY.length || ONLY.includes('old')) {
       const sess = A.mp.session(), ss = sess.setState, sd = sess.send;

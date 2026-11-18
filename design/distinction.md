@@ -213,7 +213,8 @@ R (24x3, afloat: two ripples at the waterline; the middle 16 columns stay clear)
 **Which frames.**
 - The body poses drawn by `drawPlayer`: `<char>_idle|walk|jump|fall|shoot|die` and the move poses in `POSE` (`duck_glide`, `capy_slam`, `otter_dash`, `penguin_slide`, `cat_flip`).
 - The HUD icon `life_<char>` and `portrait_<char>` (the art uses the same keys).
-- Not the `_trapped` and `_ghost` frames: they are small curled copies, on screen briefly, and the 2 px rings and tags carry the identity there.
+- Not the `_ghost` frames: they are small curled copies, on screen briefly, and the 2 px rings and tags carry the identity there.
+- The `_trapped` frames DO get the twin colour (changed 2026-11-18). Left natural, a caught twin flipped to the first copy's colours and back on release; the owner's 4-player feedback was "같은 동물 픽하면 게임하다가 동물이 이상해진다". drawBubble passes the victim's seat to drawEnt; the curled art carries the same body keys.
 
 **Plumbing.** `drawEnt(name, i, x, y, flip, o)` gains `o.twin = slot`. The frame becomes `twinFrame(f, char, slot)` first, before shop.md's `lookFrame` (items), any tint, the ring or a scale. `drawRaw` gets a sibling `drawRawTwin(name, slot, x, y)` for the HUD. `portraitCanvas(c, name, size, lk, tw)` takes an optional twin slot `tw` (and, from shop.md S2, an optional look `lk`; the bust is recoloured first, then the items are drawn on it).
 
