@@ -445,14 +445,24 @@ async function secUI() {
   const frw = await ev(`(async () => { const w = document.getElementById('f').contentWindow; const r = await w.navigator.serviceWorker.getRegistration(w.location.href);
     const m = await w.fetch(w.document.querySelector('link[rel="manifest"]').href); return { reg: !!r, ctl: !!w.navigator.serviceWorker.controller, manifest: m.ok, game: w.PG.debug.getState().phase }; })()`);
   ok(frw && !frw.reg && !frw.ctl && frw.manifest && frw.game === 'title', 'the itch upload in a frame: the game runs, no worker is registered, its manifest link resolves', frw);
-  // the fullscreen toggle
+  // the fullscreen toggle - tapped in the tab in front, as a person taps it: Chrome 157's headless grants fullscreen only
+  // to the front tab (its first tab is not, until Page.bringToFront), else requestFullscreen rejects "not granted"
+  // whatever the gesture (2026-11-13: an eval click or a real Input mouse click alike; document focus emulation no help)
   await go(APP); await until('!!(window.PG && PG.debug && PG.debug.pwa)');
+  await send('Page.bringToFront', {}, pageSid);
   st = await ev(STATE);
   ok(st.fsBtn && !st.fullscreen, 'the header has the fullscreen toggle (the Fullscreen API works here)', st);
   await send('Runtime.evaluate', { expression: `document.getElementById('pg-fs').click()`, userGesture: true }, pageSid);
   // (fullscreenElement is set before the fullscreenchange event that redraws the toggle: wait for both)
   st = await until(`PG.debug.pwa().fullscreen && document.getElementById('pg-fs').getAttribute('aria-pressed') === 'true' ? PG.debug.pwa() : null`, 4000);
-  ok(st && st.fsBtn && (await ev(`document.getElementById('pg-fs').getAttribute('aria-pressed') === 'true' && document.getElementById('pg-fs').classList.contains('is-on')`)), 'the toggle enters fullscreen (pressed, corners in)', st);
+  // (refused: the game swallows the rejection - a direct request with a gesture prints Chrome's reason instead of null)
+  let fsWhy;
+  if (!st) {
+    const r = await send('Runtime.evaluate', { expression: `document.documentElement.requestFullscreen().then(() => 'a direct request was granted', (e) => e.name + ': ' + e.message)`,
+      userGesture: true, awaitPromise: true, returnByValue: true }, pageSid);
+    fsWhy = { refused: r.result && r.result.result ? r.result.result.value : r.error, focus: await ev('document.hasFocus()') };
+  }
+  ok(st && st.fsBtn && (await ev(`document.getElementById('pg-fs').getAttribute('aria-pressed') === 'true' && document.getElementById('pg-fs').classList.contains('is-on')`)), 'the toggle enters fullscreen (pressed, corners in)', st || fsWhy);
   await send('Runtime.evaluate', { expression: `document.getElementById('pg-fs').click()`, userGesture: true }, pageSid);
   st = await until(`!PG.debug.pwa().fullscreen ? PG.debug.pwa() : null`, 4000);
   ok(st && st.fsBtn, 'and leaves it again', st);
