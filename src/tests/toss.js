@@ -608,6 +608,17 @@
       else if (scene === 'hub') { click('pg-shop-btn'); await sleep(300); }
       else if (scene === 'rec') { localStorage.setItem('ppogeul-ait-lb', '{"ok":1200,"p":0}'); TR.openRec(); await sleep(300); }
       else if (scene === 'rot') { await sleep(300); }
+      else if (scene === 'listing') {
+        // (the console's 가로 스크린샷, tools/make-listing.js: a 4-animal battle - the cat in the penguin's bubble, the duck
+        // blowing at the frog mid-hop - as this page lays it out on a landscape phone)
+        D.seed(3); D.local.battle(['duck', 'cat', 'frog', 'penguin'], { perks: true, arena: 0, countdown: false }); G.manual = true;
+        const clean = () => { G.enemies = []; G.banner = null; G.bannerQ = []; G.words = []; for (const p of G.players) p.invuln = 0; };
+        const tap = (a, s, n) => { D.press(a, true, s); D.step(n || 1); D.press(a, false, s); };
+        clean(); [[28, 196], [98, 196], [62, 196], [128, 196]].forEach(([x, y], s) => D.setPlayer(x, y, s));
+        D.step(30); clean();
+        tap('right', 0); tap('left', 1); tap('left', 3); tap('right', 2); D.step(4); clean();
+        D.party.catch(1, 3); tap('jump', 2, 8); tap('shoot', 0); D.step(7); tap('shoot', 3); D.step(5); clean(); D.step(0);
+      }
       await sleep(300);
     }
     await stage();

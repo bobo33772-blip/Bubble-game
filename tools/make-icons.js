@@ -95,6 +95,14 @@ const ICONS = [
   ['icon-maskable-512.png', 512, 9, 0],
   ['apple-touch-icon-180.png', 180, 4, 0],
 ];
+// --toss: only the 앱인토스 console's 앱 로고 - 600 x 600 PNG, square corners, an opaque background (full bleed like the
+// apple icon: the bubble 520 of 600) -> docs/listing/toss/icon-600.png (tools/make-listing.js calls this)
+if (process.argv.includes('--toss')) {
+  const dir = path.join(ROOT, 'docs', 'listing', 'toss'), buf = render(600, 13, 0);
+  fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(path.join(dir, 'icon-600.png'), buf);
+  console.log(`wrote docs/listing/toss/icon-600.png (600x600, ${buf.length} bytes)`);
+  process.exit(0);
+}
 fs.mkdirSync(OUT, { recursive: true });
 const made = ICONS.map(([name, size, scale, r]) => { const buf = render(size, scale, r); fs.writeFileSync(path.join(OUT, name), buf); return [name, size, buf]; });
 for (const [name, size, buf] of made) console.log(`wrote src/pwa/icons/${name} (${size}x${size}, ${buf.length} bytes)`);
