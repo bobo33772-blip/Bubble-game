@@ -2703,8 +2703,8 @@ window.PG = window.PG || {};
   // ---------------------------------------------------------------- twin colours 쌍둥이 색 (design/distinction.md §2.5)
   // When two players pick the same animal, every later copy has these body keys swapped, by exact pixel match on the
   // baked frame, for its own slot ramp: key -> role index into game.js SLOT_RAMP[slot] = [L, M, D, DD] (0 lightest ..
-  // 3 darkest). Used on the body poses (idle walk jump fall shoot die + the move pose), life_<char> and portrait_<char>;
-  // not on _trapped / _ghost. Keys not listed (eyes, beaks, cheeks, ink, props) keep their colours. Whoever redraws an
+  // 3 darkest). Used on the body poses (idle walk jump fall shoot die + the move pose), _trapped (2026-11-18: a caught
+  // twin kept flipping to the first copy's colours), life_<char> and portrait_<char>; not on _ghost. Keys not listed (eyes, beaks, cheeks, ink, props) keep their colours. Whoever redraws an
   // animal fixes its keys here: tools/check-sprites.js checks every key is drawn in that animal's body frames, the roles
   // are 0-3 and run light to dark, and all palette values are distinct (the pixel match relies on it).
   PG.TWIN_KEYS = {
