@@ -121,6 +121,25 @@
     });
     return w;
   }
+  // what screen fr DRAWS of player `slot` (mp.drawn: after the display smoothing, with the pose), drawn frame by drawn
+  // frame while it is free: hang = the longest run in the jump frame without moving, step = the longest step in one frame
+  function drawnWatch(fr, slot) {
+    const res = { hang: 0, step: 0, n: 0 }; let prev = null, run = 0, on = true;
+    const tick = () => {
+      if (!on) return;
+      fr.w.requestAnimationFrame(tick);
+      const p = P(fr, slot), q = fr.mp.drawn ? fr.mp.drawn(slot) : p && { x: p.x, y: p.y, pose: !p.onGround && p.vy < 0 ? '_jump' : '' };
+      if (!p || !q || p.trap || p.koT > 0 || p.dead || (q.f !== undefined && fr.G.frame - q.f > 2)) { prev = null; run = 0; return; } // (an old one: not drawn while it was caught)
+      if (prev) {
+        const d = Math.hypot(q.x - prev.x, q.y - prev.y);
+        if (Math.abs(q.y - prev.y) < 150) res.step = Math.max(res.step, Math.round(d * 10) / 10);
+        run = /_jump$/.test(q.pose) && d < 0.05 ? run + 1 : 0; res.hang = Math.max(res.hang, run);
+      }
+      prev = { x: q.x, y: q.y }; res.n++;
+    };
+    fr.w.requestAnimationFrame(tick);
+    return { res, stop() { on = false; } };
+  }
   const trappedBy = (H, victim, owner) => { const p = P(H, victim); return !!(p && p.trap && p.trap.by === owner); };
   // one trial: the victim frame V jumps; the shooter frame Sh blows (at once, or once its screen shows V high up)
   async function trial(F, H, Sh, V, late) {
@@ -158,9 +177,10 @@
     if (res.gg) ok('gg: guest -> guest (peer stream): touched on the shooter\'s screen -> caught', all('gg', (r) => r.shooterSaw && r.caught), res.gg);
     if (res.hg) ok('hg: host -> guest (its interpolated stream): touched on the host\'s screen -> caught', all('hg', (r) => r.shooterSaw && r.caught), res.hg);
     metric('claims', R.F.map((f) => N(f).claims));
-    // ---- rel: a guest mashing out of a prison hops and lands on the host's screen at once - it never hangs in the air in
-    // the jump frame until its page's first state of the new epoch arrives (game.js handoverFall; before: 0.4-0.7 s
-    // after every release at a phone's link, "점프하는 모습으로 고정된다" - the owner's 4-player feedback, 2026-11-18)
+    // ---- rel: a guest mashing out of a prison, seen on the host's and the other guest's screens: until its own page's first
+    // state of the new epoch is there (a round trip) it stays where it was freed, in the idle pose - never the jump frame
+    // hanging in the air ("점프하는 모습으로 고정된다", 2026-11-18) and never a fall the next state takes back (#30 let the
+    // host drop it meanwhile: up to 88 px of snap-back on every release, found 2026-11-26)
     if (!ONLY.length || ONLY.includes('rel')) {
       const r = [];
       for (let k = 0; k < 2; k++) {
@@ -168,20 +188,36 @@
         const sa = slotOf(A);
         if (!H.D.party.catch(sa, slotOf(H))) continue;
         await until(() => P(A, sa) && P(A, sa).trap, 2000);
-        let watching = false, run = 0, worst = 0, frames = 0, prev = null;
-        H.mp.tap(() => {
-          const p = P(H, sa); if (!p) return;
-          if (!watching) { if (p.trap) return; watching = true; }
-          if (frames++ > 60) return;
-          const still = prev !== null && Math.abs(prev - p.y) < 0.05, air = !p.onGround && p.vy < 0;
-          run = air && still ? run + 1 : 0; worst = Math.max(worst, run); prev = p.y;
-        });
+        const W = [H, B].map((fr) => drawnWatch(fr, sa));
         const t0 = now();
         while (now() - t0 < 6000 && P(H, sa).trap) { press(A, 'jump', true); await sleep(40); press(A, 'jump', false); await sleep(40); }
-        await sleep(1300); H.mp.tap(null);
-        r.push({ freed: !P(H, sa).trap, worst, frames });
+        await sleep(1500);
+        W.forEach((w) => w.stop());
+        r.push({ freed: !P(H, sa).trap, host: W[0].res, guest: W[1].res });
       }
-      ok('rel: a guest mashed out of a prison never hangs in the air on the host\'s screen (no 10+ frames in the jump frame without moving)', r.length === 2 && r.every((q) => q.freed && q.worst < 10 && q.frames > 30), r);
+      ok('rel: a guest freed from a prison never hangs in the jump frame on another screen (no 10+ frames in it without moving)', r.length === 2 && r.every((q) => q.freed && q.host.hang < 10 && q.guest.hang < 10), r);
+      ok('rel: ... and never jumps there (no step over 16 px in one drawn frame: nothing drops it and takes it back)', r.length === 2 && r.every((q) => q.host.step <= 16 && q.guest.step <= 16 && q.host.n > 40 && q.guest.n > 40), r);
+    }
+    // ---- stall: a guest's link goes quiet for 1.1 s while it is in the air (its states stop leaving; a phone's network
+    // hiccup): the other screens let it fall and land instead of hanging it in the jump frame, and take it to where it
+    // really is without a jump once the states are back; one hiccup must not leave the view slow for long
+    if (!ONLY.length || ONLY.includes('stall')) {
+      const r = [];
+      for (let k = 0; k < 2; k++) {
+        if (!(await place(R.F, H, [60, 130, 205], [1, -1, -1]))) continue;
+        const sa = slotOf(A), sess = A.mp.session(), ss = sess.setState, held = [];
+        const W = [H, B].map((fr) => drawnWatch(fr, sa));
+        press(A, 'jump', true); await until(() => me(A).y < FLOOR - 14 && me(A).vy < 0, 1500);
+        sess.setState = function (st) { held.push(st); };
+        press(A, 'right', true); await sleep(1100);
+        sess.setState = ss; press(A, 'right', false); press(A, 'jump', false);
+        await sleep(400); const d1 = [N(B).delay];
+        await sleep(3600); d1.push(N(B).delay);
+        W.forEach((w) => w.stop());
+        r.push({ host: W[0].res, guest: W[1].res, delay: d1.map((v) => Math.round(v)) });
+      }
+      ok('stall: a guest whose states stop for 1.1 s in mid-air never hangs in the jump frame on the host / another guest', r.length === 2 && r.every((q) => q.host.hang < 10 && q.guest.hang < 10), r);
+      ok('stall: ... and once they are back it is taken to its place without a jump (no step over 24 px in one drawn frame)', r.length === 2 && r.every((q) => q.host.step <= 24 && q.guest.step <= 24), r);
     }
     // ---- an older guest page: no lc in its states, no 'tp' messages -> the host judges its shot as before
     if (!ONLY.length || ONLY.includes('old')) {
