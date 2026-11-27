@@ -3830,23 +3830,9 @@ window.PG = window.PG || {};
     if (pl.koT > 0) { if (--pl.koT <= 0) respawnBattle(pl); return; }
     if (pl.trap) { updateTrapped(pl, inp); return; }
     if (pl.dead) { if (G.gameMode === 'coop') updateFallen(pl); return; } // (solo: the 'dying' screen runs it)
-    if (!pl.local) { if (pl.invuln > 0) pl.invuln--; if (pl.stunT > 0) pl.stunT--; if (pl.shield > 0) pl.shield--; handoverFall(pl); return; }
+    if (!pl.local) { if (pl.invuln > 0) pl.invuln--; if (pl.stunT > 0) pl.stunT--; if (pl.shield > 0) pl.shield--; return; }
     if (pl.stunT > 0) { pl.stunT--; updatePlayer(pl, NO_INPUT); return; }
     updatePlayer(pl, inp);
-  }
-  // A remote animal between two control epochs (released from a bubble: the release hop vy -1.6 in the air; any bump
-  // that leaves it airborne) is its page's to move only once that page's first state of the new epoch arrives - a round
-  // trip later. Until then this world used to hold it still in the air, drawn in the jump frame: 0.4-0.7 s after every
-  // release at a phone's link, on the host's screen and (through the snapshots) on every other guest's ("점프하는
-  // 모습으로 고정된다", the owner's 4-player feedback, 2026-11-18). It falls here by plain physics (no input, no move,
-  // no sound) as it does on its own page from the same spot; the owner's states take over when they come (hostInputs)
-  function handoverFall(pl) {
-    if (!G.online || pl.raft || G.mode !== 'playing') return;
-    const rem = NET.remote.get(pl.id), st = rem && rem.st;
-    if (st && st.ep === pl.ep) return;
-    const wi = waterIdx(pl.x + 8, pl.y + 15);
-    if (wi >= 0) { floatBody(pl, wi, !pl.water); pl.water = WATER[wi]; } else { physBody(pl); pl.water = 0; }
-    NET.handF = (NET.handF | 0) + 1; // (for the tests: frames a remote body fell here)
   }
   function hitTest(p) {
     for (const e of G.enemies) {
@@ -4005,9 +3991,9 @@ window.PG = window.PG || {};
   }
   function shownAt(pl) {
     const rem = NET.remote.get(pl.id); if (!rem) return null;
-    const s = bufSample(rem.buf, bufTick(rem.buf, PEER_DELAY)); if (!s) return null;
-    const a = s.a.d, b = s.b && s.b.d.ep === a.ep ? s.b.d : null;
-    return a.ep === pl.ep ? { x: lx(a.x, b && b.x, s.t), y: ly(a.y, b && b.y, s.t) } : null;
+    const s = bodyAtEp(rem.buf, PEER_DELAY, pl.ep); if (!s) return null;
+    const a = s.a.d, b = s.b && s.b.d, c = coast(pl, s.a, a, s.over);
+    return c ? { x: c.b.x, y: c.b.y } : { x: lx(a.x, b && b.x, s.t), y: ly(a.y, b && b.y, s.t) };
   }
   function playerTrapCheck(b) {
     if (G.gameMode !== 'battle' || b.owner < 0) return false;
@@ -13616,8 +13602,10 @@ window.PG = window.PG || {};
     if (p.dead) { name = c + '_die'; fi = (dieT / 6) | 0; }
     else if (lk) { name = lk.name; fi = lk.fi; }
     else if (p.shootAnim > 0) { name = c + '_shoot'; fi = 0; }
+    else if (p.hold) { /* freed, its page has not taken it yet: the idle pose, never the jump frame hanging in the air */ }
     else if (!p.onGround) { name = p.vy < 0 ? c + '_jump' : c + '_fall'; fi = 0; }
     else if (Math.abs(p.vx) > 0.15) { name = c + '_walk'; fi = (p.walkT / 5) | 0; }
+    p.dr = { x: p.x, y: p.y, pose: name, f: G.frame }; // (for the tests: mp.drawn)
     const flip = p.facing < 0;
     let sq = p.sq;
     if (p.fx && p.fx.sq && !simHere(p)) sq = p.fx.sq;
@@ -14385,7 +14373,8 @@ window.PG = window.PG || {};
     // PG.debug.step, which renders without loop, moves it too)
     G.drawT = VCLOCK.on ? VCLOCK.t : frameT || pageNow();
     const sw = G.online && G.role === 'host' ? hostDisplayIn() : null;
-    try { renderScene(); } finally { if (sw) hostDisplayOut(sw); }
+    const es = easeIn();
+    try { renderScene(); } finally { easeOut(es); if (sw) hostDisplayOut(sw); }
   }
   function renderScene() {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -15501,6 +15490,9 @@ window.PG = window.PG || {};
   // ?netinfo=1 (the owner's phone test, design/relay.md 6.4): the room hint ends with the transport and the round trip
   const NET_INFO = (() => { try { return new URLSearchParams(location.search).get('netinfo') === '1'; } catch (e) { return false; } })();
   const nowTicks = () => { const p = window.performance; return (p && p.now ? p.now() : Date.now()) * 0.06; };
+  // the same clock for what is drawn: the frame's own time (a callback that ran late - a busy phone - must not move every
+  // remote animal further that frame and less the next)
+  const drawTicks = () => { const n = nowTicks(), f = frameT * 0.06; return f > 0 && n >= f && n - f < 6 ? f : n; };
 
   const NET = {
     tr: null, trForced: false, trInfo: null, trP: null, trDone: false,
@@ -15537,7 +15529,7 @@ window.PG = window.PG || {};
   // Playout delay = max(base, adaptive): p90 of how late arrivals are vs the fastest (jitter) + p90 of the tick gap
   // between arrivals (send interval, drops) + 1, grown quickly (1 tick per arrival), shrunk slowly; at most 24 ticks.
   // A far-future tick (corrupt / hostile) is ignored; a sender clock that jumped far back resyncs the buffer.
-  const BUF_WIN = 60, BUF_STATS = 120, BUF_MAXD = 24;
+  const BUF_WIN = 60, BUF_STATS = 120, BUF_MAXD = 24, STALL_T = 20;
   function mkBuf() { return { list: [], off: null, last: -1, hist: [], adapt: 0, starveAt: 0 }; }
   function p90(a) { if (!a.length) return 0; const b = a.slice().sort((x, y) => x - y); return b[Math.min(b.length - 1, Math.floor(b.length * 0.9))]; }
   function bufPush(B, k, d) {
@@ -15551,7 +15543,12 @@ window.PG = window.PG || {};
     B.last = k; B.list.push({ k, d });
     if (B.list.length > 64) B.list.shift();
     const s = k - t;
-    B.hist.push({ t, s, gap });
+    // (an arrival after STALL_T of nothing, and the ones that were held back with it: a hiccup no playout delay hides)
+    if (B.arrT !== undefined && t - B.arrT > STALL_T && B.off !== null) { B.burst = 60; B.off0 = B.off; }
+    const late = B.burst > 0 && s < B.off0 - 6;
+    if (B.burst > 0) B.burst = late ? B.burst - 1 : 0;
+    B.arrT = t;
+    B.hist.push({ t, s, gap: late ? 0 : gap, late });
     while (B.hist.length > 2 && B.hist[0].t < t - BUF_STATS) B.hist.shift();
     let mx = -Infinity, mxNew = -Infinity;
     for (const h of B.hist) { if (h.t >= t - BUF_WIN && h.s > mx) mx = h.s; if (h.t >= t - 20 && h.s > mxNew) mxNew = h.s; }
@@ -15562,14 +15559,29 @@ window.PG = window.PG || {};
     // adaptive delay from the last ~2 s of arrivals
     if (B.hist.length >= 4) {
       const lates = [], gaps = [];
-      for (const h of B.hist) { lates.push(Math.max(0, B.off - h.s)); if (h.gap > 0) gaps.push(Math.min(h.gap, 30)); }
+      for (const h of B.hist) { if (h.late) continue; lates.push(Math.max(0, B.off - h.s)); if (h.gap > 0) gaps.push(Math.min(h.gap, 30)); }
       const want = Math.min(BUF_MAXD, p90(lates) + p90(gaps) + 1);
-      B.adapt = want > B.adapt ? Math.min(want, B.adapt + 1) : Math.max(want, B.adapt - 0.03);
+      B.adapt = want > B.adapt ? Math.min(want, B.adapt + 1) : Math.max(want, B.adapt - 0.1);
     }
     return true;
   }
   const bufDelay = (B, base) => Math.max(base, B.adapt || 0);
-  const bufTick = (B, base) => (B.off === null ? null : nowTicks() + B.off - bufDelay(B, base));
+  // the tick of the sender shown now: it runs on at the wall clock's speed and follows its target (the offset + the playout
+  // delay: both move in steps when an arrival is faster or later than usual) at no more than RT_RATE faster / slower,
+  // so the picture never jumps by those steps; further off than RT_SNAP (a stall, a resync): there at once
+  const RT_RATE = 0.35, RT_SNAP = 14;
+  function bufTick(B, base) {
+    if (B.off === null) { B.rs = undefined; return null; }
+    const t = drawTicks(), want = t + B.off - bufDelay(B, base), dt = t - B.rsT;
+    if (B.rs === undefined || !(dt >= 0) || dt > 30) B.rs = want;
+    else {
+      B.rs += dt;
+      const err = want - B.rs;
+      B.rs = Math.abs(err) > RT_SNAP ? want : B.rs + clamp(err, -RT_RATE * dt, RT_RATE * dt);
+    }
+    B.rsT = t;
+    return B.rs;
+  }
   function bufSample(B, rt) {
     const L = B.list; if (!L.length || rt === null) return null;
     while (L.length > 3 && L[1].k < rt - 90) L.shift();
@@ -15580,6 +15592,59 @@ window.PG = window.PG || {};
     }
     return { a: L[0], b: null, t: 0 };
   }
+  // ---- a remote animal as this screen shows it. bodyAtEp: the stream's sample of control epoch ep - while the sample is
+  // still of the epoch before but newer states of ep are in, the first of them (its owner took it over right there), so
+  // the hand-over never shows the host's later spot first and steps back. null: no state of ep here yet (the gap after a
+  // release, a round trip long): the caller keeps it where the host put it, held (p.hold: the idle pose)
+  function bodyAtEp(B, base, ep) {
+    const rt = bufTick(B, base), s = bufSample(B, rt); if (!s) return null;
+    if (s.a.d.ep === ep) return { a: s.a, b: s.b && s.b.d.ep === ep ? s.b : null, t: s.t, over: s.b ? 0 : Math.max(0, rt - s.a.k) };
+    const e = B.list.find((o) => o.d.ep === ep);
+    return e ? { a: e, b: null, t: 0, over: 0, pre: true } : null;
+  }
+  // a body shown still in the air - that first state, or the data ran out where nothing coasts (a raft, the water, a
+  // stage) - is drawn in the idle pose, never the jump frame
+  const heldStill = (s, c) => !c && (s.pre || s.over > 6);
+  // coast: the data ran out `over` ticks ago (a link's hiccup, a starved buffer): from its last state on, the body goes on
+  // as it was - through the air under gravity, landing on the arena's tiles; on the ground its speed for COAST_RUN ticks,
+  // then it stands - instead of hanging in the air in the jump frame until the next state (0.6 - 2 s stalls: 60 - 110
+  // frames, 2026-11-26). Display only (the host's shots judge what its screen shows: shownAt). key: the state it goes on
+  // from. Not in water, on a raft, nor in a game played on a stage (world: false)
+  const COAST_MAX = 90, COAST_RUN = 10;
+  function coast(p, key, d, over) {
+    const want = Math.min(COAST_MAX, Math.floor(over));
+    if (!(want >= 1) || G.mode !== 'playing' || p.raft || (d.fl & 6) || (G.mini && MINI[G.mini.id] && MINI[G.mini.id].world === false)) { p.co = null; return null; }
+    let c = p.co;
+    if (!c || c.key !== key || c.n > want) c = p.co = { key, n: 0, b: { x: d.x, y: d.y, vx: d.vx, vy: d.vy, onGround: !!(d.fl & 1), thruR: -1 } };
+    while (c.n < want) { c.n++; if (c.n > COAST_RUN) c.b.vx = c.b.onGround ? 0 : c.b.vx * 0.9; physBody(c.b); }
+    NET.coastF = (NET.coastF | 0) + 1; // (for the tests)
+    return c;
+  }
+  // ease: a remote animal whose shown spot steps further than a body can move (the states are back after a stall, the
+  // view's clock caught up) is drawn from where it was and slides over, x EASE a frame, instead of jumping there. Drawing
+  // only: the spot itself (catches, claims) is the true one at once. A new control epoch (a kickoff, a respawn, the host
+  // placing it) and a wrap through the drain jump as before
+  const EASE = 0.8, EASE_STEP = 7;
+  function easeIn() {
+    if (!G.online || G.mode !== 'playing') { for (const p of G.players) p.vs = null; return null; }
+    const saved = [];
+    for (const p of G.players) {
+      if (G.role === 'host' ? p.local : p.slot === G.localSlot) { p.vs = null; continue; }
+      if (!free(p) || p.out) { p.vs = null; continue; }
+      const v = p.vs, n = v ? G.frame - v.f : 99;
+      if (!v || v.ep !== p.ep || v.raft !== !!p.raft || n < 0 || n > 20) { p.vs = { ox: 0, oy: 0, ep: p.ep, raft: !!p.raft, x: p.x, y: p.y, f: G.frame }; continue; }
+      const dx = p.x - v.x, dy = p.y - v.y, d = Math.hypot(dx, dy), k = Math.pow(EASE, n);
+      v.ox *= k; v.oy *= k;
+      if (Math.abs(dy) >= 150 || d >= 200) { v.ox = 0; v.oy = 0; }
+      else if (d > EASE_STEP * Math.max(1, n)) { v.ox -= dx; v.oy -= dy; NET.eased = (NET.eased | 0) + 1; }
+      if (Math.hypot(v.ox, v.oy) < 0.5) { v.ox = 0; v.oy = 0; }
+      v.x = p.x; v.y = p.y; v.f = G.frame;
+      if (v.ox || v.oy) { saved.push([p, p.x, p.y]); p.x += v.ox; p.y += v.oy; }
+    }
+    return saved;
+  }
+  function easeOut(saved) { if (saved) for (const [p, x, y] of saved) { p.x = x; p.y = y; } }
+
   // interpolate a coordinate (no tweening across a wrap through the drain or a respawn)
   function lp(a, b, t, lo, hi) {
     a = nNum(a, lo, hi, 0);
@@ -16380,13 +16445,16 @@ window.PG = window.PG || {};
     for (const pl of G.players) {
       if (pl.local || !free(pl) || G.mode !== 'playing') continue;
       const rem = NET.remote.get(pl.id); if (!rem) continue;
-      const s = bufSample(rem.buf, bufTick(rem.buf, PEER_DELAY)); if (!s) continue;
-      const a = s.a.d, b = s.b && s.b.d.ep === a.ep ? s.b.d : null;
-      if (a.ep !== pl.ep) continue;
+      const s = bodyAtEp(rem.buf, PEER_DELAY, pl.ep);
+      pl.hold = !s && !pl.onGround && !pl.raft;   // (the gap after a release: still, in the idle pose)
+      if (!s) continue;
+      const a = s.a.d, b = s.b && s.b.d, c = coast(pl, s.a, a, s.over), on = !c || c.n <= 6;
+      pl.hold = heldStill(s, c) && !(a.fl & 1);
       saved.push([pl, pl.x, pl.y, pl.vx, pl.vy, pl.onGround, pl.facing, pl.water, pl.mvA, pl.mvB]);
-      pl.x = lx(a.x, b && b.x, s.t); pl.y = ly(a.y, b && b.y, s.t); pl.vx = a.vx; pl.vy = a.vy;
-      pl.onGround = !!(a.fl & 1); pl.facing = a.f; pl.water = a.fl & 2 ? 1 : a.fl & 4 ? 2 : 0;
-      pl.mvA = !G.perksOff && !!(a.fl & 256); pl.mvB = !G.perksOff && !!(a.fl & 512);
+      if (c) { pl.x = c.b.x; pl.y = c.b.y; pl.vx = c.b.vx; pl.vy = c.b.vy; pl.onGround = c.b.onGround; }
+      else { pl.x = lx(a.x, b && b.x, s.t); pl.y = ly(a.y, b && b.y, s.t); pl.vx = a.vx; pl.vy = a.vy; pl.onGround = !!(a.fl & 1); }
+      pl.facing = a.f; pl.water = a.fl & 2 ? 1 : a.fl & 4 ? 2 : 0;
+      pl.mvA = on && !G.perksOff && !!(a.fl & 256); pl.mvB = on && !G.perksOff && !!(a.fl & 512);
     }
     return saved;
   }
@@ -16747,13 +16815,20 @@ window.PG = window.PG || {};
       p.onGround = !!(fl & 1); p.water = fl & 2 ? 1 : fl & 4 ? 2 : 0; p.shootAnim = fl & 32 ? 2 : 0;
       p.facing = r[6] < 0 ? -1 : 1;
       const st = !mine && (fl & 64) ? peerStream(p) : null;
-      p.shownW = st ? 1 : 0; p.shownK = st ? st.a.k + (st.b ? (st.b.k - st.a.k) * st.t : 0) : NET.rt; // (guestClaim names it)
+      const x0 = p.x, y0 = p.y, hostSeat = !mine && NET.slots.get(NET.hostId) === slot;
+      p.shownW = st ? 1 : 0; p.shownK = st ? st.ka + (st.b ? (st.kb - st.ka) * st.t : 0) : NET.rt; // (guestClaim names it)
+      p.hold = false;
       if (st) {
-        const a = st.a, b = st.b;
+        const a = st.a, b = st.b, c = coast(p, st.key, a, st.over);
+        if (c && c.n > 2) p.shownK = -1; // (coasting: a guess - no catch to claim on it)
+        p.hold = heldStill(st, c) && !(a.fl & 1);
         p.x = lx(a.x, b && b.x, st.t); p.y = ly(a.y, b && b.y, st.t); p.vx = a.vx; p.vy = a.vy; p.facing = a.f;
-        p.onGround = !!(a.fl & 1); p.water = a.fl & 2 ? 1 : a.fl & 4 ? 2 : 0; p.shootAnim = a.fl & 8 ? 2 : 0;
+        p.onGround = !!(a.fl & 1);
+        if (c) { p.x = c.b.x; p.y = c.b.y; p.vx = c.b.vx; p.vy = c.b.vy; p.onGround = c.b.onGround; }
+        p.water = a.fl & 2 ? 1 : a.fl & 4 ? 2 : 0; p.shootAnim = a.fl & 8 ? 2 : 0;
         p.invuln = a.fl & 128 ? 9 : 0; p.stunT = a.fl & 64 ? 9 : 0; p.shield = a.sh;
-        p.mvA = !G.perksOff && !!(a.fl & 256); p.mvB = !G.perksOff && !!(a.fl & 512);
+        const on = !c || c.n <= 6;
+        p.mvA = on && !G.perksOff && !!(a.fl & 256); p.mvB = on && !G.perksOff && !!(a.fl & 512);
         const o = NET.others.get(st.id);
         if (o && a.ny > o.ny) { o.ny = a.ny; wordPop(p.x + 8, p.y - 2, '냥!', p.color); }
         if (o && a.dp > o.dp) { o.dp = a.dp; dropDust(p.x + 8, PF_TOP + Math.floor((p.y + 16 - PF_TOP) / TS) * TS); NET.dropSeen = (NET.dropSeen | 0) + 1; }
@@ -16761,6 +16836,12 @@ window.PG = window.PG || {};
         p.x = lx(r[2], r1v && r1v[2], t); p.y = ly(r[3], r1v && r1v[3], t);
         p.vx = nNum(r[4], -99, 99, 0) / 10; p.vy = nNum(r[5], -99, 99, 0) / 10;
         p.mvA = !G.perksOff && !!(fl & 128); p.mvB = !G.perksOff && !!(fl & 256);
+        if (!mine && (fl & 64)) {
+          // the host's own animal, its snapshots late: it goes on; another guest's, freed but not its page's yet: held
+          const c = hostSeat && !P1 ? coast(p, r, { x: p.x, y: p.y, vx: p.vx, vy: p.vy, fl: fl & 7 }, el) : null;
+          if (c) { p.x = c.b.x; p.y = c.b.y; p.vx = c.b.vx; p.vy = c.b.vy; p.onGround = c.b.onGround; if (c.n > 2) p.shownK = -1; if (c.n > 6) { p.mvA = false; p.mvB = false; } }
+          p.hold = hostSeat ? !P1 && el > 6 && !c && !(fl & 1) : !p.onGround && !p.raft && Math.abs(p.x - x0) + Math.abs(p.y - y0) < 0.05;
+        }
       }
       p.walkT += Math.abs(p.vx);
     }
@@ -16773,9 +16854,8 @@ window.PG = window.PG || {};
     for (const [pid, s] of NET.slots) if (s === p.slot) id = pid;
     if (!id || id === NET.hostId) return null;
     const o = NET.others.get(id); if (!o) return null;
-    const s = bufSample(o.buf, bufTick(o.buf, PEER_DELAY)); if (!s) return null;
-    const a = s.a.d; if (a.ep !== p.ep || a.gid !== NET.gid) return null;
-    return { id, a, b: s.b && s.b.d.ep === a.ep ? s.b.d : null, t: s.t };
+    const s = bodyAtEp(o.buf, PEER_DELAY, p.ep); if (!s || s.a.d.gid !== NET.gid) return null;
+    return { id, a: s.a.d, b: s.b && s.b.d, t: s.t, ka: s.a.k, kb: s.b ? s.b.k : 0, key: s.a, over: s.over, pre: s.pre };
   }
   // the host changed my animal's control epoch: free again -> my physics takes it from where the host put it
   function takeOver(p, r, ep, fl) {
@@ -17657,6 +17737,8 @@ window.PG = window.PG || {};
       },
       session: () => NET.sess,
       tap: (fn) => { netTap = typeof fn === 'function' ? fn : null; },
+      // what this screen last drew of a player: {x, y, pose} (after the display smoothing), null before
+      drawn: (slot) => { const p = G.players.find((o) => o.slot === slot); return p && p.dr ? Object.assign({}, p.dr) : null; },
       // (tests) the engine's battle catch test: bubble b (as drawn) on a rival drawn at px, py
       touches: (b, px, py) => rivalTouch(bubbleScale(b, bubbleChar(b)), b.x, b.y, px, py, 0),
       state: netState,

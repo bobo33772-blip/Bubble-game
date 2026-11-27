@@ -634,10 +634,13 @@
       const L = A.P.mloc(1) || {}; if (!(L.tick > lt1)) return false;
       lt2 = L.tick; lHost = (H.P.chair().own || {})[1] || null; lMine = (A.P.chair().own || {})[1] || null; return true;
     }, 6000, 1);
+    // (a state is sent at most every 30 ms: one still waiting here was made before the new sit - its old stamp, clamped to the
+    // arrival - LAG_MAX, would be taken first, as after a real hiccup; this scenario is about the new one)
+    await sleep(120);
     mute(A, false);
     ok('의자 let go (a guest): A sits on its own view of S, its claim never reaching the host - its mirror never shows it as the owner: it lets go when its view passes the tick + LAG_MAX + 30 and sits again at once with a new tick', aSat && aLet && lt1 >= cS2 && lt2 > lt1 + LAG + 30 && lt2 <= lt1 + LAG + 36 && !lHost && !lMine && (A.P.mloc(1) || {}).sit === 1, [cS2, lt1, lt2, lHost, lMine, A.P.mloc(1)]);
     const aTaken = await until(() => D3.every((f) => { const o = (f.P.chair().own || {})[1]; return o && o[0] === 1 && o[1] === lt2; }), 4000, 5);
-    ok('의자 let go (a guest): ... its link back, the new claim is taken - A owns stool 1 on every page, stamped by its new tick', aTaken, D3.map((f) => (f.P.chair().own || {})[1]));
+    ok('의자 let go (a guest): ... its link back, the new claim is taken - A owns stool 1 on every page, stamped by its new tick', aTaken, [lt1, lt2, H.G.frame, N(A).rtHi, D3.map((f) => (f.P.chair().own || {})[1])]);
     const chPod = await until(() => D3.every((f) => PS(f).ph === 'podium'), 60000);
     ok('의자: the 판 ends by its 3 fast stops and the podium shows on every page', chPod, D3.map((f) => [PS(f).ph, f.P.chair() && f.P.chair().i]));
 
