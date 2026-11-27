@@ -47,7 +47,7 @@ what changed and why, and the body below already says the corrected thing.
 |---|---|---|
 | The core / link split | `makeCore(transport, role, code, opts)` does hello / welcome / full / lock, slots, the roster, pings and rtt, unstable / lost / host_left, stale-state guards, queueing, `STATE_MAX` 3600 / `MSG_MAX` 900. `openLink` returns a link `{selfId, hostId, setMembers(ids), sendState(obj), sendRel(to, env), health(), close(fast)}` that calls `h.state(from, obj)`, `h.rel(from, env)`, `h.gone(id, 'left'/'lost'/'gone')`, `h.fatal(why)`. Opening rejects with `fail('taken' / 'not_found' / 'unavailable' / 'timeout')`. | `'ws'` is one function, `wsLink(code, role, h, opts)`, plus a branch in `openLink`. Nothing else in the core changes except `TUNE.ws` and the transport list (4.6). |
 | `peerLink` | A star: the host forwards guests' states and `'*'` / direct messages to admitted members (`members` from `setMembers`), stamps relayed frames with `f`, ignores states from non-members, skips states while a channel is backed up (`backedUp`), sends `bye` then closes 120 ms later. A dropped connection means `h.gone(id, 'lost')`. | The relay takes over the star's job with the same rules (2.3). The host phone uploads one copy of each snapshot instead of one per guest. |
-| `TUNE` | `bc` / `peer`: `stateMs 30, pingMs 1000`; `peer`: `unstableMs 3000, lostMs 12000, joinMs 15000`. The core re-sends an unchanged state about once a second (`tick`) and sends the latest state to a newcomer (`setMembers`, `grew`). | `TUNE.ws` (4.1). Convergence for late joiners is already the core's job. |
+| `TUNE` | `bc` / `peer`: `stateMs 30, pingMs 1000`; `peer`: `unstableMs 3000, lostMs 30000, joinMs 15000`. The core re-sends an unchanged state about once a second (`tick`) and sends the latest state to a newcomer (`setMembers`, `grew`). | `TUNE.ws` (4.1). Convergence for late joiners is already the core's job. |
 | Transports list | `TRANSPORTS = ['room', 'peer', 'bc']`; `fromQuery` accepts `?net=` from it; `host()` re-rolls a generated code on `'taken'` (5 tries); `join()` rejects `not_found` / `full` / `unavailable` / `timeout`. | Adding `'ws'` to the list makes `?net=ws` work on test pages. |
 | Engine traffic | Host: `netSnapshot` every `SNAP_EVERY` 3 frames (20 Hz) during play; in the room screen `netFrame` sends `{v, R}` every 30 frames (2 Hz). Guest: `guestSend` every `BODY_EVERY` 2 frames (30 Hz) during play. Each guest's core pings the host once a second. | The numbers behind the free cap (section 9). |
 | Transport detection | `netTransport()` picks one value: `t.room ? 'room' : t.peer ? 'peer' : t.bc ? 'bc' : null`, waiting for the deferred PeerJS script first (`peerTag`, `domReady`). `localOnly` / `roomOffKind` read `NET.tr === 'bc'`. | `netOrder()` replaces the single choice for host / join. `NET.tr` stays "the first choice" for the friends panel (6.2). |
@@ -151,7 +151,7 @@ decided by the host core through hello / welcome; the relay only caps sockets (2
   only sends keepalives). A seat silent for **`DEAD_MS` 150 s** (more than two keepalive periods, even when a hidden tab's timers run only once a minute) is ended as `'lost'` exactly as if
   its socket had closed, and its socket is closed with 4408. Without this, a half-open host would hold the room and its
   code until TCP gave up, and its guests would get `hi` for a host that never answers. The guests' cores do not wait for
-  it: they close `lost` after `lostMs` 12 s of silence, as today. After a wake the clocks restart at the wake (no harm:
+  it: they close `lost` after `lostMs` 30 s of silence. After a wake the clocks restart at the wake (no harm:
   a wake means something just arrived).
 - **A forgotten room is closed.** `RoomCore` counts the room's incoming frames per minute. A minute with at least
   `IDLE_RATE` 10 frames/s on average (any round in play: 2 players send about 52/s) marks the room busy. A room that has
@@ -397,7 +397,7 @@ also takes the socket's attachment, for a socket a woken core never saw (19.1).
 | Hibernation (idle object) | Sockets stay open; the object is rebuilt from attachments on the next frame. | Nothing. |
 | `npx wrangler deploy` (a new version), or a Cloudflare runtime update | Every DO restarts and its sockets are closed (code 1001/1006/1012; the exact code is not confirmed and does not matter). The new object has no seats. | Every page in a room: `h.fatal('lost')` → **연결이 끊겼어요**. They make a new room. That is why the owner guide says to deploy outside play time. |
 | Memory eviction of a busy object | Not expected while sockets are active. If it happens, it is the same as a restart. | 연결이 끊겼어요. |
-| The host's phone loses its network without a close (half-open) | The guests' cores close `lost` after 12 s of silence and leave. The relay sweeps the host's seat once it has been silent for 150 s and a frame or connect arrives (2.4), which frees the code. | 연결이 끊겼어요 (guests, after 12 s). A joiner in those 150 s gets `hi`, then no welcome: `joinQuiet`. |
+| The host's phone loses its network without a close (half-open) | The guests' cores close `lost` after 30 s of silence and leave. The relay sweeps the host's seat once it has been silent for 150 s and a frame or connect arrives (2.4), which frees the code. | 연결이 끊겼어요 (guests, after 30 s). A joiner in those 150 s gets `hi`, then no welcome: `joinQuiet`. |
 | A room left open on the room screen | Closed after 30 min without a busy minute (2.4). | 연결이 끊겼어요, on pages nobody is looking at. |
 | Free-tier cap reached mid-game | Not confirmed. Most likely the object's next events fail and its sockets close. | 연결이 끊겼어요. The next 방 만들기 / 참여 gets 4503 `cap` and falls back to `peer` (5.3). |
 | Worker free requests (100,000 a day) exceeded | Cloudflare answers with its own error page and the upgrade fails (1006). | Treated as relay `down` (5.3). |
@@ -412,13 +412,15 @@ also takes the socket's attachment, for a socket a woken core never saw (19.1).
 const TRANSPORTS = ['room', 'ws', 'peer', 'bc'];
 const WS_V = 1;                                  // the relay protocol (design/relay.md 2)
 const WS_SPACES = ['w', 'p', 't'];
-TUNE.ws = { stateMs: 30, pingMs: 2000, unstableMs: 3000, lostMs: 12000, joinMs: 12000, connectMs: 6000, quietMs: 45000, byeMs: 150 };
+TUNE.ws = { stateMs: 30, pingMs: 2000, unstableMs: 3000, lostMs: 30000, joinMs: 12000, connectMs: 6000, quietMs: 45000, byeMs: 150 };
 ```
 
 - `pingMs` 2000 is a traffic cut (9.3). The core still hears the host constantly during play (snapshots) and every half
-  second on the room screen (`R`). So `unstableMs` 3000 and `lostMs` 12000 work as they do for `'peer'`.
-- `lostMs` (12 s) only matters for a half-open socket (a phone that changed networks without a close, which TCP can
-  take minutes to notice). A clean close is reported at once.
+  second on the room screen (`R`). So `unstableMs` 3000 and `lostMs` 30000 work as they do for `'peer'`.
+- `lostMs` (30 s) matters for a half-open socket (a phone that changed networks without a close, which TCP can
+  take minutes to notice) and for a page whose JS is stopped while its socket stays open (a phone in another app).
+  A clean close is reported at once. It was 12 s until 2026-11-27: a 15 s app switch kicked a guest, or ended the
+  party when the host did it (measured with four Chromes, one paused; docs/PM-기록.md 11-27).
 - `joinMs` must stay above `connectMs`: the core's join timer starts before the link opens (`openGuest`), so with 12 s
   against 6 s a `timeout` from a `'ws'` join always means "the relay gave me `hi`, the host never welcomed me". 4.5
   relies on that to stop the search; a test asserts the inequality.
@@ -681,7 +683,7 @@ state would have to be replayed: that is v2).
 | Case | Result |
 |---|---|
 | The host is alone in its room and switches apps (to send the code), and the OS kills or freezes its socket | Re-seat when the page runs again: the room and its code keep working. |
-| A guest switches apps for a few seconds, and the OS keeps the socket | Nothing is lost. The backlog arrives when JS resumes, and the core may show 연결이 불안정해요 briefly. The host keeps the guest unless it was silent for more than `lostMs` 12 s. |
+| A guest switches apps for a few seconds, and the OS keeps the socket | Nothing is lost. The backlog arrives when JS resumes, and the core may show 연결이 불안정해요 briefly. The host keeps the guest unless it was silent for more than `lostMs` 30 s. |
 | The OS kills a guest's socket (iOS often does for a suspended page; the Toss WebView is not confirmed) | The relay sends `gone(lost)`: the host drops the guest at once. Back on the page, the guest sees 연결이 끊겼어요. It can join again with the code unless a round is running (`playing`). |
 | The host's page is hidden while guests are in the room | The game freezes for everyone (the rAF loop stops), as today. If the socket dies, the room ends: guests see 연결이 끊겼어요. |
 | A network switch (Wi-Fi ↔ LTE) | The socket dies: the same as above for that player. |

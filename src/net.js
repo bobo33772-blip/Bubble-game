@@ -180,10 +180,13 @@ window.PG = window.PG || {};
   // ~20-50 was overwritten before it went out (a move bit's edge then showed 2 frames late)
   const TUNE = {
     bc: { stateMs: 30, pingMs: 1000, unstableMs: 2500, lostMs: 9000, joinMs: 10000 },
-    peer: { stateMs: 30, pingMs: 1000, unstableMs: 3000, lostMs: 12000, joinMs: 15000 },
+    // lostMs 30000 (peer, ws): silence this long ends a seat. A phone that switches to another app stops its page's
+    // JS; at 12 s a friend who answered a message was kicked and a host who did ended the party (design/relay.md 4.1,
+    // docs/PM-기록.md 11-27). 'unstable' still shows after 3 s, so a real drop is not hidden
+    peer: { stateMs: 30, pingMs: 1000, unstableMs: 3000, lostMs: 30000, joinMs: 15000 },
     // pingMs 2000: a traffic cut (every incoming relay message is billed, design/relay.md 9.3). joinMs must stay above
     // connectMs: a 'ws' join timeout then always means "the relay found the room, its host never welcomed me"
-    ws: { stateMs: 30, pingMs: 2000, unstableMs: 3000, lostMs: 12000, joinMs: 12000, connectMs: 6000, quietMs: 45000, byeMs: 150 },
+    ws: { stateMs: 30, pingMs: 2000, unstableMs: 3000, lostMs: 30000, joinMs: 12000, connectMs: 6000, quietMs: 45000, byeMs: 150 },
     // graceMs: a player whose presence vanishes from the game room is only provisionally gone (the platform refreshes
     // connections, a phone switching networks re-asserts its presence on reconnect) unless it said bye (presence x:1);
     // settleMs: after my own reconnect the room is re-presented over a second or two, so absences wait that long

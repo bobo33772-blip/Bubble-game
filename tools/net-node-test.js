@@ -1498,7 +1498,7 @@ async function testV4Wire() {
   ok('v4 wire: game.js NET_V is 4 and netStateIn drops any other version', has(/const NET_V = 4;/) && has(/function netStateIn\(from, st\) \{\s*if \(!NET\.sess \|\| !st \|\| typeof st !== 'object' \|\| st\.v !== NET_V\) return;/));
   ok('v4 wire: guestSend sets body bits A 256 / B 512; parseBody keeps fl 0..1023', has(/if \(me\.mvA\) fl \|= 256;/) && has(/if \(me\.mvB\) fl \|= 512;/) && has(/fl: nInt\(st\.fl, 0, 1023, 0\)/));
   ok('v4 wire: snapPlayers sets P-row bits A 128 / B 256 (guestPlayers reads them, never with 능력 끄기)', has(/if \(p\.mvA\) fl \|= 128;/) && has(/if \(p\.mvB\) fl \|= 256;/) &&
-    has(/p\.mvA = !G\.perksOff && !!\(fl & 128\); p\.mvB = !G\.perksOff && !!\(fl & 256\);/) && has(/p\.mvA = !G\.perksOff && !!\(a\.fl & 256\); p\.mvB = !G\.perksOff && !!\(a\.fl & 512\);/));
+    has(/p\.mvA = !G\.perksOff && !!\(fl & 128\); p\.mvB = !G\.perksOff && !!\(fl & 256\);/) && has(/p\.mvA = on && !G\.perksOff && !!\(a\.fl & 256\); p\.mvB = on && !G\.perksOff && !!\(a\.fl & 512\);/));
   ok('v4 wire: snapBubbles bits 16 droplet / 32 yarn; viewLists keeps bubble flags 0..255', has(/if \(b\.drop\) fl \|= 16;/) && has(/if \(b\.ty === 'yarn'\) fl \|= 32;/) && has(/f = nInt\(r\[7\], 0, 255, 0\)/),
     [has(/if \(b\.drop\) fl \|= 16;/), has(/if \(b\.ty === 'yarn'\) fl \|= 32;/), has(/f = nInt\(r\[7\], 0, 255, 0\)/)]);
   ok('v4 wire: the host takes {t:\'qk\'} only through hostQuake, and a:1 only as fire(pl, m.a === 1)', has(/case 'qk': if \(pl\) hostQuake\(pl, m\); return;/) && has(/const b = fire\(pl, m\.a === 1\);/) && has(/t: 'qk', x: r1\(p\.x\), y: r1\(p\.y\), ep: p\.ep/));
